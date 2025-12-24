@@ -9,10 +9,28 @@ import { CTAIconsSection } from "@/components/cta-icons-section"
 import { CantinaAntinoriSection } from "@/components/cantina-antinori-section"
 import { Footer } from "@/components/footer"
 import Script from "next/script"
-import { getCurrentTenant } from "@/lib/get-tenant"
+import { notFound } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
 
-export default async function TenantHomePage() {
-  const tenant = await getCurrentTenant()
+interface PageProps {
+  params: Promise<{ slug: string }>
+}
+
+export default async function TenantHomePage({ params }: PageProps) {
+  const { slug } = await params
+
+  // Verifica che il tenant esista
+  const supabase = await createClient()
+  const { data: tenant } = await supabase
+    .from("properties")
+    .select("*")
+    .or(`slug.eq.${slug},subdomain.eq.${slug}`)
+    .eq("frontend_enabled", true)
+    .single()
+
+  if (!tenant) {
+    notFound()
+  }
 
   // Schema.org dinamico basato sul tenant
   const hotelSchema = {
