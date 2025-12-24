@@ -145,9 +145,12 @@ export default function AdminDashboardPage() {
   const [property, setProperty] = useState<{ name: string; slug: string; domain: string | null } | null>(null)
   const [siteUrl, setSiteUrl] = useState<string>("/")
 
+  const isSuperAdmin = adminUser?.role === "super_admin"
+
   useEffect(() => {
     async function loadProperty() {
-      if (!adminUser?.property_id) return
+      // super_admin non è legato a una property specifica
+      if (!adminUser?.property_id || isSuperAdmin) return
 
       const supabase = createClient()
       if (!supabase) return
@@ -169,7 +172,7 @@ export default function AdminDashboardPage() {
     }
 
     loadProperty()
-  }, [adminUser?.property_id])
+  }, [adminUser?.property_id, isSuperAdmin])
 
   if (isLoading) {
     return (
@@ -192,6 +195,10 @@ export default function AdminDashboardPage() {
 
   const isExternalSite = siteUrl.startsWith("https://")
 
+  const headerTitle = isSuperAdmin ? "HotelAccelerator" : property?.name || "Dashboard"
+
+  const siteButtonLabel = isSuperAdmin ? "Home" : "Sito"
+
   return (
     <main className="min-h-screen bg-[#f8f7f4]">
       {/* Header */}
@@ -199,7 +206,7 @@ export default function AdminDashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-serif text-[#5c5c5c]">{property?.name || "HotelAccelerator"}</h1>
+              <h1 className="text-xl font-serif text-[#5c5c5c]">{headerTitle}</h1>
               <span className="text-sm text-[#8b8b8b]">Dashboard</span>
             </div>
 
@@ -216,7 +223,7 @@ export default function AdminDashboardPage() {
                     className="border-[#8b7355] text-[#8b7355] hover:bg-[#8b7355] hover:text-white bg-transparent"
                   >
                     <Home className="w-4 h-4 mr-2" />
-                    Sito
+                    {siteButtonLabel}
                     <ExternalLink className="w-3 h-3 ml-1" />
                   </Button>
                 </a>
@@ -228,7 +235,7 @@ export default function AdminDashboardPage() {
                     className="border-[#8b7355] text-[#8b7355] hover:bg-[#8b7355] hover:text-white bg-transparent"
                   >
                     <Home className="w-4 h-4 mr-2" />
-                    Sito
+                    {siteButtonLabel}
                   </Button>
                 </Link>
               )}
