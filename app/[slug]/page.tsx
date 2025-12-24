@@ -12,12 +12,18 @@ import Script from "next/script"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 
+const RESERVED_PATHS = ["admin", "api", "request-access", "_next", "favicon.ico", "robots.txt", "sitemap.xml"]
+
 interface PageProps {
   params: Promise<{ slug: string }>
 }
 
 export default async function TenantHomePage({ params }: PageProps) {
   const { slug } = await params
+
+  if (RESERVED_PATHS.includes(slug.toLowerCase())) {
+    notFound()
+  }
 
   // Verifica che il tenant esista
   const supabase = await createClient()
