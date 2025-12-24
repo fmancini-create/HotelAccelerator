@@ -1,0 +1,22 @@
+{
+  "name": "Villa I Barronci Resort & Spa",
+  "short_name": "Villa I Barronci",
+  "description": "Resort & Spa nel cuore del Chianti, Toscana",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f3f0",
+  "theme_color": "#8b7355",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
