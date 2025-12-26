@@ -1,6 +1,5 @@
 import { headers } from "next/headers"
 import { createClient } from "@/lib/supabase/server"
-import { DEFAULT_PROPERTY_ID } from "@/lib/tenant"
 
 export interface CurrentTenant {
   id: string
@@ -14,17 +13,23 @@ export interface CurrentTenant {
 }
 
 /**
- * Ottiene il tenant corrente dal middleware header o fallback a default
- * Da usare nei Server Components
+ * Ottiene il tenant corrente dal middleware header
+ * Da usare nei Server Components per il FRONTEND pubblico
+ *
+ * NOTA: Questo è per il routing pubblico (subdomain/custom_domain).
+ * Per operazioni admin con autenticazione, usa getAuthenticatedPropertyId()
  */
 export async function getCurrentTenant(): Promise<CurrentTenant | null> {
   const headersList = await headers()
   const tenantIdentifier = headersList.get("x-tenant-identifier")
   const tenantType = headersList.get("x-tenant-type")
 
-  // Se non c'è identificatore, siamo su dominio admin -> usa default
   if (!tenantIdentifier) {
-    return getDefaultTenant()
+    return null
+  }
+
+  if (tenantIdentifier.includes("vusercontent.net") || tenantIdentifier.includes("vercel.app")) {
+    return null
   }
 
   const supabase = await createClient()
@@ -37,30 +42,15 @@ export async function getCurrentTenant(): Promise<CurrentTenant | null> {
     .select("id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, settings")
     .eq(column, tenantIdentifier)
     .eq("frontend_enabled", true)
-    .single()
+    .maybeSingle()
 
-  if (error || !data) {
-    console.error("[v0] Tenant not found:", tenantIdentifier, error)
+  if (error) {
+    console.error("[TENANT] Error fetching tenant:", tenantIdentifier, error)
     return null
   }
 
-  return data as CurrentTenant
-}
-
-/**
- * Ottiene il tenant di default (Villa I Barronci)
- */
-async function getDefaultTenant(): Promise<CurrentTenant | null> {
-  const supabase = await createClient()
-
-  const { data, error } = await supabase
-    .from("properties")
-    .select("id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, settings")
-    .eq("id", DEFAULT_PROPERTY_ID)
-    .single()
-
-  if (error || !data) {
-    console.error("[v0] Default tenant not found:", error)
+  if (!data) {
+    // No tenant found - this is normal for platform domain
     return null
   }
 

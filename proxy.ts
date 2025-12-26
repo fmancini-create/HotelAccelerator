@@ -1,95 +1,91 @@
+/**
+ * MIDDLEWARE - Tenant Resolution & Routing
+ * Risolve il tenant dal hostname e gestisce il routing multi-tenant
+ */
+
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-// Domini base della piattaforma
-const PLATFORM_DOMAINS = ["hotelaccelerator.com", "www.hotelaccelerator.com", "app.hotelaccelerator.com"]
+export function proxy(request: NextRequest) {
+  const hostname = request.headers.get("host") || ""
+  const pathname = request.nextUrl.pathname
 
-export async function middleware(request: NextRequest) {
-  const hostname = request.headers.get("host") || "localhost"
-  const { pathname } = request.nextUrl
-  const host = hostname.split(":")[0] // Rimuovi porta
-
-  // Static files - passa sempre
-  if (pathname.startsWith("/_next") || pathname.startsWith("/favicon") || pathname.includes(".")) {
+  // Skip per risorse statiche e API interne
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/api") ||
+    pathname.includes(".") ||
+    pathname.startsWith("/admin")
+  ) {
     return NextResponse.next()
   }
 
-  // API routes - passa sempre
-  if (pathname.startsWith("/api")) {
-    return NextResponse.next()
-  }
+  // Estrai subdomain
+  const subdomain = extractSubdomain(hostname)
 
-  // Admin routes - passa sempre (gestito da auth)
-  if (pathname.startsWith("/admin")) {
-    return NextResponse.next()
-  }
-
-  // Bypass completo - Next.js servirà app/(platform)/page.tsx automaticamente
-  if (isPlatformDomain(host)) {
-    return NextResponse.next()
-  }
-
-  const tenantInfo = extractTenantInfo(host)
-  if (tenantInfo) {
-    // Costruisci il path per il rewrite
-    const rewritePath = pathname === "/" ? "/" : pathname
-    const url = request.nextUrl.clone()
-    url.pathname = rewritePath
-
-    const response = NextResponse.rewrite(url)
-    response.headers.set("x-tenant-identifier", tenantInfo.identifier)
-    response.headers.set("x-tenant-type", tenantInfo.type)
+  // Se c'è un subdomain valido, aggiungi header per il tenant
+  if (subdomain) {
+    const response = NextResponse.next()
+    response.headers.set("x-tenant-subdomain", subdomain)
     return response
   }
 
-  // Fallback - passa la richiesta
+  // Verifica custom domain (non localhost, non piattaforma base)
+  if (!isBaseDomain(hostname)) {
+    const response = NextResponse.next()
+    response.headers.set("x-tenant-domain", hostname.split(":")[0])
+    return response
+  }
+
   return NextResponse.next()
 }
 
 /**
- * Verifica se l'hostname è il dominio della piattaforma
+ * Estrae il subdomain dal hostname
  */
-function isPlatformDomain(host: string): boolean {
-  // Development
-  if (host === "localhost" || host === "127.0.0.1") {
-    return true
-  }
+function extractSubdomain(hostname: string): string | null {
+  const host = hostname.split(":")[0]
 
-  // Vercel preview deployments
-  if (host.endsWith(".vercel.app")) {
-    return true
-  }
+  // Domini base della piattaforma
+  const baseDomains = ["hotelaccelerator.com", "hotelaccelerator.app", "vercel.app"]
 
-  // Domini piattaforma espliciti
-  return PLATFORM_DOMAINS.some((d) => host === d)
-}
-
-/**
- * Estrae informazioni tenant dall'hostname
- */
-function extractTenantInfo(host: string): { identifier: string; type: "subdomain" | "custom_domain" } | null {
-  // 1. Check subdomain su hotelaccelerator.com
-  const subdomainPatterns = ["hotelaccelerator.com", "hotelaccelerator.app"]
-  for (const base of subdomainPatterns) {
+  for (const base of baseDomains) {
     if (host.endsWith(`.${base}`)) {
       const subdomain = host.replace(`.${base}`, "")
-      // Ignora subdomain riservati
-      if (!["www", "app", "admin", "api", "mail"].includes(subdomain)) {
-        return { identifier: subdomain, type: "subdomain" }
+      // Ignora www, app, admin
+      if (subdomain !== "www" && subdomain !== "app" && subdomain !== "admin") {
+        return subdomain
       }
     }
-  }
-
-  // 2. Custom domain - qualsiasi dominio non riconosciuto come piattaforma
-  if (!isPlatformDomain(host)) {
-    return { identifier: host, type: "custom_domain" }
   }
 
   return null
 }
 
-export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+/**
+ * Verifica se è un dominio base della piattaforma
+ */
+function isBaseDomain(hostname: string): boolean {
+  const host = hostname.split(":")[0]
+  return (
+    host === "hotelaccelerator.com" ||
+    host === "www.hotelaccelerator.com" ||
+    host === "app.hotelaccelerator.com" ||
+    host === "admin.hotelaccelerator.com" ||
+    host === "localhost" ||
+    host.endsWith(".vercel.app")
+  )
 }
 
-export default middleware
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+}

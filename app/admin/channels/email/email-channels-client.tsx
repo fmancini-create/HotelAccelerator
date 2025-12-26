@@ -1,33 +1,42 @@
 "use client"
 
 import type React from "react"
+import { createClient } from "@/lib/supabase/client"
+import { AdminHeader } from "@/components/admin/admin-header"
 
 import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Mail,
   Plus,
-  ArrowLeft,
   Power,
   PowerOff,
   Trash2,
   Edit,
-  RefreshCw,
   CheckCircle,
   XCircle,
+  RefreshCw,
+  Settings,
+  FolderSync,
+  Tag,
+  Inbox,
+  Send,
+  Star,
   AlertCircle,
-  ExternalLink,
+  Clock,
+  Loader2,
+  Shield,
 } from "lucide-react"
-import Link from "next/link"
 import { useSearchParams } from "next/navigation"
-import { DEFAULT_PROPERTY_ID } from "@/lib/tenant"
 
-const GmailIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
+const GmailIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className || "w-5 h-5"} fill="none">
     <path
       d="M22 6V18C22 19.1 21.1 20 20 20H4C2.9 20 2 19.1 2 18V6C2 4.9 2.9 4 4 4H20C21.1 4 22 4.9 22 6Z"
       fill="#F2F2F2"
@@ -41,12 +50,21 @@ const GmailIcon = () => (
   </svg>
 )
 
-const OutlookIcon = () => (
-  <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none">
+const OutlookIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className || "w-5 h-5"} fill="none">
     <rect x="2" y="4" width="20" height="16" rx="2" fill="#0078D4" />
     <path d="M22 6V18M2 8H22M2 16H22" stroke="#fff" strokeWidth="0.5" opacity="0.3" />
     <ellipse cx="8" cy="12" rx="4" ry="5" fill="#fff" />
     <ellipse cx="8" cy="12" rx="2.5" ry="3.5" fill="#0078D4" />
+  </svg>
+)
+
+const YahooIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" className={className || "w-5 h-5"} fill="none">
+    <circle cx="12" cy="12" r="10" fill="#6001D2" />
+    <text x="12" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">
+      Y!
+    </text>
   </svg>
 )
 
@@ -59,17 +77,41 @@ interface EmailChannel {
   is_active: boolean
   sync_enabled: boolean
   last_sync_at: string | null
-  oauth_access_token: string | null
-  oauth_expiry: string | null
   created_at: string
-  assignments?: { user_id: string; user_name?: string }[]
+  property_id: string
+  oauth_expires_at?: string | null
+  assignments?: { user_id: string }[]
+}
+
+interface GmailLabel {
+  id: string
+  name: string
+  type: string
+  messagesTotal: number
+  messagesUnread: number
+  sync_enabled?: boolean
 }
 
 interface AdminUser {
   id: string
   name: string
   email: string
-  role: string
+}
+
+const GMAIL_SYSTEM_LABELS: Record<string, { name: string; icon: React.ReactNode; color: string }> = {
+  INBOX: { name: "Posta in arrivo", icon: <Inbox className="w-4 h-4" />, color: "text-blue-600" },
+  SENT: { name: "Posta inviata", icon: <Send className="w-4 h-4" />, color: "text-green-600" },
+  STARRED: { name: "Speciali", icon: <Star className="w-4 h-4" />, color: "text-yellow-500" },
+  IMPORTANT: { name: "Importanti", icon: <AlertCircle className="w-4 h-4" />, color: "text-orange-500" },
+  TRASH: { name: "Cestino", icon: <Trash2 className="w-4 h-4" />, color: "text-red-500" },
+  SPAM: { name: "Spam", icon: <Shield className="w-4 h-4" />, color: "text-gray-500" },
+  DRAFT: { name: "Bozze", icon: <Edit className="w-4 h-4" />, color: "text-gray-600" },
+  UNREAD: { name: "Non letti", icon: <Mail className="w-4 h-4" />, color: "text-blue-500" },
+  CATEGORY_PERSONAL: { name: "Personale", icon: <Tag className="w-4 h-4" />, color: "text-purple-500" },
+  CATEGORY_SOCIAL: { name: "Social", icon: <Tag className="w-4 h-4" />, color: "text-pink-500" },
+  CATEGORY_PROMOTIONS: { name: "Promozioni", icon: <Tag className="w-4 h-4" />, color: "text-green-500" },
+  CATEGORY_UPDATES: { name: "Aggiornamenti", icon: <Tag className="w-4 h-4" />, color: "text-blue-500" },
+  CATEGORY_FORUMS: { name: "Forum", icon: <Tag className="w-4 h-4" />, color: "text-orange-500" },
 }
 
 export default function EmailChannelsClient() {
@@ -78,209 +120,207 @@ export default function EmailChannelsClient() {
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
   const [editingChannel, setEditingChannel] = useState<EmailChannel | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [propertyId, setPropertyId] = useState<string | null>(null)
+  const [selectedChannel, setSelectedChannel] = useState<EmailChannel | null>(null)
+  const [labels, setLabels] = useState<GmailLabel[]>([])
+  const [loadingLabels, setLoadingLabels] = useState(false)
   const [syncing, setSyncing] = useState<string | null>(null)
-  const [connectingOAuth, setConnectingOAuth] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState("accounts")
 
   const searchParams = useSearchParams()
-  const successParam = searchParams.get("success")
-  const errorParam = searchParams.get("error")
+  const oauthSuccess = searchParams.get("success")
+  const oauthError = searchParams.get("error")
 
+  // Form state
   const [formData, setFormData] = useState({
-    email: "",
+    email_address: "",
     display_name: "",
     is_active: true,
     assigned_users: [] as string[],
   })
 
-  const supabase = createClient()
-
   useEffect(() => {
-    fetchChannels()
-    fetchUsers()
+    fetchData()
   }, [])
 
-  const fetchChannels = async () => {
-    setLoading(true)
+  useEffect(() => {
+    if (channels.length > 0 && !selectedChannel) {
+      const gmailChannel = channels.find((c) => c.provider === "gmail")
+      if (gmailChannel) {
+        setSelectedChannel(gmailChannel)
+        fetchLabels(gmailChannel.id)
+      }
+    }
+  }, [channels])
+
+  const fetchData = async () => {
     try {
-      const { data: channelsData, error: channelsError } = await supabase
-        .from("email_channels")
-        .select("*")
-        .eq("property_id", DEFAULT_PROPERTY_ID)
-        .order("created_at", { ascending: false })
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
 
-      if (channelsError) throw channelsError
+      const { data: adminUser } = await supabase
+        .from("admin_users")
+        .select("property_id")
+        .eq("user_id", user.id)
+        .single()
 
-      const channelsWithAssignments = await Promise.all(
-        (channelsData || []).map(async (channel) => {
-          const { data: assignments } = await supabase
-            .from("email_channel_assignments")
-            .select("user_id")
-            .eq("channel_id", channel.id)
+      if (adminUser?.property_id) {
+        setPropertyId(adminUser.property_id)
 
-          return { ...channel, assignments: assignments || [] }
-        }),
-      )
+        const channelsRes = await fetch("/api/channels/email")
+        if (channelsRes.ok) {
+          const channelsData = await channelsRes.json()
+          setChannels(channelsData)
+        }
 
-      setChannels(channelsWithAssignments)
+        const { data: adminUsers } = await supabase
+          .from("admin_users")
+          .select("id, name, email")
+          .eq("property_id", adminUser.property_id)
+
+        if (adminUsers) {
+          setUsers(adminUsers)
+        }
+      }
     } catch (error) {
-      console.error("Error fetching channels:", error)
+      console.error("Error fetching data:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchUsers = async () => {
+  const fetchLabels = async (channelId: string) => {
+    setLoadingLabels(true)
     try {
-      const { data, error } = await supabase
-        .from("admin_users")
-        .select("id, name, email, role")
-        .eq("property_id", DEFAULT_PROPERTY_ID)
-        .order("name")
-
-      if (error) throw error
-      setUsers(data || [])
-    } catch (error) {
-      console.error("Error fetching users:", error)
-    }
-  }
-
-  const handleOAuthConnect = async (provider: "gmail" | "outlook") => {
-    setConnectingOAuth(provider)
-    try {
-      const response = await fetch("/api/channels/email/oauth/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, property_id: DEFAULT_PROPERTY_ID }),
-      })
-
-      const data = await response.json()
-
-      if (data.authUrl) {
-        window.location.href = data.authUrl
-      } else {
-        alert(data.error || "Errore durante la connessione OAuth")
-        setConnectingOAuth(null)
+      const res = await fetch(`/api/channels/email/labels?channel_id=${channelId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setLabels(data.labels || [])
       }
     } catch (error) {
-      console.error("OAuth error:", error)
-      alert("Errore durante la connessione")
-      setConnectingOAuth(null)
+      console.error("Error fetching labels:", error)
+    } finally {
+      setLoadingLabels(false)
     }
   }
 
-  const handleSync = async (channelId: string) => {
-    setSyncing(channelId)
+  const handleSync = async (channel: EmailChannel) => {
+    setSyncing(channel.id)
     try {
-      const response = await fetch("/api/channels/email/sync", {
+      const res = await fetch("/api/channels/email/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_id: channelId, property_id: DEFAULT_PROPERTY_ID }),
+        body: JSON.stringify({
+          channel_id: channel.id,
+          property_id: propertyId,
+        }),
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        alert(`Sincronizzazione completata: ${data.imported} nuove email importate`)
-        fetchChannels()
+      const data = await res.json()
+      if (res.ok) {
+        alert(`Sincronizzate ${data.imported} email su ${data.total} totali`)
+        await fetchData()
       } else {
         alert(data.error || "Errore durante la sincronizzazione")
       }
     } catch (error) {
-      console.error("Sync error:", error)
+      console.error("Error syncing:", error)
       alert("Errore durante la sincronizzazione")
     } finally {
       setSyncing(null)
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
+  const handleOAuthConnect = async (provider: "gmail" | "outlook") => {
+    if (!propertyId) return
 
     try {
-      if (editingChannel) {
-        const { error: updateError } = await supabase
-          .from("email_channels")
-          .update({
-            email_address: formData.email,
-            name: formData.display_name || formData.email.split("@")[0],
-            display_name: formData.display_name,
-            is_active: formData.is_active,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", editingChannel.id)
+      const res = await fetch("/api/channels/email/oauth/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, property_id: propertyId }),
+      })
 
-        if (updateError) throw updateError
-
-        await supabase.from("email_channel_assignments").delete().eq("channel_id", editingChannel.id)
-
-        if (formData.assigned_users.length > 0) {
-          const assignments = formData.assigned_users.map((userId, index) => ({
-            property_id: DEFAULT_PROPERTY_ID,
-            channel_id: editingChannel.id,
-            user_id: userId,
-            assignment_type: index === 0 ? "owner" : "member",
-          }))
-
-          await supabase.from("email_channel_assignments").insert(assignments)
-        }
+      const data = await res.json()
+      if (data.authUrl) {
+        window.location.href = data.authUrl
       } else {
-        const { data: newChannel, error: insertError } = await supabase
-          .from("email_channels")
-          .insert({
-            property_id: DEFAULT_PROPERTY_ID,
-            email_address: formData.email,
-            name: formData.display_name || formData.email.split("@")[0],
-            display_name: formData.display_name,
-            is_active: formData.is_active,
-          })
-          .select("id")
-          .single()
-
-        if (insertError) throw insertError
-
-        if (formData.assigned_users.length > 0 && newChannel) {
-          const assignments = formData.assigned_users.map((userId, index) => ({
-            property_id: DEFAULT_PROPERTY_ID,
-            channel_id: newChannel.id,
-            user_id: userId,
-            assignment_type: index === 0 ? "owner" : "member",
-          }))
-
-          await supabase.from("email_channel_assignments").insert(assignments)
-        }
+        alert(data.error || "Errore avvio OAuth")
       }
+    } catch (error) {
+      console.error("OAuth error:", error)
+    }
+  }
 
-      setShowAddForm(false)
-      setEditingChannel(null)
-      resetForm()
-      fetchChannels()
-    } catch (error: any) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const url = editingChannel ? `/api/channels/email/${editingChannel.id}` : "/api/channels/email"
+
+      const res = await fetch(url, {
+        method: editingChannel ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      })
+
+      if (res.ok) {
+        await fetchData()
+        setShowAddForm(false)
+        setEditingChannel(null)
+        setFormData({
+          email_address: "",
+          display_name: "",
+          is_active: true,
+          assigned_users: [],
+        })
+      }
+    } catch (error) {
       console.error("Error saving channel:", error)
-      alert(`Errore: ${error.message}`)
-    } finally {
-      setSaving(false)
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("Sei sicuro di voler eliminare questo canale email?")) return
-
     try {
-      await supabase.from("email_channel_assignments").delete().eq("channel_id", id)
-      const { error } = await supabase.from("email_channels").delete().eq("id", id)
-      if (error) throw error
-      fetchChannels()
+      const res = await fetch(`/api/channels/email/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        await fetchData()
+        if (selectedChannel?.id === id) {
+          setSelectedChannel(null)
+        }
+      }
     } catch (error) {
       console.error("Error deleting channel:", error)
     }
   }
 
-  const handleEdit = (channel: EmailChannel) => {
+  const handleToggleActive = async (channel: EmailChannel) => {
+    try {
+      const res = await fetch(`/api/channels/email/${channel.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...channel,
+          is_active: !channel.is_active,
+          assigned_users: channel.assignments?.map((a) => a.user_id) || [],
+        }),
+      })
+
+      if (res.ok) {
+        await fetchData()
+      }
+    } catch (error) {
+      console.error("Error toggling channel:", error)
+    }
+  }
+
+  const startEdit = (channel: EmailChannel) => {
     setEditingChannel(channel)
     setFormData({
-      email: channel.email_address,
+      email_address: channel.email_address,
       display_name: channel.display_name || "",
       is_active: channel.is_active,
       assigned_users: channel.assignments?.map((a) => a.user_id) || [],
@@ -288,242 +328,338 @@ export default function EmailChannelsClient() {
     setShowAddForm(true)
   }
 
-  const resetForm = () => {
-    setFormData({ email: "", display_name: "", is_active: true, assigned_users: [] })
-    setEditingChannel(null)
+  const isTokenExpired = (channel: EmailChannel) => {
+    if (!channel.oauth_expires_at) return false
+    return new Date(channel.oauth_expires_at) < new Date()
   }
 
-  const toggleChannelStatus = async (channel: EmailChannel) => {
-    try {
-      const { error } = await supabase
-        .from("email_channels")
-        .update({ is_active: !channel.is_active, updated_at: new Date().toISOString() })
-        .eq("id", channel.id)
-
-      if (error) throw error
-      fetchChannels()
-    } catch (error) {
-      console.error("Error toggling status:", error)
-    }
-  }
-
-  const getProviderBadge = (channel: EmailChannel) => {
-    if (channel.provider === "gmail") {
+  const getProviderBadge = (provider: string | null) => {
+    if (provider === "gmail") {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-50 text-red-700 rounded-full text-xs font-medium">
-          <GmailIcon />
+        <Badge variant="outline" className="gap-1 bg-white">
+          <GmailIcon className="w-3 h-3" />
           Gmail
-        </span>
+        </Badge>
       )
     }
-    if (channel.provider === "outlook") {
+    if (provider === "outlook") {
       return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
-          <OutlookIcon />
+        <Badge variant="outline" className="gap-1 bg-white">
+          <OutlookIcon className="w-3 h-3" />
           Outlook
-        </span>
+        </Badge>
       )
     }
+    return <Badge variant="secondary">Manuale</Badge>
+  }
+
+  if (loading) {
     return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-        <Mail className="w-3.5 h-3.5" />
-        Manuale
-      </span>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#faf9f7]">
-      {/* Header */}
-      <header className="bg-white border-b border-[#e5e5e5] px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/dashboard" className="p-2 hover:bg-[#f8f5f0] rounded-lg transition-colors">
-              <ArrowLeft className="w-5 h-5 text-[#5c5c5c]" />
-            </Link>
-            <div>
-              <h1 className="text-xl font-semibold text-[#2c2c2c]">Canali Email</h1>
-              <p className="text-sm text-[#8b8b8b]">HotelAccelerator - Gestione caselle email</p>
-            </div>
+    <div className="min-h-screen bg-background">
+      <AdminHeader
+        title="Email"
+        subtitle="Configura e sincronizza i tuoi account email"
+        breadcrumbs={[{ label: "Canali", href: "/admin/channels" }, { label: "Email" }]}
+      />
+
+      <div className="container py-6 space-y-6">
+        {/* OAuth Status Messages */}
+        {oauthSuccess === "connected" && (
+          <div className="flex items-center gap-2 p-4 rounded-lg bg-green-50 border border-green-200">
+            <CheckCircle className="h-5 w-5 text-green-500" />
+            <span className="text-green-700">Account email collegato con successo! La sincronizzazione è attiva.</span>
           </div>
-        </div>
-      </header>
+        )}
 
-      {/* Success/Error Messages */}
-      {successParam === "connected" && (
-        <div className="mx-6 mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-green-600" />
-          <p className="text-green-800">Account email collegato con successo!</p>
-        </div>
-      )}
-      {errorParam && (
-        <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
-          <XCircle className="w-5 h-5 text-red-600" />
-          <p className="text-red-800">Errore durante la connessione: {errorParam}</p>
-        </div>
-      )}
+        {oauthError && (
+          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 border border-red-200">
+            <XCircle className="h-5 w-5 text-red-500" />
+            <span className="text-red-700">
+              {oauthError === "token_exchange_failed" && "Errore durante l'autenticazione. Riprova."}
+              {oauthError === "config_missing" && "Configurazione OAuth mancante. Contatta il supporto."}
+              {oauthError === "state_expired" && "Sessione scaduta. Riprova."}
+              {!["token_exchange_failed", "config_missing", "state_expired"].includes(oauthError) &&
+                "Errore durante il collegamento"}
+            </span>
+          </div>
+        )}
 
-      <div className="p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Channel List */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* OAuth Connect Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="border-2 border-dashed border-[#e5e5e5] hover:border-red-300 transition-colors">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-red-50 rounded-xl">
-                      <GmailIcon />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-medium text-[#2c2c2c]">Collega Gmail</h3>
-                      <p className="text-sm text-[#8b8b8b]">Sincronizza automaticamente</p>
-                    </div>
-                    <Button
-                      onClick={() => handleOAuthConnect("gmail")}
-                      disabled={connectingOAuth === "gmail"}
-                      size="sm"
-                      className="bg-red-500 hover:bg-red-600"
-                    >
-                      {connectingOAuth === "gmail" ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <>
-                          <ExternalLink className="w-4 h-4 mr-1" />
-                          Collega
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsTrigger value="accounts">Account</TabsTrigger>
+            <TabsTrigger value="folders">Cartelle</TabsTrigger>
+            <TabsTrigger value="settings">Impostazioni</TabsTrigger>
+          </TabsList>
 
-              <Card className="border-2 border-dashed border-[#e5e5e5] hover:border-blue-300 transition-colors">
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-blue-50 rounded-xl">
-                      <OutlookIcon />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-medium text-[#2c2c2c]">Collega Outlook</h3>
-                      <p className="text-sm text-[#8b8b8b]">Microsoft 365 / Outlook.com</p>
-                    </div>
-                    <Button
-                      onClick={() => handleOAuthConnect("outlook")}
-                      disabled={connectingOAuth === "outlook"}
-                      size="sm"
-                      className="bg-blue-500 hover:bg-blue-600"
-                    >
-                      {connectingOAuth === "outlook" ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <>
-                          <ExternalLink className="w-4 h-4 mr-1" />
-                          Collega
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Channels Table */}
+          {/* ACCOUNTS TAB */}
+          <TabsContent value="accounts" className="space-y-6">
+            {/* Quick Connect */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Caselle Email Collegate</CardTitle>
-                  <CardDescription>Gestisci le caselle email per la ricezione e invio messaggi</CardDescription>
-                </div>
-                <Button
-                  onClick={() => {
-                    resetForm()
-                    setShowAddForm(true)
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="border-[#8b7355] text-[#8b7355] hover:bg-[#f8f5f0]"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  Aggiungi Manuale
-                </Button>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5" />
+                  Collega Account Email
+                </CardTitle>
+                <CardDescription>
+                  Un click per collegare Gmail o Outlook. Sincronizzazione automatica bidirezionale.
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <RefreshCw className="w-6 h-6 text-[#8b7355] animate-spin" />
-                  </div>
-                ) : channels.length === 0 ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-[#f8f5f0] rounded-full flex items-center justify-center mx-auto mb-4">
-                      <Mail className="w-8 h-8 text-[#8b7355]" />
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* Gmail */}
+                  <button
+                    onClick={() => handleOAuthConnect("gmail")}
+                    className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <GmailIcon className="w-8 h-8" />
                     </div>
-                    <h3 className="text-lg font-medium text-[#2c2c2c] mb-2">Nessuna email collegata</h3>
-                    <p className="text-sm text-[#8b8b8b] mb-4">
-                      Collega Gmail o Outlook per iniziare a ricevere messaggi
-                    </p>
+                    <div className="text-left">
+                      <p className="font-medium">Google Gmail</p>
+                      <p className="text-sm text-muted-foreground">Sincronizza cartelle e etichette</p>
+                    </div>
+                  </button>
+
+                  {/* Outlook */}
+                  <button
+                    onClick={() => handleOAuthConnect("outlook")}
+                    className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <OutlookIcon className="w-8 h-8" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium">Microsoft Outlook</p>
+                      <p className="text-sm text-muted-foreground">Office 365 e Hotmail</p>
+                    </div>
+                  </button>
+
+                  {/* Manual */}
+                  <button
+                    onClick={() => setShowAddForm(true)}
+                    className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Plus className="w-6 h-6 text-muted-foreground" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium">Altro Provider</p>
+                      <p className="text-sm text-muted-foreground">IMAP/SMTP manuale</p>
+                    </div>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Add/Edit Form */}
+            {showAddForm && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>{editingChannel ? "Modifica" : "Aggiungi"} Account Email</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Indirizzo Email</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={formData.email_address}
+                          onChange={(e) => setFormData({ ...formData, email_address: e.target.value })}
+                          placeholder="info@tuohotel.com"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="display_name">Nome Visualizzato</Label>
+                        <Input
+                          id="display_name"
+                          value={formData.display_name}
+                          onChange={(e) => setFormData({ ...formData, display_name: e.target.value })}
+                          placeholder="Reception Hotel"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Assegna a</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {users.map((user) => (
+                          <Button
+                            key={user.id}
+                            type="button"
+                            variant={formData.assigned_users.includes(user.id) ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              setFormData({
+                                ...formData,
+                                assigned_users: formData.assigned_users.includes(user.id)
+                                  ? formData.assigned_users.filter((id) => id !== user.id)
+                                  : [...formData.assigned_users, user.id],
+                              })
+                            }}
+                          >
+                            {user.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button type="submit">{editingChannel ? "Salva" : "Aggiungi"}</Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowAddForm(false)
+                          setEditingChannel(null)
+                        }}
+                      >
+                        Annulla
+                      </Button>
+                    </div>
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Connected Accounts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Account Collegati</CardTitle>
+                <CardDescription>
+                  {channels.length} {channels.length === 1 ? "account" : "account"} email configurati
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {channels.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <Mail className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                    <p className="text-lg font-medium">Nessun account collegato</p>
+                    <p className="text-sm">Collega Gmail o Outlook per iniziare</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {channels.map((channel) => (
-                      <div key={channel.id} className="flex items-center justify-between p-4 bg-[#f8f5f0] rounded-lg">
+                      <div
+                        key={channel.id}
+                        className={`flex items-center justify-between p-4 rounded-xl border bg-card hover:shadow-md transition-all cursor-pointer ${
+                          selectedChannel?.id === channel.id ? "ring-2 ring-primary" : ""
+                        }`}
+                        onClick={() => {
+                          setSelectedChannel(channel)
+                          if (channel.provider === "gmail") {
+                            fetchLabels(channel.id)
+                          }
+                        }}
+                      >
                         <div className="flex items-center gap-4">
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-[#2c2c2c]">
-                                {channel.display_name || channel.email_address}
-                              </span>
-                              {getProviderBadge(channel)}
-                            </div>
-                            <span className="text-sm text-[#8b8b8b]">{channel.email_address}</span>
-                            {channel.last_sync_at && (
-                              <span className="text-xs text-[#8b8b8b]">
-                                Ultima sync: {new Date(channel.last_sync_at).toLocaleString("it-IT")}
-                              </span>
+                          <div
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                              channel.is_active ? "bg-green-100" : "bg-muted"
+                            }`}
+                          >
+                            {channel.provider === "gmail" ? (
+                              <GmailIcon className="w-7 h-7" />
+                            ) : channel.provider === "outlook" ? (
+                              <OutlookIcon className="w-7 h-7" />
+                            ) : (
+                              <Mail
+                                className={`h-6 w-6 ${channel.is_active ? "text-green-600" : "text-muted-foreground"}`}
+                              />
                             )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{channel.email_address}</p>
+                              {getProviderBadge(channel.provider)}
+                              {isTokenExpired(channel) && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Token scaduto
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span>{channel.display_name || "Nessun nome"}</span>
+                              {channel.last_sync_at && (
+                                <>
+                                  <span>•</span>
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    Sync:{" "}
+                                    {new Date(channel.last_sync_at).toLocaleString("it-IT", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                              channel.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
-                            }`}
-                          >
-                            {channel.is_active ? "Attivo" : "Disattivo"}
-                          </span>
-
-                          {channel.oauth_access_token && (
+                          {channel.provider && (
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              onClick={() => handleSync(channel.id)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleSync(channel)
+                              }}
                               disabled={syncing === channel.id}
-                              title="Sincronizza email"
                             >
-                              <RefreshCw className={`w-4 h-4 ${syncing === channel.id ? "animate-spin" : ""}`} />
+                              {syncing === channel.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-4 w-4" />
+                              )}
+                              <span className="ml-2 hidden sm:inline">Sincronizza</span>
                             </Button>
                           )}
-
                           <Button
                             variant="ghost"
-                            size="sm"
-                            onClick={() => toggleChannelStatus(channel)}
-                            title={channel.is_active ? "Disattiva" : "Attiva"}
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleToggleActive(channel)
+                            }}
                           >
                             {channel.is_active ? (
-                              <PowerOff className="w-4 h-4 text-gray-500" />
+                              <Power className="h-4 w-4 text-green-500" />
                             ) : (
-                              <Power className="w-4 h-4 text-green-500" />
+                              <PowerOff className="h-4 w-4 text-muted-foreground" />
                             )}
                           </Button>
-
-                          <Button variant="ghost" size="sm" onClick={() => handleEdit(channel)} title="Modifica">
-                            <Edit className="w-4 h-4 text-[#8b7355]" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              startEdit(channel)
+                            }}
+                          >
+                            <Settings className="h-4 w-4" />
                           </Button>
-
-                          <Button variant="ghost" size="sm" onClick={() => handleDelete(channel.id)} title="Elimina">
-                            <Trash2 className="w-4 h-4 text-red-500" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDelete(channel.id)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       </div>
@@ -532,191 +668,176 @@ export default function EmailChannelsClient() {
                 )}
               </CardContent>
             </Card>
-          </div>
+          </TabsContent>
 
-          {/* Right: Add/Edit Form or Info */}
-          <div>
-            {showAddForm ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">
-                    {editingChannel ? "Modifica Canale" : "Aggiungi Email Manuale"}
-                  </CardTitle>
-                  <CardDescription>
-                    {editingChannel
-                      ? "Modifica le impostazioni del canale email"
-                      : "Aggiungi una casella email senza OAuth"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-5">
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-[#5c5c5c]">
-                        Indirizzo Email <span className="text-red-500">*</span>
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="info@tuastruttura.com"
-                        value={formData.email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                        required
-                        disabled={!!editingChannel?.provider}
-                        className="border-[#e5e5e5] focus:border-[#8b7355] focus:ring-[#8b7355]"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="display_name" className="text-[#5c5c5c]">
-                        Nome Visualizzato
-                      </Label>
-                      <Input
-                        id="display_name"
-                        type="text"
-                        placeholder="es. Prenotazioni, Info Generale..."
-                        value={formData.display_name}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, display_name: e.target.value }))}
-                        className="border-[#e5e5e5] focus:border-[#8b7355] focus:ring-[#8b7355]"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-[#5c5c5c]">Stato</Label>
-                      <div className="flex gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setFormData((prev) => ({ ...prev, is_active: true }))}
-                          className={`flex-1 py-2.5 px-4 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                            formData.is_active
-                              ? "border-green-500 bg-green-50 text-green-700"
-                              : "border-[#e5e5e5] text-[#8b8b8b] hover:border-[#8b7355]"
-                          }`}
-                        >
-                          <Power className="w-4 h-4" />
-                          Attivo
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFormData((prev) => ({ ...prev, is_active: false }))}
-                          className={`flex-1 py-2.5 px-4 rounded-lg border-2 transition-all flex items-center justify-center gap-2 ${
-                            !formData.is_active
-                              ? "border-gray-500 bg-gray-50 text-gray-700"
-                              : "border-[#e5e5e5] text-[#8b8b8b] hover:border-[#8b7355]"
-                          }`}
-                        >
-                          <PowerOff className="w-4 h-4" />
-                          Disattivo
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-[#5c5c5c]">Assegna Operatori</Label>
-                      <div className="border border-[#e5e5e5] rounded-lg max-h-40 overflow-y-auto">
-                        {users.length === 0 ? (
-                          <div className="p-3 text-sm text-[#8b8b8b] text-center">Nessun operatore disponibile</div>
-                        ) : (
-                          users.map((user) => (
-                            <label
-                              key={user.id}
-                              className="flex items-center gap-3 p-3 hover:bg-[#f8f5f0] cursor-pointer border-b border-[#e5e5e5] last:border-b-0"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={formData.assigned_users.includes(user.id)}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      assigned_users: [...prev.assigned_users, user.id],
-                                    }))
-                                  } else {
-                                    setFormData((prev) => ({
-                                      ...prev,
-                                      assigned_users: prev.assigned_users.filter((id) => id !== user.id),
-                                    }))
-                                  }
-                                }}
-                                className="rounded border-[#e5e5e5] text-[#8b7355] focus:ring-[#8b7355]"
-                              />
-                              <div className="flex-1">
-                                <div className="text-sm font-medium text-[#5c5c5c]">{user.name}</div>
-                                <div className="text-xs text-[#8b8b8b]">{user.email}</div>
+          {/* FOLDERS TAB */}
+          <TabsContent value="folders" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FolderSync className="h-5 w-5" />
+                  Cartelle e Etichette Gmail
+                </CardTitle>
+                <CardDescription>
+                  Seleziona quali cartelle sincronizzare. Le email appariranno nella tua Inbox unificata.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!selectedChannel ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FolderSync className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                    <p>Seleziona un account Gmail per gestire le cartelle</p>
+                  </div>
+                ) : selectedChannel.provider !== "gmail" ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <FolderSync className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                    <p>La sincronizzazione cartelle è disponibile solo per Gmail</p>
+                  </div>
+                ) : loadingLabels ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* System Labels */}
+                    <div>
+                      <h4 className="text-sm font-medium mb-3 text-muted-foreground">Cartelle di Sistema</h4>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {labels
+                          .filter((l) => l.type === "system" && GMAIL_SYSTEM_LABELS[l.id])
+                          .map((label) => {
+                            const config = GMAIL_SYSTEM_LABELS[label.id]
+                            return (
+                              <div
+                                key={label.id}
+                                className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <span className={config.color}>{config.icon}</span>
+                                  <div>
+                                    <p className="font-medium text-sm">{config.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {label.messagesTotal} email • {label.messagesUnread} non lette
+                                    </p>
+                                  </div>
+                                </div>
+                                <Switch defaultChecked />
                               </div>
-                            </label>
-                          ))
-                        )}
+                            )
+                          })}
                       </div>
                     </div>
 
-                    <div className="flex gap-3 pt-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setShowAddForm(false)
-                          resetForm()
-                        }}
-                        className="flex-1"
-                      >
-                        Annulla
-                      </Button>
-                      <Button
-                        type="submit"
-                        disabled={saving}
-                        className="flex-1 bg-[#8b7355] hover:bg-[#6d5a43] text-white"
-                      >
-                        {saving ? "Salvataggio..." : editingChannel ? "Salva Modifiche" : "Aggiungi Canale"}
-                      </Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-[#8b7355]" />
-                    Come funziona
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 text-sm text-[#5c5c5c]">
-                  <div className="flex gap-3">
-                    <div className="w-6 h-6 bg-[#8b7355] text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      1
-                    </div>
-                    <div>
-                      <p className="font-medium">Collega l'account</p>
-                      <p className="text-[#8b8b8b]">
-                        Clicca su Gmail o Outlook per collegare automaticamente la casella
-                      </p>
-                    </div>
+                    {/* User Labels */}
+                    {labels.filter((l) => l.type === "user").length > 0 && (
+                      <div>
+                        <h4 className="text-sm font-medium mb-3 text-muted-foreground">Etichette Personalizzate</h4>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {labels
+                            .filter((l) => l.type === "user")
+                            .map((label) => (
+                              <div
+                                key={label.id}
+                                className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Tag className="w-4 h-4 text-blue-500" />
+                                  <div>
+                                    <p className="font-medium text-sm">{label.name}</p>
+                                    <p className="text-xs text-muted-foreground">{label.messagesTotal} email</p>
+                                  </div>
+                                </div>
+                                <Switch defaultChecked={label.sync_enabled !== false} />
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-3">
-                    <div className="w-6 h-6 bg-[#8b7355] text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      2
-                    </div>
-                    <div>
-                      <p className="font-medium">Sincronizza</p>
-                      <p className="text-[#8b8b8b]">Le email vengono importate automaticamente nella inbox</p>
-                    </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* SETTINGS TAB */}
+          <TabsContent value="settings" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Impostazioni Sincronizzazione</CardTitle>
+                <CardDescription>Configura come sincronizzare le email con la tua Inbox</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Sincronizzazione Automatica</p>
+                    <p className="text-sm text-muted-foreground">Scarica nuove email ogni 5 minuti</p>
                   </div>
-                  <div className="flex gap-3">
-                    <div className="w-6 h-6 bg-[#8b7355] text-white rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      3
-                    </div>
-                    <div>
-                      <p className="font-medium">Rispondi</p>
-                      <p className="text-[#8b8b8b]">
-                        Rispondi direttamente dalla inbox, le email partono dal tuo account
-                      </p>
-                    </div>
+                  <Switch defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Sincronizzazione Bidirezionale</p>
+                    <p className="text-sm text-muted-foreground">Le modifiche vengono riflesse anche in Gmail</p>
                   </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
+                  <Switch defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Notifiche Push</p>
+                    <p className="text-sm text-muted-foreground">Ricevi notifiche per nuove email</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Filtra Spam Automaticamente</p>
+                    <p className="text-sm text-muted-foreground">Non importare email dalla cartella Spam</p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Archivia Email Risposte</p>
+                    <p className="text-sm text-muted-foreground">Archivia automaticamente dopo la risposta</p>
+                  </div>
+                  <Switch />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Risposta Multi-Canale</CardTitle>
+                <CardDescription>
+                  Quando rispondi a un messaggio, puoi scegliere su quale canale inviarlo
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Abilita Risposta Multi-Canale</p>
+                    <p className="text-sm text-muted-foreground">
+                      Mostra opzioni per rispondere via Email, WhatsApp o altri canali
+                    </p>
+                  </div>
+                  <Switch defaultChecked />
+                </div>
+
+                <div className="p-4 rounded-lg bg-muted/50">
+                  <p className="text-sm text-muted-foreground">
+                    <strong>Come funziona:</strong> Quando rispondi a una conversazione, vedrai un menu per scegliere il
+                    canale di risposta. Se il contatto ha un numero WhatsApp, potrai rispondere direttamente su WhatsApp
+                    invece che via email.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

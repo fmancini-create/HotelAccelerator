@@ -1,15 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Link from "next/link"
-import { ArrowLeft, Megaphone, Plus, Eye, Pencil, Trash2, Home, MousePointer, RefreshCw } from "lucide-react"
+import { Megaphone, Plus, Eye, Pencil, Trash2, MousePointer, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { useAdminAuth } from "@/lib/admin-hooks"
-import { createBrowserClient } from "@/lib/supabase-browser"
-import { DEFAULT_PROPERTY_ID } from "@/lib/tenant"
+import { AdminHeader } from "@/components/admin/admin-header"
 
 interface MessageRule {
   id: string
@@ -90,15 +88,10 @@ export default function MessageRulesPage() {
 
   const loadRules = async () => {
     try {
-      const supabase = createBrowserClient()
-      const { data, error } = await supabase
-        .from("message_rules")
-        .select("*")
-        .eq("property_id", DEFAULT_PROPERTY_ID)
-        .order("priority", { ascending: false })
-
-      if (error) throw error
-      setRules(data || [])
+      const response = await fetch("/api/admin/message-rules")
+      if (!response.ok) throw new Error("Failed to load rules")
+      const data = await response.json()
+      setRules(data.rules || [])
     } catch (err: any) {
       console.error("Error loading rules:", err)
       setError("Errore caricamento messaggi")
@@ -109,19 +102,23 @@ export default function MessageRulesPage() {
 
   const handleToggleActive = async (rule: MessageRule) => {
     try {
-      const supabase = createBrowserClient()
-      const { error } = await supabase
-        .from("message_rules")
-        .update({ is_active: !rule.is_active, updated_at: new Date().toISOString() })
-        .eq("id", rule.id)
+      const response = await fetch(`/api/admin/message-rules/${rule.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !rule.is_active }),
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to toggle rule")
+      }
 
-      setRules(rules.map((r) => (r.id === rule.id ? { ...r, is_active: !r.is_active } : r)))
-      setSuccess(`Messaggio ${!rule.is_active ? "attivato" : "disattivato"}`)
+      const { rule: updatedRule } = await response.json()
+      setRules(rules.map((r) => (r.id === updatedRule.id ? updatedRule : r)))
+      setSuccess(`Messaggio ${updatedRule.is_active ? "attivato" : "disattivato"}`)
       setTimeout(() => setSuccess(""), 3000)
     } catch (err: any) {
-      setError("Errore aggiornamento messaggio")
+      setError(err.message || "Errore aggiornamento messaggio")
     }
   }
 
@@ -183,36 +180,28 @@ export default function MessageRulesPage() {
     if (!confirm(`Eliminare il messaggio "${rule.name}"?`)) return
 
     try {
-      const supabase = createBrowserClient()
-      const { error } = await supabase.from("message_rules").delete().eq("id", rule.id)
+      const response = await fetch(`/api/admin/message-rules/${rule.id}`, {
+        method: "DELETE",
+      })
 
-      if (error) throw error
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to delete rule")
+      }
 
       setRules(rules.filter((r) => r.id !== rule.id))
       setSuccess("Messaggio eliminato")
       setTimeout(() => setSuccess(""), 3000)
     } catch (err: any) {
-      setError("Errore eliminazione messaggio")
+      setError(err.message || "Errore eliminazione messaggio")
     }
   }
 
   const handleSave = async () => {
     setError("")
-
-    if (!formData.name.trim()) {
-      setError("Il nome è obbligatorio")
-      return
-    }
-    if (!formData.body.trim()) {
-      setError("Il testo del messaggio è obbligatorio")
-      return
-    }
-
     setIsSaving(true)
 
     try {
-      const supabase = createBrowserClient()
-
       let conditions: Record<string, any> = {}
       if (formData.rule_type === "page_visits") {
         conditions = { min: formData.condition_value }
@@ -229,7 +218,6 @@ export default function MessageRulesPage() {
       }
 
       const ruleData = {
-        property_id: DEFAULT_PROPERTY_ID,
         name: formData.name,
         description: formData.description || null,
         rule_type: formData.rule_type,
@@ -241,33 +229,29 @@ export default function MessageRulesPage() {
           cta_text: formData.cta_text || undefined,
           cta_url: formData.cta_url || undefined,
         },
-        updated_at: new Date().toISOString(),
       }
 
-      if (editingRule) {
-        const { error } = await supabase.from("message_rules").update(ruleData).eq("id", editingRule.id)
+      const url = editingRule ? `/api/admin/message-rules/${editingRule.id}` : "/api/admin/message-rules"
+      const method = editingRule ? "PUT" : "POST"
 
-        if (error) throw error
-        setSuccess("Messaggio aggiornato")
-      } else {
-        const { error } = await supabase.from("message_rules").insert({
-          ...ruleData,
-          is_active: false,
-          priority: 10,
-          max_impressions_per_session: 1,
-          max_impressions_per_day: 3,
-        })
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ruleData),
+      })
 
-        if (error) throw error
-        setSuccess("Messaggio creato")
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to save rule")
       }
 
+      setSuccess(editingRule ? "Messaggio aggiornato" : "Messaggio creato")
       resetForm()
       loadRules()
       setTimeout(() => setSuccess(""), 3000)
     } catch (err: any) {
       console.error("Save error:", err)
-      setError("Errore salvataggio messaggio")
+      setError(err.message || "Errore salvataggio messaggio")
     } finally {
       setIsSaving(false)
     }
@@ -275,7 +259,7 @@ export default function MessageRulesPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#8b7355]"></div>
       </div>
     )
@@ -284,46 +268,21 @@ export default function MessageRulesPage() {
   if (!adminUser) return null
 
   return (
-    <main className="min-h-screen bg-[#f8f7f4]">
-      {/* Header */}
-      <header className="bg-white border-b border-[#e5e5e5] sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/admin/dashboard">
-                <Button variant="ghost" size="sm" className="text-[#8b7355]">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Dashboard
-                </Button>
-              </Link>
-              <div className="flex items-center gap-2">
-                <Megaphone className="w-5 h-5 text-[#8b7355]" />
-                <h1 className="text-xl font-serif text-[#5c5c5c]">Smart Messages</h1>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Link href="/">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-[#8b7355] text-[#8b7355] hover:bg-[#8b7355] hover:text-white bg-transparent"
-                >
-                  <Home className="w-4 h-4 mr-2" />
-                  Sito
-                </Button>
-              </Link>
-              {!showForm && (
-                <Button onClick={() => setShowForm(true)} className="bg-[#8b7355] hover:bg-[#6b5a45]">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Nuovo Messaggio
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8">
+        {/* AdminHeader */}
+        <AdminHeader
+          title="Regole Messaggi"
+          subtitle="Configura messaggi automatici basati sul comportamento"
+          breadcrumbs={[{ label: "Regole Messaggi", href: "/admin/message-rules" }]}
+          actions={
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nuova Regola
+            </Button>
+          }
+        />
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Alerts */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
@@ -734,6 +693,6 @@ export default function MessageRulesPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   )
 }

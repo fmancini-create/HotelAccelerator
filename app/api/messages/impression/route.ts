@@ -1,12 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { DEFAULT_PROPERTY_ID } from "@/lib/tenant"
 
 // POST - Registra un'impressione (view, click, dismiss, convert)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { property_id = DEFAULT_PROPERTY_ID, rule_id, session_id, impression_type = "view" } = body
+    const { property_id, rule_id, session_id, impression_type = "view" } = body
+
+    if (!property_id) {
+      return NextResponse.json({ error: "property_id is required in request body" }, { status: 400 })
+    }
 
     if (!rule_id || !session_id) {
       return NextResponse.json({ error: "rule_id and session_id required" }, { status: 400 })

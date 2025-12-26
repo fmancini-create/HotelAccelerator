@@ -1,135 +1,90 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { getPropertyId, withPropertyId } from "@/lib/tenant"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { InboxReadService } from "@/lib/platform-services"
+import type { ConversationListOptions } from "@/lib/types/inbox-read.types"
+import { handleServiceError } from "@/lib/errors"
 
 export async function GET(request: Request) {
   try {
+    const propertyId = await getAuthenticatedPropertyId()
     const supabase = await createClient()
+    const service = new InboxReadService(supabase)
+
     const { searchParams } = new URL(request.url)
 
-    const propertyId = getPropertyId(request)
-
-    const status = searchParams.get("status") || "open"
-    const channel = searchParams.get("channel")
-    const limit = Number.parseInt(searchParams.get("limit") || "50")
-
-    const { error: tableCheckError } = await supabase.from("conversations").select("id").limit(1)
-
-    if (tableCheckError) {
-      console.error("[v0] Conversations table error:", tableCheckError.message)
-      return NextResponse.json({
-        conversations: [],
-        error: "Sistema messaggistica non configurato. Esegui lo script SQL.",
-      })
+    const options: ConversationListOptions = {
+      status: (searchParams.get("status") as any) || "open",
+      channel: (searchParams.get("channel") as any) || undefined,
+      limit: Number.parseInt(searchParams.get("limit") || "50"),
+      offset: Number.parseInt(searchParams.get("offset") || "0"),
+      search: searchParams.get("search") || undefined,
+      filter: (searchParams.get("filter") as any) || undefined,
     }
 
-    let query = supabase
-      .from("conversations")
-      .select(`
-        *,
-        contact:contacts(*),
-        assigned:admin_users(id, name, email)
-      `)
-      .eq("property_id", propertyId)
-      .order("last_message_at", { ascending: false })
-      .limit(limit)
+    const conversations = await service.listConversations(propertyId, options)
 
-    if (status !== "all") {
-      query = query.eq("status", status)
-    }
-
-    if (channel && channel !== "all") {
-      query = query.eq("channel", channel)
-    }
-
-    const { data, error } = await query
-
-    if (error) {
-      console.error("[v0] Error loading conversations:", error)
-      return NextResponse.json({ error: error.message, conversations: [] })
-    }
-
-    // Get last message for each conversation separately
-    const conversationsWithLastMessage = await Promise.all(
-      (data || []).map(async (conv) => {
-        const { data: messages } = await supabase
-          .from("messages")
-          .select("id, content, sender_type, created_at")
-          .eq("conversation_id", conv.id)
-          .eq("property_id", propertyId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-
-        return {
-          ...conv,
-          lastMessage: messages?.[0] || null,
-        }
-      }),
-    )
-
-    return NextResponse.json({ conversations: conversationsWithLastMessage })
+    return NextResponse.json({ conversations })
   } catch (error) {
-    console.error("[v0] Unexpected error:", error)
-    return NextResponse.json({
-      conversations: [],
-      error: "Errore nel caricamento delle conversazioni",
-    })
+    const { status, json } = handleServiceError(error)
+    return NextResponse.json(json, { status })
   }
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient()
-  const body = await request.json()
+  try {
+    const propertyId = await getAuthenticatedPropertyId()
 
-  const propertyId = getPropertyId(request, body)
+    const supabase = await createClient()
+    const body = await request.json()
 
-  const { channel, contact_id, subject, metadata } = body
+    const { channel, contact_id, subject, metadata } = body
 
-  let contactId = contact_id
+    let contactId = contact_id
 
-  if (!contactId && body.contact) {
-    const { data: existingContact } = await supabase
-      .from("contacts")
-      .select("id")
-      .eq("property_id", propertyId)
-      .or(`email.eq.${body.contact.email},phone.eq.${body.contact.phone}`)
-      .single()
-
-    if (existingContact) {
-      contactId = existingContact.id
-    } else {
-      const { data: newContact, error: contactError } = await supabase
+    if (!contactId && body.contact) {
+      const { data: existingContact } = await supabase
         .from("contacts")
-        .insert(withPropertyId(body.contact, propertyId))
-        .select()
+        .select("id")
+        .eq("property_id", propertyId)
+        .or(`email.eq.${body.contact.email},phone.eq.${body.contact.phone}`)
         .single()
 
-      if (contactError) {
-        return NextResponse.json({ error: contactError.message }, { status: 500 })
+      if (existingContact) {
+        contactId = existingContact.id
+      } else {
+        const { data: newContact, error: contactError } = await supabase
+          .from("contacts")
+          .insert({ ...body.contact, property_id: propertyId })
+          .select()
+          .single()
+
+        if (contactError) {
+          return NextResponse.json({ error: contactError.message }, { status: 500 })
+        }
+        contactId = newContact.id
       }
-      contactId = newContact.id
     }
+
+    const { data: conversation, error } = await supabase
+      .from("conversations")
+      .insert({
+        channel,
+        contact_id: contactId,
+        subject,
+        metadata: metadata || {},
+        property_id: propertyId,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ conversation })
+  } catch (error) {
+    const { status, json } = handleServiceError(error)
+    return NextResponse.json(json, { status })
   }
-
-  const { data: conversation, error } = await supabase
-    .from("conversations")
-    .insert(
-      withPropertyId(
-        {
-          channel,
-          contact_id: contactId,
-          subject,
-          metadata: metadata || {},
-        },
-        propertyId,
-      ),
-    )
-    .select()
-    .single()
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ conversation })
 }

@@ -1,9 +1,7 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-import { createBrowserClient } from "@supabase/ssr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -38,8 +36,8 @@ import {
 import { format, formatDistanceToNow } from "date-fns"
 import { it } from "date-fns/locale"
 import { useAdminAuth } from "@/lib/admin-hooks"
-import { DEFAULT_PROPERTY_ID } from "@/lib/tenant"
 import type { IntelligenceSummary, NextAction } from "@/lib/conversation-intelligence-aggregator"
+import { AdminHeader } from "@/components/admin/admin-header"
 
 // Types
 interface Contact {
@@ -181,16 +179,11 @@ export default function EmailInboxClient() {
   const [filter, setFilter] = useState<"all" | "action_needed" | "high_priority">("all")
   const [isProcessingIntelligence, setIsProcessingIntelligence] = useState(false)
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
-
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
       fetchConversations()
     }
-  }, [authLoading, isAuthenticated])
+  }, [authLoading, isAuthenticated, filter, searchQuery])
 
   useEffect(() => {
     if (selectedConversation) {
@@ -201,39 +194,30 @@ export default function EmailInboxClient() {
   async function fetchConversations() {
     setIsLoading(true)
     try {
-      const propertyId = DEFAULT_PROPERTY_ID
+      const params = new URLSearchParams({
+        status: "all",
+        channel: "email",
+        limit: "100",
+        filter: filter,
+      })
 
-      const { data, error } = await supabase
-        .from("conversations")
-        .select(`
-          id,
-          subject,
-          status,
-          channel,
-          last_message_at,
-          created_at,
-          booking_data,
-          property_id,
-          metadata,
-          contact:contacts(id, email, name, phone),
-          messages(id, content, sender_type, sender_id, created_at, metadata)
-        `)
-        .eq("property_id", propertyId)
-        .eq("channel", "email")
-        .order("last_message_at", { ascending: false })
+      if (searchQuery) {
+        params.append("search", searchQuery)
+      }
 
-      if (error) throw error
+      const response = await fetch(`/api/inbox/conversations?${params}`)
+      const data = await response.json()
 
-      const formattedConversations = (data || []).map((conv: Record<string, unknown>) => ({
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to fetch conversations")
+      }
+
+      // Map API response to UI types
+      const formattedConversations = (data.conversations || []).map((conv: any) => ({
         ...conv,
-        is_starred: false,
-        priority: "normal",
-        contact: Array.isArray(conv.contact) ? conv.contact[0] : conv.contact,
-        messages: ((conv.messages as Message[]) || []).sort(
-          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-        ),
-        booking_data: (conv.booking_data as BookingData) || {},
-        metadata: (conv.metadata as ConversationMetadata) || null,
+        is_starred: conv.is_starred || false,
+        priority: conv.intelligence_summary?.next_action?.priority || "normal",
+        messages: [], // Messages loaded separately when conversation is selected
       })) as Conversation[]
 
       setConversations(formattedConversations)
@@ -244,11 +228,32 @@ export default function EmailInboxClient() {
     }
   }
 
+  async function loadConversationDetail(convId: string) {
+    try {
+      const response = await fetch(`/api/inbox/${convId}`)
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to load conversation")
+      }
+
+      // Update selected conversation with full data
+      const fullConversation: Conversation = {
+        ...data.conversation,
+        messages: data.messages || [],
+        is_starred: data.conversation.is_starred || false,
+        priority: data.conversation.intelligence_summary?.next_action?.priority || "normal",
+      }
+
+      setSelectedConversation(fullConversation)
+    } catch (error) {
+      console.error("Error loading conversation detail:", error)
+    }
+  }
+
   async function processIntelligence(conv: Conversation) {
     setIsProcessingIntelligence(true)
     try {
-      const propertyId = DEFAULT_PROPERTY_ID
-
       // First process all messages
       for (const msg of conv.messages.filter((m) => m.sender_type === "customer")) {
         await fetch("/api/intelligence/process", {
@@ -256,7 +261,6 @@ export default function EmailInboxClient() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message_id: msg.id,
-            property_id: propertyId,
           }),
         })
       }
@@ -267,7 +271,6 @@ export default function EmailInboxClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversation_id: conv.id,
-          property_id: propertyId,
         }),
       })
 
@@ -348,6 +351,7 @@ Siamo ancora a disposizione per assisterLa nella prenotazione.
 Può contattarci anche telefonicamente al numero +39 055 XXX XXXX.
 
 Cordiali saluti,
+La Direzione
 Villa I Barronci`)
         break
 
@@ -380,17 +384,18 @@ Villa I Barronci`)
 
   async function updateConversationOutcome(convId: string, outcome: string) {
     try {
-      const { error } = await supabase
-        .from("conversations")
-        .update({
-          booking_data: { ...bookingData, outcome },
-          status: outcome === "confirmed" ? "closed" : "archived",
-        })
-        .eq("id", convId)
+      const response = await fetch(`/api/inbox/${convId}/update-outcome`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          outcome,
+          booking_data: bookingData,
+        }),
+      })
 
-      if (!error) {
-        await fetchConversations()
-      }
+      if (!response.ok) throw new Error("Failed to update outcome")
+
+      await fetchConversations()
     } catch (error) {
       console.error("Error updating outcome:", error)
     }
@@ -399,11 +404,17 @@ Villa I Barronci`)
   async function toggleStar(conv: Conversation, e: React.MouseEvent) {
     e.stopPropagation()
     try {
-      const { error } = await supabase.from("conversations").update({ is_starred: !conv.is_starred }).eq("id", conv.id)
+      const response = await fetch(`/api/inbox/${conv.id}/toggle-star`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_starred: !conv.is_starred }),
+      })
 
-      if (error) throw error
+      if (!response.ok) throw new Error("Failed to toggle star")
 
-      setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, is_starred: !c.is_starred } : c)))
+      const result = await response.json()
+
+      setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, is_starred: !conv.is_starred } : c)))
       if (selectedConversation?.id === conv.id) {
         setSelectedConversation({ ...selectedConversation, is_starred: !conv.is_starred })
       }
@@ -417,15 +428,12 @@ Villa I Barronci`)
 
     setIsSending(true)
     try {
-      const propertyId = DEFAULT_PROPERTY_ID
-
-      const response = await fetch("/api/inbox/email/send", {
+      const response = await fetch(`/api/inbox/${selectedConversation.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          conversation_id: selectedConversation.id,
           content: replyText,
-          property_id: propertyId,
+          sender_type: "agent",
         }),
       })
 
@@ -443,7 +451,6 @@ Villa I Barronci`)
         created_at: new Date().toISOString(),
         metadata: {
           email_sent: true,
-          sent_to: result.sent_to,
         },
       }
 
@@ -453,7 +460,7 @@ Villa I Barronci`)
       })
 
       setReplyText("")
-      alert(`Email inviata con successo a ${result.sent_to}`)
+      alert("Email inviata con successo")
     } catch (error) {
       console.error("Error sending reply:", error)
       alert(error instanceof Error ? error.message : "Errore durante l'invio dell'email")
@@ -467,12 +474,15 @@ Villa I Barronci`)
 
     setIsSavingBooking(true)
     try {
-      const { error } = await supabase
-        .from("conversations")
-        .update({ booking_data: bookingData })
-        .eq("id", selectedConversation.id)
+      const response = await fetch(`/api/inbox/${selectedConversation.id}/update-booking`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_data: bookingData }),
+      })
 
-      if (error) throw error
+      if (!response.ok) throw new Error("Failed to save booking data")
+
+      const result = await response.json()
 
       setSelectedConversation({ ...selectedConversation, booking_data: bookingData })
       setConversations((prev) =>
@@ -485,51 +495,18 @@ Villa I Barronci`)
     }
   }
 
-  const filteredConversations = conversations.filter((conv) => {
-    const matchesSearch =
-      (conv.subject?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-      (conv.contact?.name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-      (conv.contact?.email?.toLowerCase() || "").includes(searchQuery.toLowerCase())
-
-    const summary = conv.metadata?.intelligence_summary
-    const needsAction = summary?.next_action?.action && !["await_response", "none"].includes(summary.next_action.action)
-    const isHighPriority = summary?.next_action?.priority === "high"
-
-    const matchesFilter =
-      filter === "all" || (filter === "action_needed" && needsAction) || (filter === "high_priority" && isHighPriority)
-
-    return matchesSearch && matchesFilter
-  })
-
-  const sortedConversations = [...filteredConversations].sort((a, b) => {
-    const priorityOrder = { high: 0, medium: 1, low: 2 }
-    const aPriority = a.metadata?.intelligence_summary?.next_action?.priority || "low"
-    const bPriority = b.metadata?.intelligence_summary?.next_action?.priority || "low"
-    return priorityOrder[aPriority] - priorityOrder[bPriority]
-  })
-
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
-        <AlertCircle className="h-12 w-12 text-destructive" />
-        <p className="text-lg">Accesso non autorizzato</p>
-        <Button onClick={() => (window.location.href = "/admin")}>Vai al login</Button>
-      </div>
-    )
-  }
-
   const getIntelligenceSummary = (conv: Conversation) => conv.metadata?.intelligence_summary
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex flex-col h-screen bg-background">
+      <div className="border-b shrink-0">
+        <AdminHeader
+          title="Email Inbox"
+          subtitle="Gestisci le email"
+          breadcrumbs={[{ label: "Inbox", href: "/admin/inbox" }, { label: "Email" }]}
+        />
+      </div>
+
       {/* Left Sidebar - Conversation List */}
       <div className="w-96 border-r flex flex-col">
         {/* Header */}
@@ -585,13 +562,13 @@ Villa I Barronci`)
             <div className="flex items-center justify-center h-32">
               <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : sortedConversations.length === 0 ? (
+          ) : conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
               <Mail className="h-12 w-12 mb-2 opacity-50" />
               <p className="text-sm">Nessuna conversazione</p>
             </div>
           ) : (
-            sortedConversations.map((conv) => {
+            conversations.map((conv) => {
               const summary = getIntelligenceSummary(conv)
               const nextAction = summary?.next_action
               const priorityConfig = nextAction?.priority ? PRIORITY_CONFIG[nextAction.priority] : null
@@ -599,7 +576,7 @@ Villa I Barronci`)
               return (
                 <div
                   key={conv.id}
-                  onClick={() => setSelectedConversation(conv)}
+                  onClick={() => loadConversationDetail(conv.id)}
                   className={`p-4 border-b cursor-pointer hover:bg-muted/50 transition-colors ${
                     selectedConversation?.id === conv.id ? "bg-muted" : ""
                   }`}

@@ -3,13 +3,19 @@ import type { Metadata } from "next"
 import Script from "next/script"
 import { getCurrentTenant } from "@/lib/get-tenant"
 import { getCurrentDomain } from "@/lib/seo-utils"
-import { notFound } from "next/navigation"
 import { ChatWidget } from "@/components/chat-widget"
 import { HotelSchema, LocalBusinessSchema } from "@/components/schema-org"
 
 export async function generateMetadata(): Promise<Metadata> {
   const tenant = await getCurrentTenant()
   const domain = await getCurrentDomain()
+
+  if (!tenant) {
+    return {
+      title: "Preview Mode",
+      description: "Preview mode - no tenant configured",
+    }
+  }
 
   // Usa campi SEO dal database se disponibili
   const tenantName = tenant?.name || "HotelAccelerator"
@@ -63,9 +69,21 @@ export default async function FrontendLayout({
 }) {
   const tenant = await getCurrentTenant()
 
-  // Se il tenant non esiste o frontend disabilitato, 404
-  if (!tenant || !tenant.frontend_enabled) {
-    notFound()
+  // This allows the frontend to work in v0 preview and development
+  if (!tenant) {
+    return <div data-preview-mode="true">{children}</div>
+  }
+
+  // Se il frontend è disabilitato per questo tenant, mostra errore
+  if (!tenant.frontend_enabled) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-2">Sito non disponibile</h1>
+          <p className="text-muted-foreground">Il frontend per questa struttura non è attivo.</p>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -6,21 +6,21 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { aggregateIntelligence, type IntelligenceSummary } from "@/lib/conversation-intelligence-aggregator"
-import { DEFAULT_PROPERTY_ID, getPropertyId } from "@/lib/tenant"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function POST(request: NextRequest) {
   try {
+    const effectivePropertyId = await getAuthenticatedPropertyId()
+
     const body = await request.json()
-    const { conversation_id, property_id, max_messages = 20 } = body
+    const { conversation_id, max_messages = 20 } = body
 
     if (!conversation_id) {
       return NextResponse.json({ error: "conversation_id richiesto" }, { status: 400 })
     }
 
-    const effectivePropertyId = property_id || getPropertyId(request, body)
     const supabase = await createClient()
 
-    // Recupera conversazione
     const { data: conversation, error: convError } = await supabase
       .from("conversations")
       .select("id, created_at, metadata")
@@ -32,7 +32,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Conversazione non trovata" }, { status: 404 })
     }
 
-    // Recupera ultimi N messaggi con intelligence
     const { data: messages, error: msgError } = await supabase
       .from("messages")
       .select("id, content, sender_type, created_at, metadata")
@@ -45,10 +44,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Errore recupero messaggi" }, { status: 500 })
     }
 
-    // Aggrega intelligence
     const summary = aggregateIntelligence(messages || [], conversation.created_at)
 
-    // Salva in conversation.metadata.intelligence_summary
     const updatedMetadata = {
       ...(conversation.metadata || {}),
       intelligence_summary: summary,
@@ -81,9 +78,10 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    const property_id = await getAuthenticatedPropertyId()
+
     const { searchParams } = new URL(request.url)
     const conversation_id = searchParams.get("conversation_id")
-    const property_id = searchParams.get("property_id") || DEFAULT_PROPERTY_ID
 
     if (!conversation_id) {
       return NextResponse.json({ error: "conversation_id richiesto" }, { status: 400 })

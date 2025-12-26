@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,9 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ArrowLeft, Globe, CheckCircle2, AlertCircle, Clock, Copy, ExternalLink, RefreshCw, Info } from "lucide-react"
-import Link from "next/link"
-import { DEFAULT_PROPERTY_ID } from "@/lib/tenant"
+import { Globe, CheckCircle2, Clock, Copy, ExternalLink, RefreshCw, Info } from "lucide-react"
+import { AdminHeader } from "@/components/admin/admin-header"
 
 interface PropertyDomain {
   id: string
@@ -26,7 +24,6 @@ interface PropertyDomain {
 }
 
 export function DomainsClient() {
-  const searchParams = useSearchParams()
   const [property, setProperty] = useState<PropertyDomain | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -40,15 +37,13 @@ export function DomainsClient() {
   const [activeDomainType, setActiveDomainType] = useState<"subdomain" | "custom_domain">("subdomain")
   const [frontendEnabled, setFrontendEnabled] = useState(true)
 
-  const propertyId = searchParams.get("property_id") || DEFAULT_PROPERTY_ID
-
   useEffect(() => {
     fetchProperty()
-  }, [propertyId])
+  }, [])
 
   const fetchProperty = async () => {
     try {
-      const response = await fetch(`/api/admin/domains?property_id=${propertyId}`)
+      const response = await fetch(`/api/admin/domains`)
       const data = await response.json()
 
       if (data.error) {
@@ -77,7 +72,6 @@ export function DomainsClient() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          property_id: propertyId,
           subdomain: subdomain.trim().toLowerCase(),
           custom_domain: customDomain.trim().toLowerCase(),
           active_domain_type: activeDomainType,
@@ -110,7 +104,7 @@ export function DomainsClient() {
       const response = await fetch("/api/admin/domains/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ property_id: propertyId }),
+        body: JSON.stringify({}),
       })
 
       const data = await response.json()
@@ -164,37 +158,13 @@ export function DomainsClient() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/admin/dashboard">
-              <Button variant="ghost" size="icon">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
-            <div>
-              <h1 className="text-xl font-semibold">Gestione Domini</h1>
-              <p className="text-sm text-muted-foreground">Configura subdomain e dominio personalizzato</p>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
-        {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {success && (
-          <Alert className="mb-6 border-green-200 bg-green-50">
-            <CheckCircle2 className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">{success}</AlertDescription>
-          </Alert>
-        )}
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        {/* AdminHeader */}
+        <AdminHeader
+          title="Domini"
+          subtitle="Configura il dominio del tuo sito"
+          breadcrumbs={[{ label: "Impostazioni", href: "/admin/settings" }, { label: "Domini" }]}
+        />
 
         {/* Frontend Toggle */}
         <Card className="mb-6">
@@ -393,7 +363,7 @@ export function DomainsClient() {
             </Button>
           )}
         </div>
-      </main>
+      </div>
     </div>
   )
 }

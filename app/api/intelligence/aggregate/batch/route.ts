@@ -6,22 +6,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { aggregateIntelligence } from "@/lib/conversation-intelligence-aggregator"
-import { getPropertyId } from "@/lib/tenant"
+import { getAuthenticatedPropertyIdWithSuperAdminOverride } from "@/lib/auth-property"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const {
-      property_id,
-      max_messages_per_conversation = 20,
-      limit = 50, // Max conversazioni da processare
-      only_missing = true, // Solo quelle senza summary
-    } = body
+    const effectivePropertyId = await getAuthenticatedPropertyIdWithSuperAdminOverride(request)
 
-    const effectivePropertyId = property_id || getPropertyId(request, body)
+    const body = await request.json()
+    const { max_messages_per_conversation = 20, limit = 50, only_missing = true } = body
+
     const supabase = await createClient()
 
-    // Recupera conversazioni da processare
     const query = supabase
       .from("conversations")
       .select("id, created_at, metadata")
@@ -36,7 +31,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Errore recupero conversazioni" }, { status: 500 })
     }
 
-    // Filtra solo quelle senza summary se richiesto
     const toProcess = only_missing
       ? conversations?.filter((c) => !c.metadata?.intelligence_summary) || []
       : conversations || []
@@ -47,10 +41,8 @@ export async function POST(request: NextRequest) {
       error?: string
     }> = []
 
-    // Processa ogni conversazione
     for (const conv of toProcess) {
       try {
-        // Recupera messaggi
         const { data: messages, error: msgError } = await supabase
           .from("messages")
           .select("id, content, sender_type, created_at, metadata")
@@ -67,10 +59,8 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        // Aggrega
         const summary = aggregateIntelligence(messages || [], conv.created_at)
 
-        // Salva
         const updatedMetadata = {
           ...(conv.metadata || {}),
           intelligence_summary: summary,

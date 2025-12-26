@@ -1,14 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { DEFAULT_PROPERTY_ID } from "@/lib/tenant"
 
 // GET - Ottiene regole attive per property_id e sessione
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const propertyId = searchParams.get("property_id") || DEFAULT_PROPERTY_ID
+    const propertyId = searchParams.get("property_id")
     const sessionId = searchParams.get("session_id")
     const currentPage = searchParams.get("page") || "/"
+
+    if (!propertyId) {
+      return NextResponse.json({ error: "property_id is required. No default tenant allowed." }, { status: 400 })
+    }
 
     if (!sessionId) {
       return NextResponse.json({ error: "session_id required" }, { status: 400 })

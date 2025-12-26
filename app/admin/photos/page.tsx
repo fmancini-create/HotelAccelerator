@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { ArrowLeft, ImageIcon, Upload, Trash2, Tag, Home } from "lucide-react"
+import { ImageIcon, Upload, Trash2, Tag } from "lucide-react"
 import { useAdminAuth } from "@/lib/admin-hooks"
 import { createBrowserClient } from "@/lib/supabase-browser"
+import { AdminHeader } from "@/components/admin/admin-header"
 
 interface Photo {
   id: string
@@ -153,38 +154,19 @@ export default function AdminPhotosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f2ed]">
-      <header className="bg-white border-b border-[#e5e0d8] sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => router.push("/admin/dashboard")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Dashboard
-              </Button>
-              <h1 className="text-xl font-semibold">Gestione Foto</h1>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => router.push("/")}
-                className="border-amber-600 text-amber-600 hover:bg-amber-600 hover:text-white"
-              >
-                <Home className="h-4 w-4 mr-2" />
-                Sito Pubblico
-              </Button>
-              <Button onClick={() => router.push("/admin/gallery")} variant="default">
-                <Upload className="h-4 w-4 mr-2" />
-                Nuova Galleria
-              </Button>
-              <span className="text-sm text-gray-600">{adminUser.name}</span>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#f8f7f4]">
+      <AdminHeader
+        title="Gestione Foto"
+        subtitle="Carica, elimina e organizza le foto"
+        actions={
+          <Button className="bg-[#8b7355] hover:bg-[#6d5a43] text-white">
+            <Upload className="w-4 h-4 mr-2" />
+            Carica Foto
+          </Button>
+        }
+      />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex items-center justify-between">
           <div className="text-sm text-gray-600">
             {photos.length} foto totali ({photos.filter((p) => p.is_published).length} pubblicate)
@@ -244,7 +226,7 @@ export default function AdminPhotosPage() {
             </Button>
           </div>
         )}
-      </main>
+      </div>
 
       {selectedPhoto && (
         <div

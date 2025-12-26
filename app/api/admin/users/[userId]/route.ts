@@ -1,0 +1,32 @@
+import { type NextRequest, NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
+  try {
+    const { userId } = await params
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const supabase = await createClient()
+
+    // Verify user belongs to this property
+    const { data: user, error: checkError } = await supabase
+      .from("admin_users")
+      .select("id, email, property_id")
+      .eq("id", userId)
+      .eq("property_id", propertyId)
+      .single()
+
+    if (checkError || !user) {
+      return NextResponse.json({ error: "Utente non trovato" }, { status: 404 })
+    }
+
+    // Delete admin_users record
+    const { error } = await supabase.from("admin_users").delete().eq("id", userId)
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}

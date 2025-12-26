@@ -16,13 +16,16 @@ import {
   Home,
   Inbox,
   Megaphone,
-  Mail,
   Globe,
   ExternalLink,
+  Layers,
+  Radio,
+  Activity,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAdminAuth, getRoleLabel } from "@/lib/admin-hooks"
 import { createClient } from "@/lib/supabase/client"
+import { Progress } from "@/components/ui/progress"
 
 interface DashboardModule {
   id: string
@@ -45,20 +48,28 @@ const dashboardModules: DashboardModule[] = [
     color: "bg-blue-500",
   },
   {
+    id: "cms",
+    title: "Pagine CMS",
+    description: "Crea e gestisci pagine libere del sito",
+    icon: <Layers className="w-8 h-8" />,
+    href: "/admin/cms",
+    color: "bg-violet-500",
+  },
+  {
+    id: "channels",
+    title: "Canali",
+    description: "Configura Email, Chat, WhatsApp, Social e altri canali",
+    icon: <Radio className="w-8 h-8" />,
+    href: "/admin/channels",
+    color: "bg-rose-500",
+  },
+  {
     id: "inbox",
-    title: "Email Inbox",
-    description: "Gestisci richieste email con dettagli prenotazione",
+    title: "Inbox",
+    description: "Gestisci tutte le conversazioni in un unico posto",
     icon: <Inbox className="w-8 h-8" />,
     href: "/admin/inbox/email",
     color: "bg-emerald-500",
-  },
-  {
-    id: "email-channels",
-    title: "Canali Email",
-    description: "Configura le caselle email da monitorare",
-    icon: <Mail className="w-8 h-8" />,
-    href: "/admin/channels/email",
-    color: "bg-sky-500",
   },
   {
     id: "smart-messages",
@@ -67,6 +78,22 @@ const dashboardModules: DashboardModule[] = [
     icon: <Megaphone className="w-8 h-8" />,
     href: "/admin/message-rules",
     color: "bg-indigo-500",
+  },
+  {
+    id: "demand-calendar",
+    title: "Calendario Domanda",
+    description: "Monitora le date più cercate dai visitatori",
+    icon: <Calendar className="w-8 h-8" />,
+    href: "/admin/tracking/demand",
+    color: "bg-amber-500",
+  },
+  {
+    id: "monitoring",
+    title: "Monitoring",
+    description: "Monitora utilizzo risorse e performance",
+    icon: <Activity className="w-8 h-8" />,
+    href: "/admin/monitoring",
+    color: "bg-red-500",
   },
   {
     id: "domains",
@@ -91,7 +118,7 @@ const dashboardModules: DashboardModule[] = [
     description: "Modifica la tua password e visualizza i permessi",
     icon: <Lock className="w-8 h-8" />,
     href: "/admin/profile",
-    color: "bg-amber-500",
+    color: "bg-gray-500",
   },
   {
     id: "content",
@@ -135,7 +162,7 @@ const dashboardModules: DashboardModule[] = [
     description: "Configurazione generale del sito",
     icon: <Settings className="w-8 h-8" />,
     href: "/admin/settings",
-    color: "bg-gray-500",
+    color: "bg-slate-500",
     comingSoon: true,
   },
 ]
@@ -144,12 +171,17 @@ export default function AdminDashboardPage() {
   const { isLoading, adminUser, logout } = useAdminAuth()
   const [property, setProperty] = useState<{ name: string; slug: string; domain: string | null } | null>(null)
   const [siteUrl, setSiteUrl] = useState<string>("/")
+  const [quotas, setQuotas] = useState<{
+    pages: { current: number; limit: number }
+    photos: { current: number; limit: number }
+    conversations: { current: number; limit: number }
+    plan: string
+  } | null>(null)
 
   const isSuperAdmin = adminUser?.role === "super_admin"
 
   useEffect(() => {
     async function loadProperty() {
-      // super_admin non è legato a una property specifica
       if (!adminUser?.property_id || isSuperAdmin) return
 
       const supabase = createClient()
@@ -171,7 +203,22 @@ export default function AdminDashboardPage() {
       }
     }
 
+    async function loadQuotas() {
+      if (!adminUser?.property_id || isSuperAdmin) return
+
+      try {
+        const response = await fetch("/api/admin/quotas")
+        if (response.ok) {
+          const data = await response.json()
+          setQuotas(data)
+        }
+      } catch (error) {
+        console.error("Failed to load quotas:", error)
+      }
+    }
+
     loadProperty()
+    loadQuotas()
   }, [adminUser?.property_id, isSuperAdmin])
 
   if (isLoading) {
@@ -260,6 +307,60 @@ export default function AdminDashboardPage() {
           <h2 className="text-2xl font-serif text-[#5c5c5c] mb-2">Benvenuto, {adminUser.name.split(" ")[0]}</h2>
           <p className="text-[#8b8b8b]">Seleziona un modulo per iniziare.</p>
         </div>
+
+        {quotas && !isSuperAdmin && (
+          <div className="mb-8 bg-white rounded-xl border border-[#e5e5e5] p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-[#5c5c5c]">Utilizzo Risorse</h3>
+              <span className="px-3 py-1 bg-[#8b7355] text-white text-xs rounded-full uppercase">
+                Piano {quotas.plan}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-[#8b8b8b]">Pagine CMS</span>
+                  <span className="text-[#5c5c5c] font-medium">
+                    {quotas.pages.current} / {quotas.pages.limit === -1 ? "∞" : quotas.pages.limit}
+                  </span>
+                </div>
+                <Progress
+                  value={quotas.pages.limit === -1 ? 10 : (quotas.pages.current / quotas.pages.limit) * 100}
+                  className="h-2"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-[#8b8b8b]">Foto</span>
+                  <span className="text-[#5c5c5c] font-medium">
+                    {quotas.photos.current} / {quotas.photos.limit === -1 ? "∞" : quotas.photos.limit}
+                  </span>
+                </div>
+                <Progress
+                  value={quotas.photos.limit === -1 ? 10 : (quotas.photos.current / quotas.photos.limit) * 100}
+                  className="h-2"
+                />
+              </div>
+              <div>
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-[#8b8b8b]">Conversazioni/mese</span>
+                  <span className="text-[#5c5c5c] font-medium">
+                    {quotas.conversations.current} /{" "}
+                    {quotas.conversations.limit === -1 ? "∞" : quotas.conversations.limit}
+                  </span>
+                </div>
+                <Progress
+                  value={
+                    quotas.conversations.limit === -1
+                      ? 10
+                      : (quotas.conversations.current / quotas.conversations.limit) * 100
+                  }
+                  className="h-2"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modules Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

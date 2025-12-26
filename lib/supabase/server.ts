@@ -1,6 +1,15 @@
 import { createServerClient as createSupabaseServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
+/**
+ * Creates a new Supabase server client for each request.
+ *
+ * IMPORTANT: Do NOT cache this client in serverless environments.
+ * Each request must have its own client instance to:
+ * 1. Prevent memory leaks
+ * 2. Ensure proper cookie handling per request
+ * 3. Avoid cross-tenant data contamination
+ */
 export async function createClient() {
   const cookieStore = await cookies()
 
@@ -22,7 +31,7 @@ export async function createClient() {
         try {
           cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
         } catch {
-          // Server Component - ignora
+          // Server Component - ignore cookie setting errors
         }
       },
     },

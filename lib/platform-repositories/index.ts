@@ -1,0 +1,6 @@
+export { InboxWriteRepository } from "./inbox-write.repository"
+export { EmbedScriptRepository } from "./embed-script.repository"
+export { InboxReadRepository } from "./inbox-read.repository"
+export { EmailChannelRepository } from "./email-channel.repository"
+export { MessageRuleRepository } from "./message-rule.repository"
+export { SuperAdminRepository } from "./super-admin.repository"

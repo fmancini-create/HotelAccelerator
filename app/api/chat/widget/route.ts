@@ -1,13 +1,17 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { getPropertyId, withPropertyId } from "@/lib/tenant"
+import { withPropertyId } from "@/lib/auth-property"
 
 // Endpoint per il widget chat live
 export async function POST(request: Request) {
   const supabase = await createClient()
   const body = await request.json()
 
-  const propertyId = getPropertyId(request, body)
+  const { property_id: propertyId } = body
+
+  if (!propertyId) {
+    return NextResponse.json({ error: "property_id is required (from widget embed)" }, { status: 400 })
+  }
 
   const { action, conversation_id, message, visitor } = body
 

@@ -1,11 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { ArrowLeft, User, Lock, Save, Eye, EyeOff, Check, X } from "lucide-react"
+import { User, Lock, Save, Eye, EyeOff, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAdminAuth, getRoleLabel } from "@/lib/admin-hooks"
+import { AdminHeader } from "@/components/admin/admin-header"
 
 const PASSWORDS_KEY = "villa_barronci_admin_passwords"
 
@@ -106,26 +106,14 @@ export default function AdminProfilePage() {
   const doPasswordsMatch = newPassword === confirmPassword && confirmPassword.length > 0
 
   return (
-    <main className="min-h-screen bg-[#f8f7f4]">
-      {/* Header */}
-      <header className="bg-white border-b border-[#e5e5e5] sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/admin/dashboard">
-                <Button variant="ghost" size="sm" className="text-[#8b7355]">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Dashboard
-                </Button>
-              </Link>
-              <h1 className="text-xl font-serif text-[#5c5c5c]">Profilo</h1>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-[#f8f7f4]">
+      <div className="container mx-auto px-4 py-8">
+        <AdminHeader
+          title="Profilo"
+          subtitle="Gestisci il tuo account"
+          breadcrumbs={[{ label: "Profilo", href: "/admin/profile" }]}
+        />
 
-      {/* Main Content */}
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Profile Info */}
         <div className="bg-white rounded-xl border border-[#e5e5e5] p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
@@ -327,6 +315,6 @@ export default function AdminProfilePage() {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   )
 }
