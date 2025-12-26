@@ -18,8 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Pencil, Trash2, FolderPlus } from "lucide-react"
 import { getCurrentUser, type AdminUser } from "@/lib/admin-users"
 import { getCategories, addCategory, updateCategory, deleteCategory, SITE_PAGES, type Category } from "@/lib/categories"
-import { AdminHeader } from "@/components/admin/admin-header"
-import { logout } from "@/lib/auth" // Import logout function
+import { AdminHeader } from "@/components/admin/header"
 
 export default function CategoriesPage() {
   const router = useRouter()
@@ -50,8 +49,8 @@ export default function CategoriesPage() {
     setIsLoading(false)
   }, [router])
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    localStorage.removeItem("currentUser")
     router.push("/admin")
   }
 

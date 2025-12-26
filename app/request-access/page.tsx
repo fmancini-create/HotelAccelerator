@@ -99,13 +99,13 @@ export default function RequestAccessPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="rooms">Numero Camere</Label>
+            <Label htmlFor="rooms">Numero di Camere</Label>
             <Input id="rooms" name="rooms" type="number" min="1" />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="message">Note o Richieste</Label>
-            <Textarea id="message" name="message" rows={4} placeholder="Dicci qualcosa di più sulla tua struttura..." />
+            <Textarea id="message" name="message" rows={4} placeholder="Raccontaci di più sulla tua struttura..." />
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>
