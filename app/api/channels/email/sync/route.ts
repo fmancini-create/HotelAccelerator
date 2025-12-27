@@ -78,27 +78,49 @@ async function fetchGmailMessages(accessToken: string): Promise<any[]> {
       { headers: { Authorization: `Bearer ${accessToken}` } },
     )
 
-    if (!listResponse.ok) return []
+    if (!listResponse.ok) {
+      const errorText = await listResponse.text()
+      console.error(`Gmail list error (${listResponse.status}):`, errorText)
+      if (listResponse.status === 429) {
+        throw new Error("Gmail rate limit exceeded. Riprova tra qualche minuto.")
+      }
+      return []
+    }
 
     const listData = await listResponse.json()
     if (!listData.messages) return []
 
-    // Fetch full message details
-    const messages = await Promise.all(
-      listData.messages.slice(0, 20).map(async (msg: { id: string }) => {
+    const messages: any[] = []
+    const messagesToFetch = listData.messages.slice(0, 15) // Reduced from 20 to 15
+
+    for (const msg of messagesToFetch) {
+      try {
         const msgResponse = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
           { headers: { Authorization: `Bearer ${accessToken}` } },
         )
-        if (!msgResponse.ok) return null
-        return msgResponse.json()
-      }),
-    )
 
-    return messages.filter(Boolean).map(parseGmailMessage)
+        if (msgResponse.status === 429) {
+          console.warn("Gmail rate limit hit, stopping fetch")
+          break // Stop fetching more messages
+        }
+
+        if (msgResponse.ok) {
+          const msgData = await msgResponse.json()
+          messages.push(msgData)
+        }
+
+        // Small delay between requests to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      } catch (error) {
+        console.error(`Error fetching message ${msg.id}:`, error)
+      }
+    }
+
+    return messages.map(parseGmailMessage)
   } catch (error) {
     console.error("Gmail fetch error:", error)
-    return []
+    throw error // Re-throw to show error to user
   }
 }
 
