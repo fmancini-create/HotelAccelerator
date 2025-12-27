@@ -3,11 +3,31 @@ import { createClient } from "@/lib/supabase/server"
 
 // Gmail Pub/Sub webhook endpoint
 // Google Cloud Pub/Sub sends push notifications here when new emails arrive
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json()
 
-    console.log("[v0] Gmail webhook received:", JSON.stringify(body).slice(0, 500))
+export async function GET(request: NextRequest) {
+  console.log("[v0] Gmail webhook GET - Test endpoint called")
+  return NextResponse.json({
+    status: "ok",
+    message: "Gmail webhook endpoint is active",
+    timestamp: new Date().toISOString(),
+    env_check: {
+      NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL ? "set" : "missing",
+      GOOGLE_PUBSUB_TOPIC: process.env.GOOGLE_PUBSUB_TOPIC ? "set" : "missing",
+    },
+  })
+}
+
+export async function POST(request: NextRequest) {
+  console.log("[v0] ============================================")
+  console.log("[v0] Gmail webhook POST - Request received!")
+  console.log("[v0] Headers:", JSON.stringify(Object.fromEntries(request.headers.entries())))
+
+  try {
+    const rawBody = await request.text()
+    console.log("[v0] Raw body:", rawBody.slice(0, 1000))
+
+    const body = JSON.parse(rawBody)
+    console.log("[v0] Gmail webhook parsed body:", JSON.stringify(body).slice(0, 500))
 
     // Pub/Sub message structure
     const message = body.message
