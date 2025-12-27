@@ -90,7 +90,6 @@ export class InboxReadRepository {
         subject,
         status,
         channel,
-        priority,
         is_starred,
         last_message_at,
         created_at,
@@ -124,7 +123,7 @@ export class InboxReadRepository {
       contact: Array.isArray(conversation.contact) ? conversation.contact[0] : conversation.contact,
       assigned: Array.isArray(conversation.assigned) ? conversation.assigned[0] : conversation.assigned,
       messages: (messages || []) as MessageItem[],
-      priority: conversation.priority || "normal",
+      priority: "normal",
     } as ConversationDetail
   }
 
