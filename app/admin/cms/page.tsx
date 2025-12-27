@@ -16,7 +16,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Plus, MoreVertical, Pencil, Trash2, Eye, Search, FileText, Loader2 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus, MoreVertical, Pencil, Trash2, Eye, Search, FileText, Loader2, LayoutTemplate, Globe } from "lucide-react"
 import Link from "next/link"
 import { Suspense } from "react"
 import { AdminHeader } from "@/components/admin/admin-header"
@@ -26,10 +27,39 @@ interface CMSPage {
   slug: string
   title: string
   status: "draft" | "published" | "hidden"
+  page_type: string
+  language: string
+  template_id: string | null
   created_at: string
   updated_at: string
   published_at: string | null
 }
+
+interface CMSTemplate {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  category: string
+  is_system: boolean
+}
+
+const PAGE_TYPES = {
+  home: { label: "Homepage", icon: "🏠" },
+  room: { label: "Camera", icon: "🛏️" },
+  service: { label: "Servizio", icon: "🛎️" },
+  location: { label: "Località", icon: "📍" },
+  contact: { label: "Contatti", icon: "📧" },
+  gallery: { label: "Galleria", icon: "🖼️" },
+  custom: { label: "Personalizzata", icon: "✨" },
+}
+
+const LANGUAGES = [
+  { code: "it", label: "Italiano", flag: "🇮🇹" },
+  { code: "en", label: "English", flag: "🇬🇧" },
+  { code: "de", label: "Deutsch", flag: "🇩🇪" },
+  { code: "fr", label: "Français", flag: "🇫🇷" },
+]
 
 export default function CMSPagesPage() {
   return (
@@ -47,6 +77,7 @@ export default function CMSPagesPage() {
 
 function CMSPagesContent() {
   const [pages, setPages] = useState<CMSPage[]>([])
+  const [templates, setTemplates] = useState<CMSTemplate[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [propertyId, setPropertyId] = useState<string | null>(null)
@@ -55,6 +86,9 @@ function CMSPagesContent() {
   const [selectedPage, setSelectedPage] = useState<CMSPage | null>(null)
   const [newPageTitle, setNewPageTitle] = useState("")
   const [newPageSlug, setNewPageSlug] = useState("")
+  const [newPageType, setNewPageType] = useState("custom")
+  const [newPageLanguage, setNewPageLanguage] = useState("it")
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
@@ -79,6 +113,23 @@ function CMSPagesContent() {
 
     if (!adminUser?.property_id) return
     setPropertyId(adminUser.property_id)
+
+    // Carica templates disponibili
+    const { data: templatesData } = await supabase
+      .from("cms_templates")
+      .select("id, name, slug, description, category, is_system")
+      .eq("is_active", true)
+      .or(`property_id.is.null,property_id.eq.${adminUser.property_id}`)
+      .order("is_system", { ascending: false })
+
+    if (templatesData) {
+      setTemplates(templatesData)
+      // Imposta template default (Villa I Barronci)
+      const defaultTemplate = templatesData.find((t) => t.slug === "villa-i-barronci")
+      if (defaultTemplate) {
+        setSelectedTemplateId(defaultTemplate.id)
+      }
+    }
 
     // Carica pagine
     const response = await fetch(`/api/cms/pages?property_id=${adminUser.property_id}`)
@@ -110,6 +161,9 @@ function CMSPagesContent() {
         title: newPageTitle.trim(),
         slug,
         status: "draft",
+        page_type: newPageType,
+        language: newPageLanguage,
+        template_id: selectedTemplateId,
         sections: [],
       }),
     })
@@ -121,6 +175,8 @@ function CMSPagesContent() {
       setIsCreateDialogOpen(false)
       setNewPageTitle("")
       setNewPageSlug("")
+      setNewPageType("custom")
+      setNewPageLanguage("it")
     } else {
       alert(data.error || "Errore nella creazione")
     }
@@ -168,6 +224,14 @@ function CMSPagesContent() {
     }
   }
 
+  const getPageTypeInfo = (pageType: string) => {
+    return PAGE_TYPES[pageType as keyof typeof PAGE_TYPES] || PAGE_TYPES.custom
+  }
+
+  const getLanguageInfo = (langCode: string) => {
+    return LANGUAGES.find((l) => l.code === langCode) || LANGUAGES[0]
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -180,7 +244,7 @@ function CMSPagesContent() {
     <div className="space-y-6">
       <AdminHeader
         title="Pagine CMS"
-        subtitle="Gestisci le pagine libere del tuo sito"
+        subtitle="Gestisci le pagine del tuo sito"
         breadcrumbs={[{ label: "CMS", href: "/admin/cms" }]}
         actions={
           <Button onClick={() => setIsCreateDialogOpen(true)}>
@@ -218,74 +282,156 @@ function CMSPagesContent() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {filteredPages.map((page) => (
-            <Card key={page.id}>
-              <CardContent className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-4">
-                  <div className="p-2 bg-muted rounded-lg">
-                    <FileText className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-medium">{page.title}</h3>
-                      {getStatusBadge(page.status)}
-                    </div>
-                    <p className="text-sm text-muted-foreground">/{page.slug}</p>
-                  </div>
-                </div>
+          {filteredPages.map((page) => {
+            const pageTypeInfo = getPageTypeInfo(page.page_type || "custom")
+            const langInfo = getLanguageInfo(page.language || "it")
 
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground hidden md:block">
-                    Modificata: {new Date(page.updated_at).toLocaleDateString("it-IT")}
-                  </span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem asChild>
-                        <Link href={`/admin/cms/${page.id}`}>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Modifica
-                        </Link>
-                      </DropdownMenuItem>
-                      {page.status === "published" && (
+            return (
+              <Card key={page.id}>
+                <CardContent className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 bg-muted rounded-lg text-lg">{pageTypeInfo.icon}</div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-medium">{page.title}</h3>
+                        {getStatusBadge(page.status)}
+                        <span className="text-sm" title={langInfo.label}>
+                          {langInfo.flag}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>/{page.slug}</span>
+                        <span className="text-xs px-1.5 py-0.5 bg-muted rounded">{pageTypeInfo.label}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground hidden md:block">
+                      {new Date(page.updated_at).toLocaleDateString("it-IT")}
+                    </span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link href={`/p/${page.slug}`} target="_blank">
-                            <Eye className="h-4 w-4 mr-2" />
-                            Visualizza
+                          <Link href={`/admin/cms/${page.id}`}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Modifica
                           </Link>
                         </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => {
-                          setSelectedPage(page)
-                          setIsDeleteDialogOpen(true)
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Elimina
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                        {page.status === "published" && (
+                          <DropdownMenuItem asChild>
+                            <Link href={`/${page.slug}`} target="_blank">
+                              <Eye className="h-4 w-4 mr-2" />
+                              Visualizza
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => {
+                            setSelectedPage(page)
+                            setIsDeleteDialogOpen(true)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Elimina
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
       )}
 
-      {/* Dialog: Crea Pagina */}
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Nuova Pagina</DialogTitle>
             <DialogDescription>Crea una nuova pagina per il tuo sito</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {/* Template Selection */}
+            {templates.length > 0 && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <LayoutTemplate className="h-4 w-4" />
+                  Template
+                </Label>
+                <Select value={selectedTemplateId || ""} onValueChange={setSelectedTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Seleziona un template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{template.name}</span>
+                          {template.is_system && (
+                            <Badge variant="secondary" className="text-xs">
+                              Sistema
+                            </Badge>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Il template definisce lo stile e i blocchi predefiniti</p>
+              </div>
+            )}
+
+            {/* Page Type */}
+            <div className="space-y-2">
+              <Label>Tipo Pagina</Label>
+              <Select value={newPageType} onValueChange={setNewPageType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(PAGE_TYPES).map(([value, { label, icon }]) => (
+                    <SelectItem key={value} value={value}>
+                      <span className="flex items-center gap-2">
+                        <span>{icon}</span>
+                        <span>{label}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Language */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Globe className="h-4 w-4" />
+                Lingua
+              </Label>
+              <Select value={newPageLanguage} onValueChange={setNewPageLanguage}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LANGUAGES.map(({ code, label, flag }) => (
+                    <SelectItem key={code} value={code}>
+                      <span className="flex items-center gap-2">
+                        <span>{flag}</span>
+                        <span>{label}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Title */}
             <div className="space-y-2">
               <Label htmlFor="title">Titolo</Label>
               <Input
@@ -295,15 +441,25 @@ function CMSPagesContent() {
                 onChange={(e) => setNewPageTitle(e.target.value)}
               />
             </div>
+
+            {/* Slug */}
             <div className="space-y-2">
-              <Label htmlFor="slug">Slug (opzionale)</Label>
+              <Label htmlFor="slug">Slug (URL)</Label>
               <Input
                 id="slug"
                 placeholder="es. chi-siamo"
                 value={newPageSlug}
                 onChange={(e) => setNewPageSlug(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Se lasciato vuoto, verrà generato dal titolo</p>
+              <p className="text-xs text-muted-foreground">
+                La pagina sarà accessibile su /
+                {newPageSlug ||
+                  newPageTitle
+                    .toLowerCase()
+                    .replace(/\s+/g, "-")
+                    .replace(/[^a-z0-9-]/g, "") ||
+                  "slug"}
+              </p>
             </div>
           </div>
           <DialogFooter>

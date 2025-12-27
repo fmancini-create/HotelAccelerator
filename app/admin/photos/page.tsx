@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -41,6 +43,8 @@ export default function AdminPhotosPage() {
   const [isSavingCategories, setIsSavingCategories] = useState(false)
   const [editAlt, setEditAlt] = useState("")
   const [isSavingAlt, setIsSavingAlt] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!authLoading && adminUser) {
@@ -206,6 +210,51 @@ export default function AdminPhotosPage() {
     }
   }
 
+  const handleUploadClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploading(true)
+    try {
+      const formData = new FormData()
+      for (let i = 0; i < files.length; i++) {
+        formData.append("files", files[i])
+      }
+
+      console.log("[v0] Uploading", files.length, "files...")
+
+      const response = await fetch("/api/admin/upload-photos", {
+        method: "POST",
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Upload failed")
+      }
+
+      console.log("[v0] Upload successful:", result)
+      alert(`${result.uploaded} foto caricate con successo!`)
+
+      // Reload photos to show new ones
+      await loadPhotos()
+    } catch (error: any) {
+      console.error("[v0] Upload error:", error)
+      alert(`Errore upload: ${error.message}`)
+    } finally {
+      setIsUploading(false)
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
   if (authLoading || isLoading || !adminUser) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -216,13 +265,19 @@ export default function AdminPhotosPage() {
 
   return (
     <div className="min-h-screen bg-[#f8f7f4]">
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
+
       <AdminHeader
         title="Gestione Foto"
         subtitle="Carica, elimina e organizza le foto"
         actions={
-          <Button className="bg-[#8b7355] hover:bg-[#6d5a43] text-white">
+          <Button
+            className="bg-[#8b7355] hover:bg-[#6d5a43] text-white"
+            onClick={handleUploadClick}
+            disabled={isUploading || !adminUser?.can_upload}
+          >
             <Upload className="w-4 h-4 mr-2" />
-            Carica Foto
+            {isUploading ? "Caricamento..." : "Carica Foto"}
           </Button>
         }
       />
