@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useAdminAuth } from "@/lib/admin-hooks"
 import {
@@ -105,9 +105,11 @@ export default function InboxPage() {
   const [showDemandCalendar, setShowDemandCalendar] = useState(true)
   const [replyChannel, setReplyChannel] = useState<string>("same")
   const [rateLimitError, setRateLimitError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const isPausedRef = useRef(false)
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -117,7 +119,9 @@ export default function InboxPage() {
     scrollToBottom()
   }, [messages])
 
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
+    if (isPausedRef.current) return
+
     try {
       const params = new URLSearchParams()
       if (filterStatus !== "all") params.set("status", filterStatus)
@@ -127,7 +131,24 @@ export default function InboxPage() {
 
       if (res.status === 429) {
         setRateLimitError(true)
-        setTimeout(() => setRateLimitError(false), 5000)
+        isPausedRef.current = true
+        setTimeout(() => {
+          setRateLimitError(false)
+          isPausedRef.current = false
+        }, 30000)
+        return
+      }
+
+      if (res.status === 401) {
+        setError("Non autenticato. Effettua il login.")
+        setIsLoading(false)
+        return
+      }
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        console.error("[v0] API error:", errorData)
+        setError(errorData.error || "Errore nel caricamento")
         return
       }
 
@@ -136,21 +157,34 @@ export default function InboxPage() {
       if (data.conversations) {
         setConversations(data.conversations)
         setRateLimitError(false)
+        setError(null)
       }
     } catch (error) {
       console.error("Error loading conversations:", error)
+      setError("Errore di connessione")
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [filterChannel, filterStatus])
 
-  const loadMessages = async (conversationId: string) => {
+  const loadMessages = useCallback(async (conversationId: string) => {
+    if (isPausedRef.current) return
+
     try {
       const res = await fetch(`/api/inbox/${conversationId}`)
 
       if (res.status === 429) {
         setRateLimitError(true)
-        setTimeout(() => setRateLimitError(false), 5000)
+        isPausedRef.current = true
+        setTimeout(() => {
+          setRateLimitError(false)
+          isPausedRef.current = false
+        }, 30000)
+        return
+      }
+
+      if (!res.ok) {
+        console.error("[v0] Error loading messages:", res.status)
         return
       }
 
@@ -167,12 +201,12 @@ export default function InboxPage() {
     } catch (error) {
       console.error("Error loading messages:", error)
     }
-  }
+  }, [])
 
   useEffect(() => {
     if (!authLoading && adminUser) {
       loadConversations()
-      pollIntervalRef.current = setInterval(loadConversations, 15000)
+      pollIntervalRef.current = setInterval(loadConversations, 30000)
     }
 
     return () => {
@@ -180,17 +214,22 @@ export default function InboxPage() {
         clearInterval(pollIntervalRef.current)
       }
     }
-  }, [authLoading, adminUser, filterChannel, filterStatus])
+  }, [authLoading, adminUser])
 
   useEffect(() => {
+    let msgPoll: NodeJS.Timeout | null = null
+
     if (selectedConversation) {
       loadMessages(selectedConversation.id)
-
-      const msgPoll = setInterval(() => {
+      msgPoll = setInterval(() => {
         loadMessages(selectedConversation.id)
-      }, 10000)
+      }, 20000)
+    }
 
-      return () => clearInterval(msgPoll)
+    return () => {
+      if (msgPoll) {
+        clearInterval(msgPoll)
+      }
     }
   }, [selectedConversation])
 
@@ -305,6 +344,27 @@ export default function InboxPage() {
     }
     channels.push({ value: "telegram", label: "Telegram" })
     return channels
+  }
+
+  if (error && !authLoading) {
+    return (
+      <div className="flex flex-col h-screen bg-background">
+        <AdminHeader title="Inbox" subtitle="Centro messaggi unificato" />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <p className="text-destructive">{error}</p>
+            <Button
+              onClick={() => {
+                setError(null)
+                loadConversations()
+              }}
+            >
+              Riprova
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (authLoading) {

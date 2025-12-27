@@ -7,7 +7,11 @@ import { handleServiceError } from "@/lib/errors"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("[v0] Inbox conversations API called")
+
     const propertyId = await getAuthenticatedPropertyId(request)
+    console.log("[v0] Property ID:", propertyId)
+
     const supabase = await createClient()
     const service = new InboxReadService(supabase)
 
@@ -22,10 +26,14 @@ export async function GET(request: NextRequest) {
       filter: (searchParams.get("filter") as any) || undefined,
     }
 
+    console.log("[v0] Inbox options:", options)
+
     const conversations = await service.listConversations(propertyId, options)
+    console.log("[v0] Found conversations:", conversations.length)
 
     return NextResponse.json({ conversations })
   } catch (error) {
+    console.error("[v0] Inbox conversations error:", error)
     const { status, json } = handleServiceError(error)
     return NextResponse.json(json, { status })
   }
