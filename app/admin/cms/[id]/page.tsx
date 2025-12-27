@@ -77,13 +77,20 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
 
     setIsSaving(true)
 
+    const pagePayload = {
+      slug: page.slug,
+      title: page.title,
+      status: newStatus || page.status,
+      seo_title: page.seo_title,
+      seo_description: page.seo_description,
+      seo_noindex: page.seo_noindex,
+      sections: page.sections,
+    }
+
     const response = await fetch(`/api/cms/pages/${page.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...page,
-        status: newStatus || page.status,
-      }),
+      body: JSON.stringify(pagePayload),
     })
 
     const data = await response.json()

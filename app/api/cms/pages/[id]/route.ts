@@ -31,8 +31,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const { id } = await params
     const body = await request.json()
 
-    // Validazione con Zod
-    const validation = validatePage({ ...body, id })
+    // Valido solo i campi previsti dallo schema, senza aggiungere id
+    const validation = validatePage(body)
     if (!validation.success) {
       return NextResponse.json({ error: validation.error }, { status: 400 })
     }
