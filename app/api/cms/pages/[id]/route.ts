@@ -1,11 +1,11 @@
 import { createServerClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { validatePage } from "@/lib/cms/section-schemas"
+import { validatePage, ZodError } from "@/lib/cms/section-schemas"
 
 // GET /api/cms/pages/[id] - Singola pagina
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = await params
+    const { id } = params
     const supabase = await createServerClient()
 
     const { data: page, error } = await supabase.from("cms_pages").select("*").eq("id", id).single()
@@ -26,18 +26,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 // PUT /api/cms/pages/[id] - Aggiorna pagina
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = await params
+    const { id } = params
     const body = await request.json()
 
-    // Valido solo i campi previsti dallo schema, senza aggiungere id
-    const validation = validatePage(body)
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 })
+    let pageData
+    try {
+      pageData = validatePage(body)
+    } catch (err) {
+      if (err instanceof ZodError) {
+        return NextResponse.json({ error: err.flatten() }, { status: 400 })
+      }
+      throw err
     }
-
-    const pageData = validation.data
 
     const supabase = await createServerClient()
 
@@ -105,9 +107,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 // DELETE /api/cms/pages/[id] - Elimina pagina
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   try {
-    const { id } = await params
+    const { id } = params
     const supabase = await createServerClient()
 
     // Verifica auth

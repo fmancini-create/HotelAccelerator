@@ -1,4 +1,4 @@
-import { z } from "zod"
+import { z, ZodError } from "zod"
 
 // ===========================================
 // SECTION TYPES & METADATA
@@ -407,25 +407,28 @@ export function getSectionDefault(type: SectionType): Record<string, unknown> {
 // VALIDATION HELPERS
 // ===========================================
 
+export { ZodError }
+
 export const SectionSchema = z.object({
   id: z.string().uuid(),
   type: z.enum(SECTION_TYPE_KEYS),
   data: z.record(z.unknown()),
 })
 
-export const PageSchema = z.object({
-  property_id: z.string().uuid().optional(), // Made optional for updates
-  slug: z
-    .string()
-    .min(1)
-    .regex(/^[a-z0-9-/]+$/, "Slug può contenere solo lettere minuscole, numeri, trattini e slash"),
-  title: z.string().min(1, "Titolo richiesto"),
-  status: z.enum(["draft", "published", "hidden"]).default("draft"),
-  seo_title: z.string().nullable().optional(),
-  seo_description: z.string().nullable().optional(),
-  seo_noindex: z.boolean().default(false),
-  sections: z.array(SectionSchema).default([]),
-})
+export const PageSchema = z
+  .object({
+    slug: z
+      .string()
+      .min(1)
+      .regex(/^[a-z0-9\-/]+$/, "Slug può contenere solo lettere minuscole, numeri, trattini e slash"),
+    title: z.string().min(1, "Titolo richiesto"),
+    status: z.enum(["draft", "published", "hidden"]).default("draft"),
+    seo_title: z.string().nullable().optional(),
+    seo_description: z.string().nullable().optional(),
+    seo_noindex: z.boolean().default(false),
+    sections: z.array(SectionSchema).default([]),
+  })
+  .strict()
 
 export type Section = z.infer<typeof SectionSchema>
 export type Page = z.infer<typeof PageSchema>
@@ -433,30 +436,11 @@ export type Page = z.infer<typeof PageSchema>
 export function validateSection(type: SectionType, data: unknown) {
   const schema = SECTION_SCHEMAS[type]
   if (!schema) {
-    return { success: false, error: `Tipo sezione sconosciuto: ${type}` }
+    throw new Error(`Tipo sezione sconosciuto: ${type}`)
   }
-
-  const result = schema.safeParse(data)
-  if (!result.success) {
-    return { success: false, error: result.error.errors.map((e) => e.message).join(", ") }
-  }
-
-  return { success: true, data: result.data }
+  return schema.parse(data)
 }
 
-export function validatePage(data: unknown) {
-  const result = PageSchema.safeParse(data)
-  if (!result.success) {
-    return { success: false, error: result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ") }
-  }
-
-  // Valida ogni sezione
-  for (const section of result.data.sections) {
-    const sectionValidation = validateSection(section.type, section.data)
-    if (!sectionValidation.success) {
-      return { success: false, error: `Sezione ${section.type}: ${sectionValidation.error}` }
-    }
-  }
-
-  return { success: true, data: result.data }
+export function validatePage(input: unknown) {
+  return PageSchema.parse(input)
 }
