@@ -3,6 +3,13 @@ import { createClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS, type OAuthProvider, getOAuthRedirectUri } from "@/lib/oauth-config"
 import { EmailChannelService } from "@/lib/platform-services"
 
+function fromBase64Url(str: string): string {
+  const base64 = str.replace(/-/g, "+").replace(/_/g, "/")
+  const pad = base64.length % 4
+  const padded = pad ? base64 + "=".repeat(4 - pad) : base64
+  return Buffer.from(padded, "base64").toString()
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const code = searchParams.get("code")
@@ -18,7 +25,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const stateData = JSON.parse(Buffer.from(state, "base64url").toString())
+    const stateData = JSON.parse(fromBase64Url(state))
     const { property_id, provider } = stateData as {
       property_id: string
       provider: OAuthProvider

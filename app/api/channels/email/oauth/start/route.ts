@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { buildOAuthUrl, type OAuthProvider } from "@/lib/oauth-config"
 
+function toBase64Url(str: string): string {
+  return Buffer.from(str).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
+}
+
 // Start OAuth flow for Gmail or Outlook
 export async function POST(request: NextRequest) {
   try {
@@ -24,14 +28,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create state with property_id and provider for callback
-    const state = Buffer.from(
+    const state = toBase64Url(
       JSON.stringify({
         property_id,
         provider,
         timestamp: Date.now(),
       }),
-    ).toString("base64url")
+    )
 
     // Build OAuth URL
     const authUrl = buildOAuthUrl(provider as OAuthProvider, state, clientId)
