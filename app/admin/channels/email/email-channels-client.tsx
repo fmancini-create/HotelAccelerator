@@ -159,7 +159,10 @@ export default function EmailChannelsClient() {
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        setLoading(false)
+        return
+      }
 
       const { data: adminUser } = await supabase.from("admin_users").select("property_id").eq("id", user.id).single()
 
@@ -169,7 +172,10 @@ export default function EmailChannelsClient() {
         const channelsRes = await fetch("/api/channels/email")
         if (channelsRes.ok) {
           const channelsData = await channelsRes.json()
-          setChannels(channelsData)
+          setChannels(channelsData.channels || [])
+        } else {
+          console.error("[v0] Failed to fetch channels:", channelsRes.status)
+          setChannels([])
         }
 
         const { data: adminUsers } = await supabase
@@ -182,7 +188,8 @@ export default function EmailChannelsClient() {
         }
       }
     } catch (error) {
-      console.error("Error fetching data:", error)
+      console.error("[v0] Error fetching data:", error)
+      setChannels([])
     } finally {
       setLoading(false)
     }
