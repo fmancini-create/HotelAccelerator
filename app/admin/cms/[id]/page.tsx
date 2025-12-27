@@ -9,10 +9,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Save, Eye, Plus, GripVertical, Trash2, Loader2, ChevronUp, ChevronDown } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Save, Eye, Plus, GripVertical, Trash2, Loader2, ChevronUp, ChevronDown, AlertCircle } from "lucide-react"
 import Link from "next/link"
-import { SECTION_TYPES, type SectionType, getSectionDefault } from "@/lib/cms/section-schemas"
+import { SECTION_TYPES, type SectionType, getSectionDefault, PageSchema } from "@/lib/cms/section-schemas"
 import { AdminHeader } from "@/components/admin/admin-header"
+
+interface ValidationErrors {
+  formErrors: string[]
+  fieldErrors: {
+    slug?: string[]
+    title?: string[]
+    status?: string[]
+    sections?: string[]
+    seo_title?: string[]
+    seo_description?: string[]
+    seo_noindex?: string[]
+  }
+}
 
 interface CMSPageState {
   slug: string
@@ -40,6 +54,7 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
+  const [errors, setErrors] = useState<ValidationErrors | null>(null)
 
   useEffect(() => {
     async function resolveParams() {
@@ -65,10 +80,13 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
     setIsLoading(false)
   }
 
+  const isSaveDisabled =
+    !page || isSaving || !hasChanges || !page.slug.trim() || !page.title.trim() || page.sections.length === 0
+
   async function handleSave(newStatus?: string) {
     if (!page || !pageId) return
 
-    setIsSaving(true)
+    setErrors(null)
 
     const payload = {
       slug: normalizeSlug(page.slug),
@@ -80,6 +98,14 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
       sections: page.sections,
     }
 
+    const result = PageSchema.safeParse(payload)
+    if (!result.success) {
+      setErrors(result.error.flatten())
+      return
+    }
+
+    setIsSaving(true)
+
     const response = await fetch(`/api/cms/pages/${pageId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -88,12 +114,20 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
 
     const data = await response.json()
 
+    if (!response.ok) {
+      if (data.errors) {
+        setErrors(data.errors)
+      } else {
+        setErrors({ formErrors: [data.error || "Errore nel salvataggio"], fieldErrors: {} })
+      }
+      setIsSaving(false)
+      return
+    }
+
     if (data.page) {
       const { slug, title, status, seo_title, seo_description, seo_noindex, sections } = data.page
       setPage({ slug, title, status, seo_title, seo_description, seo_noindex, sections })
       setHasChanges(false)
-    } else {
-      alert(data.error || "Errore nel salvataggio")
     }
 
     setIsSaving(false)
@@ -103,6 +137,7 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
     if (!page) return
     setPage({ ...page, ...updates })
     setHasChanges(true)
+    if (errors) setErrors(null)
   }
 
   function addSection(type: SectionType) {
@@ -173,19 +208,47 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
                 </Button>
               </Link>
             )}
-            <Button onClick={() => handleSave()} disabled={isSaving || !hasChanges}>
+            <Button onClick={() => handleSave()} disabled={isSaveDisabled}>
               {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               <Save className="h-4 w-4 mr-2" />
               Salva
             </Button>
             {page.status === "draft" && (
-              <Button onClick={() => handleSave("published")} disabled={isSaving}>
+              <Button onClick={() => handleSave("published")} disabled={isSaveDisabled}>
                 Pubblica
               </Button>
             )}
           </div>
         }
       />
+
+      {errors && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <ul className="list-disc list-inside space-y-1">
+              {errors.formErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+              {errors.fieldErrors.slug?.map((err, i) => (
+                <li key={`slug-${i}`}>Slug: {err}</li>
+              ))}
+              {errors.fieldErrors.title?.map((err, i) => (
+                <li key={`title-${i}`}>Titolo: {err}</li>
+              ))}
+              {errors.fieldErrors.sections?.map((err, i) => (
+                <li key={`sections-${i}`}>Sezioni: {err}</li>
+              ))}
+              {errors.fieldErrors.seo_title?.map((err, i) => (
+                <li key={`seo-title-${i}`}>Meta Title: {err}</li>
+              ))}
+              {errors.fieldErrors.seo_description?.map((err, i) => (
+                <li key={`seo-desc-${i}`}>Meta Description: {err}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
@@ -212,7 +275,8 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
             <CardContent className="space-y-4">
               {page.sections.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  Nessuna sezione. Aggiungi la prima sezione.
+                  <p>Nessuna sezione. Aggiungi la prima sezione.</p>
+                  <p className="text-sm text-destructive mt-2">Almeno una sezione è richiesta per salvare.</p>
                 </div>
               ) : (
                 page.sections.map((section, index) => (
@@ -239,11 +303,21 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Titolo</Label>
-                <Input value={page.title} onChange={(e) => updatePage({ title: e.target.value })} />
+                <Input
+                  value={page.title}
+                  onChange={(e) => updatePage({ title: e.target.value })}
+                  className={errors?.fieldErrors.title ? "border-destructive" : ""}
+                />
+                {!page.title.trim() && <p className="text-xs text-destructive">Il titolo è obbligatorio</p>}
               </div>
               <div className="space-y-2">
                 <Label>Slug</Label>
-                <Input value={page.slug} onChange={(e) => updatePage({ slug: normalizeSlug(e.target.value) })} />
+                <Input
+                  value={page.slug}
+                  onChange={(e) => updatePage({ slug: normalizeSlug(e.target.value) })}
+                  className={errors?.fieldErrors.slug ? "border-destructive" : ""}
+                />
+                {!page.slug.trim() && <p className="text-xs text-destructive">Lo slug è obbligatorio</p>}
               </div>
               <div className="space-y-2">
                 <Label>Stato</Label>

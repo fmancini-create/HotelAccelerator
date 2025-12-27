@@ -12,6 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   Mail,
   Plus,
@@ -32,6 +34,9 @@ import {
   Clock,
   Loader2,
   Shield,
+  ExternalLink,
+  Copy,
+  Info,
 } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 
@@ -56,15 +61,6 @@ const OutlookIcon = ({ className }: { className?: string }) => (
     <path d="M22 6V18M2 8H22M2 16H22" stroke="#fff" strokeWidth="0.5" opacity="0.3" />
     <ellipse cx="8" cy="12" rx="4" ry="5" fill="#fff" />
     <ellipse cx="8" cy="12" rx="2.5" ry="3.5" fill="#0078D4" />
-  </svg>
-)
-
-const YahooIcon = ({ className }: { className?: string }) => (
-  <svg viewBox="0 0 24 24" className={className || "w-5 h-5"} fill="none">
-    <circle cx="12" cy="12" r="10" fill="#6001D2" />
-    <text x="12" y="16" textAnchor="middle" fill="white" fontSize="10" fontWeight="bold">
-      Y!
-    </text>
   </svg>
 )
 
@@ -126,6 +122,10 @@ export default function EmailChannelsClient() {
   const [loadingLabels, setLoadingLabels] = useState(false)
   const [syncing, setSyncing] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("accounts")
+  const [showOAuthSetup, setShowOAuthSetup] = useState(false)
+  const [oauthProvider, setOauthProvider] = useState<"gmail" | "outlook" | null>(null)
+  const [connecting, setConnecting] = useState(false)
+  const [connectionError, setConnectionError] = useState<string | null>(null)
 
   const searchParams = useSearchParams()
   const oauthSuccess = searchParams.get("success")
@@ -161,11 +161,7 @@ export default function EmailChannelsClient() {
       } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: adminUser } = await supabase
-        .from("admin_users")
-        .select("property_id")
-        .eq("user_id", user.id)
-        .single()
+      const { data: adminUser } = await supabase.from("admin_users").select("property_id").eq("id", user.id).single()
 
       if (adminUser?.property_id) {
         setPropertyId(adminUser.property_id)
@@ -235,9 +231,18 @@ export default function EmailChannelsClient() {
   }
 
   const handleOAuthConnect = async (provider: "gmail" | "outlook") => {
-    if (!propertyId) return
+    if (!propertyId) {
+      setConnectionError("Property ID non trovato. Ricarica la pagina.")
+      return
+    }
+
+    setConnecting(true)
+    setConnectionError(null)
+    setOauthProvider(provider)
 
     try {
+      console.log("[v0] Starting OAuth flow for:", provider)
+
       const res = await fetch("/api/channels/email/oauth/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -245,13 +250,26 @@ export default function EmailChannelsClient() {
       })
 
       const data = await res.json()
+      console.log("[v0] OAuth start response:", data)
+
       if (data.authUrl) {
+        // Redirect to OAuth provider
         window.location.href = data.authUrl
+      } else if (data.error) {
+        // Check if it's a configuration error
+        if (data.error.includes("Configurazione") || data.error.includes("mancante")) {
+          setShowOAuthSetup(true)
+        } else {
+          setConnectionError(data.error)
+        }
       } else {
-        alert(data.error || "Errore avvio OAuth")
+        setConnectionError("Errore sconosciuto durante l'avvio OAuth")
       }
     } catch (error) {
-      console.error("OAuth error:", error)
+      console.error("[v0] OAuth error:", error)
+      setConnectionError("Errore di connessione. Riprova.")
+    } finally {
+      setConnecting(false)
     }
   }
 
@@ -353,6 +371,10 @@ export default function EmailChannelsClient() {
     return <Badge variant="secondary">Manuale</Badge>
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -360,6 +382,9 @@ export default function EmailChannelsClient() {
       </div>
     )
   }
+
+  const currentUrl = typeof window !== "undefined" ? window.location.origin : ""
+  const callbackUrl = `${currentUrl}/api/channels/email/oauth/callback`
 
   return (
     <div className="min-h-screen bg-background">
@@ -372,23 +397,35 @@ export default function EmailChannelsClient() {
       <div className="container py-6 space-y-6">
         {/* OAuth Status Messages */}
         {oauthSuccess === "connected" && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-green-50 border border-green-200">
+          <Alert className="bg-green-50 border-green-200">
             <CheckCircle className="h-5 w-5 text-green-500" />
-            <span className="text-green-700">Account email collegato con successo! La sincronizzazione è attiva.</span>
-          </div>
+            <AlertTitle className="text-green-700">Connessione riuscita!</AlertTitle>
+            <AlertDescription className="text-green-600">
+              Account email collegato con successo. La sincronizzazione è attiva.
+            </AlertDescription>
+          </Alert>
         )}
 
         {oauthError && (
-          <div className="flex items-center gap-2 p-4 rounded-lg bg-red-50 border border-red-200">
-            <XCircle className="h-5 w-5 text-red-500" />
-            <span className="text-red-700">
+          <Alert variant="destructive">
+            <XCircle className="h-5 w-5" />
+            <AlertTitle>Errore di connessione</AlertTitle>
+            <AlertDescription>
               {oauthError === "token_exchange_failed" && "Errore durante l'autenticazione. Riprova."}
               {oauthError === "config_missing" && "Configurazione OAuth mancante. Contatta il supporto."}
               {oauthError === "state_expired" && "Sessione scaduta. Riprova."}
               {!["token_exchange_failed", "config_missing", "state_expired"].includes(oauthError) &&
-                "Errore durante il collegamento"}
-            </span>
-          </div>
+                `Errore: ${oauthError}`}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {connectionError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-5 w-5" />
+            <AlertTitle>Errore</AlertTitle>
+            <AlertDescription>{connectionError}</AlertDescription>
+          </Alert>
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -413,13 +450,18 @@ export default function EmailChannelsClient() {
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {/* Gmail */}
+                  {/* Gmail - Added loading state */}
                   <button
                     onClick={() => handleOAuthConnect("gmail")}
-                    className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group"
+                    disabled={connecting}
+                    className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <GmailIcon className="w-8 h-8" />
+                      {connecting && oauthProvider === "gmail" ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                      ) : (
+                        <GmailIcon className="w-8 h-8" />
+                      )}
                     </div>
                     <div className="text-left">
                       <p className="font-medium">Google Gmail</p>
@@ -427,13 +469,18 @@ export default function EmailChannelsClient() {
                     </div>
                   </button>
 
-                  {/* Outlook */}
+                  {/* Outlook - Added loading state */}
                   <button
                     onClick={() => handleOAuthConnect("outlook")}
-                    className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group"
+                    disabled={connecting}
+                    className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <OutlookIcon className="w-8 h-8" />
+                      {connecting && oauthProvider === "outlook" ? (
+                        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                      ) : (
+                        <OutlookIcon className="w-8 h-8" />
+                      )}
                     </div>
                     <div className="text-left">
                       <p className="font-medium">Microsoft Outlook</p>
@@ -542,17 +589,17 @@ export default function EmailChannelsClient() {
               <CardContent>
                 {channels.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground">
-                    <Mail className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                    <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p className="text-lg font-medium">Nessun account collegato</p>
                     <p className="text-sm">Collega Gmail o Outlook per iniziare</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {channels.map((channel) => (
                       <div
                         key={channel.id}
-                        className={`flex items-center justify-between p-4 rounded-xl border bg-card hover:shadow-md transition-all cursor-pointer ${
-                          selectedChannel?.id === channel.id ? "ring-2 ring-primary" : ""
+                        className={`flex items-center justify-between p-4 rounded-lg border ${
+                          selectedChannel?.id === channel.id ? "border-primary bg-primary/5" : "bg-muted/30"
                         }`}
                         onClick={() => {
                           setSelectedChannel(channel)
@@ -562,52 +609,46 @@ export default function EmailChannelsClient() {
                         }}
                       >
                         <div className="flex items-center gap-4">
-                          <div
-                            className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                              channel.is_active ? "bg-green-100" : "bg-muted"
-                            }`}
-                          >
+                          <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
                             {channel.provider === "gmail" ? (
                               <GmailIcon className="w-7 h-7" />
                             ) : channel.provider === "outlook" ? (
                               <OutlookIcon className="w-7 h-7" />
                             ) : (
-                              <Mail
-                                className={`h-6 w-6 ${channel.is_active ? "text-green-600" : "text-muted-foreground"}`}
-                              />
+                              <Mail className="w-5 h-5 text-muted-foreground" />
                             )}
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="font-medium">{channel.email_address}</p>
+                              <p className="font-medium">{channel.display_name || channel.email_address}</p>
                               {getProviderBadge(channel.provider)}
+                              {channel.is_active ? (
+                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                  <CheckCircle className="w-3 h-3 mr-1" />
+                                  Attivo
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-gray-50 text-gray-500">
+                                  <XCircle className="w-3 h-3 mr-1" />
+                                  Disattivo
+                                </Badge>
+                              )}
                               {isTokenExpired(channel) && (
-                                <Badge variant="destructive" className="text-xs">
+                                <Badge variant="destructive">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
                                   Token scaduto
                                 </Badge>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                              <span>{channel.display_name || "Nessun nome"}</span>
-                              {channel.last_sync_at && (
-                                <>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    Sync:{" "}
-                                    {new Date(channel.last_sync_at).toLocaleString("it-IT", {
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                </>
-                              )}
-                            </div>
+                            <p className="text-sm text-muted-foreground">{channel.email_address}</p>
+                            {channel.last_sync_at && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                <Clock className="w-3 h-3" />
+                                Ultima sync: {new Date(channel.last_sync_at).toLocaleString("it-IT")}
+                              </p>
+                            )}
                           </div>
                         </div>
-
                         <div className="flex items-center gap-2">
                           {channel.provider && (
                             <Button
@@ -620,46 +661,41 @@ export default function EmailChannelsClient() {
                               disabled={syncing === channel.id}
                             >
                               {syncing === channel.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                <RefreshCw className="h-4 w-4" />
+                                <RefreshCw className="w-4 h-4" />
                               )}
-                              <span className="ml-2 hidden sm:inline">Sincronizza</span>
                             </Button>
                           )}
                           <Button
-                            variant="ghost"
-                            size="icon"
+                            variant="outline"
+                            size="sm"
                             onClick={(e) => {
                               e.stopPropagation()
                               handleToggleActive(channel)
                             }}
                           >
-                            {channel.is_active ? (
-                              <Power className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <PowerOff className="h-4 w-4 text-muted-foreground" />
-                            )}
+                            {channel.is_active ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                           </Button>
                           <Button
-                            variant="ghost"
-                            size="icon"
+                            variant="outline"
+                            size="sm"
                             onClick={(e) => {
                               e.stopPropagation()
                               startEdit(channel)
                             }}
                           >
-                            <Settings className="h-4 w-4" />
+                            <Edit className="w-4 h-4" />
                           </Button>
                           <Button
-                            variant="ghost"
-                            size="icon"
+                            variant="outline"
+                            size="sm"
                             onClick={(e) => {
                               e.stopPropagation()
                               handleDelete(channel.id)
                             }}
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
@@ -678,30 +714,28 @@ export default function EmailChannelsClient() {
                   <FolderSync className="h-5 w-5" />
                   Cartelle e Etichette Gmail
                 </CardTitle>
-                <CardDescription>
-                  Seleziona quali cartelle sincronizzare. Le email appariranno nella tua Inbox unificata.
-                </CardDescription>
+                <CardDescription>Seleziona quali cartelle sincronizzare con la piattaforma</CardDescription>
               </CardHeader>
               <CardContent>
                 {!selectedChannel ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <FolderSync className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                    <FolderSync className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p>Seleziona un account Gmail per gestire le cartelle</p>
                   </div>
                 ) : selectedChannel.provider !== "gmail" ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <FolderSync className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                    <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p>La sincronizzazione cartelle è disponibile solo per Gmail</p>
                   </div>
                 ) : loadingLabels ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    <Loader2 className="h-6 w-6 animate-spin" />
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {/* System Labels */}
                     <div>
-                      <h4 className="text-sm font-medium mb-3 text-muted-foreground">Cartelle di Sistema</h4>
+                      <h4 className="text-sm font-medium mb-3">Cartelle di Sistema</h4>
                       <div className="grid gap-2 sm:grid-cols-2">
                         {labels
                           .filter((l) => l.type === "system" && GMAIL_SYSTEM_LABELS[l.id])
@@ -713,25 +747,25 @@ export default function EmailChannelsClient() {
                                 className="flex items-center justify-between p-3 rounded-lg border bg-card"
                               >
                                 <div className="flex items-center gap-3">
-                                  <span className={config.color}>{config.icon}</span>
+                                  <div className={config.color}>{config.icon}</div>
                                   <div>
-                                    <p className="font-medium text-sm">{config.name}</p>
+                                    <p className="font-medium">{config.name}</p>
                                     <p className="text-xs text-muted-foreground">
-                                      {label.messagesTotal} email • {label.messagesUnread} non lette
+                                      {label.messagesTotal} messaggi ({label.messagesUnread} non letti)
                                     </p>
                                   </div>
                                 </div>
-                                <Switch defaultChecked />
+                                <Switch checked={label.sync_enabled !== false} />
                               </div>
                             )
                           })}
                       </div>
                     </div>
 
-                    {/* User Labels */}
+                    {/* Custom Labels */}
                     {labels.filter((l) => l.type === "user").length > 0 && (
                       <div>
-                        <h4 className="text-sm font-medium mb-3 text-muted-foreground">Etichette Personalizzate</h4>
+                        <h4 className="text-sm font-medium mb-3">Etichette Personalizzate</h4>
                         <div className="grid gap-2 sm:grid-cols-2">
                           {labels
                             .filter((l) => l.type === "user")
@@ -741,18 +775,20 @@ export default function EmailChannelsClient() {
                                 className="flex items-center justify-between p-3 rounded-lg border bg-card"
                               >
                                 <div className="flex items-center gap-3">
-                                  <Tag className="w-4 h-4 text-blue-500" />
+                                  <Tag className="w-4 h-4 text-muted-foreground" />
                                   <div>
-                                    <p className="font-medium text-sm">{label.name}</p>
-                                    <p className="text-xs text-muted-foreground">{label.messagesTotal} email</p>
+                                    <p className="font-medium">{label.name}</p>
+                                    <p className="text-xs text-muted-foreground">{label.messagesTotal} messaggi</p>
                                   </div>
                                 </div>
-                                <Switch defaultChecked={label.sync_enabled !== false} />
+                                <Switch checked={label.sync_enabled !== false} />
                               </div>
                             ))}
                         </div>
                       </div>
                     )}
+
+                    <p className="text-sm text-muted-foreground">Le modifiche vengono riflesse anche in Gmail</p>
                   </div>
                 )}
               </CardContent>
@@ -763,82 +799,180 @@ export default function EmailChannelsClient() {
           <TabsContent value="settings" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Impostazioni Sincronizzazione</CardTitle>
-                <CardDescription>Configura come sincronizzare le email con la tua Inbox</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Impostazioni Sincronizzazione
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Sincronizzazione Automatica</p>
-                    <p className="text-sm text-muted-foreground">Scarica nuove email ogni 5 minuti</p>
+                    <p className="font-medium">Sincronizzazione automatica</p>
+                    <p className="text-sm text-muted-foreground">Sincronizza automaticamente le email ogni 5 minuti</p>
                   </div>
                   <Switch defaultChecked />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Sincronizzazione Bidirezionale</p>
-                    <p className="text-sm text-muted-foreground">Le modifiche vengono riflesse anche in Gmail</p>
+                    <p className="font-medium">Notifiche nuove email</p>
+                    <p className="text-sm text-muted-foreground">Ricevi notifiche per nuove email in arrivo</p>
                   </div>
                   <Switch defaultChecked />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Notifiche Push</p>
-                    <p className="text-sm text-muted-foreground">Ricevi notifiche per nuove email</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Filtra Spam Automaticamente</p>
-                    <p className="text-sm text-muted-foreground">Non importare email dalla cartella Spam</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium">Archivia Email Risposte</p>
-                    <p className="text-sm text-muted-foreground">Archivia automaticamente dopo la risposta</p>
+                    <p className="font-medium">Crea contatti automaticamente</p>
+                    <p className="text-sm text-muted-foreground">Aggiungi automaticamente nuovi mittenti al CRM</p>
                   </div>
                   <Switch />
                 </div>
-              </CardContent>
-            </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Risposta Multi-Canale</CardTitle>
-                <CardDescription>
-                  Quando rispondi a un messaggio, puoi scegliere su quale canale inviarlo
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium">Abilita Risposta Multi-Canale</p>
-                    <p className="text-sm text-muted-foreground">
-                      Mostra opzioni per rispondere via Email, WhatsApp o altri canali
-                    </p>
+                    <p className="font-medium">Sincronizza allegati</p>
+                    <p className="text-sm text-muted-foreground">Scarica e salva gli allegati delle email</p>
                   </div>
                   <Switch defaultChecked />
-                </div>
-
-                <div className="p-4 rounded-lg bg-muted/50">
-                  <p className="text-sm text-muted-foreground">
-                    <strong>Come funziona:</strong> Quando rispondi a una conversazione, vedrai un menu per scegliere il
-                    canale di risposta. Se il contatto ha un numero WhatsApp, potrai rispondere direttamente su WhatsApp
-                    invece che via email.
-                  </p>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={showOAuthSetup} onOpenChange={setShowOAuthSetup}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {oauthProvider === "gmail" ? <GmailIcon className="w-6 h-6" /> : <OutlookIcon className="w-6 h-6" />}
+              Configurazione {oauthProvider === "gmail" ? "Google" : "Microsoft"} OAuth
+            </DialogTitle>
+            <DialogDescription>
+              Per collegare {oauthProvider === "gmail" ? "Gmail" : "Outlook"}, è necessario configurare le credenziali
+              OAuth.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Configurazione richiesta</AlertTitle>
+              <AlertDescription>
+                Il super admin della piattaforma deve configurare le credenziali OAuth nelle impostazioni.
+              </AlertDescription>
+            </Alert>
+
+            {oauthProvider === "gmail" && (
+              <div className="space-y-4">
+                <h4 className="font-medium">Istruzioni per Google Cloud Console:</h4>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                  <li>
+                    Vai su{" "}
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      Google Cloud Console
+                    </a>
+                  </li>
+                  <li>Crea un nuovo progetto o seleziona uno esistente</li>
+                  <li>Vai su "Credenziali" e crea "ID client OAuth 2.0"</li>
+                  <li>Seleziona "Applicazione Web" come tipo</li>
+                  <li>Aggiungi l'URI di reindirizzamento autorizzato:</li>
+                </ol>
+
+                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg font-mono text-sm">
+                  <code className="flex-1 break-all">{callbackUrl}</code>
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(callbackUrl)}>
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Variabili d'ambiente necessarie:</p>
+                  <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                    <li>
+                      <code className="bg-muted px-1 rounded">GOOGLE_CLIENT_ID</code>
+                    </li>
+                    <li>
+                      <code className="bg-muted px-1 rounded">GOOGLE_CLIENT_SECRET</code>
+                    </li>
+                    <li>
+                      <code className="bg-muted px-1 rounded">NEXT_PUBLIC_APP_URL</code>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {oauthProvider === "outlook" && (
+              <div className="space-y-4">
+                <h4 className="font-medium">Istruzioni per Azure Portal:</h4>
+                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                  <li>
+                    Vai su{" "}
+                    <a
+                      href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary underline"
+                    >
+                      Azure Portal - App registrations
+                    </a>
+                  </li>
+                  <li>Registra una nuova applicazione</li>
+                  <li>Configura l'URI di reindirizzamento:</li>
+                </ol>
+
+                <div className="flex items-center gap-2 p-3 bg-muted rounded-lg font-mono text-sm">
+                  <code className="flex-1 break-all">{callbackUrl}</code>
+                  <Button variant="ghost" size="sm" onClick={() => copyToClipboard(callbackUrl)}>
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Variabili d'ambiente necessarie:</p>
+                  <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                    <li>
+                      <code className="bg-muted px-1 rounded">MICROSOFT_CLIENT_ID</code>
+                    </li>
+                    <li>
+                      <code className="bg-muted px-1 rounded">MICROSOFT_CLIENT_SECRET</code>
+                    </li>
+                    <li>
+                      <code className="bg-muted px-1 rounded">NEXT_PUBLIC_APP_URL</code>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowOAuthSetup(false)}>
+                Chiudi
+              </Button>
+              <Button asChild>
+                <a
+                  href={
+                    oauthProvider === "gmail"
+                      ? "https://console.cloud.google.com/apis/credentials"
+                      : "https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Apri Console <ExternalLink className="w-4 h-4 ml-2" />
+                </a>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
