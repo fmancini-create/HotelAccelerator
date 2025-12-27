@@ -184,7 +184,7 @@ export class EmailChannelService {
         provider,
         oauth_access_token: accessToken,
         oauth_refresh_token: refreshToken,
-        oauth_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+        oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
         is_active: true,
       })
     } else {
@@ -196,7 +196,7 @@ export class EmailChannelService {
         provider,
         oauth_access_token: accessToken,
         oauth_refresh_token: refreshToken,
-        oauth_expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
+        oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
       })
     }
   }
