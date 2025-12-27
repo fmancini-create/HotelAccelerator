@@ -37,6 +37,35 @@ export const SECTION_TYPES = {
 
 export type SectionType = keyof typeof SECTION_TYPES
 
+const SECTION_TYPE_KEYS = [
+  "hero",
+  "text",
+  "image",
+  "gallery",
+  "video",
+  "cta",
+  "testimonials",
+  "features",
+  "pricing",
+  "contact_form",
+  "map",
+  "faq",
+  "spacer",
+  "villa_hero_slider",
+  "villa_hero_gallery",
+  "villa_about",
+  "villa_pool",
+  "villa_restaurant",
+  "villa_florence",
+  "villa_three_features",
+  "villa_cta_icons",
+  "villa_cantina",
+  "villa_room_gallery",
+  "villa_room_intro",
+  "villa_spa",
+  "villa_services",
+] as const
+
 // ===========================================
 // SECTION SCHEMAS (Zod)
 // ===========================================
@@ -380,16 +409,16 @@ export function getSectionDefault(type: SectionType): Record<string, unknown> {
 
 export const SectionSchema = z.object({
   id: z.string().uuid(),
-  type: z.enum(Object.keys(SECTION_TYPES) as [SectionType, ...SectionType[]]),
+  type: z.enum(SECTION_TYPE_KEYS),
   data: z.record(z.unknown()),
 })
 
 export const PageSchema = z.object({
-  property_id: z.string().uuid(),
+  property_id: z.string().uuid().optional(), // Made optional for updates
   slug: z
     .string()
     .min(1)
-    .regex(/^[a-z0-9-]+$/, "Slug può contenere solo lettere minuscole, numeri e trattini"),
+    .regex(/^[a-z0-9-/]+$/, "Slug può contenere solo lettere minuscole, numeri, trattini e slash"),
   title: z.string().min(1, "Titolo richiesto"),
   status: z.enum(["draft", "published", "hidden"]).default("draft"),
   seo_title: z.string().nullable().optional(),
