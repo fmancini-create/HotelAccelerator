@@ -312,11 +312,17 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
     }
 
     // Update conversation last message
+    const { data: currentConv } = await supabase
+      .from("conversations")
+      .select("unread_count")
+      .eq("id", conversation.id)
+      .single()
+
     await supabase
       .from("conversations")
       .update({
         last_message_at: new Date(email.date).toISOString(),
-        unread_count: supabase.sql`unread_count + 1`,
+        unread_count: (currentConv?.unread_count || 0) + 1,
         updated_at: new Date().toISOString(),
       })
       .eq("id", conversation.id)

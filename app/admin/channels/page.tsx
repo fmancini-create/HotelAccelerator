@@ -167,11 +167,7 @@ export default function ChannelsPage() {
       } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data: adminUser } = await supabase
-        .from("admin_users")
-        .select("property_id")
-        .eq("user_id", user.id)
-        .single()
+      const { data: adminUser } = await supabase.from("admin_users").select("property_id").eq("id", user.id).single()
 
       if (!adminUser?.property_id) return
       setPropertyId(adminUser.property_id)
