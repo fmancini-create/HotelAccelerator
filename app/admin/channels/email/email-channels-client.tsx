@@ -357,18 +357,15 @@ export default function EmailChannelsClient() {
     setEnablingPush(channel.id)
     try {
       if (channel.push_enabled) {
-        // Disable push
-        const res = await fetch(`/api/channels/email/${channel.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            push_enabled: false,
-            gmail_watch_expiration: null,
-          }),
+        const res = await fetch(`/api/channels/email/watch?channel_id=${channel.id}`, {
+          method: "DELETE",
         })
         if (res.ok) {
           await fetchData()
           alert("Notifiche in tempo reale disattivate")
+        } else {
+          const data = await res.json()
+          alert(data.error || "Errore durante la disattivazione")
         }
       } else {
         // Enable push - call watch API
