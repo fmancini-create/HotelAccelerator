@@ -94,7 +94,7 @@ export class InboxWriteService {
       command.conversationId,
       command.propertyId,
       command.content,
-      "admin",
+      "agent",
       actorId || null,
       "text",
       [],
