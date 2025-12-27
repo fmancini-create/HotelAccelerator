@@ -26,7 +26,7 @@ export default function LocationPage() {
 
       <section className="relative h-[60vh] min-h-[500px]">
         <Image
-          src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0044.webp"
+          src="/images/design-mode/villa-i-barronci-web-0044.webp"
           alt="Villa I Barronci Location"
           fill
           className="object-cover"

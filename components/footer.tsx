@@ -50,22 +50,22 @@ export function Footer() {
       <div className="container mx-auto px-6 py-12">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12 items-center justify-items-center">
           <img
-            src="https://ibarronci.com/wp-content/uploads/2023/06/villa-i-barronci.png"
+            src="/images/design-mode/villa-i-barronci.png"
             alt="Villa I Barronci"
             className="h-12 w-auto"
           />
           <img
-            src="https://ibarronci.com/wp-content/uploads/2023/06/namaste4.png"
+            src="/images/design-mode/namaste4.png"
             alt="Namaste"
             className="h-12 w-auto"
           />
           <img
-            src="https://ibarronci.com/wp-content/uploads/2023/06/terrazza-tiberio.png"
+            src="/images/design-mode/terrazza-tiberio.png"
             alt="Terrazza Tiberio"
             className="h-12 w-auto"
           />
           <img
-            src="https://ibarronci.com/wp-content/uploads/2023/06/da-tiberio.png"
+            src="/images/design-mode/da-tiberio.png"
             alt="da Tiberio"
             className="h-12 w-auto"
           />
@@ -159,7 +159,7 @@ export function Footer() {
 
         <div className="flex justify-center mb-8">
           <img
-            src="https://ibarronci.com/wp-content/uploads/2024/12/tripadvisor2.webp"
+            src="/images/design-mode/tripadvisor2.webp"
             alt="TripAdvisor Travellers' Choice Awards"
             className="h-32"
           />

@@ -6,7 +6,7 @@ export function ThreeFeaturesSection() {
           <div className="text-center group">
             <div className="aspect-[4/3] mb-6 overflow-hidden">
               <img
-                src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0011.webp"
+                src="/images/design-mode/villa-i-barronci-web-0011.webp"
                 alt="Namaste Area Relax"
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
@@ -21,7 +21,7 @@ export function ThreeFeaturesSection() {
           <div className="text-center group">
             <div className="aspect-[4/3] mb-6 overflow-hidden">
               <img
-                src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0033-copia.webp"
+                src="/images/design-mode/villa-i-barronci-web-0033-copia.webp"
                 alt="da Tiberio a San Casciano"
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               />
@@ -36,7 +36,7 @@ export function ThreeFeaturesSection() {
           <div className="text-center group">
             <div className="aspect-[4/3] mb-6 overflow-hidden">
               <img
-                src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0044.webp"
+                src="/images/design-mode/villa-i-barronci-web-0044.webp"
                 alt="Pool & Jacuzzi"
                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               />

@@ -89,7 +89,7 @@ export function Navigation() {
           <div className="flex items-center justify-between py-4">
             <a href="/">
               <img
-                src="https://ibarronci.com/wp-content/uploads/2023/07/villaibarronci-logo-orizzontale-700.png"
+                src="/images/design-mode/villaibarronci-logo-orizzontale-700.png"
                 alt="Villa I Barronci Resort & Spa"
                 className="h-12 md:h-16 w-auto object-contain"
                 width="700"

@@ -25,7 +25,7 @@ export default function RestaurantPage() {
 
       <section className="relative h-[60vh] min-h-[500px]">
         <Image
-          src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0033-copia.webp"
+          src="/images/design-mode/villa-i-barronci-web-0033-copia.webp"
           alt="Restaurant da Tiberio"
           fill
           className="object-cover"

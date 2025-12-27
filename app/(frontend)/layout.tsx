@@ -1,3 +1,5 @@
+import { BUILD_VERSION } from "../../lib/build-version"
+
 import type React from "react"
 import type { Metadata } from "next"
 import Script from "next/script"

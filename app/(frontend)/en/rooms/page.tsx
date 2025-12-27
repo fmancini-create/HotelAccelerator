@@ -78,7 +78,7 @@ export default function RoomsPage() {
 
       <section className="relative h-[60vh] min-h-[500px]">
         <Image
-          src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0011.webp"
+          src="/images/design-mode/villa-i-barronci-web-0011.webp"
           alt="Rooms Villa I Barronci"
           fill
           className="object-cover"

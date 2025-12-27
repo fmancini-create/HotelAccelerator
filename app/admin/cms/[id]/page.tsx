@@ -14,9 +14,7 @@ import Link from "next/link"
 import { SECTION_TYPES, type SectionType, getSectionDefault } from "@/lib/cms/section-schemas"
 import { AdminHeader } from "@/components/admin/admin-header"
 
-interface CMSPage {
-  id: string
-  property_id: string
+interface CMSPageState {
   slug: string
   title: string
   status: "draft" | "published" | "hidden"
@@ -24,9 +22,6 @@ interface CMSPage {
   seo_description: string | null
   seo_noindex: boolean
   sections: Section[]
-  created_at: string
-  updated_at: string
-  published_at: string | null
 }
 
 interface Section {
@@ -35,50 +30,48 @@ interface Section {
   data: Record<string, unknown>
 }
 
+function normalizeSlug(value: string): string {
+  return value.toLowerCase().trim().replace(/\s+/g, "-")
+}
+
 export default function CMSPageEditor({ params }: { params: { id: string } | Promise<{ id: string }> }) {
-  // Gestisce sia il caso Promise che oggetto diretto
-  const [resolvedParams, setResolvedParams] = useState<{ id: string } | null>(null)
-  const [page, setPage] = useState<CMSPage | null>(null)
+  const [pageId, setPageId] = useState<string | null>(null)
+  const [page, setPage] = useState<CMSPageState | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [hasChanges, setHasChanges] = useState(false)
 
   useEffect(() => {
     async function resolveParams() {
-      if (params instanceof Promise) {
-        const resolved = await params
-        setResolvedParams(resolved)
-      } else {
-        setResolvedParams(params)
-      }
+      const resolved = params instanceof Promise ? await params : params
+      setPageId(resolved.id)
     }
     resolveParams()
   }, [params])
 
   useEffect(() => {
-    if (resolvedParams?.id) {
-      loadPage()
-    }
-  }, [resolvedParams?.id])
+    if (pageId) loadPage()
+  }, [pageId])
 
   async function loadPage() {
-    if (!resolvedParams?.id) return
-    const response = await fetch(`/api/cms/pages/${resolvedParams.id}`)
+    if (!pageId) return
+    const response = await fetch(`/api/cms/pages/${pageId}`)
     const data = await response.json()
 
     if (data.page) {
-      setPage(data.page)
+      const { slug, title, status, seo_title, seo_description, seo_noindex, sections } = data.page
+      setPage({ slug, title, status, seo_title, seo_description, seo_noindex, sections })
     }
     setIsLoading(false)
   }
 
   async function handleSave(newStatus?: string) {
-    if (!page) return
+    if (!page || !pageId) return
 
     setIsSaving(true)
 
-    const pagePayload = {
-      slug: page.slug,
+    const payload = {
+      slug: normalizeSlug(page.slug),
       title: page.title,
       status: newStatus || page.status,
       seo_title: page.seo_title,
@@ -87,16 +80,17 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
       sections: page.sections,
     }
 
-    const response = await fetch(`/api/cms/pages/${page.id}`, {
+    const response = await fetch(`/api/cms/pages/${pageId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(pagePayload),
+      body: JSON.stringify(payload),
     })
 
     const data = await response.json()
 
     if (data.page) {
-      setPage(data.page)
+      const { slug, title, status, seo_title, seo_description, seo_noindex, sections } = data.page
+      setPage({ slug, title, status, seo_title, seo_description, seo_noindex, sections })
       setHasChanges(false)
     } else {
       alert(data.error || "Errore nel salvataggio")
@@ -105,7 +99,7 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
     setIsSaving(false)
   }
 
-  function updatePage(updates: Partial<CMSPage>) {
+  function updatePage(updates: Partial<CMSPageState>) {
     if (!page) return
     setPage({ ...page, ...updates })
     setHasChanges(true)
@@ -113,19 +107,16 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
 
   function addSection(type: SectionType) {
     if (!page) return
-
     const newSection: Section = {
       id: crypto.randomUUID(),
       type,
       data: getSectionDefault(type),
     }
-
     updatePage({ sections: [...page.sections, newSection] })
   }
 
   function updateSection(sectionId: string, data: Record<string, unknown>) {
     if (!page) return
-
     const newSections = page.sections.map((s) => (s.id === sectionId ? { ...s, data } : s))
     updatePage({ sections: newSections })
   }
@@ -137,17 +128,13 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
 
   function moveSection(sectionId: string, direction: "up" | "down") {
     if (!page) return
-
     const index = page.sections.findIndex((s) => s.id === sectionId)
     if (index === -1) return
-
     const newIndex = direction === "up" ? index - 1 : index + 1
     if (newIndex < 0 || newIndex >= page.sections.length) return
-
     const newSections = [...page.sections]
     const [moved] = newSections.splice(index, 1)
     newSections.splice(newIndex, 0, moved)
-
     updatePage({ sections: newSections })
   }
 
@@ -201,7 +188,6 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sezioni */}
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -245,7 +231,6 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
           </Card>
         </div>
 
-        {/* Sidebar: Impostazioni */}
         <div className="space-y-4">
           <Card>
             <CardHeader>
@@ -258,11 +243,11 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
               </div>
               <div className="space-y-2">
                 <Label>Slug</Label>
-                <Input value={page.slug} onChange={(e) => updatePage({ slug: e.target.value })} />
+                <Input value={page.slug} onChange={(e) => updatePage({ slug: normalizeSlug(e.target.value) })} />
               </div>
               <div className="space-y-2">
                 <Label>Stato</Label>
-                <Select value={page.status} onValueChange={(v) => updatePage({ status: v as CMSPage["status"] })}>
+                <Select value={page.status} onValueChange={(v) => updatePage({ status: v as CMSPageState["status"] })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

@@ -25,7 +25,7 @@ export default function BreakfastPage() {
 
       <section className="relative h-[60vh] min-h-[500px]">
         <Image
-          src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0033-copia.webp"
+          src="/images/design-mode/villa-i-barronci-web-0033-copia.webp"
           alt="Breakfast at Villa I Barronci"
           fill
           className="object-cover"

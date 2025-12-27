@@ -1,3 +1,4 @@
+import { BUILD_VERSION } from './lib/build-version'
 import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { Playfair_Display, Inter } from "next/font/google"

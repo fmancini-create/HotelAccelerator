@@ -25,7 +25,7 @@ export default function SpaPage() {
 
       <section className="relative h-[60vh] min-h-[500px]">
         <Image
-          src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0011.webp"
+          src="/images/design-mode/villa-i-barronci-web-0011.webp"
           alt="Namaste Entspannungsbereich"
           fill
           className="object-cover"
@@ -65,7 +65,7 @@ export default function SpaPage() {
 
           <div className="relative h-[400px] rounded-lg overflow-hidden">
             <Image
-              src="https://ibarronci.com/wp-content/uploads/2024/11/villa-i-barronci-web-0011.webp"
+              src="/images/design-mode/villa-i-barronci-web-0011.webp"
               alt="Spa-Behandlung"
               fill
               className="object-cover"
