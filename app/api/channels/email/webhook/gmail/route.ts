@@ -236,7 +236,7 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
     // Find or create conversation
     let { data: conversation } = await supabase
       .from("conversations")
-      .select("id")
+      .select("id, unread_count")
       .eq("property_id", property_id)
       .eq("gmail_thread_id", email.threadId)
       .single()
@@ -256,7 +256,7 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
           unread_count: 1,
           last_message_at: new Date(email.date).toISOString(),
         })
-        .select("id")
+        .select("id, unread_count")
         .single()
       conversation = newConv
     }
@@ -277,12 +277,12 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
       created_at: new Date(email.date).toISOString(),
     })
 
-    // Update conversation
+    const currentUnread = conversation?.unread_count || 0
     await supabase
       .from("conversations")
       .update({
         last_message_at: new Date(email.date).toISOString(),
-        unread_count: supabase.sql`unread_count + 1`,
+        unread_count: currentUnread + 1,
         updated_at: new Date().toISOString(),
       })
       .eq("id", conversation.id)
