@@ -1,5 +1,3 @@
-import { BUILD_VERSION } from "../../lib/build-version"
-
 import type React from "react"
 import type { Metadata } from "next"
 import Script from "next/script"
@@ -76,13 +74,17 @@ export default async function FrontendLayout({
   children: React.ReactNode
 }) {
   const isPlatform = await isPlatformDomain()
+
+  console.log("[v0] FrontendLayout - isPlatform:", isPlatform)
+
   if (isPlatform) {
     return <>{children}</>
   }
 
   const tenant = await getCurrentTenant()
 
-  // Se non c'è tenant su un dominio non-piattaforma, errore
+  console.log("[v0] FrontendLayout - tenant:", tenant?.name || "null")
+
   if (!tenant) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
