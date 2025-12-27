@@ -134,6 +134,13 @@ export default function EmailChannelsClient() {
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [enablingPush, setEnablingPush] = useState<string | null>(null)
 
+  const [settings, setSettings] = useState({
+    autoSync: true,
+    notifications: true,
+    autoContacts: false,
+    syncAttachments: true,
+  })
+
   const searchParams = useSearchParams()
   const oauthSuccess = searchParams.get("success")
   const oauthError = searchParams.get("error")
@@ -170,6 +177,7 @@ export default function EmailChannelsClient() {
       if (gmailChannel) {
         setSelectedChannel(gmailChannel)
         fetchLabels(gmailChannel.id)
+        fetchSettings(gmailChannel.id)
       }
     }
   }, [channels])
@@ -230,12 +238,39 @@ export default function EmailChannelsClient() {
       })
       if (res.ok) {
         const data = await res.json()
-        setLabels(data.labels || [])
+        // Ensure labels are initialized with sync_enabled state
+        const initializedLabels = (data.labels || []).map((label: GmailLabel) => ({
+          ...label,
+          sync_enabled: label.sync_enabled === undefined ? true : label.sync_enabled,
+        }))
+        setLabels(initializedLabels)
       }
     } catch (error) {
       console.error("Error fetching labels:", error)
     } finally {
       setLoadingLabels(false)
+    }
+  }
+
+  const fetchSettings = async (channelId: string) => {
+    try {
+      const headers = await getAuthHeaders()
+      const response = await fetch(`/api/channels/email/${channelId}/settings`, {
+        headers,
+        credentials: "include",
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSettings({
+          autoSync: data.sync_enabled ?? true,
+          notifications: data.notifications_enabled ?? true,
+          autoContacts: data.auto_create_contacts ?? false,
+          syncAttachments: data.save_attachments ?? true,
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching settings:", error)
     }
   }
 
@@ -539,6 +574,104 @@ export default function EmailChannelsClient() {
     toast({ title: "Copiato negli appunti!" })
   }
 
+  const handleLabelToggle = async (labelId: string, enabled: boolean) => {
+    if (!selectedChannel) return
+
+    // Ottimistic update
+    setLabels((prevLabels) =>
+      prevLabels.map((label) => (label.id === labelId ? { ...label, sync_enabled: enabled } : label)),
+    )
+
+    try {
+      const headers = await getAuthHeaders()
+      const response = await fetch(`/api/channels/email/${selectedChannel.id}/labels`, {
+        method: "PATCH",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ labelId, syncEnabled: enabled }),
+      })
+
+      if (!response.ok) {
+        // Revert on error
+        setLabels((prevLabels) =>
+          prevLabels.map((label) => (label.id === labelId ? { ...label, sync_enabled: !enabled } : label)),
+        )
+        toast({
+          title: "Errore",
+          description: "Impossibile aggiornare l'etichetta",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: enabled ? "Etichetta attivata" : "Etichetta disattivata",
+        description: `La sincronizzazione per questa etichetta è stata ${enabled ? "attivata" : "disattivata"}.`,
+      })
+    } catch (error) {
+      console.error("Error toggling label:", error)
+      // Revert on error
+      setLabels((prevLabels) =>
+        prevLabels.map((label) => (label.id === labelId ? { ...label, sync_enabled: !enabled } : label)),
+      )
+      toast({
+        title: "Errore",
+        description: "Impossibile aggiornare l'etichetta",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSettingToggle = async (setting: keyof typeof settings, enabled: boolean) => {
+    if (!selectedChannel) return
+
+    // Ottimistic update
+    setSettings((prev) => ({ ...prev, [setting]: enabled }))
+
+    // Mappa i nomi delle impostazioni UI ai nomi del database
+    const settingMap: Record<string, string> = {
+      autoSync: "sync_enabled",
+      notifications: "notifications_enabled",
+      autoContacts: "auto_create_contacts",
+      syncAttachments: "save_attachments",
+    }
+
+    try {
+      const headers = await getAuthHeaders()
+      const response = await fetch(`/api/channels/email/${selectedChannel.id}/settings`, {
+        method: "PATCH",
+        headers,
+        credentials: "include",
+        body: JSON.stringify({ [settingMap[setting]]: enabled }),
+      })
+
+      if (!response.ok) {
+        // Revert on error
+        setSettings((prev) => ({ ...prev, [setting]: !enabled }))
+        toast({
+          title: "Errore",
+          description: "Impossibile aggiornare l'impostazione",
+          variant: "destructive",
+        })
+        return
+      }
+
+      toast({
+        title: "Impostazione aggiornata",
+        description: `L'impostazione è stata ${enabled ? "attivata" : "disattivata"}.`,
+      })
+    } catch (error) {
+      console.error("Error toggling setting:", error)
+      // Revert on error
+      setSettings((prev) => ({ ...prev, [setting]: !enabled }))
+      toast({
+        title: "Errore",
+        description: "Impossibile aggiornare l'impostazione",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -769,6 +902,7 @@ export default function EmailChannelsClient() {
                           setSelectedChannel(channel)
                           if (channel.provider === "gmail") {
                             fetchLabels(channel.id)
+                            fetchSettings(channel.id) // Aggiorna anche le impostazioni quando si cambia canale
                           }
                         }}
                       >
@@ -953,7 +1087,10 @@ export default function EmailChannelsClient() {
                                     </p>
                                   </div>
                                 </div>
-                                <Switch checked={label.sync_enabled !== false} />
+                                <Switch
+                                  checked={label.sync_enabled !== false}
+                                  onCheckedChange={(checked) => handleLabelToggle(label.id, checked)}
+                                />
                               </div>
                             )
                           })}
@@ -979,7 +1116,10 @@ export default function EmailChannelsClient() {
                                     <p className="text-xs text-muted-foreground">{label.messagesTotal} messaggi</p>
                                   </div>
                                 </div>
-                                <Switch checked={label.sync_enabled !== false} />
+                                <Switch
+                                  checked={label.sync_enabled !== false}
+                                  onCheckedChange={(checked) => handleLabelToggle(label.id, checked)}
+                                />
                               </div>
                             ))}
                         </div>
@@ -1008,7 +1148,10 @@ export default function EmailChannelsClient() {
                     <p className="font-medium">Sincronizzazione automatica</p>
                     <p className="text-sm text-muted-foreground">Sincronizza automaticamente le email ogni 5 minuti</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    checked={settings.autoSync}
+                    onCheckedChange={(checked) => handleSettingToggle("autoSync", checked)}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -1016,7 +1159,10 @@ export default function EmailChannelsClient() {
                     <p className="font-medium">Notifiche nuove email</p>
                     <p className="text-sm text-muted-foreground">Ricevi notifiche per nuove email in arrivo</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    checked={settings.notifications}
+                    onCheckedChange={(checked) => handleSettingToggle("notifications", checked)}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -1024,7 +1170,10 @@ export default function EmailChannelsClient() {
                     <p className="font-medium">Crea contatti automaticamente</p>
                     <p className="text-sm text-muted-foreground">Aggiungi automaticamente nuovi mittenti al CRM</p>
                   </div>
-                  <Switch />
+                  <Switch
+                    checked={settings.autoContacts}
+                    onCheckedChange={(checked) => handleSettingToggle("autoContacts", checked)}
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -1032,7 +1181,10 @@ export default function EmailChannelsClient() {
                     <p className="font-medium">Sincronizza allegati</p>
                     <p className="text-sm text-muted-foreground">Scarica e salva gli allegati delle email</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch
+                    checked={settings.syncAttachments}
+                    onCheckedChange={(checked) => handleSettingToggle("syncAttachments", checked)}
+                  />
                 </div>
               </CardContent>
             </Card>
