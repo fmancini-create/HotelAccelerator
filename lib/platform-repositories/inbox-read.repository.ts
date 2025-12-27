@@ -5,6 +5,26 @@ import type {
   ConversationListOptions,
   MessageItem,
 } from "@/lib/types/inbox-read.types"
+import { RateLimitError } from "@/lib/errors"
+
+function handleSupabaseError(error: any): never {
+  if (error && typeof error === "object") {
+    const message = error.message || String(error)
+    if (
+      message.toLowerCase().includes("too many") ||
+      message.toLowerCase().includes("rate limit") ||
+      error.code === "429" ||
+      error.status === 429
+    ) {
+      throw new RateLimitError()
+    }
+  }
+  // Check if error is a string containing rate limit message
+  if (typeof error === "string" && error.toLowerCase().includes("too many")) {
+    throw new RateLimitError()
+  }
+  throw error
+}
 
 export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
@@ -48,15 +68,22 @@ export class InboxReadRepository {
 
     const { data, error } = await query
 
-    if (error) throw error
+    if (error) handleSupabaseError(error)
 
     const conversationIds = (data || []).map((c) => c.id)
-    const { data: lastMessages } = await this.supabase
+
+    if (conversationIds.length === 0) {
+      return []
+    }
+
+    const { data: lastMessages, error: msgError } = await this.supabase
       .from("messages")
       .select("id, content, sender_type, created_at, conversation_id")
       .in("conversation_id", conversationIds)
       .eq("property_id", propertyId)
       .order("created_at", { ascending: false })
+
+    if (msgError) handleSupabaseError(msgError)
 
     const lastMessageMap = new Map()
     lastMessages?.forEach((msg) => {
@@ -105,7 +132,7 @@ export class InboxReadRepository {
       .eq("property_id", propertyId)
       .single()
 
-    if (convError) throw convError
+    if (convError) handleSupabaseError(convError)
     if (!conversation) return null
 
     const { data: messages, error: msgError } = await this.supabase
@@ -115,7 +142,7 @@ export class InboxReadRepository {
       .eq("property_id", propertyId)
       .order("created_at", { ascending: true })
 
-    if (msgError) throw msgError
+    if (msgError) handleSupabaseError(msgError)
 
     return {
       ...conversation,
@@ -130,7 +157,7 @@ export class InboxReadRepository {
   async countByStatus(propertyId: string): Promise<Record<string, number>> {
     const { data, error } = await this.supabase.from("conversations").select("status").eq("property_id", propertyId)
 
-    if (error) throw error
+    if (error) handleSupabaseError(error)
 
     const counts: Record<string, number> = {}
     data?.forEach((row) => {
