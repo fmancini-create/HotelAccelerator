@@ -6,7 +6,7 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: channelId } = await params
-    const { propertyId } = await getAuthenticatedPropertyId(request)
+    const propertyId = await getAuthenticatedPropertyId(request)
 
     const supabase = await createClient()
 
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: channelId } = await params
-    const { propertyId } = await getAuthenticatedPropertyId(request)
+    const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
 
     const supabase = await createClient()

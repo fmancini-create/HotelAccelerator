@@ -3,10 +3,10 @@ import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 // GET - Carica etichette e il loro stato di sincronizzazione
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id: channelId } = await params
-    const { propertyId } = await getAuthenticatedPropertyId(request)
+    const { id: channelId } = params
+    const propertyId = await getAuthenticatedPropertyId(request)
 
     const supabase = await createClient()
 
@@ -30,10 +30,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 // PATCH - Aggiorna stato sincronizzazione etichetta
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { id: channelId } = await params
-    const { propertyId } = await getAuthenticatedPropertyId(request)
+    const { id: channelId } = params
+    const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
 
     const { labelId, syncEnabled } = body
@@ -44,12 +44,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     const supabase = await createClient()
 
-    // Aggiorna l'etichetta - usiamo il campo color per memorizzare lo stato sync
-    // (o possiamo aggiungere un campo sync_enabled alla tabella email_labels)
     const { error } = await supabase
       .from("email_labels")
       .update({
-        // Usiamo il campo type per memorizzare lo stato: "synced" o "ignored"
         type: syncEnabled ? "synced" : "ignored",
         updated_at: new Date().toISOString(),
       })
