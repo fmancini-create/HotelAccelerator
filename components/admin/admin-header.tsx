@@ -4,8 +4,7 @@ import type React from "react"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronRight, Home, ArrowLeft } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { ChevronRight, Home } from "lucide-react"
 
 interface BreadcrumbItem {
   label: string
@@ -54,52 +53,41 @@ function buildBreadcrumbs(pathname: string): BreadcrumbItem[] {
   return breadcrumbs
 }
 
-export function AdminHeader({ title, subtitle, backHref, backLabel, actions }: AdminHeaderProps) {
+export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
   const pathname = usePathname()
   const breadcrumbs = buildBreadcrumbs(pathname)
-
-  // Trova il parent diretto per il bottone "Indietro"
-  const parentPath = pathMap[pathname]?.parent || "/admin/dashboard"
-  const effectiveBackHref = backHref || parentPath
-  const effectiveBackLabel =
-    backLabel || (parentPath === "/admin/dashboard" ? "Dashboard" : pathMap[parentPath]?.label || "Indietro")
 
   return (
     <header className="bg-white border-b border-[#e5e5e5] sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 py-2 text-sm text-[#8b8b8b] border-b border-[#f0f0f0]">
-          <Link href="/admin/dashboard" className="hover:text-[#8b7355] transition-colors">
-            <Home className="w-4 h-4" />
-          </Link>
-          {breadcrumbs.map((crumb, index) => (
-            <div key={crumb.href} className="flex items-center gap-2">
-              <ChevronRight className="w-4 h-4" />
-              {index === breadcrumbs.length - 1 ? (
-                <span className="text-[#5c5c5c] font-medium">{crumb.label}</span>
-              ) : (
-                <Link href={crumb.href} className="hover:text-[#8b7355] transition-colors">
-                  {crumb.label}
-                </Link>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Header principale */}
         <div className="flex items-center justify-between h-14">
-          <div className="flex items-center gap-4">
-            <Link href={effectiveBackHref}>
-              <Button variant="ghost" size="sm" className="text-[#8b8b8b] hover:text-[#8b7355]">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                {effectiveBackLabel}
-              </Button>
-            </Link>
-            <div className="h-6 w-px bg-[#e5e5e5]" />
-            <div>
-              <h1 className="text-lg font-serif text-[#5c5c5c]">{title}</h1>
-              {subtitle && <p className="text-xs text-[#8b8b8b]">{subtitle}</p>}
-            </div>
+          <div className="flex items-center gap-3">
+            {/* Breadcrumb compatto */}
+            <nav className="flex items-center gap-1.5 text-sm">
+              <Link href="/admin/dashboard" className="text-[#8b8b8b] hover:text-[#8b7355] transition-colors">
+                <Home className="w-4 h-4" />
+              </Link>
+              {breadcrumbs.map((crumb, index) => (
+                <div key={crumb.href} className="flex items-center gap-1.5">
+                  <ChevronRight className="w-3 h-3 text-[#c0c0c0]" />
+                  {index === breadcrumbs.length - 1 ? (
+                    <span className="text-[#5c5c5c] font-medium">{crumb.label}</span>
+                  ) : (
+                    <Link href={crumb.href} className="text-[#8b8b8b] hover:text-[#8b7355] transition-colors">
+                      {crumb.label}
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </nav>
+
+            {/* Separatore e sottotitolo */}
+            {subtitle && (
+              <>
+                <div className="h-4 w-px bg-[#e5e5e5]" />
+                <p className="text-xs text-[#8b8b8b]">{subtitle}</p>
+              </>
+            )}
           </div>
 
           {actions && <div className="flex items-center gap-2">{actions}</div>}
