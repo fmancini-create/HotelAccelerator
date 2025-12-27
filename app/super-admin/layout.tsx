@@ -1,8 +1,9 @@
 "use client"
 
 import type React from "react"
+import { useEffect, useState } from "react"
+import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
 import { LayoutDashboard, Building2, Users, CreditCard, Settings, LogOut, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -12,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { createClient } from "@/lib/supabase/client"
 
 const navigation = [
   { name: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
@@ -26,6 +28,90 @@ export default function SuperAdminLayout({
   children: React.ReactNode
 }) {
   const pathname = usePathname()
+  const router = useRouter()
+  const [isChecking, setIsChecking] = useState(true)
+  const [userEmail, setUserEmail] = useState<string | null>(null)
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      // Skip auth check for login page
+      if (pathname === "/super-admin/login") {
+        setIsChecking(false)
+        return
+      }
+
+      try {
+        const supabase = createClient()
+
+        // Check if user is authenticated
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
+
+        if (authError || !user) {
+          console.log("[v0] Not authenticated, redirecting to login")
+          router.push("/super-admin/login")
+          return
+        }
+
+        // Check if user is a platform collaborator
+        const { data: collaborator, error: collaboratorError } = await supabase
+          .from("platform_collaborators")
+          .select("role, is_active, email")
+          .eq("email", user.email)
+          .maybeSingle()
+
+        if (collaboratorError || !collaborator) {
+          console.log("[v0] Not a platform collaborator")
+          router.push("/super-admin/login")
+          return
+        }
+
+        if (collaborator.role !== "super_admin" || !collaborator.is_active) {
+          console.log("[v0] Not super admin or account suspended")
+          await supabase.auth.signOut()
+          router.push("/super-admin/login")
+          return
+        }
+
+        setUserEmail(collaborator.email)
+        setIsChecking(false)
+      } catch (error) {
+        console.error("[v0] Auth check error:", error)
+        router.push("/super-admin/login")
+      }
+    }
+
+    checkAuth()
+  }, [pathname, router])
+
+  const handleLogout = async () => {
+    try {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      router.push("/super-admin/login")
+    } catch (error) {
+      console.error("[v0] Logout error:", error)
+    }
+  }
+
+  // Show login page without layout
+  if (pathname === "/super-admin/login") {
+    return <>{children}</>
+  }
+
+  // Show loading state while checking auth
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+        <div className="flex flex-col items-center gap-4">
+          <span className="w-8 h-8 border-4 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
+          <p className="text-sm text-neutral-600">Verifica autenticazione...</p>
+        </div>
+      </div>
+    )
+  }
 
   const isActive = (href: string) => {
     if (href === "/super-admin") return pathname === "/super-admin"
@@ -75,7 +161,7 @@ export default function SuperAdminLayout({
                   <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center mr-2">
                     <span className="text-xs font-medium">SA</span>
                   </div>
-                  <span className="hidden sm:block text-sm">Super Admin</span>
+                  <span className="hidden sm:block text-sm">{userEmail}</span>
                   <ChevronDown className="w-4 h-4 ml-1" />
                 </Button>
               </DropdownMenuTrigger>
@@ -87,7 +173,7 @@ export default function SuperAdminLayout({
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
+                <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                   <LogOut className="w-4 h-4 mr-2" />
                   Logout
                 </DropdownMenuItem>

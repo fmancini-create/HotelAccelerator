@@ -19,23 +19,25 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1, // Prevents zoom on input focus on iOS
   userScalable: false,
-  themeColor: "#8b7355",
+  themeColor: "#0a0a0a",
 }
 
 export const metadata: Metadata = {
-  title: "Resort Spa Toscana Agriturismo San Casciano Val di Pesa",
+  title: {
+    default: "HotelAccelerator - Piattaforma SaaS per Hotel",
+    template: "%s | HotelAccelerator",
+  },
   description:
-    "Villa I Barronci Resort & Spa - Tra le colline del Chianti, la tua vacanza di lusso in Toscana: villa d'epoca con piscina, Area Relax e parco privato",
+    "La piattaforma all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI. Aumenta le prenotazioni dirette.",
   keywords: [
-    "resort spa toscana",
-    "agriturismo san casciano",
-    "villa chianti",
-    "piscina panoramica toscana",
-    "hotel lusso toscana",
-    "spa chianti",
-    "vacanza toscana",
+    "hotel management",
+    "saas hotel",
+    "crm hotel",
+    "email marketing hotel",
+    "prenotazioni dirette",
+    "software hotel",
   ],
-  authors: [{ name: "Villa I Barronci Resort & Spa" }],
+  authors: [{ name: "HotelAccelerator" }],
   alternates: {
     canonical: "https://www.ibarronci.com",
     languages: {
@@ -49,36 +51,18 @@ export const metadata: Metadata = {
     type: "website",
     locale: "it_IT",
     url: "https://www.ibarronci.com",
-    siteName: "Villa I Barronci Resort & Spa",
-    title: "Resort Spa Toscana Agriturismo San Casciano Val di Pesa",
-    description:
-      "Tra le colline del Chianti, la tua vacanza di lusso in Toscana: villa d'epoca con piscina, Area Relax e parco privato",
-    images: [
-      {
-        url: "https://ibarronci.com/wp-content/uploads/2023/08/Villa-I-Barronci-Panoramica.jpg",
-        width: 1200,
-        height: 630,
-        alt: "Villa I Barronci Resort & Spa",
-      },
-    ],
+    siteName: "HotelAccelerator",
+    title: "HotelAccelerator - Piattaforma SaaS per Hotel",
+    description: "La piattaforma all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Resort Spa Toscana Agriturismo San Casciano Val di Pesa",
-    description:
-      "Tra le colline del Chianti, la tua vacanza di lusso in Toscana: villa d'epoca con piscina, Area Relax e parco privato",
-    images: ["https://ibarronci.com/wp-content/uploads/2023/08/Villa-I-Barronci-Panoramica.jpg"],
+    title: "HotelAccelerator - Piattaforma SaaS per Hotel",
+    description: "La piattaforma all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI.",
   },
   robots: {
     index: true,
     follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-video-preview": -1,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-    },
   },
   verification: {
     google: "your-google-verification-code",

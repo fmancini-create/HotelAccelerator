@@ -1,24 +1,31 @@
 import type React from "react"
 import type { Metadata } from "next"
 import Script from "next/script"
-import { getCurrentTenant } from "@/lib/get-tenant"
+import { getCurrentTenant, isPlatformDomain } from "@/lib/get-tenant"
 import { getCurrentDomain } from "@/lib/seo-utils"
 import { ChatWidget } from "@/components/chat-widget"
 import { HotelSchema, LocalBusinessSchema } from "@/components/schema-org"
 
 export async function generateMetadata(): Promise<Metadata> {
+  const isPlatform = await isPlatformDomain()
+  if (isPlatform) {
+    return {
+      title: "HotelAccelerator - Piattaforma SaaS per Hotel",
+      description: "La piattaforma all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI.",
+    }
+  }
+
   const tenant = await getCurrentTenant()
   const domain = await getCurrentDomain()
 
   if (!tenant) {
     return {
-      title: "Preview Mode",
-      description: "Preview mode - no tenant configured",
+      title: "Sito non trovato",
+      description: "Nessun sito configurato per questo dominio",
     }
   }
 
-  // Usa campi SEO dal database se disponibili
-  const tenantName = tenant?.name || "HotelAccelerator"
+  const tenantName = tenant?.name || "Hotel"
   const seoTitle = tenant?.seo_title || tenantName
   const seoDescription =
     tenant?.seo_description ||
@@ -26,7 +33,6 @@ export async function generateMetadata(): Promise<Metadata> {
   const seoOgImage = tenant?.seo_og_image
   const seoKeywords = tenant?.seo_keywords
 
-  // Costruisci URL immagine OG
   const ogImages = seoOgImage ? [`${domain}${seoOgImage.startsWith("/") ? seoOgImage : `/${seoOgImage}`}`] : undefined
 
   return {
@@ -67,14 +73,29 @@ export default async function FrontendLayout({
 }: {
   children: React.ReactNode
 }) {
-  const tenant = await getCurrentTenant()
-
-  // This allows the frontend to work in v0 preview and development
-  if (!tenant) {
-    return <div data-preview-mode="true">{children}</div>
+  const isPlatform = await isPlatformDomain()
+  if (isPlatform) {
+    return <>{children}</>
   }
 
-  // Se il frontend è disabilitato per questo tenant, mostra errore
+  const tenant = await getCurrentTenant()
+
+  // Se non c'è tenant su un dominio non-piattaforma, errore
+  if (!tenant) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center max-w-md px-4">
+          <h1 className="text-2xl font-bold mb-2">Sito non trovato</h1>
+          <p className="text-muted-foreground mb-4">Nessun sito è configurato per questo dominio.</p>
+          <p className="text-sm text-muted-foreground">
+            Se sei il proprietario, accedi al pannello di controllo per configurare il dominio.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Se il frontend è disabilitato per questo tenant
   if (!tenant.frontend_enabled) {
     return (
       <div className="min-h-screen flex items-center justify-center">

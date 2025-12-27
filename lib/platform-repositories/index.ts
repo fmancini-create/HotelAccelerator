@@ -4,3 +4,7 @@ export { InboxReadRepository } from "./inbox-read.repository"
 export { EmailChannelRepository } from "./email-channel.repository"
 export { MessageRuleRepository } from "./message-rule.repository"
 export { SuperAdminRepository } from "./super-admin.repository"
+
+// Re-export types
+export type { MessageRule, CreateMessageRuleData, UpdateMessageRuleData } from "./message-rule.repository"
+export type { EmailChannel } from "./email-channel.repository"

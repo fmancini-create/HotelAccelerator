@@ -6,34 +6,41 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
   // Skip per risorse statiche e API interne
-  if (
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api") ||
-    pathname.includes(".") ||
-    pathname.startsWith("/admin")
-  ) {
+  if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next()
   }
 
-  // Estrai subdomain
+  const isPlatformDomain = isBaseDomain(hostname)
+
+  // Se è dominio piattaforma, aggiungi header e lascia passare
+  if (isPlatformDomain) {
+    const response = NextResponse.next()
+    response.headers.set("x-is-platform-domain", "true")
+    return response
+  }
+
+  // Estrai subdomain per tenant
   const subdomain = extractSubdomain(hostname)
 
   // Se c'è un subdomain valido, aggiungi header per il tenant
   if (subdomain) {
     const response = NextResponse.next()
-    response.headers.set("x-tenant-subdomain", subdomain)
+    response.headers.set("x-tenant-identifier", subdomain)
+    response.headers.set("x-tenant-type", "subdomain")
     return response
   }
 
   // Verifica custom domain (non localhost, non piattaforma base)
-  if (!isBaseDomain(hostname)) {
+  const customDomain = hostname.split(":")[0]
+  if (customDomain) {
     const response = NextResponse.next()
-    response.headers.set("x-tenant-domain", hostname.split(":")[0])
+    response.headers.set("x-tenant-identifier", customDomain)
+    response.headers.set("x-tenant-type", "custom_domain")
     return response
   }
 
@@ -63,18 +70,42 @@ function extractSubdomain(hostname: string): string | null {
 }
 
 /**
- * Verifica se è un dominio base della piattaforma
+ * Verifica se è un dominio base della piattaforma (senza subdomain tenant)
  */
 function isBaseDomain(hostname: string): boolean {
   const host = hostname.split(":")[0]
-  return (
-    host === "hotelaccelerator.com" ||
-    host === "www.hotelaccelerator.com" ||
-    host === "app.hotelaccelerator.com" ||
-    host === "admin.hotelaccelerator.com" ||
-    host === "localhost" ||
-    host.endsWith(".vercel.app")
-  )
+
+  // Domini che mostrano la landing page piattaforma
+  const platformDomains = [
+    "hotelaccelerator.com",
+    "www.hotelaccelerator.com",
+    "app.hotelaccelerator.com",
+    "admin.hotelaccelerator.com",
+    "localhost",
+  ]
+
+  // Check esatto
+  if (platformDomains.includes(host)) {
+    return true
+  }
+
+  // Check per vercel.app senza subdomain tenant
+  // es: hotel-accelerator.vercel.app è piattaforma
+  // ma: barronci.hotel-accelerator.vercel.app è tenant
+  if (host.endsWith(".vercel.app")) {
+    // Se ha solo un punto prima di vercel.app, è il dominio base
+    const beforeVercel = host.replace(".vercel.app", "")
+    if (!beforeVercel.includes(".")) {
+      return true
+    }
+  }
+
+  // Check per vusercontent.net (v0 preview)
+  if (host.includes("vusercontent.net")) {
+    return true
+  }
+
+  return false
 }
 
 export const config = {

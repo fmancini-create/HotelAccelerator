@@ -10,6 +10,10 @@ export interface CurrentTenant {
   frontend_enabled: boolean
   logo_url: string | null
   settings: Record<string, unknown>
+  seo_title?: string
+  seo_description?: string
+  seo_og_image?: string
+  seo_keywords?: string[]
 }
 
 /**
@@ -28,10 +32,6 @@ export async function getCurrentTenant(): Promise<CurrentTenant | null> {
     return null
   }
 
-  if (tenantIdentifier.includes("vusercontent.net") || tenantIdentifier.includes("vercel.app")) {
-    return null
-  }
-
   const supabase = await createClient()
 
   // Cerca per subdomain o custom_domain
@@ -39,7 +39,9 @@ export async function getCurrentTenant(): Promise<CurrentTenant | null> {
 
   const { data, error } = await supabase
     .from("properties")
-    .select("id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, settings")
+    .select(
+      "id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, settings, seo_title, seo_description, seo_og_image, seo_keywords",
+    )
     .eq(column, tenantIdentifier)
     .eq("frontend_enabled", true)
     .maybeSingle()
@@ -50,11 +52,18 @@ export async function getCurrentTenant(): Promise<CurrentTenant | null> {
   }
 
   if (!data) {
-    // No tenant found - this is normal for platform domain
     return null
   }
 
   return data as CurrentTenant
+}
+
+/**
+ * Verifica se siamo sul dominio piattaforma (non tenant)
+ */
+export async function isPlatformDomain(): Promise<boolean> {
+  const headersList = await headers()
+  return headersList.get("x-is-platform-domain") === "true"
 }
 
 /**
