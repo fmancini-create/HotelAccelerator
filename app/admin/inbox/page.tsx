@@ -389,13 +389,7 @@ export default function AdminInboxPage() {
 
     if (isHtml) {
       return (
-        <div
-          className="email-content prose prose-sm max-w-none"
-          style={{
-            all: "initial",
-            fontFamily: "inherit",
-          }}
-        >
+        <div className="email-content prose prose-sm max-w-none overflow-x-auto">
           <iframe
             srcDoc={`
               <!DOCTYPE html>
@@ -412,6 +406,8 @@ export default function AdminInboxPage() {
                     margin: 0;
                     padding: 16px;
                     background: white;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
                   }
                   img {
                     max-width: 100%;
@@ -419,15 +415,30 @@ export default function AdminInboxPage() {
                   }
                   a {
                     color: #0066cc;
+                    word-break: break-all;
                   }
                   table {
-                    max-width: 100%;
+                    max-width: 100% !important;
+                    width: 100% !important;
+                    table-layout: fixed;
+                  }
+                  td, th {
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
                   }
                   blockquote {
                     border-left: 3px solid #ccc;
                     margin: 0;
                     padding-left: 12px;
                     color: #666;
+                  }
+                  * {
+                    max-width: 100%;
+                    box-sizing: border-box;
+                  }
+                  a[style*="display"], div[style*="display"] {
+                    max-width: 100% !important;
+                    word-break: break-word;
                   }
                 </style>
               </head>
@@ -689,8 +700,10 @@ export default function AdminInboxPage() {
                     className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`max-w-[80%] rounded-lg ${
-                        message.sender_type === "agent" ? "bg-primary text-primary-foreground p-3" : "bg-muted p-0"
+                      className={`rounded-lg ${
+                        message.sender_type === "agent"
+                          ? "max-w-[80%] bg-primary text-primary-foreground p-3"
+                          : "max-w-[95%] bg-muted p-0"
                       }`}
                     >
                       {message.sender_type === "agent" ? (

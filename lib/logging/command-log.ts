@@ -189,3 +189,40 @@ export async function logCommandExecution<T>(
     throw error
   }
 }
+
+/**
+ * Simple command log - logs after execution has completed
+ * Use when you don't need timing or don't want wrapper pattern
+ */
+export async function logCommand(options: {
+  command: string
+  payload?: Record<string, any>
+  actorId?: string
+  propertyId?: string
+  entityType?: CommandLogEvent["entity_type"]
+  entityId?: string
+  result?: Record<string, any>
+  error?: string
+}): Promise<void> {
+  try {
+    // Fire and forget - never block execution
+    const event: Partial<CommandLogEvent> = {
+      timestamp: new Date().toISOString(),
+      actor_id: options.actorId || "system",
+      property_id: options.propertyId || "",
+      command_name: options.command,
+      entity_type: options.entityType || "conversation",
+      entity_id: options.entityId || "",
+      payload_summary: options.payload || {},
+      result: options.error ? "failure" : "success",
+      error_code: options.error,
+    }
+
+    // Log to console in development
+    if (process.env.NODE_ENV === "development") {
+      console.log("[CommandLog]", options.command, options.result || options.error || "success")
+    }
+  } catch {
+    // Silent failure
+  }
+}

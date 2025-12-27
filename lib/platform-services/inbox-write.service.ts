@@ -8,7 +8,7 @@ import type {
   UpdateStatusCommand,
 } from "@/lib/types/inbox-write.types"
 import { ValidationError, NotFoundError } from "@/lib/errors"
-import { logCommandExecution } from "@/lib/logging/command-log"
+import { logCommand } from "@/lib/logging/command-log"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export class InboxWriteService {
@@ -24,10 +24,13 @@ export class InboxWriteService {
       throw new NotFoundError("Conversation not found")
     }
     await this.repository.markConversationAsRead(command.conversationId, command.propertyId)
-    await logCommandExecution({
+    await logCommand({
       command: "markAsRead",
       payload: command,
       actorId,
+      propertyId: command.propertyId,
+      entityType: "conversation",
+      entityId: command.conversationId,
       result: { success: true },
     })
     return { success: true }
@@ -38,13 +41,15 @@ export class InboxWriteService {
     if (!conversation) {
       throw new NotFoundError("Conversation not found")
     }
-    // Use the isStarred from command since DB column doesn't exist yet
     const newStarred = command.isStarred
     await this.repository.toggleStar(command.conversationId, command.propertyId, newStarred)
-    await logCommandExecution({
+    await logCommand({
       command: "toggleStar",
       payload: command,
       actorId,
+      propertyId: command.propertyId,
+      entityType: "conversation",
+      entityId: command.conversationId,
       result: { starred: newStarred },
     })
     return { starred: newStarred }
@@ -58,10 +63,13 @@ export class InboxWriteService {
     if (!["converted", "lost", "pending", "followup"].includes(command.outcome)) {
       throw new ValidationError("Invalid outcome value")
     }
-    await logCommandExecution({
+    await logCommand({
       command: "updateOutcome",
       payload: command,
       actorId,
+      propertyId: command.propertyId,
+      entityType: "conversation",
+      entityId: command.conversationId,
       result: { outcome: command.outcome },
     })
     return { outcome: command.outcome }
@@ -73,10 +81,13 @@ export class InboxWriteService {
       throw new NotFoundError("Conversation not found")
     }
     await this.repository.updateBookingData(command.conversationId, command.propertyId, command.bookingData)
-    await logCommandExecution({
+    await logCommand({
       command: "updateBookingData",
       payload: command,
       actorId,
+      propertyId: command.propertyId,
+      entityType: "conversation",
+      entityId: command.conversationId,
       result: { bookingData: command.bookingData },
     })
     return { bookingData: command.bookingData }
@@ -100,10 +111,13 @@ export class InboxWriteService {
       [],
     )
     await this.repository.updateLastMessageAt(command.conversationId, command.propertyId)
-    await logCommandExecution({
+    await logCommand({
       command: "sendMessage",
       payload: { ...command, content: "[REDACTED]" },
       actorId,
+      propertyId: command.propertyId,
+      entityType: "message",
+      entityId: message.id,
       result: { messageId: message.id },
     })
     return message
@@ -118,10 +132,13 @@ export class InboxWriteService {
       throw new ValidationError("Invalid status value")
     }
     await this.repository.updateStatus(command.conversationId, command.propertyId, command.status)
-    await logCommandExecution({
+    await logCommand({
       command: "updateStatus",
       payload: command,
       actorId,
+      propertyId: command.propertyId,
+      entityType: "conversation",
+      entityId: command.conversationId,
       result: { status: command.status },
     })
     return { status: command.status }
