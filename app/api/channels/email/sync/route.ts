@@ -127,14 +127,48 @@ function parseGmailMessage(msg: any) {
   const headers = msg.payload?.headers || []
   const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || ""
 
-  // Get body content
   let body = ""
+  let contentType = "text"
+
+  // Helper to decode base64url content
+  const decodeContent = (data: string) => {
+    try {
+      return Buffer.from(data, "base64url").toString("utf-8")
+    } catch {
+      return Buffer.from(data, "base64").toString("utf-8")
+    }
+  }
+
+  // Helper to find parts recursively (for nested multipart)
+  const findPart = (parts: any[], mimeType: string): any => {
+    for (const part of parts) {
+      if (part.mimeType === mimeType && part.body?.data) {
+        return part
+      }
+      if (part.parts) {
+        const found = findPart(part.parts, mimeType)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
+  // Try to get HTML first, then plain text
   if (msg.payload?.body?.data) {
-    body = Buffer.from(msg.payload.body.data, "base64url").toString()
+    // Single part message
+    body = decodeContent(msg.payload.body.data)
+    contentType = msg.payload.mimeType?.includes("html") ? "html" : "text"
   } else if (msg.payload?.parts) {
-    const textPart = msg.payload.parts.find((p: any) => p.mimeType === "text/plain")
-    if (textPart?.body?.data) {
-      body = Buffer.from(textPart.body.data, "base64url").toString()
+    // Multipart message - prefer HTML
+    const htmlPart = findPart(msg.payload.parts, "text/html")
+    const textPart = findPart(msg.payload.parts, "text/plain")
+
+    if (htmlPart?.body?.data) {
+      body = decodeContent(htmlPart.body.data)
+      contentType = "html"
+    } else if (textPart?.body?.data) {
+      body = decodeContent(textPart.body.data)
+      contentType = "text"
     }
   }
 
@@ -146,6 +180,7 @@ function parseGmailMessage(msg: any) {
     subject: getHeader("Subject"),
     date: getHeader("Date"),
     body,
+    contentType, // Include content type in parsed message
     snippet: msg.snippet,
     labelIds: msg.labelIds || [],
   }
@@ -256,13 +291,12 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
       return false // Already imported
     }
 
-    // Insert message
     const { error: msgError } = await supabase.from("messages").insert({
       property_id,
       conversation_id: conversation.id,
       sender_type: "customer",
       content: email.body || email.snippet || "",
-      content_type: "text",
+      content_type: email.contentType || "text", // Use content type from parsed message
       gmail_id: email.id,
       metadata: {
         from: email.from,

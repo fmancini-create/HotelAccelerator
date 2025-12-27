@@ -315,10 +315,19 @@ export default function AdminInboxPage() {
   }
 
   const handleSendReply = async () => {
-    if (!replyText.trim() || !selectedConversation) return
+    console.log("[v0] handleSendReply called", { replyText, selectedConversation: selectedConversation?.id })
+
+    if (!replyText.trim() || !selectedConversation) {
+      console.log("[v0] Send blocked - missing text or conversation", {
+        hasText: !!replyText.trim(),
+        hasConversation: !!selectedConversation,
+      })
+      return
+    }
 
     setIsSending(true)
     try {
+      console.log("[v0] Sending reply to:", `/api/inbox/${selectedConversation.id}/send`)
       const res = await fetch(`/api/inbox/${selectedConversation.id}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -329,14 +338,20 @@ export default function AdminInboxPage() {
         }),
       })
 
+      console.log("[v0] Send response status:", res.status)
+      const responseData = await res.json().catch(() => ({}))
+      console.log("[v0] Send response data:", responseData)
+
       if (res.ok) {
         setReplyText("")
         setAttachments([])
         await loadMessages(selectedConversation.id, false)
         setTimeout(() => scrollToBottom(true), 100)
+      } else {
+        console.error("[v0] Send failed:", responseData)
       }
     } catch (error) {
-      console.error("Error sending reply:", error)
+      console.error("[v0] Error sending reply:", error)
     } finally {
       setIsSending(false)
     }
