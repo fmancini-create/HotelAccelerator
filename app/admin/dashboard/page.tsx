@@ -68,7 +68,7 @@ const dashboardModules: DashboardModule[] = [
     title: "Inbox",
     description: "Gestisci tutte le conversazioni in un unico posto",
     icon: <Inbox className="w-8 h-8" />,
-    href: "/admin/inbox/email",
+    href: "/admin/inbox",
     color: "bg-emerald-500",
   },
   {

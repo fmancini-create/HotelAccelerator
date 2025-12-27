@@ -31,7 +31,6 @@ const pathMap: Record<string, { label: string; parent?: string }> = {
   "/admin/channels/telegram": { label: "Telegram", parent: "/admin/channels" },
   "/admin/channels/phone": { label: "Telefono IP", parent: "/admin/channels" },
   "/admin/inbox": { label: "Inbox", parent: "/admin/dashboard" },
-  "/admin/inbox/email": { label: "Email Inbox", parent: "/admin/inbox" },
   "/admin/message-rules": { label: "Smart Messages", parent: "/admin/dashboard" },
   "/admin/users": { label: "Gestione Utenti", parent: "/admin/dashboard" },
   "/admin/profile": { label: "Il Mio Profilo", parent: "/admin/dashboard" },
