@@ -231,7 +231,7 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
       .select("id")
       .eq("property_id", property_id)
       .eq("email", senderEmail)
-      .single()
+      .maybeSingle()
 
     if (!contact) {
       const { data: newContact, error: contactError } = await supabase
@@ -257,7 +257,7 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
       .select("id")
       .eq("property_id", property_id)
       .eq("gmail_thread_id", email.threadId)
-      .single()
+      .maybeSingle()
 
     if (!conversation) {
       const { data: newConv, error: convError } = await supabase
@@ -285,7 +285,7 @@ async function processInboundEmail(supabase: any, email: any, channel: any, prop
     }
 
     // Check if message already exists
-    const { data: existingMsg } = await supabase.from("messages").select("id").eq("gmail_id", email.id).single()
+    const { data: existingMsg } = await supabase.from("messages").select("id").eq("gmail_id", email.id).maybeSingle()
 
     if (existingMsg) {
       return false // Already imported
