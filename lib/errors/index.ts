@@ -100,18 +100,44 @@ export class ConflictError extends Error {
   }
 }
 
+export class RateLimitError extends Error {
+  public readonly code = "RATE_LIMIT_EXCEEDED"
+  public readonly statusCode = 429
+
+  constructor(message = "Too many requests. Please try again later.") {
+    super(message)
+    this.name = "RateLimitError"
+    Object.setPrototypeOf(this, RateLimitError.prototype)
+  }
+
+  toJSON() {
+    return {
+      error: this.message,
+      code: this.code,
+      type: this.name,
+    }
+  }
+}
+
 /**
  * Type guard to check if error is one of our custom errors
  */
 export function isAppError(
   error: unknown,
-): error is ValidationError | AuthorizationError | NotFoundError | InvariantViolationError | ConflictError {
+): error is
+  | ValidationError
+  | AuthorizationError
+  | NotFoundError
+  | InvariantViolationError
+  | ConflictError
+  | RateLimitError {
   return (
     error instanceof ValidationError ||
     error instanceof AuthorizationError ||
     error instanceof NotFoundError ||
     error instanceof InvariantViolationError ||
-    error instanceof ConflictError
+    error instanceof ConflictError ||
+    error instanceof RateLimitError
   )
 }
 
@@ -123,6 +149,20 @@ export function handleServiceError(error: unknown): { status: number; json: any 
     return {
       status: error.statusCode,
       json: error.toJSON(),
+    }
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase()
+    if (message.includes("too many") || message.includes("rate limit") || message.includes("429")) {
+      return {
+        status: 429,
+        json: {
+          error: "Too many requests. Please try again in a few seconds.",
+          code: "RATE_LIMIT_EXCEEDED",
+          type: "RateLimitError",
+        },
+      }
     }
   }
 

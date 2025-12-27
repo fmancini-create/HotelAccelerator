@@ -104,6 +104,7 @@ export default function InboxPage() {
   const [isSending, setIsSending] = useState(false)
   const [showDemandCalendar, setShowDemandCalendar] = useState(true)
   const [replyChannel, setReplyChannel] = useState<string>("same")
+  const [rateLimitError, setRateLimitError] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -123,10 +124,18 @@ export default function InboxPage() {
       if (filterChannel !== "all") params.set("channel", filterChannel)
 
       const res = await fetch(`/api/inbox/conversations?${params}`)
+
+      if (res.status === 429) {
+        setRateLimitError(true)
+        setTimeout(() => setRateLimitError(false), 5000)
+        return
+      }
+
       const data = await res.json()
 
       if (data.conversations) {
         setConversations(data.conversations)
+        setRateLimitError(false)
       }
     } catch (error) {
       console.error("Error loading conversations:", error)
@@ -138,10 +147,18 @@ export default function InboxPage() {
   const loadMessages = async (conversationId: string) => {
     try {
       const res = await fetch(`/api/inbox/${conversationId}`)
+
+      if (res.status === 429) {
+        setRateLimitError(true)
+        setTimeout(() => setRateLimitError(false), 5000)
+        return
+      }
+
       const data = await res.json()
 
       if (data.messages) {
         setMessages(data.messages)
+        setRateLimitError(false)
       }
       if (data.conversation) {
         setSelectedConversation(data.conversation)
@@ -155,7 +172,7 @@ export default function InboxPage() {
   useEffect(() => {
     if (!authLoading && adminUser) {
       loadConversations()
-      pollIntervalRef.current = setInterval(loadConversations, 10000)
+      pollIntervalRef.current = setInterval(loadConversations, 15000)
     }
 
     return () => {
@@ -171,7 +188,7 @@ export default function InboxPage() {
 
       const msgPoll = setInterval(() => {
         loadMessages(selectedConversation.id)
-      }, 5000)
+      }, 10000)
 
       return () => clearInterval(msgPoll)
     }
@@ -300,6 +317,12 @@ export default function InboxPage() {
 
   return (
     <div className="flex flex-col h-screen">
+      {rateLimitError && (
+        <div className="bg-amber-100 border-b border-amber-200 px-4 py-2 text-center text-sm text-amber-800">
+          Troppe richieste. Attendere qualche secondo...
+        </div>
+      )}
+
       <div className="border-b shrink-0">
         <AdminHeader
           title="Inbox Unificata"
