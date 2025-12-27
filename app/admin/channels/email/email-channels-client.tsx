@@ -37,6 +37,8 @@ import {
   ExternalLink,
   Copy,
   Info,
+  Bell,
+  BellOff,
 } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 
@@ -58,7 +60,7 @@ const GmailIcon = ({ className }: { className?: string }) => (
 const OutlookIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className || "w-5 h-5"} fill="none">
     <rect x="2" y="4" width="20" height="16" rx="2" fill="#0078D4" />
-    <path d="M22 6V18M2 8H22M2 16H22" stroke="#fff" strokeWidth="0.5" opacity="0.3" />
+    <path d="M2 8H22M2 16H22" stroke="#fff" strokeWidth="0.5" opacity="0.3" />
     <ellipse cx="8" cy="12" rx="4" ry="5" fill="#fff" />
     <ellipse cx="8" cy="12" rx="2.5" ry="3.5" fill="#0078D4" />
   </svg>
@@ -76,7 +78,10 @@ interface EmailChannel {
   created_at: string
   property_id: string
   oauth_expires_at?: string | null
+  oauth_expiry?: string | null
   assignments?: { user_id: string }[]
+  push_enabled?: boolean
+  gmail_watch_expiration?: string | null
 }
 
 interface GmailLabel {
@@ -126,6 +131,7 @@ export default function EmailChannelsClient() {
   const [oauthProvider, setOauthProvider] = useState<"gmail" | "outlook" | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
+  const [enablingPush, setEnablingPush] = useState<string | null>(null)
 
   const searchParams = useSearchParams()
   const oauthSuccess = searchParams.get("success")
@@ -342,6 +348,52 @@ export default function EmailChannelsClient() {
     }
   }
 
+  const handleTogglePush = async (channel: EmailChannel) => {
+    if (channel.provider !== "gmail") {
+      alert("Le notifiche in tempo reale sono disponibili solo per Gmail")
+      return
+    }
+
+    setEnablingPush(channel.id)
+    try {
+      if (channel.push_enabled) {
+        // Disable push
+        const res = await fetch(`/api/channels/email/${channel.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            push_enabled: false,
+            gmail_watch_expiration: null,
+          }),
+        })
+        if (res.ok) {
+          await fetchData()
+          alert("Notifiche in tempo reale disattivate")
+        }
+      } else {
+        // Enable push - call watch API
+        const res = await fetch("/api/channels/email/watch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel_id: channel.id }),
+        })
+
+        const data = await res.json()
+        if (res.ok) {
+          await fetchData()
+          alert("Notifiche in tempo reale attivate! Le nuove email arriveranno istantaneamente.")
+        } else {
+          alert(data.error || "Errore durante l'attivazione delle notifiche")
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error toggling push:", error)
+      alert("Errore durante l'operazione")
+    } finally {
+      setEnablingPush(null)
+    }
+  }
+
   const startEdit = (channel: EmailChannel) => {
     setEditingChannel(channel)
     setFormData({
@@ -356,6 +408,11 @@ export default function EmailChannelsClient() {
   const isTokenExpired = (channel: EmailChannel) => {
     if (!channel.oauth_expires_at) return false
     return new Date(channel.oauth_expires_at) < new Date()
+  }
+
+  const isWatchExpired = (channel: EmailChannel) => {
+    if (!channel.gmail_watch_expiration) return false
+    return new Date(channel.gmail_watch_expiration) < new Date()
   }
 
   const getProviderBadge = (provider: string | null) => {
@@ -646,6 +703,18 @@ export default function EmailChannelsClient() {
                                   Token scaduto
                                 </Badge>
                               )}
+                              {channel.provider === "gmail" && channel.push_enabled && (
+                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                  <Bell className="w-3 h-3 mr-1" />
+                                  Real-time
+                                </Badge>
+                              )}
+                              {channel.provider === "gmail" && channel.push_enabled && isWatchExpired(channel) && (
+                                <Badge variant="destructive">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
+                                  Watch scaduto
+                                </Badge>
+                              )}
                             </div>
                             <p className="text-sm text-muted-foreground">{channel.email_address}</p>
                             {channel.last_sync_at && (
@@ -657,6 +726,28 @@ export default function EmailChannelsClient() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {channel.provider === "gmail" && (
+                            <Button
+                              variant={channel.push_enabled ? "default" : "outline"}
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleTogglePush(channel)
+                              }}
+                              disabled={enablingPush === channel.id}
+                              title={
+                                channel.push_enabled ? "Disattiva notifiche real-time" : "Attiva notifiche real-time"
+                              }
+                            >
+                              {enablingPush === channel.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : channel.push_enabled ? (
+                                <Bell className="w-4 h-4" />
+                              ) : (
+                                <BellOff className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
                           {channel.provider && (
                             <Button
                               variant="outline"
