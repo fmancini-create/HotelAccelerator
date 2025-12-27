@@ -315,20 +315,28 @@ export default function AdminInboxPage() {
   }
 
   const handleSendReply = async () => {
-    console.log("[v0] handleSendReply called", { replyText, selectedConversation: selectedConversation?.id })
+    console.log("[v0] handleSendReply called", {
+      replyText,
+      replyTextLength: replyText?.length,
+      selectedConversation: selectedConversation?.id,
+      selectedConversationId,
+    })
 
     if (!replyText.trim() || !selectedConversation) {
       console.log("[v0] Send blocked - missing text or conversation", {
         hasText: !!replyText.trim(),
+        textValue: replyText,
         hasConversation: !!selectedConversation,
+        conversationId: selectedConversation?.id,
       })
       return
     }
 
     setIsSending(true)
     try {
-      console.log("[v0] Sending reply to:", `/api/inbox/${selectedConversation.id}/send`)
-      const res = await fetch(`/api/inbox/${selectedConversation.id}/send`, {
+      const url = `/api/inbox/${selectedConversation.id}/send`
+      console.log("[v0] Sending reply to:", url)
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -349,9 +357,11 @@ export default function AdminInboxPage() {
         setTimeout(() => scrollToBottom(true), 100)
       } else {
         console.error("[v0] Send failed:", responseData)
+        alert(`Errore invio: ${responseData.error || "Errore sconosciuto"}`)
       }
     } catch (error) {
       console.error("[v0] Error sending reply:", error)
+      alert(`Errore invio: ${error}`)
     } finally {
       setIsSending(false)
     }
@@ -722,15 +732,27 @@ export default function AdminInboxPage() {
                   <Textarea
                     placeholder="Scrivi una risposta..."
                     value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
+                    onChange={(e) => {
+                      console.log("[v0] replyText changed:", e.target.value)
+                      setReplyText(e.target.value)
+                    }}
                     className="min-h-[80px]"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        console.log("[v0] Ctrl+Enter pressed")
                         handleSendReply()
                       }
                     }}
                   />
-                  <Button onClick={handleSendReply} disabled={!replyText.trim() || isSending} className="self-end">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      console.log("[v0] Send button clicked directly")
+                      handleSendReply()
+                    }}
+                    disabled={!replyText.trim() || isSending}
+                    className="self-end"
+                  >
                     {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
                 </div>

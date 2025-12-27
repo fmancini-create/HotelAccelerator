@@ -22,7 +22,6 @@ export interface EmailChannelAssignment {
   channel_id: string
   user_id: string
   assignment_type: "owner" | "member"
-  property_id: string
   created_at: string
 }
 
@@ -140,7 +139,7 @@ export class EmailChannelRepository {
     return data || []
   }
 
-  async setAssignments(channelId: string, userIds: string[], propertyId: string): Promise<void> {
+  async setAssignments(channelId: string, userIds: string[]): Promise<void> {
     await this.supabase.from("email_channel_assignments").delete().eq("channel_id", channelId)
 
     if (userIds.length > 0) {
@@ -148,7 +147,6 @@ export class EmailChannelRepository {
         channel_id: channelId,
         user_id: userId,
         assignment_type: (index === 0 ? "owner" : "member") as "owner" | "member",
-        property_id: propertyId,
       }))
 
       const { error } = await this.supabase.from("email_channel_assignments").insert(assignments)

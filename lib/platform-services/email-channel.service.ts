@@ -72,14 +72,13 @@ export class EmailChannelService {
       email_address: data.email_address,
       display_name: data.display_name,
       is_active: data.is_active,
-      provider: null,
-      name: data.display_name || data.email_address,
+      provider: "manual",
     })
 
     await logCommandExecution(propertyId, "system", "channel.email.create", { email: data.email_address }, true)
 
     if (data.assigned_users.length > 0) {
-      await this.repository.setAssignments(channel.id, data.assigned_users, propertyId)
+      await this.repository.setAssignments(channel.id, data.assigned_users)
     }
 
     const assignments = await this.repository.listAssignments(channel.id)
@@ -119,7 +118,7 @@ export class EmailChannelService {
       is_active: data.is_active,
     })
 
-    await this.repository.setAssignments(channelId, data.assigned_users, propertyId)
+    await this.repository.setAssignments(channelId, data.assigned_users)
 
     await logCommandExecution(
       propertyId,
