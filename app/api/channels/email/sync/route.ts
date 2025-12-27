@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getValidGmailToken } from "@/lib/gmail-client"
 import type { OAuthProvider } from "@/lib/oauth-config"
 
 // Sync emails from Gmail or Outlook
@@ -29,37 +30,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Canale non configurato con OAuth" }, { status: 400 })
     }
 
-    // Check if token needs refresh
-    if (channel.oauth_expiry && new Date(channel.oauth_expiry) < new Date()) {
-      // Refresh token first
-      const refreshResponse = await fetch(
-        `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/channels/email/oauth/refresh`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ channel_id }),
-        },
-      )
-
-      if (!refreshResponse.ok) {
-        return NextResponse.json({ error: "Token scaduto. Ricollegare l'account." }, { status: 401 })
-      }
-
-      // Re-fetch channel with new token
-      const { data: refreshedChannel } = await supabase
-        .from("email_channels")
-        .select("oauth_access_token")
-        .eq("id", channel_id)
-        .single()
-
-      channel.oauth_access_token = refreshedChannel?.oauth_access_token
-    }
-
     const provider = channel.provider as OAuthProvider
     let emails: any[] = []
 
     if (provider === "gmail") {
-      emails = await fetchGmailMessages(channel.oauth_access_token)
+      const { token, error: tokenError } = await getValidGmailToken(channel_id)
+      if (!token) {
+        return NextResponse.json({ error: tokenError || "Token non valido" }, { status: 401 })
+      }
+      emails = await fetchGmailMessages(token)
     } else if (provider === "outlook") {
       emails = await fetchOutlookMessages(channel.oauth_access_token)
     }

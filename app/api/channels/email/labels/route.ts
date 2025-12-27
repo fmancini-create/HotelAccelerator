@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { gmailFetch } from "@/lib/gmail-client"
 
 // Get Gmail labels for a channel
 export async function GET(request: NextRequest) {
@@ -11,42 +12,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const supabase = await createClient()
+    const { data, error, status } = await gmailFetch(channelId, "labels")
 
-    // Get channel with OAuth token
-    const { data: channel, error } = await supabase.from("email_channels").select("*").eq("id", channelId).single()
-
-    if (error || !channel) {
-      return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
+    if (error) {
+      return NextResponse.json({ error }, { status })
     }
-
-    if (channel.provider !== "gmail" || !channel.oauth_access_token) {
-      return NextResponse.json({ error: "Canale non configurato con Gmail OAuth" }, { status: 400 })
-    }
-
-    // Fetch labels from Gmail API
-    const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
-      headers: { Authorization: `Bearer ${channel.oauth_access_token}` },
-    })
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        return NextResponse.json({ error: "Token scaduto. Riconnetti l'account." }, { status: 401 })
-      }
-      return NextResponse.json({ error: "Errore recupero etichette" }, { status: 500 })
-    }
-
-    const data = await response.json()
 
     // Fetch details for each label to get message counts
     const labelsWithDetails = await Promise.all(
       (data.labels || []).map(async (label: any) => {
         try {
-          const detailRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/labels/${label.id}`, {
-            headers: { Authorization: `Bearer ${channel.oauth_access_token}` },
-          })
-          if (detailRes.ok) {
-            const detail = await detailRes.json()
+          const { data: detail } = await gmailFetch(channelId, `labels/${label.id}`)
+          if (detail) {
             return {
               id: label.id,
               name: label.name,
