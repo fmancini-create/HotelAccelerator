@@ -41,6 +41,7 @@ import {
   BellOff,
 } from "lucide-react"
 import { useSearchParams } from "next/navigation"
+import { toast } from "@/components/ui/use-toast"
 
 const GmailIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className || "w-5 h-5"} fill="none">
@@ -145,6 +146,20 @@ export default function EmailChannelsClient() {
     assigned_users: [] as string[],
   })
 
+  const getAuthHeaders = async (): Promise<HeadersInit> => {
+    const supabase = createClient()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      return {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      }
+    }
+    return { "Content-Type": "application/json" }
+  }
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -175,7 +190,11 @@ export default function EmailChannelsClient() {
       if (adminUser?.property_id) {
         setPropertyId(adminUser.property_id)
 
-        const channelsRes = await fetch("/api/channels/email")
+        const headers = await getAuthHeaders()
+        const channelsRes = await fetch("/api/channels/email", {
+          headers,
+          credentials: "include",
+        })
         if (channelsRes.ok) {
           const channelsData = await channelsRes.json()
           setChannels(channelsData.channels || [])
@@ -204,7 +223,11 @@ export default function EmailChannelsClient() {
   const fetchLabels = async (channelId: string) => {
     setLoadingLabels(true)
     try {
-      const res = await fetch(`/api/channels/email/labels?channel_id=${channelId}`)
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/channels/email/labels?channel_id=${channelId}`, {
+        headers,
+        credentials: "include",
+      })
       if (res.ok) {
         const data = await res.json()
         setLabels(data.labels || [])
@@ -219,9 +242,11 @@ export default function EmailChannelsClient() {
   const handleSync = async (channel: EmailChannel) => {
     setSyncing(channel.id)
     try {
+      const headers = await getAuthHeaders()
       const res = await fetch("/api/channels/email/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify({
           channel_id: channel.id,
           property_id: propertyId,
@@ -230,14 +255,25 @@ export default function EmailChannelsClient() {
 
       const data = await res.json()
       if (res.ok) {
-        alert(`Sincronizzate ${data.imported} email su ${data.total} totali`)
+        toast({
+          title: "Sincronizzazione completata",
+          description: `Importate ${data.imported} email su ${data.total} totali.`,
+        })
         await fetchData()
       } else {
-        alert(data.error || "Errore durante la sincronizzazione")
+        toast({
+          title: "Errore durante la sincronizzazione",
+          description: data.error || "Contatta il supporto tecnico",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error("Error syncing:", error)
-      alert("Errore durante la sincronizzazione")
+      console.error("[v0] Sync error:", error)
+      toast({
+        title: "Errore",
+        description: error instanceof Error ? error.message : "Errore durante la sincronizzazione",
+        variant: "destructive",
+      })
     } finally {
       setSyncing(null)
     }
@@ -256,9 +292,11 @@ export default function EmailChannelsClient() {
     try {
       console.log("[v0] Starting OAuth flow for:", provider)
 
+      const headers = await getAuthHeaders()
       const res = await fetch("/api/channels/email/oauth/start", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify({ provider, property_id: propertyId }),
       })
 
@@ -291,9 +329,11 @@ export default function EmailChannelsClient() {
     try {
       const url = editingChannel ? `/api/channels/email/${editingChannel.id}` : "/api/channels/email"
 
+      const headers = await getAuthHeaders()
       const res = await fetch(url, {
         method: editingChannel ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify(formData),
       })
 
@@ -307,32 +347,63 @@ export default function EmailChannelsClient() {
           is_active: true,
           assigned_users: [],
         })
+      } else {
+        const errorData = await res.json()
+        toast({
+          title: "Errore",
+          description: errorData.error || "Errore durante il salvataggio dell'account",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error saving channel:", error)
+      toast({
+        title: "Errore",
+        description: "Errore durante il salvataggio dell'account",
+        variant: "destructive",
+      })
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("Sei sicuro di voler eliminare questo canale email?")) return
     try {
-      const res = await fetch(`/api/channels/email/${id}`, { method: "DELETE" })
+      const headers = await getAuthHeaders()
+      const res = await fetch(`/api/channels/email/${id}`, {
+        method: "DELETE",
+        headers,
+        credentials: "include",
+      })
       if (res.ok) {
         await fetchData()
         if (selectedChannel?.id === id) {
           setSelectedChannel(null)
         }
+      } else {
+        const errorData = await res.json()
+        toast({
+          title: "Errore",
+          description: errorData.error || "Errore durante l'eliminazione",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error deleting channel:", error)
+      toast({
+        title: "Errore",
+        description: "Errore durante l'eliminazione",
+        variant: "destructive",
+      })
     }
   }
 
   const handleToggleActive = async (channel: EmailChannel) => {
     try {
+      const headers = await getAuthHeaders()
       const res = await fetch(`/api/channels/email/${channel.id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify({
           ...channel,
           is_active: !channel.is_active,
@@ -342,9 +413,21 @@ export default function EmailChannelsClient() {
 
       if (res.ok) {
         await fetchData()
+      } else {
+        const errorData = await res.json()
+        toast({
+          title: "Errore",
+          description: errorData.error || "Errore durante l'aggiornamento dello stato",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("Error toggling channel:", error)
+      toast({
+        title: "Errore",
+        description: "Errore durante l'aggiornamento dello stato",
+        variant: "destructive",
+      })
     }
   }
 
@@ -356,36 +439,55 @@ export default function EmailChannelsClient() {
 
     setEnablingPush(channel.id)
     try {
+      const headers = await getAuthHeaders()
       if (channel.push_enabled) {
         const res = await fetch(`/api/channels/email/watch?channel_id=${channel.id}`, {
           method: "DELETE",
+          headers,
+          credentials: "include",
         })
         if (res.ok) {
           await fetchData()
-          alert("Notifiche in tempo reale disattivate")
+          toast({ title: "Notifiche disattivate", description: "Le notifiche in tempo reale sono state disattivate." })
         } else {
           const data = await res.json()
-          alert(data.error || "Errore durante la disattivazione")
+          toast({
+            title: "Errore",
+            description: data.error || "Errore durante la disattivazione delle notifiche",
+            variant: "destructive",
+          })
         }
       } else {
         // Enable push - call watch API
         const res = await fetch("/api/channels/email/watch", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
+          credentials: "include",
           body: JSON.stringify({ channel_id: channel.id }),
         })
 
         const data = await res.json()
         if (res.ok) {
           await fetchData()
-          alert("Notifiche in tempo reale attivate! Le nuove email arriveranno istantaneamente.")
+          toast({
+            title: "Notifiche attivate",
+            description: "Notifiche in tempo reale attivate! Le nuove email arriveranno istantaneamente.",
+          })
         } else {
-          alert(data.error || "Errore durante l'attivazione delle notifiche")
+          toast({
+            title: "Errore",
+            description: data.error || "Errore durante l'attivazione delle notifiche",
+            variant: "destructive",
+          })
         }
       }
     } catch (error) {
       console.error("[v0] Error toggling push:", error)
-      alert("Errore durante l'operazione")
+      toast({
+        title: "Errore",
+        description: "Errore durante l'operazione",
+        variant: "destructive",
+      })
     } finally {
       setEnablingPush(null)
     }
@@ -434,6 +536,7 @@ export default function EmailChannelsClient() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
+    toast({ title: "Copiato negli appunti!" })
   }
 
   if (loading) {
