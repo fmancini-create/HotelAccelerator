@@ -10,12 +10,15 @@ export default function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
+  console.log("[v0] Proxy - hostname:", hostname, "pathname:", pathname)
+
   // Skip per risorse statiche e API interne
   if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next()
   }
 
   const isPlatformDomain = isBaseDomain(hostname)
+  console.log("[v0] Proxy - isPlatformDomain:", isPlatformDomain)
 
   // Se è dominio piattaforma, aggiungi header e lascia passare
   if (isPlatformDomain) {
@@ -75,6 +78,10 @@ function extractSubdomain(hostname: string): string | null {
 function isBaseDomain(hostname: string): boolean {
   const host = hostname.split(":")[0]
 
+  if (host.includes("vusercontent.net")) {
+    return true
+  }
+
   // Domini che mostrano la landing page piattaforma
   const platformDomains = [
     "hotelaccelerator.com",
@@ -90,19 +97,14 @@ function isBaseDomain(hostname: string): boolean {
   }
 
   // Check per vercel.app senza subdomain tenant
-  // es: hotel-accelerator.vercel.app è piattaforma
-  // ma: barronci.hotel-accelerator.vercel.app è tenant
+  // es: hotelaccelerator.vercel.app è piattaforma
+  // ma: barronci.hotelaccelerator.vercel.app è tenant
   if (host.endsWith(".vercel.app")) {
     // Se ha solo un punto prima di vercel.app, è il dominio base
     const beforeVercel = host.replace(".vercel.app", "")
     if (!beforeVercel.includes(".")) {
       return true
     }
-  }
-
-  // Check per vusercontent.net (v0 preview)
-  if (host.includes("vusercontent.net")) {
-    return true
   }
 
   return false
