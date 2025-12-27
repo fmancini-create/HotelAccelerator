@@ -9,13 +9,16 @@ import type {
 } from "@/lib/types/inbox-write.types"
 import { ValidationError, NotFoundError } from "@/lib/errors"
 import { logCommand } from "@/lib/logging/command-log"
+import { sendGmailEmail } from "@/lib/gmail-client"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export class InboxWriteService {
   private repository: InboxWriteRepository
+  private supabase: SupabaseClient
 
   constructor(supabase: SupabaseClient) {
     this.repository = new InboxWriteRepository(supabase)
+    this.supabase = supabase
   }
 
   async markAsRead(command: MarkConversationReadCommand, actorId?: string) {
@@ -101,6 +104,14 @@ export class InboxWriteService {
     if (!command.content || command.content.trim() === "") {
       throw new ValidationError("Message content cannot be empty")
     }
+
+    if (conversation.channel === "email") {
+      const emailSendResult = await this.sendEmailViaGmail(conversation, command.content, command.propertyId)
+      if (!emailSendResult.success) {
+        throw new ValidationError(emailSendResult.error || "Errore invio email")
+      }
+    }
+
     const message = await this.repository.insertMessage(
       command.conversationId,
       command.propertyId,
@@ -121,6 +132,103 @@ export class InboxWriteService {
       result: { messageId: message.id },
     })
     return message
+  }
+
+  private async sendEmailViaGmail(
+    conversation: any,
+    content: string,
+    propertyId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    // Get the email channel for this property
+    const { data: emailChannel, error: channelError } = await this.supabase
+      .from("email_channels")
+      .select("id, email_address")
+      .eq("property_id", propertyId)
+      .eq("is_default", true)
+      .single()
+
+    if (channelError || !emailChannel) {
+      // Try to get any email channel for this property
+      const { data: anyChannel } = await this.supabase
+        .from("email_channels")
+        .select("id, email_address")
+        .eq("property_id", propertyId)
+        .limit(1)
+        .single()
+
+      if (!anyChannel) {
+        console.error("[v0] No email channel found for property:", propertyId)
+        return { success: false, error: "Nessun canale email configurato" }
+      }
+
+      return this.doSendEmail(anyChannel, conversation, content)
+    }
+
+    return this.doSendEmail(emailChannel, conversation, content)
+  }
+
+  private async doSendEmail(
+    emailChannel: { id: string; email_address: string },
+    conversation: any,
+    content: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    // Get recipient email from conversation metadata or contact
+    let recipientEmail = conversation.contact_email
+
+    if (!recipientEmail && conversation.metadata?.email) {
+      recipientEmail = conversation.metadata.email
+    }
+
+    if (!recipientEmail && conversation.metadata?.from) {
+      recipientEmail = conversation.metadata.from
+    }
+
+    if (!recipientEmail) {
+      // Try to get from contacts table
+      const { data: contact } = await this.supabase
+        .from("contacts")
+        .select("email")
+        .eq("id", conversation.contact_id)
+        .single()
+
+      recipientEmail = contact?.email
+    }
+
+    if (!recipientEmail) {
+      console.error("[v0] No recipient email found for conversation:", conversation.id)
+      return { success: false, error: "Email destinatario non trovata" }
+    }
+
+    // Build subject - use Re: prefix for replies
+    const subject = conversation.subject?.startsWith("Re:")
+      ? conversation.subject
+      : `Re: ${conversation.subject || "Senza oggetto"}`
+
+    // Convert plain text to simple HTML
+    const htmlContent = `<div style="font-family: Arial, sans-serif;">${content.replace(/\n/g, "<br>")}</div>`
+
+    // Get thread info for proper Gmail threading
+    const threadId = conversation.metadata?.gmail_thread_id
+    const replyToMessageId = conversation.metadata?.gmail_message_id
+
+    console.log("[v0] Sending email via Gmail:", {
+      channelId: emailChannel.id,
+      to: recipientEmail,
+      subject,
+      threadId,
+      replyToMessageId,
+    })
+
+    const result = await sendGmailEmail(
+      emailChannel.id,
+      recipientEmail,
+      subject,
+      htmlContent,
+      replyToMessageId,
+      threadId,
+    )
+
+    return result
   }
 
   async updateStatus(command: UpdateStatusCommand, actorId?: string) {

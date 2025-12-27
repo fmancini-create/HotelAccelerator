@@ -8,6 +8,8 @@ interface EmailChannel {
   oauth_refresh_token: string | null
   oauth_expiry: string | null
   property_id: string
+  email_address?: string
+  display_name?: string
 }
 
 /**
@@ -19,7 +21,9 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
   // Get channel with OAuth tokens
   const { data: channel, error } = await supabase
     .from("email_channels")
-    .select("id, provider, oauth_access_token, oauth_refresh_token, oauth_expiry, property_id")
+    .select(
+      "id, provider, oauth_access_token, oauth_refresh_token, oauth_expiry, property_id, email_address, display_name",
+    )
     .eq("id", channelId)
     .single()
 
@@ -138,4 +142,87 @@ export async function gmailFetch(
 
   const data = await response.json()
   return { data, error: null, status: response.status }
+}
+
+/**
+ * Sends an email via Gmail API
+ */
+export async function sendGmailEmail(
+  channelId: string,
+  to: string,
+  subject: string,
+  body: string,
+  replyToMessageId?: string,
+  threadId?: string,
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  // Get sender email from channel
+  const supabase = await createClient()
+  const { data: channel } = await supabase
+    .from("email_channels")
+    .select("email_address, display_name")
+    .eq("id", channelId)
+    .single()
+
+  if (!channel?.email_address) {
+    return { success: false, error: "Email mittente non configurata" }
+  }
+
+  // Build RFC 2822 email message
+  const fromHeader = channel.display_name ? `${channel.display_name} <${channel.email_address}>` : channel.email_address
+
+  const headers = [
+    `From: ${fromHeader}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/html; charset=UTF-8`,
+  ]
+
+  // Add threading headers for replies
+  if (replyToMessageId) {
+    headers.push(`In-Reply-To: ${replyToMessageId}`)
+    headers.push(`References: ${replyToMessageId}`)
+  }
+
+  const emailContent = headers.join("\r\n") + "\r\n\r\n" + body
+
+  // Base64 URL-safe encode
+  const encodedMessage = Buffer.from(emailContent)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "")
+
+  try {
+    const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        raw: encodedMessage,
+        ...(threadId && { threadId }),
+      }),
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error("[v0] Gmail send error:", response.status, errorBody)
+      return { success: false, error: `Errore invio Gmail: ${response.status}` }
+    }
+
+    const data = await response.json()
+    console.log("[v0] Email sent successfully via Gmail, messageId:", data.id)
+    return { success: true, messageId: data.id }
+  } catch (err) {
+    console.error("[v0] Gmail send exception:", err)
+    return { success: false, error: "Errore durante l'invio dell'email" }
+  }
 }
