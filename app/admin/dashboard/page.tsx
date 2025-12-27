@@ -322,11 +322,13 @@ export default function AdminDashboardPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-[#8b8b8b]">Pagine CMS</span>
                   <span className="text-[#5c5c5c] font-medium">
-                    {quotas.pages.current} / {quotas.pages.limit === -1 ? "∞" : quotas.pages.limit}
+                    {quotas.pages?.current ?? 0} / {quotas.pages?.limit === -1 ? "∞" : (quotas.pages?.limit ?? 0)}
                   </span>
                 </div>
                 <Progress
-                  value={quotas.pages.limit === -1 ? 10 : (quotas.pages.current / quotas.pages.limit) * 100}
+                  value={
+                    quotas.pages?.limit === -1 ? 10 : ((quotas.pages?.current ?? 0) / (quotas.pages?.limit || 1)) * 100
+                  }
                   className="h-2"
                 />
               </div>
@@ -334,11 +336,15 @@ export default function AdminDashboardPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-[#8b8b8b]">Foto</span>
                   <span className="text-[#5c5c5c] font-medium">
-                    {quotas.photos.current} / {quotas.photos.limit === -1 ? "∞" : quotas.photos.limit}
+                    {quotas.photos?.current ?? 0} / {quotas.photos?.limit === -1 ? "∞" : (quotas.photos?.limit ?? 0)}
                   </span>
                 </div>
                 <Progress
-                  value={quotas.photos.limit === -1 ? 10 : (quotas.photos.current / quotas.photos.limit) * 100}
+                  value={
+                    quotas.photos?.limit === -1
+                      ? 10
+                      : ((quotas.photos?.current ?? 0) / (quotas.photos?.limit || 1)) * 100
+                  }
                   className="h-2"
                 />
               </div>
@@ -346,15 +352,15 @@ export default function AdminDashboardPage() {
                 <div className="flex justify-between text-sm mb-2">
                   <span className="text-[#8b8b8b]">Conversazioni/mese</span>
                   <span className="text-[#5c5c5c] font-medium">
-                    {quotas.conversations.current} /{" "}
-                    {quotas.conversations.limit === -1 ? "∞" : quotas.conversations.limit}
+                    {quotas.conversations?.current ?? 0} /{" "}
+                    {quotas.conversations?.limit === -1 ? "∞" : (quotas.conversations?.limit ?? 0)}
                   </span>
                 </div>
                 <Progress
                   value={
-                    quotas.conversations.limit === -1
+                    quotas.conversations?.limit === -1
                       ? 10
-                      : (quotas.conversations.current / quotas.conversations.limit) * 100
+                      : ((quotas.conversations?.current ?? 0) / (quotas.conversations?.limit || 1)) * 100
                   }
                   className="h-2"
                 />
