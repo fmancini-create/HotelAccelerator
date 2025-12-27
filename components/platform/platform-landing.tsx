@@ -331,7 +331,7 @@ export function PlatformLanding() {
               </Link>
               <Link href="/super-admin/login" className="hover:text-white transition-colors flex items-center gap-1">
                 <Shield className="h-3 w-3" />
-                Platform
+                Area Manager
               </Link>
             </div>
             <div className="text-sm text-gray-500">© 2025 HotelAccelerator. Tutti i diritti riservati.</div>
