@@ -38,4 +38,30 @@ export async function createClient() {
   })
 }
 
+export async function createClientWithToken(accessToken?: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      `Missing Supabase environment variables. URL: ${supabaseUrl ? "set" : "missing"}, Key: ${supabaseAnonKey ? "set" : "missing"}`,
+    )
+  }
+
+  // If we have a token, use it directly
+  if (accessToken) {
+    const { createClient: createSupabaseClient } = await import("@supabase/supabase-js")
+    return createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    })
+  }
+
+  // Otherwise, fall back to cookie-based auth
+  return createClient()
+}
+
 export { createClient as createServerClient }

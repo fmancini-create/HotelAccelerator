@@ -1,12 +1,38 @@
 import type { NextRequest } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createClient, createClientWithToken } from "@/lib/supabase/server"
+
+function getTokenFromRequest(request: NextRequest): string | undefined {
+  // Try Authorization header first
+  const authHeader = request.headers.get("authorization")
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7)
+  }
+
+  // Try cookie (for Supabase session)
+  const cookies = request.headers.get("cookie") || ""
+  const tokenMatch = cookies.match(/sb-[^-]+-auth-token=([^;]+)/)
+  if (tokenMatch) {
+    try {
+      // The cookie value is base64 encoded JSON
+      const decoded = JSON.parse(decodeURIComponent(tokenMatch[1]))
+      if (Array.isArray(decoded) && decoded[0]?.access_token) {
+        return decoded[0].access_token
+      }
+    } catch {
+      // Ignore parsing errors
+    }
+  }
+
+  return undefined
+}
 
 /**
  * Ottiene il property_id dell'utente autenticato dalla sessione
  * Usato nelle API routes admin per verificare l'accesso
  */
 export async function getAuthenticatedPropertyId(request: NextRequest): Promise<string> {
-  const supabase = await createClient()
+  const token = getTokenFromRequest(request)
+  const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
     data: { user },
@@ -38,7 +64,8 @@ export async function getAuthenticatedPropertyId(request: NextRequest): Promise<
  * Ottiene l'utente autenticato e il suo property_id
  */
 export async function getAuthenticatedUser(request: NextRequest) {
-  const supabase = await createClient()
+  const token = getTokenFromRequest(request)
+  const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
     data: { user },
@@ -69,21 +96,11 @@ export async function getAuthenticatedUser(request: NextRequest) {
 }
 
 /**
- * Aggiunge property_id a un oggetto per insert/update
- * Helper per multitenancy
- */
-export function withPropertyId<T extends Record<string, unknown>>(
-  data: T,
-  propertyId: string,
-): T & { property_id: string } {
-  return { ...data, property_id: propertyId }
-}
-
-/**
  * Ottiene l'email dell'utente autenticato
  */
-export async function getAuthenticatedUserEmail(): Promise<string> {
-  const supabase = await createClient()
+export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<string> {
+  const token = request ? getTokenFromRequest(request) : undefined
+  const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
     data: { user },
@@ -102,7 +119,8 @@ export async function getAuthenticatedUserEmail(): Promise<string> {
  * I super admin possono operare su qualsiasi property se specificato nel query param
  */
 export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request: NextRequest): Promise<string> {
-  const supabase = await createClient()
+  const token = getTokenFromRequest(request)
+  const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
     data: { user },
@@ -145,6 +163,17 @@ export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request: 
   }
 
   return adminUser.property_id
+}
+
+/**
+ * Aggiunge property_id a un oggetto per insert/update
+ * Helper per multitenancy
+ */
+export function withPropertyId<T extends Record<string, unknown>>(
+  data: T,
+  propertyId: string,
+): T & { property_id: string } {
+  return { ...data, property_id: propertyId }
 }
 
 /**
