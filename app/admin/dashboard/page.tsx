@@ -178,11 +178,12 @@ export default function AdminDashboardPage() {
     plan: string
   } | null>(null)
 
-  const isSuperAdmin = adminUser?.role === "super_admin"
+  // Qui siamo nella dashboard /admin, quindi è sempre un tenant admin
+  const isSuperAdmin = false // In /admin siamo sempre nel contesto tenant
 
   useEffect(() => {
     async function loadProperty() {
-      if (!adminUser?.property_id || isSuperAdmin) return
+      if (!adminUser?.property_id) return
 
       const supabase = createClient()
       if (!supabase) return
@@ -204,7 +205,7 @@ export default function AdminDashboardPage() {
     }
 
     async function loadQuotas() {
-      if (!adminUser?.property_id || isSuperAdmin) return
+      if (!adminUser?.property_id) return
 
       try {
         const response = await fetch("/api/admin/quotas")
@@ -219,7 +220,7 @@ export default function AdminDashboardPage() {
 
     loadProperty()
     loadQuotas()
-  }, [adminUser?.property_id, isSuperAdmin])
+  }, [adminUser?.property_id])
 
   if (isLoading) {
     return (
@@ -242,9 +243,9 @@ export default function AdminDashboardPage() {
 
   const isExternalSite = siteUrl.startsWith("https://")
 
-  const headerTitle = isSuperAdmin ? "HotelAccelerator" : property?.name || "Dashboard"
+  const headerTitle = property?.name || "Dashboard"
 
-  const siteButtonLabel = isSuperAdmin ? "Home" : "Sito"
+  const siteButtonLabel = "Sito"
 
   return (
     <main className="min-h-screen bg-[#f8f7f4]">

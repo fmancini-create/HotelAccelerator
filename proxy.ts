@@ -1,12 +1,12 @@
 /**
- * MIDDLEWARE - Tenant Resolution & Routing
+ * PROXY - Tenant Resolution & Routing (Next.js 16)
  * Risolve il tenant dal hostname e gestisce il routing multi-tenant
  */
 
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-export function middleware(request: NextRequest) {
+export default function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
