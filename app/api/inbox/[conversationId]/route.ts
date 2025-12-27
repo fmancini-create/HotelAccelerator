@@ -1,18 +1,18 @@
 import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxReadService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export async function GET(request: Request, { params }: { params: { conversationId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
     const service = new InboxReadService(supabase)
 
-    const { conversationId } = params
+    const { conversationId } = await params
 
     const conversation = await service.getConversation(propertyId, conversationId)
 
@@ -34,12 +34,12 @@ export async function GET(request: Request, { params }: { params: { conversation
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: { conversationId: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
 
     const supabase = await createClient()
-    const { conversationId } = params
+    const { conversationId } = await params
 
     if (!UUID_REGEX.test(conversationId)) {
       return NextResponse.json({ error: "Invalid conversation ID format", code: "VALIDATION_ERROR" }, { status: 400 })

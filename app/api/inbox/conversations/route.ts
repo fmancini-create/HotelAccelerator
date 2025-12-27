@@ -1,13 +1,13 @@
 import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxReadService } from "@/lib/platform-services"
 import type { ConversationListOptions } from "@/lib/types/inbox-read.types"
 import { handleServiceError } from "@/lib/errors"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
     const service = new InboxReadService(supabase)
 
@@ -31,9 +31,9 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
 
     const supabase = await createClient()
     const body = await request.json()
