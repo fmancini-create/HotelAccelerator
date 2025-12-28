@@ -193,6 +193,7 @@ export default function InboxPage() {
   const [gmailDebugInfo, setGmailDebugInfo] = useState<GmailDebugInfo | null>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [gmailCurrentPage, setGmailCurrentPage] = useState(1)
+  const [gmailApiVersion, setGmailApiVersion] = useState<string | null>(null)
 
   // ==================== SMART MODE STATE (DB-driven) ====================
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -245,12 +246,22 @@ export default function InboxPage() {
         if (pageToken) params.set("pageToken", pageToken)
         if (query) params.set("q", query)
 
-        console.log("[v0] Loading Gmail threads:", { labelId, pageToken: pageToken ? "present" : "none", query })
+        console.log("[v0] FRONTEND: Loading Gmail threads:", {
+          labelId,
+          pageToken: pageToken ? "present" : "none",
+          query,
+        })
 
         const res = await fetch(`/api/gmail/threads?${params}`)
+
+        console.log("[v0] FRONTEND: /api/gmail/threads response status:", res.status)
+
         if (res.ok) {
           const data = await res.json()
 
+          console.log("[v0] FRONTEND: FULL API RESPONSE:", JSON.stringify(data, null, 2))
+
+          setGmailApiVersion(data.debugVersion || null)
           setGmailThreads(data.threads || [])
           setGmailNextPageToken(data.nextPageToken || null)
           setGmailTotalEstimate(data.resultSizeEstimate || 0)
@@ -263,19 +274,23 @@ export default function InboxPage() {
             resultSizeEstimate: data.resultSizeEstimate,
           })
 
-          console.log("[v0] Gmail threads loaded:", {
+          console.log("[v0] FRONTEND: Gmail threads loaded:", {
+            apiVersion: data.debugVersion,
             count: data.threads?.length || 0,
             total: data.resultSizeEstimate,
             hasNextPage: !!data.nextPageToken,
             debug: data._debug,
           })
         } else {
-          console.error("[Gmail] Error loading threads:", res.status)
+          const errorBody = await res.text()
+          console.error("[v0] FRONTEND: Error loading threads:", res.status, errorBody)
           setGmailThreads([])
+          setGmailApiVersion(null)
         }
       } catch (error) {
-        console.error("[Gmail] Error loading threads:", error)
+        console.error("[v0] FRONTEND: Exception loading threads:", error)
         setGmailThreads([])
+        setGmailApiVersion(null)
       } finally {
         setGmailLoading(false)
       }
@@ -715,6 +730,12 @@ export default function InboxPage() {
             <span>
               Displayed: <strong>{gmailThreads.length}</strong>
             </span>
+            {/* Display API Version */}
+            {gmailApiVersion && (
+              <span>
+                API Version: <strong className="text-yellow-400">{gmailApiVersion}</strong>
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -911,7 +932,7 @@ export default function InboxPage() {
         // ==================== GMAIL MIRROR LAYOUT (Direct Gmail API - 1:1 parity) ====================
         <div className="flex h-[calc(100vh-64px)] bg-white">
           {/* LEFT - Gmail Folder Sidebar */}
-          <div className="w-56 border-r border-gray-200 flex flex-col bg-gray-50/50">
+          <div className="w-52 border-r flex flex-col bg-muted/30">
             <div className="p-3">
               <Button
                 className="w-full bg-white hover:bg-gray-100 text-gray-700 border shadow-sm rounded-2xl h-14 justify-start gap-3"

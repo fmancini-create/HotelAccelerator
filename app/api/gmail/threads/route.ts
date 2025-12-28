@@ -3,14 +3,19 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 
+const API_VERSION = "v742" // Debug marker
+
 export async function GET(request: NextRequest) {
+  console.log(`[v0] GMAIL THREADS API ${API_VERSION} HIT`) // Explicit debug log
+
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
+    console.log(`[v0] ${API_VERSION} - No user found`)
+    return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
   }
 
   // Get user's property
@@ -21,7 +26,8 @@ export async function GET(request: NextRequest) {
     .single()
 
   if (!propertyUser) {
-    return NextResponse.json({ error: "Property non trovata" }, { status: 404 })
+    console.log(`[v0] ${API_VERSION} - No property found`)
+    return NextResponse.json({ error: "Property non trovata", debugVersion: API_VERSION }, { status: 404 })
   }
 
   // Get email channel
@@ -34,18 +40,29 @@ export async function GET(request: NextRequest) {
     .single()
 
   if (!channel) {
-    return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
+    console.log(`[v0] ${API_VERSION} - No Gmail channel configured`)
+    return NextResponse.json({ error: "Canale Gmail non configurato", debugVersion: API_VERSION }, { status: 404 })
   }
 
   const { token, error: tokenError } = await getValidGmailToken(channel.id)
   if (!token) {
-    return NextResponse.json({ error: tokenError || "Token non disponibile" }, { status: 401 })
+    console.log(`[v0] ${API_VERSION} - Token error:`, tokenError)
+    return NextResponse.json(
+      { error: tokenError || "Token non disponibile", debugVersion: API_VERSION },
+      { status: 401 },
+    )
   }
 
   const searchParams = request.nextUrl.searchParams
   const labelId = searchParams.get("labelId") || "INBOX"
   const pageToken = searchParams.get("pageToken") || undefined
   const q = searchParams.get("q") || undefined
+
+  console.log(`[v0] ${API_VERSION} - Fetching Gmail threads:`, {
+    labelId,
+    pageToken: pageToken ? "present" : "none",
+    q,
+  })
 
   try {
     // Gmail API maxResults max is 500 for threads.list
@@ -68,13 +85,16 @@ export async function GET(request: NextRequest) {
 
     if (!threadsListRes.ok) {
       const errorBody = await threadsListRes.text()
-      console.error("[Gmail API] threads.list error:", threadsListRes.status, errorBody)
-      return NextResponse.json({ error: "Errore Gmail API" }, { status: threadsListRes.status })
+      console.error(`[v0] ${API_VERSION} - Gmail API threads.list error:`, threadsListRes.status, errorBody)
+      return NextResponse.json(
+        { error: "Errore Gmail API", debugVersion: API_VERSION },
+        { status: threadsListRes.status },
+      )
     }
 
     const threadsListData = await threadsListRes.json()
 
-    console.log("[v0] Gmail threads.list raw response:", {
+    console.log(`[v0] ${API_VERSION} - Gmail threads.list raw response:`, {
       threadsCount: threadsListData.threads?.length || 0,
       resultSizeEstimate: threadsListData.resultSizeEstimate,
       nextPageToken: threadsListData.nextPageToken ? "present" : "none",
@@ -94,7 +114,7 @@ export async function GET(request: NextRequest) {
         )
 
         if (!threadRes.ok) {
-          console.error("[Gmail API] thread.get error for", threadId, threadRes.status)
+          console.error(`[v0] ${API_VERSION} - thread.get error for`, threadId, threadRes.status)
           return null
         }
 
@@ -144,12 +164,16 @@ export async function GET(request: NextRequest) {
     // Filter out nulls and sort by internalDate descending (newest first)
     const validThreads = threads.filter(Boolean).sort((a: any, b: any) => b.internalDate - a.internalDate)
 
+    console.log(`[v0] ${API_VERSION} - Returning ${validThreads.length} threads`)
+
     return NextResponse.json({
       threads: validThreads,
       nextPageToken: threadsListData.nextPageToken || null,
       resultSizeEstimate: threadsListData.resultSizeEstimate || 0,
+      debugVersion: API_VERSION, // Add debug version to response
       // Debug info
       _debug: {
+        version: API_VERSION,
         rawThreadsCount: threadIds.length,
         processedThreadsCount: validThreads.length,
         hasNextPage: !!threadsListData.nextPageToken,
@@ -157,7 +181,10 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("[Gmail API] Error:", error)
-    return NextResponse.json({ error: "Errore durante il recupero dei thread" }, { status: 500 })
+    console.error(`[v0] ${API_VERSION} - Error:`, error)
+    return NextResponse.json(
+      { error: "Errore durante il recupero dei thread", debugVersion: API_VERSION },
+      { status: 500 },
+    )
   }
 }
