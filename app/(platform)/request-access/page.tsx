@@ -97,14 +97,8 @@ export default function RequestAccessPage() {
                 <div className="space-y-3 text-sm text-gray-400">
                   <div className="flex items-center gap-3">
                     <Mail className="h-4 w-4 text-amber-500" />
-                    <a href="mailto:info@hotelaccelerator.com" className="hover:text-white transition-colors">
-                      info@hotelaccelerator.com
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Phone className="h-4 w-4 text-amber-500" />
-                    <a href="tel:+390558205820" className="hover:text-white transition-colors">
-                      +39 055 820 5820
+                    <a href="mailto:info@4bid.it" className="hover:text-white transition-colors">
+                      info@4bid.it
                     </a>
                   </div>
                 </div>
@@ -170,7 +164,7 @@ export default function RequestAccessPage() {
                       id="phone"
                       type="tel"
                       placeholder="+39 055 123 4567"
-                      className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-gray-500 focus:border-amber-500"
+                      className="pl-10 bg-white/5 border border-white/10 text-white placeholder:text-gray-500 focus:border-amber-500"
                     />
                   </div>
                 </div>
