@@ -11,7 +11,6 @@ import {
   CheckCircle,
   Zap,
   Users,
-  Play,
   Star,
 } from "lucide-react"
 import type { Metadata } from "next"
@@ -233,12 +232,7 @@ function PlatformLanding() {
                 <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Button>
             </Link>
-            <Link href="#demo">
-              <Button size="lg" variant="outline" className="border-white/20 hover:bg-white/5 bg-transparent gap-2">
-                <Play className="h-4 w-4" aria-hidden="true" />
-                Guarda il Video
-              </Button>
-            </Link>
+            {/* Removed video link button */}
           </div>
         </div>
       </section>
