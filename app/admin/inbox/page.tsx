@@ -26,6 +26,7 @@ import {
   Clock,
   Zap,
   Settings,
+  Tag,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -106,14 +107,17 @@ const statusConfig = {
   spam: { label: "Spam", color: "bg-red-100 text-red-700" },
 }
 
-const gmailLabelsConfig: Record<GmailLabel, { label: string; icon: React.ElementType }> = {
-  INBOX: { label: "Posta in arrivo", icon: Inbox },
-  SENT: { label: "Posta inviata", icon: Send },
-  DRAFT: { label: "Bozze", icon: FileText },
-  SPAM: { label: "Spam", icon: AlertCircle },
-  TRASH: { label: "Cestino", icon: Trash2 },
-  STARRED: { label: "Speciali", icon: Star },
-  ALL: { label: "Tutti i messaggi", icon: Mail },
+const gmailLabelsConfig: Record<
+  GmailLabel,
+  { label: string; icon: React.ElementType; section: "system" | "category" }
+> = {
+  INBOX: { label: "Posta in arrivo", icon: Inbox, section: "system" },
+  STARRED: { label: "Speciali", icon: Star, section: "system" },
+  SENT: { label: "Posta inviata", icon: Send, section: "system" },
+  DRAFT: { label: "Bozze", icon: FileText, section: "system" },
+  SPAM: { label: "Spam", icon: AlertCircle, section: "system" },
+  TRASH: { label: "Cestino", icon: Trash2, section: "system" },
+  ALL: { label: "Tutti i messaggi", icon: Mail, section: "system" },
 }
 
 export default function InboxPage() {
@@ -610,6 +614,244 @@ export default function InboxPage() {
     )
   }
 
+  const ConversationList = () => (
+    <div className="flex-1 overflow-y-auto">
+      {isLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : filteredConversations.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Inbox className="h-8 w-8 mx-auto mb-2 opacity-50" />
+          <p className="text-sm">{inboxMode === "smart" ? "Nessun messaggio da gestire" : "Nessun messaggio"}</p>
+        </div>
+      ) : (
+        filteredConversations.map((conv) => (
+          <div
+            key={conv.id}
+            onClick={() => handleSelectConversation(conv)}
+            className={`p-3 border-b cursor-pointer hover:bg-accent transition-colors ${
+              selectedConversation?.id === conv.id ? "bg-accent" : ""
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              <Checkbox checked={false} onCheckedChange={() => {}} onClick={(e) => e.stopPropagation()} />
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`font-medium text-sm truncate ${conv.unread_count > 0 ? "font-bold" : ""}`}>
+                    {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
+                  </span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                    {formatDistanceToNow(new Date(conv.last_message_at), {
+                      addSuffix: true,
+                      locale: it,
+                    })}
+                  </span>
+                </div>
+
+                <p className="text-xs text-muted-foreground truncate">
+                  {conv.subject || conv.lastMessage?.content || "Nessun messaggio"}
+                </p>
+
+                <div className="flex items-center gap-1 mt-1">
+                  {(() => {
+                    const config = channelConfig[conv.channel]
+                    const Icon = config?.icon || MessageCircle
+                    return <Icon className={`h-3 w-3 ${config?.color.split(" ")[0] || "text-gray-600"}`} />
+                  })()}
+
+                  {conv.unread_count > 0 && (
+                    <Badge variant="default" className="h-4 px-1 text-xs">
+                      {conv.unread_count}
+                    </Badge>
+                  )}
+
+                  {inboxMode === "smart" && conv.status && (
+                    <Badge variant="outline" className={`h-4 px-1 text-xs ${statusConfig[conv.status]?.color || ""}`}>
+                      {statusConfig[conv.status]?.label}
+                    </Badge>
+                  )}
+
+                  <div className="flex-1" />
+
+                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => handleToggleStar(conv, e)}>
+                    <Star
+                      className={`h-3 w-3 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
+                    />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  )
+
+  const MessagePanel = () => (
+    <>
+      {selectedConversation ? (
+        <>
+          {/* Header */}
+          <div className="flex-shrink-0 p-4 border-b bg-card">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-medium">
+                    {selectedConversation.contact?.name || selectedConversation.contact?.email || "Sconosciuto"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">{selectedConversation.contact?.email}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Badge className={statusConfig[selectedConversation.status]?.color}>
+                  {statusConfig[selectedConversation.status]?.label}
+                </Badge>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <MoreVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleToggleStar(selectedConversation)}>
+                      <Star className="mr-2 h-4 w-4" />
+                      {selectedConversation.is_starred ? "Rimuovi stella" : "Aggiungi stella"}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleArchive(selectedConversation.id)}>
+                      <Archive className="mr-2 h-4 w-4" />
+                      Archivia
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => handleMarkAsSpam(selectedConversation.id)}
+                      className="text-red-600"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Segna come spam
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+
+            {selectedConversation.subject && (
+              <div className="mt-2 text-sm font-medium">Oggetto: {selectedConversation.subject}</div>
+            )}
+          </div>
+
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {Array.from(new Map(messages.map((m) => [m.id, m])).values()).map((message) => (
+              <div
+                key={message.id}
+                className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`rounded-lg ${
+                    message.sender_type === "agent"
+                      ? "max-w-[80%] bg-primary text-primary-foreground p-3"
+                      : "max-w-[95%] bg-muted p-0"
+                  }`}
+                >
+                  {message.sender_type === "agent" ? (
+                    <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                  ) : (
+                    <div className="bg-white rounded-lg overflow-hidden">{renderEmailContent(message.content)}</div>
+                  )}
+                  <div
+                    className={`text-xs mt-1 ${
+                      message.sender_type === "agent" ? "text-primary-foreground/70" : "text-muted-foreground px-3 pb-2"
+                    }`}
+                  >
+                    {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
+                  </div>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Reply Box */}
+          <div className="flex-shrink-0 p-4 border-t bg-card">
+            <div className="flex gap-2 mb-2">
+              <Select value={replyChannel} onValueChange={setReplyChannel}>
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="same">Stesso canale</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-2">
+              <Textarea
+                placeholder="Scrivi una risposta..."
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                className="min-h-[80px]"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    handleSendReply()
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                onClick={handleSendReply}
+                disabled={!replyText.trim() || isSending}
+                className="self-end"
+              >
+                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            <div className="flex gap-2 mt-2">
+              <Input type="file" multiple ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                <Paperclip className="h-4 w-4 mr-2" />
+                Allega file
+              </Button>
+              {attachments.length > 0 && (
+                <div className="flex gap-2 items-center">
+                  {attachments.map((file, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <span className="text-sm">{file.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5"
+                        onClick={() => setAttachments(attachments.filter((_, i) => i !== index))}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          <div className="text-center">
+            <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>Seleziona una conversazione per visualizzare i messaggi</p>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader
@@ -642,40 +884,32 @@ export default function InboxPage() {
 
       {inboxMode === "smart" && <EmailKpiBar />}
 
-      <div className="flex h-[calc(100vh-140px)]">
-        {/* Sidebar - Conversation List */}
-        <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
-          <div className="p-4 border-b space-y-3 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold flex items-center gap-2">
-                {inboxMode === "smart" ? (
-                  <>
-                    <Zap className="h-4 w-4 text-amber-500" />
-                    Smart Inbox
-                  </>
-                ) : (
-                  <>
-                    <Mail className="h-4 w-4 text-blue-500" />
-                    Gmail Mirror
-                  </>
-                )}
-              </h2>
-              <Button variant="ghost" size="icon" onClick={loadConversations} disabled={rateLimitError}>
-                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
+      {inboxMode === "smart" ? (
+        // ==================== SMART MODE LAYOUT ====================
+        <div className="flex h-[calc(100vh-140px)]">
+          {/* Sidebar - Conversation List with filters */}
+          <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
+            <div className="p-4 border-b space-y-3 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  Smart Inbox
+                </h2>
+                <Button variant="ghost" size="icon" onClick={loadConversations} disabled={rateLimitError}>
+                  <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
 
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Cerca conversazioni..."
-                className="pl-8"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cerca conversazioni..."
+                  className="pl-8"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
 
-            {inboxMode === "smart" ? (
               <div className="flex gap-1">
                 <Button
                   variant={statusFilter === "open" ? "default" : "outline"}
@@ -705,282 +939,104 @@ export default function InboxPage() {
                   Speciali
                 </Button>
               </div>
-            ) : (
-              /* Gmail labels as horizontal scrollable chips instead of vertical list */
-              <div className="flex flex-wrap gap-1">
-                {(Object.keys(gmailLabelsConfig) as GmailLabel[]).map((label) => {
-                  const config = gmailLabelsConfig[label]
-                  const Icon = config.icon
-                  return (
-                    <Button
-                      key={label}
-                      variant={gmailLabel === label ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setGmailLabel(label)}
-                      className="text-xs"
-                    >
-                      <Icon className="h-3 w-3 mr-1" />
-                      {config.label}
-                    </Button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Conversation list */}
-          <div className="flex-1 overflow-y-auto">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <Inbox className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">{inboxMode === "smart" ? "Nessun messaggio da gestire" : "Nessun messaggio"}</p>
-              </div>
-            ) : (
-              filteredConversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => handleSelectConversation(conv)}
-                  className={`p-3 border-b cursor-pointer hover:bg-accent transition-colors ${
-                    selectedConversation?.id === conv.id ? "bg-accent" : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-2">
-                    <Checkbox checked={false} onCheckedChange={() => {}} onClick={(e) => e.stopPropagation()} />
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`font-medium text-sm truncate ${conv.unread_count > 0 ? "font-bold" : ""}`}>
-                          {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
-                        </span>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">
-                          {formatDistanceToNow(new Date(conv.last_message_at), {
-                            addSuffix: true,
-                            locale: it,
-                          })}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-muted-foreground truncate">
-                        {conv.subject || conv.lastMessage?.content || "Nessun messaggio"}
-                      </p>
-
-                      <div className="flex items-center gap-1 mt-1">
-                        {(() => {
-                          const config = channelConfig[conv.channel]
-                          const Icon = config?.icon || MessageCircle
-                          return <Icon className={`h-3 w-3 ${config?.color.split(" ")[0] || "text-gray-600"}`} />
-                        })()}
-
-                        {conv.unread_count > 0 && (
-                          <Badge variant="default" className="h-4 px-1 text-xs">
-                            {conv.unread_count}
-                          </Badge>
-                        )}
-
-                        {inboxMode === "smart" && conv.status && (
-                          <Badge
-                            variant="outline"
-                            className={`h-4 px-1 text-xs ${statusConfig[conv.status]?.color || ""}`}
-                          >
-                            {statusConfig[conv.status]?.label}
-                          </Badge>
-                        )}
-
-                        <div className="flex-1" />
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          onClick={(e) => handleToggleStar(conv, e)}
-                        >
-                          <Star
-                            className={`h-3 w-3 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
-                          />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {selectedConversation ? (
-            <>
-              {/* Header */}
-              <div className="flex-shrink-0 p-4 border-b bg-card">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium">
-                        {selectedConversation.contact?.name || selectedConversation.contact?.email || "Sconosciuto"}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">{selectedConversation.contact?.email}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Badge className={statusConfig[selectedConversation.status]?.color}>
-                      {statusConfig[selectedConversation.status]?.label}
-                    </Badge>
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleToggleStar(selectedConversation)}>
-                          <Star className="mr-2 h-4 w-4" />
-                          {selectedConversation.is_starred ? "Rimuovi stella" : "Aggiungi stella"}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleArchive(selectedConversation.id)}>
-                          <Archive className="mr-2 h-4 w-4" />
-                          Archivia
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => handleMarkAsSpam(selectedConversation.id)}
-                          className="text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Segna come spam
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                {selectedConversation.subject && (
-                  <div className="mt-2 text-sm font-medium">Oggetto: {selectedConversation.subject}</div>
-                )}
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {Array.from(new Map(messages.map((m) => [m.id, m])).values()).map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`rounded-lg ${
-                        message.sender_type === "agent"
-                          ? "max-w-[80%] bg-primary text-primary-foreground p-3"
-                          : "max-w-[95%] bg-muted p-0"
-                      }`}
-                    >
-                      {message.sender_type === "agent" ? (
-                        <div className="text-sm whitespace-pre-wrap">{message.content}</div>
-                      ) : (
-                        <div className="bg-white rounded-lg overflow-hidden">{renderEmailContent(message.content)}</div>
-                      )}
-                      <div
-                        className={`text-xs mt-1 ${
-                          message.sender_type === "agent"
-                            ? "text-primary-foreground/70"
-                            : "text-muted-foreground px-3 pb-2"
-                        }`}
-                      >
-                        {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Reply Box */}
-              <div className="flex-shrink-0 p-4 border-t bg-card">
-                <div className="flex gap-2 mb-2">
-                  <Select value={replyChannel} onValueChange={setReplyChannel}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="same">Stesso canale</SelectItem>
-                      <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex gap-2">
-                  <Textarea
-                    placeholder="Scrivi una risposta..."
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    className="min-h-[80px]"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                        handleSendReply()
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleSendReply}
-                    disabled={!replyText.trim() || isSending}
-                    className="self-end"
-                  >
-                    {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </div>
-
-                <div className="flex gap-2 mt-2">
-                  <Input type="file" multiple ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                    <Paperclip className="h-4 w-4 mr-2" />
-                    Allega file
-                  </Button>
-                  {attachments.length > 0 && (
-                    <div className="flex gap-2 items-center">
-                      {attachments.map((file, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <span className="text-sm">{file.name}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5"
-                            onClick={() => setAttachments(attachments.filter((_, i) => i !== index))}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              <div className="text-center">
-                <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Seleziona una conversazione per visualizzare i messaggi</p>
-              </div>
             </div>
-          )}
-        </div>
 
-        {/* Right Sidebar - only in Smart mode */}
-        {inboxMode === "smart" && (
+            <ConversationList />
+          </div>
+
+          {/* Main content - Messages */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <MessagePanel />
+          </div>
+
+          {/* Right Sidebar - Demand Calendar (Smart only) */}
           <div className="w-80 border-l bg-card p-4 overflow-y-auto hidden lg:block">
             <h3 className="font-semibold mb-4">Calendario Domanda</h3>
             <DemandCalendar />
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        // ==================== GMAIL MODE LAYOUT ====================
+        <div className="flex h-[calc(100vh-80px)]">
+          {/* LEFT SIDEBAR - Gmail Folders */}
+          <div className="w-56 border-r bg-card flex flex-col overflow-hidden">
+            <div className="p-3 border-b">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold flex items-center gap-2 text-sm">
+                  <Mail className="h-4 w-4 text-red-500" />
+                  Gmail Mirror
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={loadConversations}
+                  disabled={rateLimitError}
+                >
+                  <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
+            </div>
+
+            {/* Gmail folders list */}
+            <nav className="flex-1 overflow-y-auto py-2">
+              {(Object.keys(gmailLabelsConfig) as GmailLabel[]).map((label) => {
+                const config = gmailLabelsConfig[label]
+                const Icon = config.icon
+                const isActive = gmailLabel === label
+
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setGmailLabel(label)}
+                    className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left ${
+                      isActive
+                        ? "bg-red-50 text-red-700 font-medium border-r-2 border-red-600"
+                        : "text-muted-foreground hover:bg-accent"
+                    }`}
+                  >
+                    <Icon className={`h-4 w-4 ${isActive ? "text-red-600" : ""}`} />
+                    <span>{config.label}</span>
+                  </button>
+                )
+              })}
+
+              {/* Separator */}
+              <div className="my-2 mx-4 border-t" />
+
+              {/* Custom labels section */}
+              <div className="px-4 py-2">
+                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  <Tag className="h-3 w-3" />
+                  Etichette
+                </div>
+              </div>
+            </nav>
+          </div>
+
+          {/* CENTER - Conversation List */}
+          <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
+            <div className="p-3 border-b">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Cerca in Gmail..."
+                  className="pl-8 h-9"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <ConversationList />
+          </div>
+
+          {/* RIGHT - Message Content */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <MessagePanel />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
