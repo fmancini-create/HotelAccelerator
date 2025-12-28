@@ -29,7 +29,9 @@ import {
   Edit3,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   MailOpen,
+  Bug,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -95,6 +97,15 @@ interface GmailLabelInfo {
   threadsTotal: number
   threadsUnread: number
   color?: string | null
+}
+
+interface GmailDebugInfo {
+  rawThreadsCount: number
+  processedThreadsCount: number
+  hasNextPage: boolean
+  labelId: string
+  resultSizeEstimate?: number
+  pageTokenHistory?: string[]
 }
 
 // ==================== SMART MODE TYPES (DB-driven) ====================
@@ -173,11 +184,15 @@ export default function InboxPage() {
   const [gmailSystemLabels, setGmailSystemLabels] = useState<GmailLabelInfo[]>([])
   const [gmailUserLabels, setGmailUserLabels] = useState<GmailLabelInfo[]>([])
   const [gmailNextPageToken, setGmailNextPageToken] = useState<string | null>(null)
+  const [gmailPrevPageTokens, setGmailPrevPageTokens] = useState<string[]>([]) // Track page history for back navigation
   const [gmailTotalEstimate, setGmailTotalEstimate] = useState(0)
   const [gmailLoading, setGmailLoading] = useState(false)
   const [gmailThreadLoading, setGmailThreadLoading] = useState(false)
   const [gmailSearchQuery, setGmailSearchQuery] = useState("")
   const [labelsExpanded, setLabelsExpanded] = useState(true)
+  const [gmailDebugInfo, setGmailDebugInfo] = useState<GmailDebugInfo | null>(null)
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [gmailCurrentPage, setGmailCurrentPage] = useState(1)
 
   // ==================== SMART MODE STATE (DB-driven) ====================
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -211,38 +226,62 @@ export default function InboxPage() {
         const data = await res.json()
         setGmailSystemLabels(data.systemLabels || [])
         setGmailUserLabels(data.labels || [])
+        console.log("[v0] Gmail labels loaded:", {
+          systemCount: data.systemLabels?.length || 0,
+          userCount: data.labels?.length || 0,
+        })
       }
     } catch (error) {
       console.error("[Gmail] Error loading labels:", error)
     }
   }, [])
 
-  const loadGmailThreads = useCallback(async (labelId: string, pageToken?: string, query?: string) => {
-    setGmailLoading(true)
-    try {
-      const params = new URLSearchParams()
-      params.set("labelId", labelId)
-      if (pageToken) params.set("pageToken", pageToken)
-      if (query) params.set("q", query)
-      params.set("maxResults", "50")
+  const loadGmailThreads = useCallback(
+    async (labelId: string, pageToken?: string, query?: string, isNextPage = false) => {
+      setGmailLoading(true)
+      try {
+        const params = new URLSearchParams()
+        params.set("labelId", labelId)
+        if (pageToken) params.set("pageToken", pageToken)
+        if (query) params.set("q", query)
 
-      const res = await fetch(`/api/gmail/threads?${params}`)
-      if (res.ok) {
-        const data = await res.json()
-        setGmailThreads(data.threads || [])
-        setGmailNextPageToken(data.nextPageToken || null)
-        setGmailTotalEstimate(data.resultSizeEstimate || 0)
-      } else {
-        console.error("[Gmail] Error loading threads:", res.status)
+        console.log("[v0] Loading Gmail threads:", { labelId, pageToken: pageToken ? "present" : "none", query })
+
+        const res = await fetch(`/api/gmail/threads?${params}`)
+        if (res.ok) {
+          const data = await res.json()
+
+          setGmailThreads(data.threads || [])
+          setGmailNextPageToken(data.nextPageToken || null)
+          setGmailTotalEstimate(data.resultSizeEstimate || 0)
+
+          setGmailDebugInfo({
+            rawThreadsCount: data._debug?.rawThreadsCount || 0,
+            processedThreadsCount: data._debug?.processedThreadsCount || 0,
+            hasNextPage: !!data.nextPageToken,
+            labelId,
+            resultSizeEstimate: data.resultSizeEstimate,
+          })
+
+          console.log("[v0] Gmail threads loaded:", {
+            count: data.threads?.length || 0,
+            total: data.resultSizeEstimate,
+            hasNextPage: !!data.nextPageToken,
+            debug: data._debug,
+          })
+        } else {
+          console.error("[Gmail] Error loading threads:", res.status)
+          setGmailThreads([])
+        }
+      } catch (error) {
+        console.error("[Gmail] Error loading threads:", error)
         setGmailThreads([])
+      } finally {
+        setGmailLoading(false)
       }
-    } catch (error) {
-      console.error("[Gmail] Error loading threads:", error)
-      setGmailThreads([])
-    } finally {
-      setGmailLoading(false)
-    }
-  }, [])
+    },
+    [],
+  )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
     setGmailThreadLoading(true)
@@ -306,18 +345,50 @@ export default function InboxPage() {
     setGmailLabelId(labelId)
     setSelectedGmailThread(null)
     setGmailMessages([])
+    setGmailPrevPageTokens([]) // Reset pagination
+    setGmailCurrentPage(1)
     loadGmailThreads(labelId)
   }
 
   // Handle Gmail search
   const handleGmailSearch = () => {
+    setGmailPrevPageTokens([])
+    setGmailCurrentPage(1)
     loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
   }
 
-  // Get label count
-  const getLabelCount = (labelId: string): number => {
+  const handleGmailNextPage = () => {
+    if (gmailNextPageToken) {
+      // Save current page token for back navigation
+      setGmailPrevPageTokens((prev) => [...prev, gmailNextPageToken])
+      setGmailCurrentPage((prev) => prev + 1)
+      loadGmailThreads(gmailLabelId, gmailNextPageToken, gmailSearchQuery || undefined, true)
+    }
+  }
+
+  const handleGmailPrevPage = () => {
+    if (gmailPrevPageTokens.length > 0) {
+      const newTokens = [...gmailPrevPageTokens]
+      const prevToken = newTokens.pop()
+      setGmailPrevPageTokens(newTokens)
+      setGmailCurrentPage((prev) => prev - 1)
+
+      // If we're going back to first page, don't use token
+      if (newTokens.length === 0) {
+        loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery || undefined)
+      } else {
+        loadGmailThreads(gmailLabelId, newTokens[newTokens.length - 1], gmailSearchQuery || undefined)
+      }
+    }
+  }
+
+  // Get label count - now uses threadsTotal from Gmail API
+  const getLabelCount = (labelId: string): { total: number; unread: number } => {
     const label = gmailSystemLabels.find((l) => l.id === labelId)
-    return label?.threadsUnread || 0
+    return {
+      total: label?.threadsTotal || 0,
+      unread: label?.threadsUnread || 0,
+    }
   }
 
   // ==================== SMART MODE FUNCTIONS (DB-driven, unchanged) ====================
@@ -600,6 +671,16 @@ export default function InboxPage() {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
+            {inboxMode === "gmail" && (
+              <Button
+                variant={showDebugPanel ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowDebugPanel(!showDebugPanel)}
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                Debug
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => router.push("/admin/channels/email")}>
               <Settings className="h-4 w-4 mr-2" />
               Impostazioni Email
@@ -609,6 +690,34 @@ export default function InboxPage() {
       />
 
       {inboxMode === "smart" && <EmailKpiBar />}
+
+      {inboxMode === "gmail" && showDebugPanel && gmailDebugInfo && (
+        <div className="bg-gray-900 text-green-400 font-mono text-xs p-4 border-b">
+          <div className="flex items-center gap-4 flex-wrap">
+            <span>
+              Label: <strong>{gmailDebugInfo.labelId}</strong>
+            </span>
+            <span>
+              Raw from API: <strong>{gmailDebugInfo.rawThreadsCount}</strong>
+            </span>
+            <span>
+              Processed: <strong>{gmailDebugInfo.processedThreadsCount}</strong>
+            </span>
+            <span>
+              Gmail Estimate: <strong>{gmailDebugInfo.resultSizeEstimate}</strong>
+            </span>
+            <span>
+              HasNextPage: <strong>{gmailDebugInfo.hasNextPage ? "YES" : "NO"}</strong>
+            </span>
+            <span>
+              Current Page: <strong>{gmailCurrentPage}</strong>
+            </span>
+            <span>
+              Displayed: <strong>{gmailThreads.length}</strong>
+            </span>
+          </div>
+        </div>
+      )}
 
       {inboxMode === "smart" ? (
         // ==================== SMART MODE LAYOUT ====================
@@ -799,7 +908,7 @@ export default function InboxPage() {
           </div>
         </div>
       ) : (
-        // ==================== GMAIL MIRROR LAYOUT (Direct Gmail API) ====================
+        // ==================== GMAIL MIRROR LAYOUT (Direct Gmail API - 1:1 parity) ====================
         <div className="flex h-[calc(100vh-64px)] bg-white">
           {/* LEFT - Gmail Folder Sidebar */}
           <div className="w-56 border-r border-gray-200 flex flex-col bg-gray-50/50">
@@ -816,7 +925,7 @@ export default function InboxPage() {
               {GMAIL_SYSTEM_FOLDERS.map((folder) => {
                 const Icon = folder.icon
                 const isActive = gmailLabelId === folder.id
-                const count = getLabelCount(folder.id)
+                const counts = getLabelCount(folder.id)
                 return (
                   <button
                     key={folder.id}
@@ -827,7 +936,9 @@ export default function InboxPage() {
                   >
                     <Icon className={`h-4 w-4 ${isActive ? "text-blue-800" : "text-gray-600"}`} />
                     <span className="flex-1 text-left truncate">{folder.label}</span>
-                    {count > 0 && <span className="text-xs font-semibold">{count}</span>}
+                    {counts.total > 0 && (
+                      <span className="text-xs font-semibold">{counts.unread > 0 ? counts.unread : counts.total}</span>
+                    )}
                   </button>
                 )
               })}
@@ -853,7 +964,7 @@ export default function InboxPage() {
                   >
                     <Tag className="h-3.5 w-3.5" style={label.color ? { color: label.color } : undefined} />
                     <span className="flex-1 text-left truncate">{label.name}</span>
-                    {label.threadsUnread > 0 && <span className="text-xs">{label.threadsUnread}</span>}
+                    {label.threadsTotal > 0 && <span className="text-xs">{label.threadsTotal}</span>}
                   </button>
                 ))}
             </nav>
@@ -867,9 +978,31 @@ export default function InboxPage() {
                 <RefreshCw className={`h-4 w-4 ${gmailLoading ? "animate-spin" : ""}`} />
               </Button>
               <div className="flex-1" />
-              <span className="text-xs text-gray-500">
-                {gmailThreads.length > 0 && `1-${gmailThreads.length} di ${gmailTotalEstimate}`}
-              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleGmailPrevPage}
+                  disabled={gmailCurrentPage === 1 || gmailLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-xs text-gray-500 min-w-[100px] text-center">
+                  {gmailThreads.length > 0
+                    ? `${(gmailCurrentPage - 1) * 100 + 1}-${(gmailCurrentPage - 1) * 100 + gmailThreads.length} di ${gmailTotalEstimate}`
+                    : "0 messaggi"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={handleGmailNextPage}
+                  disabled={!gmailNextPageToken || gmailLoading}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <div className="px-2 py-2 border-b border-gray-200 bg-white">
