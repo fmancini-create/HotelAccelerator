@@ -10,12 +10,12 @@ import {
   ArrowRight,
   CheckCircle,
   Zap,
-  Shield,
   Users,
   Play,
   Star,
 } from "lucide-react"
 import type { Metadata } from "next"
+import { PlatformFooter } from "@/components/platform-footer"
 
 export const platformMetadata: Metadata = {
   title: "HotelAccelerator - Software Gestionale per Hotel e Strutture Ricettive | CRM, CMS, Email Marketing",
@@ -140,9 +140,9 @@ const colorClasses = {
   pink: { bg: "bg-pink-500/10", text: "text-pink-400" },
 }
 
-export function PlatformLanding() {
+function PlatformLanding() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
       {/* Schema.org structured data */}
       <script
         type="application/ld+json"
@@ -473,91 +473,10 @@ export function PlatformLanding() {
       </section>
 
       {/* Footer with semantic HTML */}
-      <footer className="py-12 px-4 border-t border-white/10" role="contentinfo">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Building2 className="h-6 w-6 text-white" aria-hidden="true" />
-                <span className="font-semibold">HotelAccelerator</span>
-              </div>
-              <p className="text-sm text-gray-500">La piattaforma completa per hotel e strutture ricettive.</p>
-            </div>
-            <div>
-              <h3 className="font-medium mb-4">Prodotto</h3>
-              <ul className="space-y-2 text-sm text-gray-500">
-                <li>
-                  <Link href="/features/cms" className="hover:text-white transition-colors">
-                    CMS
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features/crm" className="hover:text-white transition-colors">
-                    CRM
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features/email-marketing" className="hover:text-white transition-colors">
-                    Email Marketing
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features/inbox-omnicanale" className="hover:text-white transition-colors">
-                    Inbox Omnicanale
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features/analytics" className="hover:text-white transition-colors">
-                    Analytics
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/features/ai-assistant" className="hover:text-white transition-colors">
-                    AI Assistant
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-medium mb-4">Azienda</h3>
-              <ul className="space-y-2 text-sm text-gray-500">
-                <li>
-                  <Link href="/privacy" className="hover:text-white transition-colors">
-                    Privacy Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/terms" className="hover:text-white transition-colors">
-                    Termini di Servizio
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="font-medium mb-4">Contatti</h3>
-              <ul className="space-y-2 text-sm text-gray-500">
-                <li>
-                  <Link href="/request-access" className="hover:text-white transition-colors">
-                    Richiedi Demo
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    href="/super-admin/login"
-                    className="hover:text-white transition-colors flex items-center gap-1"
-                  >
-                    <Shield className="h-3 w-3" aria-hidden="true" />
-                    Area Manager
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="pt-8 border-t border-white/10 text-center text-sm text-gray-500">
-            © {new Date().getFullYear()} HotelAccelerator. Tutti i diritti riservati.
-          </div>
-        </div>
-      </footer>
+      <PlatformFooter />
     </div>
   )
 }
+
+export { PlatformLanding }
+export default PlatformLanding

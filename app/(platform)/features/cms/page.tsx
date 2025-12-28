@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Globe, ArrowRight, Smartphone, Search, Languages, Palette, Zap, Shield, Building2 } from "lucide-react"
+import { PlatformFooter } from "@/components/platform-footer"
 
 export const metadata: Metadata = {
   title: "CMS per Hotel - Crea il Sito Web del Tuo Hotel | HotelAccelerator",
@@ -73,7 +74,7 @@ const benefits = [
 
 export default function CMSLandingPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
       {/* Schema.org */}
       <script
         type="application/ld+json"
@@ -233,13 +234,7 @@ export default function CMSLandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-4 border-t border-white/10">
-        <div className="container mx-auto text-center text-sm text-gray-500">
-          <Link href="/" className="hover:text-white">
-            ← Torna a HotelAccelerator
-          </Link>
-        </div>
-      </footer>
+      <PlatformFooter />
     </div>
   )
 }

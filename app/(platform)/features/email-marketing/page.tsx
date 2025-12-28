@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Mail, ArrowRight, Send, BarChart3, Clock, Sparkles, FileText, Target, Building2, Zap } from "lucide-react"
+import { PlatformFooter } from "@/components/platform-footer"
 
 export const metadata: Metadata = {
   title: "Email Marketing per Hotel - Campagne Automatizzate | HotelAccelerator",
@@ -229,13 +230,7 @@ export default function EmailMarketingLandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 px-4 border-t border-white/10">
-        <div className="container mx-auto text-center text-sm text-gray-500">
-          <Link href="/" className="hover:text-white">
-            ← Torna a HotelAccelerator
-          </Link>
-        </div>
-      </footer>
+      <PlatformFooter />
     </div>
   )
 }
