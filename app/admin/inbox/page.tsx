@@ -174,7 +174,7 @@ export default function InboxPage() {
   const router = useRouter()
   const { adminUser, isLoading: authLoading } = useAdminAuth()
 
-  const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
+  const [inboxMode, setInboxMode] = useState<InboxMode>("gmail")
 
   // ==================== GMAIL MODE STATE (API-driven) ====================
   const [gmailLabelId, setGmailLabelId] = useState("INBOX")
@@ -221,6 +221,7 @@ export default function InboxPage() {
   // ==================== GMAIL MODE FUNCTIONS (Direct API calls) ====================
 
   const loadGmailLabels = useCallback(async () => {
+    console.log("[v0] DEBUG: loadGmailLabels CALLED")
     try {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
@@ -239,6 +240,7 @@ export default function InboxPage() {
 
   const loadGmailThreads = useCallback(
     async (labelId: string, pageToken?: string, query?: string, isNextPage = false) => {
+      console.log("[v0] DEBUG: loadGmailThreads CALLED with labelId:", labelId)
       setGmailLoading(true)
       try {
         const params = new URLSearchParams()
@@ -246,15 +248,13 @@ export default function InboxPage() {
         if (pageToken) params.set("pageToken", pageToken)
         if (query) params.set("q", query)
 
-        console.log("[v0] FRONTEND: Loading Gmail threads:", {
-          labelId,
-          pageToken: pageToken ? "present" : "none",
-          query,
-        })
+        const fullUrl = `/api/gmail/threads?${params}`
+        console.log("[v0] DEBUG: FULL REQUEST URL:", fullUrl)
+        console.log("[v0] DEBUG: About to fetch /api/gmail/threads")
 
-        const res = await fetch(`/api/gmail/threads?${params}`)
+        const res = await fetch(fullUrl)
 
-        console.log("[v0] FRONTEND: /api/gmail/threads response status:", res.status)
+        console.log("[v0] DEBUG: Fetch completed, status:", res.status)
 
         if (res.ok) {
           const data = await res.json()
@@ -288,7 +288,7 @@ export default function InboxPage() {
           setGmailApiVersion(null)
         }
       } catch (error) {
-        console.error("[v0] FRONTEND: Exception loading threads:", error)
+        console.error("[v0] DEBUG: Exception in loadGmailThreads:", error)
         setGmailThreads([])
         setGmailApiVersion(null)
       } finally {
@@ -342,7 +342,9 @@ export default function InboxPage() {
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
+    console.log("[v0] DEBUG: Gmail mode useEffect triggered", { inboxMode, adminUser: !!adminUser })
     if (inboxMode === "gmail" && adminUser) {
+      console.log("[v0] DEBUG: Calling loadGmailLabels and loadGmailThreads from useEffect")
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
     }
@@ -511,7 +513,7 @@ export default function InboxPage() {
       })
       setConversations((prev) => prev.map((c) => (c.id === conv.id ? { ...c, is_starred: !c.is_starred } : c)))
       if (selectedConversation?.id === conv.id) {
-        setSelectedConversation({ ...selectedConversation, is_starred: !conv.is_starred })
+        setSelectedConversation({ ...selectedConversation, is_starred: !selectedConversation.is_starred })
       }
     } catch (error) {
       console.error("Error toggling star:", error)
