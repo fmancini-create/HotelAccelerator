@@ -3,24 +3,34 @@ import { createClient } from "@/lib/supabase/server"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 
 // Gmail Pub/Sub webhook endpoint
+// VERSION: v744 - With HARD logging for debugging
 
 export async function GET(request: NextRequest) {
   return NextResponse.json({
     status: "ok",
     message: "Gmail webhook endpoint is active",
+    version: "v744",
     timestamp: new Date().toISOString(),
   })
 }
 
 export async function POST(request: NextRequest) {
-  const receivedAt = new Date() // Log when we received the webhook
+  const receivedAt = new Date()
+
+  console.log("==================================================")
+  console.log("[GMAIL WEBHOOK v744] HIT at", receivedAt.toISOString())
+  console.log("==================================================")
 
   try {
     const rawBody = await request.text()
+    console.log("[GMAIL WEBHOOK] Raw body length:", rawBody.length)
+
     const body = JSON.parse(rawBody)
+    console.log("[GMAIL WEBHOOK] Parsed body subscription:", body.subscription)
 
     const message = body.message
     if (!message?.data) {
+      console.log("[GMAIL WEBHOOK] No message.data - returning ok")
       return NextResponse.json({ status: "ok" })
     }
 
@@ -28,7 +38,14 @@ export async function POST(request: NextRequest) {
     const notification = JSON.parse(decodedData)
     const { emailAddress, historyId } = notification
 
+    console.log("[GMAIL WEBHOOK] Notification:", {
+      emailAddress,
+      historyId,
+      messageId: message.messageId,
+    })
+
     if (!emailAddress || !historyId) {
+      console.log("[GMAIL WEBHOOK] Missing emailAddress or historyId")
       return NextResponse.json({ status: "ok" })
     }
 
@@ -44,48 +61,85 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (channelError || !channel) {
+      console.log("[GMAIL WEBHOOK] Channel not found for:", emailAddress, channelError?.message)
       return NextResponse.json({ status: "ok" })
     }
 
-    // TASK 2: Idempotency - check if we've processed this historyId
     const lastHistoryId = channel.gmail_history_id || 0
+    console.log("[GMAIL WEBHOOK] Channel found:", {
+      channelId: channel.id,
+      email: channel.email_address,
+      lastHistoryIdInDB: lastHistoryId,
+      newHistoryId: historyId,
+      willProcess: Number(historyId) > Number(lastHistoryId),
+    })
+
+    // Idempotency check
     if (Number(historyId) <= Number(lastHistoryId)) {
-      // Already processed - idempotent response
+      console.log("[GMAIL WEBHOOK] SKIP - Already processed (historyId <= lastHistoryId)")
       return NextResponse.json({ status: "ok" })
     }
 
-    // Process new emails
-    await syncNewEmails(supabase, channel, lastHistoryId, historyId)
+    console.log("[GMAIL WEBHOOK] PROCESSING - New historyId detected")
+    const syncResult = await syncNewEmails(supabase, channel, lastHistoryId, historyId)
+    console.log("[GMAIL WEBHOOK] Sync result:", syncResult)
 
     // Update history ID atomically
-    await supabase
+    const { error: updateError } = await supabase
       .from("email_channels")
       .update({
         gmail_history_id: historyId,
+        last_sync_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
       .eq("id", channel.id)
       .eq("gmail_history_id", lastHistoryId) // Optimistic locking
 
+    if (updateError) {
+      console.log("[GMAIL WEBHOOK] WARNING: Failed to update historyId:", updateError.message)
+    } else {
+      console.log("[GMAIL WEBHOOK] SUCCESS: Updated historyId from", lastHistoryId, "to", historyId)
+    }
+
+    console.log("==================================================")
+    console.log("[GMAIL WEBHOOK v744] COMPLETE")
+    console.log("==================================================")
+
     return NextResponse.json({ status: "ok" })
   } catch (error) {
-    console.error("[Gmail Webhook] Error:", error)
+    console.error("[GMAIL WEBHOOK] ERROR:", error)
     // Always return 200 to prevent Pub/Sub retries
     return NextResponse.json({ status: "ok" })
   }
 }
 
-async function syncNewEmails(supabase: any, channel: any, startHistoryId: number, endHistoryId: number) {
+async function syncNewEmails(
+  supabase: any,
+  channel: any,
+  startHistoryId: number,
+  endHistoryId: number,
+): Promise<{ messagesFound: number; messagesInserted: number; conversationsCreated: number; errors: string[] }> {
+  const result = {
+    messagesFound: 0,
+    messagesInserted: 0,
+    conversationsCreated: 0,
+    errors: [] as string[],
+  }
+
   try {
     // Refresh token if needed
     if (channel.oauth_expiry && new Date(channel.oauth_expiry) < new Date()) {
+      console.log("[GMAIL WEBHOOK] Token expired, refreshing...")
       const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/channels/email/oauth/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel_id: channel.id }),
       })
 
-      if (!refreshResponse.ok) return
+      if (!refreshResponse.ok) {
+        result.errors.push("Token refresh failed")
+        return result
+      }
 
       const { data: refreshedChannel } = await supabase
         .from("email_channels")
@@ -94,24 +148,39 @@ async function syncNewEmails(supabase: any, channel: any, startHistoryId: number
         .single()
 
       channel.oauth_access_token = refreshedChannel?.oauth_access_token
+      console.log("[GMAIL WEBHOOK] Token refreshed successfully")
     }
 
     // Get history changes
-    const historyResponse = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/history?startHistoryId=${startHistoryId}&historyTypes=messageAdded`,
-      { headers: { Authorization: `Bearer ${channel.oauth_access_token}` } },
-    )
+    const historyUrl = `https://gmail.googleapis.com/gmail/v1/users/me/history?startHistoryId=${startHistoryId}&historyTypes=messageAdded`
+    console.log("[GMAIL WEBHOOK] Fetching history from:", historyUrl)
+
+    const historyResponse = await fetch(historyUrl, {
+      headers: { Authorization: `Bearer ${channel.oauth_access_token}` },
+    })
 
     if (!historyResponse.ok) {
+      const errorText = await historyResponse.text()
+      console.log("[GMAIL WEBHOOK] History API error:", historyResponse.status, errorText)
+
       if (historyResponse.status === 404) {
-        // History expired - trigger full sync
+        console.log("[GMAIL WEBHOOK] History expired - triggering full sync")
         await triggerFullSync(channel)
+        result.errors.push("History expired, full sync triggered")
       }
-      return
+      return result
     }
 
     const historyData = await historyResponse.json()
-    if (!historyData.history) return
+    console.log("[GMAIL WEBHOOK] History response:", {
+      hasHistory: !!historyData.history,
+      historyCount: historyData.history?.length || 0,
+    })
+
+    if (!historyData.history) {
+      console.log("[GMAIL WEBHOOK] No new history entries")
+      return result
+    }
 
     // Extract new message IDs (deduplicated)
     const newMessageIds = new Set<string>()
@@ -125,34 +194,84 @@ async function syncNewEmails(supabase: any, channel: any, startHistoryId: number
       }
     }
 
+    result.messagesFound = newMessageIds.size
+    console.log("[GMAIL WEBHOOK] New INBOX messages found:", result.messagesFound, Array.from(newMessageIds))
+
+    if (result.messagesFound === 0) {
+      return result
+    }
+
     // Process each message with EmailProcessor
     const processor = new EmailProcessor(supabase)
 
     for (const messageId of newMessageIds) {
-      await fetchAndProcessMessage(processor, supabase, channel, messageId)
+      const msgResult = await fetchAndProcessMessage(processor, supabase, channel, messageId)
+      if (msgResult.success) {
+        result.messagesInserted++
+        if (msgResult.newConversation) {
+          result.conversationsCreated++
+        }
+      } else if (msgResult.error) {
+        result.errors.push(`${messageId}: ${msgResult.error}`)
+      }
     }
+
+    console.log("[GMAIL WEBHOOK] Processing complete:", result)
+    return result
   } catch (error) {
-    console.error("[Gmail Webhook] Sync error:", error)
+    console.error("[GMAIL WEBHOOK] Sync error:", error)
+    result.errors.push(String(error))
+    return result
   }
 }
 
-async function fetchAndProcessMessage(processor: EmailProcessor, supabase: any, channel: any, messageId: string) {
+async function fetchAndProcessMessage(
+  processor: EmailProcessor,
+  supabase: any,
+  channel: any,
+  messageId: string,
+): Promise<{ success: boolean; newConversation?: boolean; error?: string }> {
   try {
-    // Fetch full message from Gmail
+    console.log("[GMAIL WEBHOOK] Fetching message:", messageId)
+
     const msgResponse = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
       { headers: { Authorization: `Bearer ${channel.oauth_access_token}` } },
     )
 
-    if (!msgResponse.ok) return
+    if (!msgResponse.ok) {
+      const errorText = await msgResponse.text()
+      console.log("[GMAIL WEBHOOK] Message fetch failed:", messageId, msgResponse.status, errorText)
+      return { success: false, error: `Fetch failed: ${msgResponse.status}` }
+    }
 
     const msg = await msgResponse.json()
     const email = parseGmailMessage(msg)
 
+    console.log("[GMAIL WEBHOOK] Message parsed:", {
+      id: messageId,
+      from: email.from,
+      subject: email.subject?.substring(0, 50),
+      bodyLength: email.body?.length || 0,
+    })
+
     // Process with centralized processor (handles idempotency, threading, etc.)
-    await processor.processInboundEmail(email, channel.id, channel.property_id)
+    const result = await processor.processInboundEmail(email, channel.id, channel.property_id)
+
+    console.log("[GMAIL WEBHOOK] Message processed:", {
+      id: messageId,
+      success: result.success,
+      isDuplicate: result.isDuplicate,
+      conversationId: result.conversationId,
+    })
+
+    return {
+      success: result.success && !result.isDuplicate,
+      newConversation: result.newConversation,
+    }
   } catch (error) {
-    console.error("[Gmail Webhook] Error processing message:", messageId, error)
+    console.error("[GMAIL WEBHOOK] Error processing message:", messageId, error)
+    return { success: false, error: String(error) }
   }
 }
 
@@ -218,6 +337,7 @@ function parseGmailMessage(msg: any): InboundEmail {
 
 async function triggerFullSync(channel: any) {
   try {
+    console.log("[GMAIL WEBHOOK] Triggering full sync for channel:", channel.id)
     await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/channels/email/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -227,6 +347,6 @@ async function triggerFullSync(channel: any) {
       }),
     })
   } catch (error) {
-    console.error("[Gmail Webhook] Full sync trigger failed:", error)
+    console.error("[GMAIL WEBHOOK] Full sync trigger failed:", error)
   }
 }

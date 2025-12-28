@@ -32,6 +32,7 @@ import {
   ChevronLeft,
   MailOpen,
   Bug,
+  Database,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -146,6 +147,32 @@ interface Message {
   channel?: string
 }
 
+interface SmartDebugInfo {
+  timestamp: string
+  channel: {
+    id: string
+    email: string
+    historyId: string
+    lastSyncAt: string
+    watchExpiration: string
+    watchActive: boolean
+    pushEnabled: boolean
+  } | null
+  database: {
+    messagesCount: number
+    conversationsCount: number
+    lastMessageAt: string | null
+    lastMessageSubject: string | null
+  }
+  recentMessages: Array<{
+    id: string
+    subject: string
+    from: string
+    createdAt: string
+  }>
+  webhookUrl: string
+}
+
 const channelConfig = {
   chat: { icon: MessageCircle, color: "text-green-600 bg-green-100", name: "Chat" },
   whatsapp: { icon: Phone, color: "text-emerald-600 bg-emerald-100", name: "WhatsApp" },
@@ -203,6 +230,7 @@ export default function InboxPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("open")
   const [isLoading, setIsLoading] = useState(true)
+  const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
 
   // ==================== SHARED STATE ====================
   const [replyText, setReplyText] = useState("")
@@ -211,6 +239,8 @@ export default function InboxPage() {
   const [error, setError] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<File[]>([])
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
+  const [showComposeModal, setShowComposeModal] = useState(false)
+  const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" })
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -431,9 +461,10 @@ export default function InboxPage() {
     }
   }
 
-  // ==================== SMART MODE FUNCTIONS (DB-driven, unchanged) ====================
+  // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
   const loadConversations = useCallback(async () => {
+    console.log("[v0] Smart mode: loadConversations from DB")
     try {
       const queryParams = new URLSearchParams()
       if (statusFilter) queryParams.set("status", statusFilter)
@@ -446,12 +477,28 @@ export default function InboxPage() {
 
       const data = await res.json()
       setConversations(data.conversations || [])
+      console.log("[v0] Smart mode: loaded", data.conversations?.length || 0, "conversations from DB")
     } catch (error) {
       console.error("Error loading conversations:", error)
     } finally {
       setIsLoading(false)
     }
   }, [statusFilter, searchQuery])
+
+  // Database is the single source of truth, updated only by webhook
+
+  const loadSmartDebugInfo = useCallback(async () => {
+    try {
+      const res = await fetch("/api/inbox/debug")
+      if (res.ok) {
+        const data = await res.json()
+        setSmartDebugInfo(data)
+        console.log("[v0] Smart debug info loaded:", data)
+      }
+    } catch (error) {
+      console.error("[v0] Error loading smart debug info:", error)
+    }
+  }, [])
 
   const loadMessages = async (conversationId: string, isInitialLoad = false) => {
     try {
@@ -492,16 +539,58 @@ export default function InboxPage() {
     }
   }, [])
 
-  // Smart mode data loading
   useEffect(() => {
     if (inboxMode === "smart" && !authLoading && adminUser) {
+      console.log("[v0] Smart mode: initializing DB-only mode with Realtime")
+
+      // Load conversations from DB
       loadConversations()
-      pollIntervalRef.current = setInterval(loadConversations, 30000)
+
+      // Load debug info
+      loadSmartDebugInfo()
+
+      pollIntervalRef.current = setInterval(() => {
+        console.log("[v0] Smart mode: polling DB for new conversations")
+        loadConversations()
+      }, 30000)
+
+      // Debug info refresh every 60 seconds
+      const debugInterval = setInterval(loadSmartDebugInfo, 60000)
+
+      const supabase = createClient()
+
+      const messagesChannel = supabase
+        .channel("smart-inbox-messages")
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+          console.log("[v0] Realtime: new message INSERT detected:", payload.new)
+          // Reload conversations to show new message
+          loadConversations()
+        })
+        .subscribe((status) => {
+          console.log("[v0] Realtime messages subscription status:", status)
+        })
+
+      const conversationsChannel = supabase
+        .channel("smart-inbox-conversations")
+        .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
+          console.log("[v0] Realtime: conversation change detected:", payload.eventType, payload.new)
+          loadConversations()
+        })
+        .subscribe((status) => {
+          console.log("[v0] Realtime conversations subscription status:", status)
+        })
+
+      return () => {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+        clearInterval(debugInterval)
+        supabase.removeChannel(messagesChannel)
+        supabase.removeChannel(conversationsChannel)
+      }
     }
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     }
-  }, [inboxMode, authLoading, adminUser, loadConversations])
+  }, [inboxMode, authLoading, adminUser, loadConversations, loadSmartDebugInfo])
 
   useEffect(() => {
     if (inboxMode === "smart" && selectedConversationId) {
@@ -668,26 +757,61 @@ export default function InboxPage() {
     return <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 p-4 h-full">{content}</div>
   }
 
-  // Realtime subscription (Smart mode only)
-  useEffect(() => {
-    if (inboxMode !== "smart" || !adminUser) return
+  // Realtime subscription (Smart mode only) - REMOVED as it's handled in the useEffect above
+  // useEffect(() => {
+  //   if (inboxMode !== "smart" || !adminUser) return
 
-    const supabase = createClient()
-    const channel = supabase
-      .channel("inbox-realtime")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
-        loadConversations()
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => {
-        loadConversations()
-      })
-      .subscribe()
+  //   const supabase = createClient()
+  //   const channel = supabase
+  //     .channel("inbox-realtime")
+  //     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, () => {
+  //       loadConversations()
+  //     })
+  //     .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, () => {
+  //       loadConversations()
+  //     })
+  //     .subscribe()
 
-    realtimeChannelRef.current = channel
-    return () => {
-      supabase.removeChannel(channel)
+  //   realtimeChannelRef.current = channel
+  //   return () => {
+  //     supabase.removeChannel(channel)
+  //   }
+  // }, [inboxMode, adminUser, loadConversations])
+
+  const handleComposeEmail = async () => {
+    if (!composeData.to || !composeData.body) {
+      setError("Inserisci destinatario e messaggio")
+      return
     }
-  }, [inboxMode, adminUser, loadConversations])
+
+    setIsSending(true)
+    try {
+      const res = await fetch("/api/gmail/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(composeData),
+      })
+
+      if (res.ok) {
+        setShowComposeModal(false)
+        setComposeData({ to: "", subject: "", body: "" })
+        // Refresh lists
+        if (inboxMode === "gmail") {
+          await loadGmailThreads(gmailLabelId)
+        } else {
+          await loadConversations()
+        }
+      } else {
+        const data = await res.json()
+        setError(data.error || "Errore durante l'invio")
+      }
+    } catch (error) {
+      console.error("Compose error:", error)
+      setError("Errore durante l'invio")
+    } finally {
+      setIsSending(false)
+    }
+  }
 
   if (authLoading) {
     return (
@@ -705,6 +829,61 @@ export default function InboxPage() {
           <p className="text-muted-foreground mb-4">Devi effettuare il login per accedere all'inbox.</p>
           <Button onClick={() => router.push("/admin/login")}>Vai al login</Button>
         </div>
+      </div>
+    )
+  }
+
+  const SmartDebugPanel = () => {
+    if (!showDebugPanel || !smartDebugInfo) return null
+
+    const watchStatus = smartDebugInfo.channel?.watchActive
+    const lastSync = smartDebugInfo.channel?.lastSyncAt
+      ? formatDistanceToNow(new Date(smartDebugInfo.channel.lastSyncAt), { addSuffix: true, locale: it })
+      : "mai"
+
+    return (
+      <div className="absolute top-12 right-4 z-50 bg-gray-900 text-white p-4 rounded-lg shadow-xl text-xs max-w-md">
+        <div className="font-bold mb-2 flex items-center gap-2">
+          <Database className="h-4 w-4" />
+          Smart Mode Debug (DB Source of Truth)
+        </div>
+
+        <div className="space-y-2">
+          <div className="border-b border-gray-700 pb-2">
+            <div className="font-semibold text-yellow-400">Gmail Watch Status</div>
+            <div>Push enabled: {smartDebugInfo.channel?.pushEnabled ? "✅" : "❌"}</div>
+            <div>Watch active: {watchStatus ? "✅" : "❌ EXPIRED"}</div>
+            <div>Watch expires: {smartDebugInfo.channel?.watchExpiration || "N/A"}</div>
+          </div>
+
+          <div className="border-b border-gray-700 pb-2">
+            <div className="font-semibold text-yellow-400">Sync Status</div>
+            <div>Last webhook sync: {lastSync}</div>
+            <div>History ID: {smartDebugInfo.channel?.historyId || "N/A"}</div>
+          </div>
+
+          <div className="border-b border-gray-700 pb-2">
+            <div className="font-semibold text-yellow-400">Database</div>
+            <div>Messages in DB: {smartDebugInfo.database.messagesCount}</div>
+            <div>Conversations: {smartDebugInfo.database.conversationsCount}</div>
+            <div>Last message: {smartDebugInfo.database.lastMessageSubject?.substring(0, 30) || "N/A"}</div>
+          </div>
+
+          <div>
+            <div className="font-semibold text-yellow-400">Recent Messages (DB)</div>
+            {smartDebugInfo.recentMessages.slice(0, 3).map((m, i) => (
+              <div key={i} className="text-gray-400 truncate">
+                {m.subject?.substring(0, 25) || "No subject"} - {m.from?.split("@")[0]}
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-2 text-gray-500">Webhook URL: {smartDebugInfo.webhookUrl}</div>
+        </div>
+
+        <Button size="sm" variant="outline" className="mt-2 w-full text-xs bg-transparent" onClick={loadSmartDebugInfo}>
+          Refresh Debug Info
+        </Button>
       </div>
     )
   }
@@ -791,25 +970,36 @@ export default function InboxPage() {
         // ==================== SMART MODE LAYOUT ====================
         <div className="flex flex-1 min-h-0">
           {/* LEFT SIDEBAR - Conversation List */}
-          <div className="w-80 border-r flex flex-col bg-card min-h-0">
-            <div className="p-4 border-b space-y-3 flex-shrink-0">
+          <div className="w-72 border-r flex flex-col bg-card min-h-0">
+            {" "}
+            {/* Changed width to w-72 */}
+            <div className="p-3 space-y-3 flex-shrink-0">
+              {" "}
+              {/* Changed p-4 to p-3 */}
+              <Button
+                onClick={() => {
+                  setComposeData({ to: "", subject: "", body: "" }) // Clear form on open
+                  setShowComposeModal(true)
+                }}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg h-10 justify-center gap-2"
+              >
+                <Edit3 className="h-4 w-4" />
+                <span className="font-medium">Nuova Email</span>
+              </Button>
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold flex items-center gap-2">
                   <Zap className="h-4 w-4 text-amber-500" />
                   Smart Inbox
                 </h2>
-                <Button variant="ghost" size="icon" onClick={loadConversations}>
-                  <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Cerca conversazioni..."
-                  className="pl-8"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+                {/* Add debug button for Smart Mode */}
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" onClick={() => setShowDebugPanel(!showDebugPanel)}>
+                    <Bug className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={loadConversations}>
+                    <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+                  </Button>
+                </div>
               </div>
               <div className="flex gap-1">
                 {["open", "pending", "starred"].map((filter) => (
@@ -828,6 +1018,7 @@ export default function InboxPage() {
                 ))}
               </div>
             </div>
+            {/* <SmartDebugPanel />  <-- Moved outside the left sidebar, to overlay the whole screen */}
             <div className="flex-1 min-h-0 overflow-y-auto">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
@@ -884,7 +1075,6 @@ export default function InboxPage() {
               )}
             </div>
           </div>
-
           {/* CENTER - Message Panel */}
           <div className="flex-1 flex flex-col min-h-0">
             {selectedConversation ? (
@@ -980,12 +1170,12 @@ export default function InboxPage() {
               </div>
             )}
           </div>
-
           {/* RIGHT SIDEBAR - Demand Calendar */}
           <div className="w-80 border-l bg-card p-4 overflow-y-auto hidden lg:block flex-shrink-0">
             <h3 className="font-semibold mb-4">Calendario Domanda</h3>
             <DemandCalendar />
           </div>
+          <SmartDebugPanel /> {/* Render SmartDebugPanel here */}
         </div>
       ) : (
         // ==================== GMAIL MIRROR LAYOUT (Direct Gmail API - 1:1 parity) ====================
@@ -996,6 +1186,10 @@ export default function InboxPage() {
               <Button
                 className="w-full bg-white hover:bg-gray-100 text-gray-700 border shadow-sm rounded-2xl h-14 justify-start gap-3"
                 variant="outline"
+                onClick={() => {
+                  setComposeData({ to: "", subject: "", body: "" }) // Clear form on open
+                  setShowComposeModal(true)
+                }}
               >
                 <Edit3 className="h-5 w-5" />
                 <span className="font-medium">Scrivi</span>
@@ -1291,7 +1485,7 @@ export default function InboxPage() {
                       <Button
                         onClick={handleSendReply}
                         disabled={!replyText.trim() || isSending}
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                        className="bg-blue-600 hover:bg-blue-700"
                       >
                         {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Invia"}
                       </Button>
@@ -1316,6 +1510,62 @@ export default function InboxPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showComposeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h2 className="font-semibold text-lg">Nuovo messaggio</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowComposeModal(false)}>
+                <span className="sr-only">Chiudi</span>×
+              </Button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">A:</label>
+                <Input
+                  placeholder="email@esempio.com"
+                  value={composeData.to}
+                  onChange={(e) => setComposeData((prev) => ({ ...prev, to: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Oggetto:</label>
+                <Input
+                  placeholder="Oggetto del messaggio"
+                  value={composeData.subject}
+                  onChange={(e) => setComposeData((prev) => ({ ...prev, subject: e.target.value }))}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Messaggio:</label>
+                <Textarea
+                  placeholder="Scrivi il tuo messaggio..."
+                  value={composeData.body}
+                  onChange={(e) => setComposeData((prev) => ({ ...prev, body: e.target.value }))}
+                  className="mt-1 min-h-[200px]"
+                />
+              </div>
+              {error && <div className="text-red-600 text-sm">{error}</div>}
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
+              <Button variant="outline" onClick={() => setShowComposeModal(false)}>
+                Annulla
+              </Button>
+              <Button
+                onClick={handleComposeEmail}
+                disabled={!composeData.to || !composeData.body || isSending}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                Invia
+              </Button>
+            </div>
           </div>
         </div>
       )}
