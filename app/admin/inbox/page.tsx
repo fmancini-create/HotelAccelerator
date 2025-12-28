@@ -299,18 +299,34 @@ export default function InboxPage() {
   )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
+    console.log("[v0] loadGmailThread CALLED with threadId:", threadId)
     setGmailThreadLoading(true)
     setGmailMessages([])
     try {
       const res = await fetch(`/api/gmail/threads/${threadId}`)
+      console.log("[v0] loadGmailThread response status:", res.status)
       if (res.ok) {
         const data = await res.json()
+        console.log("[v0] loadGmailThread FULL RESPONSE:", JSON.stringify(data, null, 2))
+        console.log("[v0] Messages count:", data.messages?.length || 0)
+
+        // Log body info for each message
+        data.messages?.forEach((msg: any, idx: number) => {
+          console.log(
+            `[v0] Message ${idx + 1}: bodyLength=${msg.content?.length || 0}, contentType=${msg.content_type}, source=${msg._debug?.bodySource}`,
+          )
+          if (!msg.content || msg.content.length === 0) {
+            console.error(`[v0] WARNING: Message ${idx + 1} has EMPTY body!`)
+          }
+        })
+
         setGmailMessages(data.messages || [])
       } else {
-        console.error("[Gmail] Error loading thread:", res.status)
+        const errorBody = await res.text()
+        console.error("[v0] loadGmailThread error:", res.status, errorBody)
       }
     } catch (error) {
-      console.error("[Gmail] Error loading thread:", error)
+      console.error("[v0] loadGmailThread exception:", error)
     } finally {
       setGmailThreadLoading(false)
     }
@@ -602,25 +618,58 @@ export default function InboxPage() {
   }
 
   // Email content renderer
-  const renderEmailContent = (content: string) => {
-    const isHtml = /<[a-z][\s\S]*>/i.test(content)
+  const renderEmailContent = (content: string, contentType?: string) => {
+    console.log("[v0] renderEmailContent called:", { contentLength: content?.length || 0, contentType })
+
+    // Handle empty content
+    if (!content || content.length === 0) {
+      return (
+        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+          <strong>Errore:</strong> Contenuto email vuoto
+        </div>
+      )
+    }
+
+    const isHtml = contentType === "text/html" || /<[a-z][\s\S]*>/i.test(content)
+    console.log("[v0] renderEmailContent isHtml:", isHtml)
+
     if (isHtml) {
       return (
         <iframe
-          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Roboto,Arial,sans-serif;font-size:14px;line-height:1.5;color:#222;margin:0;padding:0;}img{max-width:100%;}a{color:#1a73e8;}blockquote{border-left:1px solid #ccc;margin:0;padding-left:1ex;}</style></head><body>${content}</body></html>`}
+          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              font-size: 14px;
+              line-height: 1.6;
+              color: #1f2937;
+              margin: 0;
+              padding: 16px;
+              word-wrap: break-word;
+            }
+            img { max-width: 100%; height: auto; }
+            a { color: #2563eb; }
+            blockquote { border-left: 3px solid #d1d5db; margin: 1em 0; padding-left: 1em; color: #6b7280; }
+            pre, code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-size: 13px; }
+            table { border-collapse: collapse; max-width: 100%; }
+            td, th { padding: 8px; border: 1px solid #e5e7eb; }
+          </style></head><body>${content}</body></html>`}
           className="w-full border-0"
-          style={{ minHeight: "200px" }}
+          style={{ minHeight: "300px", height: "auto" }}
           onLoad={(e) => {
             const iframe = e.target as HTMLIFrameElement
             if (iframe.contentWindow?.document.body) {
-              iframe.style.height = iframe.contentWindow.document.body.scrollHeight + "px"
+              const height = iframe.contentWindow.document.body.scrollHeight
+              iframe.style.height = Math.max(height + 32, 300) + "px"
+              console.log("[v0] iframe height set to:", iframe.style.height)
             }
           }}
-          sandbox="allow-same-origin"
+          sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         />
       )
     }
-    return <div className="text-sm whitespace-pre-wrap">{content}</div>
+
+    // Plain text
+    return <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 p-4">{content}</div>
   }
 
   // Realtime subscription (Smart mode only)
@@ -1112,14 +1161,21 @@ export default function InboxPage() {
           <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
             {selectedGmailThread ? (
               <>
-                <div className="p-4 border-b border-gray-200">
+                <div className="p-4 border-b border-gray-200 flex-shrink-0">
                   <h1 className="text-xl font-normal text-gray-900">{selectedGmailThread.subject}</h1>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto min-h-0">
                   {gmailThreadLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                    </div>
+                  ) : gmailMessages.length === 0 ? (
+                    <div className="flex items-center justify-center py-12 text-gray-500">
+                      <div className="text-center">
+                        <AlertCircle className="h-8 w-8 mx-auto mb-2 text-amber-500" />
+                        <p>Nessun messaggio trovato nel thread</p>
+                      </div>
                     </div>
                   ) : (
                     gmailMessages.map((message) => (
@@ -1202,13 +1258,15 @@ export default function InboxPage() {
                             </DropdownMenu>
                           </div>
                         </div>
-                        <div className="px-4 pb-4 pl-16">{renderEmailContent(message.content)}</div>
+                        <div className="px-4 pb-4 pl-16">
+                          {renderEmailContent(message.content, message.content_type)}
+                        </div>
                       </div>
                     ))
                   )}
                 </div>
 
-                <div className="border-t border-gray-200 p-4 bg-gray-50">
+                <div className="border-t border-gray-200 p-4 bg-gray-50 flex-shrink-0">
                   <div className="bg-white rounded-lg border border-gray-300 shadow-sm">
                     <div className="p-3">
                       <Textarea
@@ -1216,6 +1274,9 @@ export default function InboxPage() {
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
                         className="min-h-[60px] border-0 p-0 focus-visible:ring-0 resize-none"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
+                        }}
                       />
                     </div>
                     <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
