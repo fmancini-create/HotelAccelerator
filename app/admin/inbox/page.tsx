@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Clock,
   Zap,
+  Settings,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -165,12 +166,10 @@ export default function InboxPage() {
       const queryParams = new URLSearchParams()
 
       if (inboxMode === "smart") {
-        // Smart mode: filter by status, show only actionable items
         if (statusFilter) queryParams.set("status", statusFilter)
-        queryParams.set("channel", "email") // Only email for now
+        queryParams.set("channel", "email")
         queryParams.set("mode", "smart")
       } else {
-        // Gmail mode: filter by Gmail label
         queryParams.set("gmail_label", gmailLabel)
         queryParams.set("channel", "email")
         queryParams.set("mode", "gmail")
@@ -498,6 +497,10 @@ export default function InboxPage() {
                     color: #0066cc;
                     word-break: break-all;
                   }
+                  pre, code {
+                    white-space: pre-wrap;
+                    word-wrap: break-word;
+                  }
                   table {
                     max-width: 100% !important;
                     width: 100% !important;
@@ -629,8 +632,9 @@ export default function InboxPage() {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button variant="outline" size="sm" onClick={() => router.push("/admin/inbox/settings")}>
-              Gestisci le conversazioni
+            <Button variant="outline" size="sm" onClick={() => router.push("/admin/channels/email")}>
+              <Settings className="h-4 w-4 mr-2" />
+              Impostazioni Email
             </Button>
           </div>
         }
@@ -639,7 +643,7 @@ export default function InboxPage() {
       {inboxMode === "smart" && <EmailKpiBar />}
 
       <div className="flex h-[calc(100vh-140px)]">
-        {/* Conversation List */}
+        {/* Sidebar - Conversation List */}
         <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
           <div className="p-4 border-b space-y-3 flex-shrink-0">
             <div className="flex items-center justify-between">
@@ -672,7 +676,6 @@ export default function InboxPage() {
             </div>
 
             {inboxMode === "smart" ? (
-              // Smart mode: status filters
               <div className="flex gap-1">
                 <Button
                   variant={statusFilter === "open" ? "default" : "outline"}
@@ -703,20 +706,20 @@ export default function InboxPage() {
                 </Button>
               </div>
             ) : (
-              // Gmail mode: Gmail folders/labels
-              <div className="space-y-1">
+              /* Gmail labels as horizontal scrollable chips instead of vertical list */
+              <div className="flex flex-wrap gap-1">
                 {(Object.keys(gmailLabelsConfig) as GmailLabel[]).map((label) => {
                   const config = gmailLabelsConfig[label]
                   const Icon = config.icon
                   return (
                     <Button
                       key={label}
-                      variant={gmailLabel === label ? "default" : "ghost"}
+                      variant={gmailLabel === label ? "default" : "outline"}
                       size="sm"
                       onClick={() => setGmailLabel(label)}
-                      className="w-full justify-start"
+                      className="text-xs"
                     >
-                      <Icon className="h-4 w-4 mr-2" />
+                      <Icon className="h-3 w-3 mr-1" />
                       {config.label}
                     </Button>
                   )
@@ -725,6 +728,7 @@ export default function InboxPage() {
             )}
           </div>
 
+          {/* Conversation list */}
           <div className="flex-1 overflow-y-auto">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
@@ -807,7 +811,6 @@ export default function InboxPage() {
           </div>
         </div>
 
-        {/* Message Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedConversation ? (
             <>
@@ -864,7 +867,7 @@ export default function InboxPage() {
                 )}
               </div>
 
-              <div ref={messagesEndRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {Array.from(new Map(messages.map((m) => [m.id, m])).values()).map((message) => (
                   <div
                     key={message.id}
@@ -948,9 +951,10 @@ export default function InboxPage() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            className="h-5 w-5"
                             onClick={() => setAttachments(attachments.filter((_, i) => i !== index))}
                           >
-                            <X className="h-4 w-4" />
+                            <X className="h-3 w-3" />
                           </Button>
                         </div>
                       ))}
@@ -962,27 +966,17 @@ export default function InboxPage() {
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
-                {inboxMode === "smart" ? (
-                  <>
-                    <Zap className="h-12 w-12 mx-auto mb-4 opacity-50 text-amber-500" />
-                    <p className="font-medium">Smart Inbox</p>
-                    <p className="text-sm">Seleziona una conversazione da gestire</p>
-                  </>
-                ) : (
-                  <>
-                    <Mail className="h-12 w-12 mx-auto mb-4 opacity-50 text-blue-500" />
-                    <p className="font-medium">Gmail Mirror</p>
-                    <p className="text-sm">Seleziona un thread per visualizzarlo</p>
-                  </>
-                )}
+                <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Seleziona una conversazione per visualizzare i messaggi</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Sidebar - Only in Smart mode */}
+        {/* Right Sidebar - only in Smart mode */}
         {inboxMode === "smart" && (
-          <div className="w-80 border-l bg-card overflow-y-auto flex-shrink-0">
+          <div className="w-80 border-l bg-card p-4 overflow-y-auto hidden lg:block">
+            <h3 className="font-semibold mb-4">Calendario Domanda</h3>
             <DemandCalendar />
           </div>
         )}
