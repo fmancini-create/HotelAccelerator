@@ -626,8 +626,6 @@ export default function InboxPage() {
 
   // Email content renderer
   const renderEmailContent = (content: string, contentType?: string) => {
-    console.log("[v0] renderEmailContent called:", { contentLength: content?.length || 0, contentType })
-
     // Handle empty content
     if (!content || content.length === 0) {
       return (
@@ -638,7 +636,6 @@ export default function InboxPage() {
     }
 
     const isHtml = contentType === "text/html" || /<[a-z][\s\S]*>/i.test(content)
-    console.log("[v0] renderEmailContent isHtml:", isHtml)
 
     if (isHtml) {
       return (
@@ -661,24 +658,14 @@ export default function InboxPage() {
             table { border-collapse: collapse; max-width: 100%; }
             td, th { padding: 8px; border: 1px solid #e5e7eb; }
           </style></head><body>${content}</body></html>`}
-          className="w-full border-0 block"
-          style={{ minHeight: "400px", height: "600px" }}
-          onLoad={(e) => {
-            const iframe = e.target as HTMLIFrameElement
-            if (iframe.contentWindow?.document.body) {
-              const height = iframe.contentWindow.document.body.scrollHeight
-              const finalHeight = Math.min(Math.max(height + 40, 400), 800)
-              iframe.style.height = finalHeight + "px"
-              console.log("[v0] iframe height set to:", finalHeight)
-            }
-          }}
+          className="w-full h-full min-h-full border-0 block"
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
         />
       )
     }
 
     // Plain text
-    return <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 p-4">{content}</div>
+    return <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 p-4 h-full">{content}</div>
   }
 
   // Realtime subscription (Smart mode only)
@@ -802,8 +789,9 @@ export default function InboxPage() {
 
       {inboxMode === "smart" ? (
         // ==================== SMART MODE LAYOUT ====================
-        <div className="flex h-[calc(100vh-140px)]">
-          <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
+        <div className="flex flex-1 min-h-0">
+          {/* LEFT SIDEBAR - Conversation List */}
+          <div className="w-80 border-r flex flex-col bg-card min-h-0">
             <div className="p-4 border-b space-y-3 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold flex items-center gap-2">
@@ -840,7 +828,7 @@ export default function InboxPage() {
                 ))}
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -897,9 +885,11 @@ export default function InboxPage() {
             </div>
           </div>
 
-          <div className="flex-1 flex flex-col overflow-hidden">
+          {/* CENTER - Message Panel */}
+          <div className="flex-1 flex flex-col min-h-0">
             {selectedConversation ? (
               <>
+                {/* Header - fixed */}
                 <div className="flex-shrink-0 p-4 border-b bg-card">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -919,32 +909,40 @@ export default function InboxPage() {
                     <div className="mt-2 text-sm font-medium">Oggetto: {selectedConversation.subject}</div>
                   )}
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  {messages.map((message) => (
-                    <div
-                      key={message.id}
-                      className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
-                    >
+
+                {/* Messages area - flex-1 with min-h-0 for proper scrolling */}
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <div className="h-full overflow-y-auto p-4 space-y-4">
+                    {messages.map((message) => (
                       <div
-                        className={`rounded-lg ${message.sender_type === "agent" ? "max-w-[80%] bg-primary text-primary-foreground p-3" : "w-full bg-muted p-0"}`}
+                        key={message.id}
+                        className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
                       >
                         {message.sender_type === "agent" ? (
-                          <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                          <div className="max-w-[80%] bg-primary text-primary-foreground p-3 rounded-lg">
+                            <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                            <div className="text-xs mt-1 text-primary-foreground/70">
+                              {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
+                            </div>
+                          </div>
                         ) : (
-                          <div className="bg-white rounded-lg overflow-hidden">
-                            {renderEmailContent(message.content)}
+                          /* Customer email now uses flex container with proper height */
+                          <div className="w-full flex flex-col min-h-0" style={{ maxHeight: "60vh" }}>
+                            <div className="flex-1 min-h-0 overflow-hidden bg-white rounded-lg border">
+                              {renderEmailContent(message.content)}
+                            </div>
+                            <div className="text-xs mt-1 text-muted-foreground">
+                              {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
+                            </div>
                           </div>
                         )}
-                        <div
-                          className={`text-xs mt-1 ${message.sender_type === "agent" ? "text-primary-foreground/70" : "text-muted-foreground px-3 pb-2"}`}
-                        >
-                          {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
-                        </div>
                       </div>
-                    </div>
-                  ))}
-                  <div ref={messagesEndRef} />
+                    ))}
+                    <div ref={messagesEndRef} />
+                  </div>
                 </div>
+
+                {/* Reply area - fixed */}
                 <div className="flex-shrink-0 p-4 border-t bg-card">
                   <div className="flex gap-2 mb-2">
                     <Select value={replyChannel} onValueChange={setReplyChannel}>
@@ -983,7 +981,8 @@ export default function InboxPage() {
             )}
           </div>
 
-          <div className="w-80 border-l bg-card p-4 overflow-y-auto hidden lg:block">
+          {/* RIGHT SIDEBAR - Demand Calendar */}
+          <div className="w-80 border-l bg-card p-4 overflow-y-auto hidden lg:block flex-shrink-0">
             <h3 className="font-semibold mb-4">Calendario Domanda</h3>
             <DemandCalendar />
           </div>
