@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxReadService } from "@/lib/platform-services"
-import type { ConversationListOptions } from "@/lib/types/inbox-read.types"
+import type { ConversationListOptions, GmailLabel } from "@/lib/types/inbox-read.types"
 import { handleServiceError } from "@/lib/errors"
 
 export async function GET(request: NextRequest) {
@@ -17,6 +17,9 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
 
+    const mode = (searchParams.get("mode") as "smart" | "gmail") || "smart"
+    const gmailLabel = searchParams.get("gmail_label") as GmailLabel | null
+
     const options: ConversationListOptions = {
       status: (searchParams.get("status") as any) || "open",
       channel: (searchParams.get("channel") as any) || undefined,
@@ -24,6 +27,8 @@ export async function GET(request: NextRequest) {
       offset: Number.parseInt(searchParams.get("offset") || "0"),
       search: searchParams.get("search") || undefined,
       filter: (searchParams.get("filter") as any) || undefined,
+      mode,
+      gmail_label: gmailLabel || undefined,
     }
 
     console.log("[v0] Inbox options:", options)
@@ -92,6 +97,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ conversation })
   } catch (error) {
+    console.error("[v0] Inbox conversations POST error:", error)
     const { status, json } = handleServiceError(error)
     return NextResponse.json(json, { status })
   }

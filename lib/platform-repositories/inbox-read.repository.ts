@@ -19,7 +19,6 @@ function handleSupabaseError(error: any): never {
       throw new RateLimitError()
     }
   }
-  // Check if error is a string containing rate limit message
   if (typeof error === "string" && error.toLowerCase().includes("too many")) {
     throw new RateLimitError()
   }
@@ -30,7 +29,7 @@ export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, limit = 50, offset = 0, search } = options
+    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label } = options
 
     let query = this.supabase
       .from("conversations")
@@ -46,16 +45,49 @@ export class InboxReadRepository {
         unread_count,
         booking_data,
         metadata,
+        gmail_thread_id,
+        gmail_labels,
         contact:contacts!inner(id, email, name, phone),
         assigned:admin_users(id, name, email)
       `,
       )
       .eq("property_id", propertyId)
-      .order("last_message_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
-    if (status !== "all") {
-      query = query.eq("status", status)
+    if (mode === "gmail") {
+      // Gmail Mirror mode: filter by Gmail labels
+      query = query.eq("channel", "email")
+
+      if (gmail_label && gmail_label !== "ALL") {
+        if (gmail_label === "STARRED") {
+          query = query.eq("is_starred", true)
+        } else if (gmail_label === "INBOX") {
+          // INBOX = has INBOX label or no specific sent/draft/spam/trash status
+          query = query.contains("gmail_labels", ["INBOX"])
+        } else if (gmail_label === "SENT") {
+          query = query.contains("gmail_labels", ["SENT"])
+        } else if (gmail_label === "DRAFT") {
+          query = query.contains("gmail_labels", ["DRAFT"])
+        } else if (gmail_label === "SPAM") {
+          query = query.or("status.eq.spam,gmail_labels.cs.{SPAM}")
+        } else if (gmail_label === "TRASH") {
+          query = query.contains("gmail_labels", ["TRASH"])
+        }
+      }
+
+      // Gmail mode: order by last_message_at (mirroring Gmail's threading)
+      query = query.order("last_message_at", { ascending: false })
+    } else {
+      // Smart mode: filter by status and prioritize actionable items
+      if (status === "starred") {
+        query = query.eq("is_starred", true)
+      } else if (status !== "all") {
+        query = query.eq("status", status)
+      }
+
+      // Smart mode: order by priority (unread first, then by date)
+      query = query.order("unread_count", { ascending: false })
+      query = query.order("last_message_at", { ascending: false })
     }
 
     if (channel && channel !== "all") {
@@ -105,6 +137,8 @@ export class InboxReadRepository {
       last_message: lastMessageMap.get(conv.id) || null,
       intelligence_summary: conv.metadata?.intelligence_summary || null,
       booking_data: conv.booking_data || null,
+      gmail_thread_id: conv.gmail_thread_id || null,
+      gmail_labels: conv.gmail_labels || null,
     })) as ConversationListItem[]
   }
 
@@ -124,6 +158,8 @@ export class InboxReadRepository {
         unread_count,
         metadata,
         booking_data,
+        gmail_thread_id,
+        gmail_labels,
         contact:contacts(id, email, name, phone),
         assigned:admin_users(id, name, email)
       `,
@@ -137,9 +173,10 @@ export class InboxReadRepository {
 
     const { data: messages, error: msgError } = await this.supabase
       .from("messages")
-      .select("id, content, sender_type, sender_id, created_at, metadata")
+      .select("id, content, sender_type, sender_id, created_at, metadata, gmail_id, received_at, status")
       .eq("conversation_id", conversationId)
       .eq("property_id", propertyId)
+      .order("received_at", { ascending: true, nullsFirst: false })
       .order("created_at", { ascending: true })
 
     if (msgError) handleSupabaseError(msgError)
@@ -151,6 +188,8 @@ export class InboxReadRepository {
       assigned: Array.isArray(conversation.assigned) ? conversation.assigned[0] : conversation.assigned,
       messages: (messages || []) as MessageItem[],
       priority: "normal",
+      gmail_thread_id: conversation.gmail_thread_id || null,
+      gmail_labels: conversation.gmail_labels || null,
     } as ConversationDetail
   }
 

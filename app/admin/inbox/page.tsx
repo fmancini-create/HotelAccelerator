@@ -15,13 +15,16 @@ import {
   Archive,
   Trash2,
   RefreshCw,
-  Tag,
   Inbox,
   Users,
   Loader2,
   MoreVertical,
   Paperclip,
   X,
+  FileText,
+  AlertCircle,
+  Clock,
+  Zap,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -40,6 +43,12 @@ import { DemandCalendar } from "@/components/admin/demand-calendar"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { formatDistanceToNow } from "date-fns"
 import { it } from "date-fns/locale"
+import { EmailKpiBar } from "@/components/admin/email-kpi-bar"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+type InboxMode = "smart" | "gmail"
+
+type GmailLabel = "INBOX" | "SENT" | "DRAFT" | "SPAM" | "TRASH" | "STARRED" | "ALL"
 
 interface Contact {
   id: string
@@ -63,6 +72,8 @@ interface Conversation {
     sender_type: string
     created_at: string
   } | null
+  gmail_thread_id?: string
+  gmail_labels?: string[]
 }
 
 interface Message {
@@ -76,6 +87,8 @@ interface Message {
   status?: "received" | "read" | "replied"
   attachments: any[]
   channel?: string
+  gmail_id?: string
+  gmail_internal_date?: string
 }
 
 const channelConfig = {
@@ -92,9 +105,22 @@ const statusConfig = {
   spam: { label: "Spam", color: "bg-red-100 text-red-700" },
 }
 
+const gmailLabelsConfig: Record<GmailLabel, { label: string; icon: React.ElementType }> = {
+  INBOX: { label: "Posta in arrivo", icon: Inbox },
+  SENT: { label: "Posta inviata", icon: Send },
+  DRAFT: { label: "Bozze", icon: FileText },
+  SPAM: { label: "Spam", icon: AlertCircle },
+  TRASH: { label: "Cestino", icon: Trash2 },
+  STARRED: { label: "Speciali", icon: Star },
+  ALL: { label: "Tutti i messaggi", icon: Mail },
+}
+
 export default function InboxPage() {
   const router = useRouter()
   const { adminUser, isLoading: authLoading } = useAdminAuth()
+
+  const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
+  const [gmailLabel, setGmailLabel] = useState<GmailLabel>("INBOX")
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
@@ -121,6 +147,10 @@ export default function InboxPage() {
   const selectedConversationIdRef = useRef<string | null>(null)
   const hasScrolledRef = useRef(false)
 
+  useEffect(() => {
+    selectedConversationIdRef.current = selectedConversationId
+  }, [selectedConversationId])
+
   const scrollToBottom = (force = false) => {
     if (messagesEndRef.current && (force || !hasScrolledRef.current)) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
@@ -133,7 +163,19 @@ export default function InboxPage() {
 
     try {
       const queryParams = new URLSearchParams()
-      if (statusFilter) queryParams.set("status", statusFilter)
+
+      if (inboxMode === "smart") {
+        // Smart mode: filter by status, show only actionable items
+        if (statusFilter) queryParams.set("status", statusFilter)
+        queryParams.set("channel", "email") // Only email for now
+        queryParams.set("mode", "smart")
+      } else {
+        // Gmail mode: filter by Gmail label
+        queryParams.set("gmail_label", gmailLabel)
+        queryParams.set("channel", "email")
+        queryParams.set("mode", "gmail")
+      }
+
       if (searchQuery) queryParams.set("search", searchQuery)
 
       const res = await fetch(`/api/inbox/conversations?${queryParams}`)
@@ -167,7 +209,7 @@ export default function InboxPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter, searchQuery])
+  }, [statusFilter, searchQuery, inboxMode, gmailLabel])
 
   const loadMessages = async (conversationId: string, isInitialLoad = false) => {
     if (isPausedRef.current) return
@@ -193,7 +235,17 @@ export default function InboxPage() {
       const data = await res.json()
 
       if (data.messages) {
-        setMessages(data.messages)
+        const sortedMessages = [...data.messages].sort((a, b) => {
+          if (inboxMode === "gmail") {
+            const dateA = a.gmail_internal_date || a.received_at || a.created_at
+            const dateB = b.gmail_internal_date || b.received_at || b.created_at
+            return new Date(dateA).getTime() - new Date(dateB).getTime()
+          }
+          const dateA = a.received_at || a.created_at
+          const dateB = b.received_at || b.created_at
+          return new Date(dateA).getTime() - new Date(dateB).getTime()
+        })
+        setMessages(sortedMessages)
         setRateLimitError(false)
         if (isInitialLoad) {
           setTimeout(() => scrollToBottom(true), 100)
@@ -209,7 +261,6 @@ export default function InboxPage() {
   }
 
   const markMessagesAsRead = useCallback(async (messageIds: string[], conversationId: string) => {
-    // Filter out already marked messages
     const newIds = messageIds.filter((id) => !markedAsReadRef.current.has(id))
     if (newIds.length === 0) return
 
@@ -224,12 +275,19 @@ export default function InboxPage() {
         console.error("Error marking messages as read:", res.status)
         return
       }
-      // Mark as processed locally
       newIds.forEach((id) => markedAsReadRef.current.add(id))
     } catch (error) {
       console.error("Error marking messages as read:", error)
     }
   }, [])
+
+  useEffect(() => {
+    setSelectedConversation(null)
+    setSelectedConversationId(null)
+    setMessages([])
+    setIsLoading(true)
+    loadConversations()
+  }, [inboxMode, gmailLabel])
 
   useEffect(() => {
     if (!authLoading && adminUser) {
@@ -278,7 +336,6 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (messages.length > 0 && selectedConversationId) {
-      // Get customer messages with status 'received'
       const receivedCustomerMessages = messages
         .filter((m) => m.sender_type === "customer" && m.status === "received")
         .map((m) => m.id)
@@ -355,27 +412,13 @@ export default function InboxPage() {
   }
 
   const handleSendReply = async () => {
-    console.log("[v0] handleSendReply called", {
-      replyText,
-      replyTextLength: replyText?.length,
-      selectedConversation: selectedConversation?.id,
-      selectedConversationId,
-    })
-
     if (!replyText.trim() || !selectedConversation) {
-      console.log("[v0] Send blocked - missing text or conversation", {
-        hasText: !!replyText.trim(),
-        textValue: replyText,
-        hasConversation: !!selectedConversation,
-        conversationId: selectedConversation?.id,
-      })
       return
     }
 
     setIsSending(true)
     try {
       const url = `/api/inbox/${selectedConversation.id}/send`
-      console.log("[v0] Sending reply to:", url)
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -386,9 +429,7 @@ export default function InboxPage() {
         }),
       })
 
-      console.log("[v0] Send response status:", res.status)
       const responseData = await res.json().catch(() => ({}))
-      console.log("[v0] Send response data:", responseData)
 
       if (res.ok) {
         setReplyText("")
@@ -507,7 +548,6 @@ export default function InboxPage() {
 
     const supabase = createClient()
 
-    // Subscribe to new messages and conversation updates
     const channel = supabase
       .channel("inbox-realtime")
       .on(
@@ -518,10 +558,7 @@ export default function InboxPage() {
           table: "messages",
         },
         (payload) => {
-          console.log("[v0] Realtime: New message received", payload)
-          // Reload conversations to update last message and unread count
           loadConversations()
-          // If this message is for the selected conversation, reload messages
           if (payload.new && payload.new.conversation_id === selectedConversationIdRef.current) {
             loadMessages(selectedConversationIdRef.current, false)
           }
@@ -534,14 +571,11 @@ export default function InboxPage() {
           schema: "public",
           table: "conversations",
         },
-        (payload) => {
-          console.log("[v0] Realtime: Conversation updated", payload)
+        () => {
           loadConversations()
         },
       )
-      .subscribe((status) => {
-        console.log("[v0] Realtime subscription status:", status)
-      })
+      .subscribe()
 
     realtimeChannelRef.current = channel
 
@@ -574,39 +608,53 @@ export default function InboxPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      <AdminHeader title="Inbox" subtitle="Gestisci le conversazioni" />
+    <div className="min-h-screen bg-background">
+      <AdminHeader
+        title="Inbox"
+        breadcrumbs={[
+          { label: "Dashboard", href: "/admin" },
+          { label: "Inbox", href: "/admin/inbox" },
+        ]}
+        actions={
+          <div className="flex items-center gap-4">
+            <Tabs value={inboxMode} onValueChange={(v) => setInboxMode(v as InboxMode)}>
+              <TabsList>
+                <TabsTrigger value="smart" className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Smart
+                </TabsTrigger>
+                <TabsTrigger value="gmail" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  Gmail
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button variant="outline" size="sm" onClick={() => router.push("/admin/inbox/settings")}>
+              Gestisci le conversazioni
+            </Button>
+          </div>
+        }
+      />
 
-      {rateLimitError && (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-2 text-sm text-yellow-800">
-          Troppe richieste. Riprovo tra qualche secondo...
-        </div>
-      )}
+      {inboxMode === "smart" && <EmailKpiBar />}
 
-      {error && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-sm text-red-800 flex items-center justify-between">
-          <span>{error}</span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setError(null)
-              loadConversations()
-            }}
-          >
-            Riprova
-          </Button>
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex h-[calc(100vh-140px)]">
         {/* Conversation List */}
         <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
           <div className="p-4 border-b space-y-3 flex-shrink-0">
             <div className="flex items-center justify-between">
               <h2 className="font-semibold flex items-center gap-2">
-                <Inbox className="h-4 w-4" />
-                Inbox Operativa
+                {inboxMode === "smart" ? (
+                  <>
+                    <Zap className="h-4 w-4 text-amber-500" />
+                    Smart Inbox
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-4 w-4 text-blue-500" />
+                    Gmail Mirror
+                  </>
+                )}
               </h2>
               <Button variant="ghost" size="icon" onClick={loadConversations} disabled={rateLimitError}>
                 <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
@@ -623,35 +671,58 @@ export default function InboxPage() {
               />
             </div>
 
-            <div className="flex gap-1">
-              <Button
-                variant={statusFilter === "open" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("open")}
-                className="flex-1"
-              >
-                <MessageCircle className="h-3 w-3 mr-1" />
-                Tutte
-              </Button>
-              <Button
-                variant={statusFilter === "pending" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("pending")}
-                className="flex-1"
-              >
-                <Tag className="h-3 w-3 mr-1" />
-                Da fare
-              </Button>
-              <Button
-                variant={statusFilter === "starred" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setStatusFilter("starred")}
-                className="flex-1"
-              >
-                <Star className="h-3 w-3 mr-1" />
-                Urgenti
-              </Button>
-            </div>
+            {inboxMode === "smart" ? (
+              // Smart mode: status filters
+              <div className="flex gap-1">
+                <Button
+                  variant={statusFilter === "open" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("open")}
+                  className="flex-1"
+                >
+                  <Clock className="h-3 w-3 mr-1" />
+                  Da fare
+                </Button>
+                <Button
+                  variant={statusFilter === "pending" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("pending")}
+                  className="flex-1"
+                >
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  Urgenti
+                </Button>
+                <Button
+                  variant={statusFilter === "starred" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter("starred")}
+                  className="flex-1"
+                >
+                  <Star className="h-3 w-3 mr-1" />
+                  Speciali
+                </Button>
+              </div>
+            ) : (
+              // Gmail mode: Gmail folders/labels
+              <div className="space-y-1">
+                {(Object.keys(gmailLabelsConfig) as GmailLabel[]).map((label) => {
+                  const config = gmailLabelsConfig[label]
+                  const Icon = config.icon
+                  return (
+                    <Button
+                      key={label}
+                      variant={gmailLabel === label ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setGmailLabel(label)}
+                      className="w-full justify-start"
+                    >
+                      <Icon className="h-4 w-4 mr-2" />
+                      {config.label}
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto">
@@ -662,7 +733,7 @@ export default function InboxPage() {
             ) : filteredConversations.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Inbox className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Nessuna conversazione</p>
+                <p className="text-sm">{inboxMode === "smart" ? "Nessun messaggio da gestire" : "Nessun messaggio"}</p>
               </div>
             ) : (
               filteredConversations.map((conv) => (
@@ -678,7 +749,7 @@ export default function InboxPage() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-medium text-sm truncate">
+                        <span className={`font-medium text-sm truncate ${conv.unread_count > 0 ? "font-bold" : ""}`}>
                           {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
                         </span>
                         <span className="text-xs text-muted-foreground flex-shrink-0">
@@ -703,6 +774,15 @@ export default function InboxPage() {
                         {conv.unread_count > 0 && (
                           <Badge variant="default" className="h-4 px-1 text-xs">
                             {conv.unread_count}
+                          </Badge>
+                        )}
+
+                        {inboxMode === "smart" && conv.status && (
+                          <Badge
+                            variant="outline"
+                            className={`h-4 px-1 text-xs ${statusConfig[conv.status]?.color || ""}`}
+                          >
+                            {statusConfig[conv.status]?.label}
                           </Badge>
                         )}
 
@@ -836,24 +916,17 @@ export default function InboxPage() {
                   <Textarea
                     placeholder="Scrivi una risposta..."
                     value={replyText}
-                    onChange={(e) => {
-                      console.log("[v0] replyText changed:", e.target.value)
-                      setReplyText(e.target.value)
-                    }}
+                    onChange={(e) => setReplyText(e.target.value)}
                     className="min-h-[80px]"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                        console.log("[v0] Ctrl+Enter pressed")
                         handleSendReply()
                       }
                     }}
                   />
                   <Button
                     type="button"
-                    onClick={() => {
-                      console.log("[v0] Send button clicked directly")
-                      handleSendReply()
-                    }}
+                    onClick={handleSendReply}
                     disabled={!replyText.trim() || isSending}
                     className="self-end"
                   >
@@ -889,17 +962,30 @@ export default function InboxPage() {
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Seleziona una conversazione</p>
+                {inboxMode === "smart" ? (
+                  <>
+                    <Zap className="h-12 w-12 mx-auto mb-4 opacity-50 text-amber-500" />
+                    <p className="font-medium">Smart Inbox</p>
+                    <p className="text-sm">Seleziona una conversazione da gestire</p>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="h-12 w-12 mx-auto mb-4 opacity-50 text-blue-500" />
+                    <p className="font-medium">Gmail Mirror</p>
+                    <p className="text-sm">Seleziona un thread per visualizzarlo</p>
+                  </>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Sidebar - Demand Calendar */}
-        <div className="w-80 border-l bg-card overflow-y-auto flex-shrink-0">
-          <DemandCalendar />
-        </div>
+        {/* Right Sidebar - Only in Smart mode */}
+        {inboxMode === "smart" && (
+          <div className="w-80 border-l bg-card overflow-y-auto flex-shrink-0">
+            <DemandCalendar />
+          </div>
+        )}
       </div>
     </div>
   )

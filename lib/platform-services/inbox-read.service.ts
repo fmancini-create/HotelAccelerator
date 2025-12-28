@@ -12,10 +12,14 @@ export class InboxReadService {
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
     let conversations = await this.repository.listConversations(propertyId, options)
-    if (options.filter) {
-      conversations = this.applyComplexFilter(conversations, options.filter)
+
+    if (options.mode !== "gmail") {
+      if (options.filter) {
+        conversations = this.applyComplexFilter(conversations, options.filter)
+      }
+      conversations = this.sortByPriority(conversations)
     }
-    conversations = this.sortByPriority(conversations)
+
     return conversations
   }
 

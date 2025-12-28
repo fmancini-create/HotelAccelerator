@@ -72,6 +72,9 @@ export interface ConversationListItem {
     guests_adults?: number
     outcome?: string
   } | null
+
+  gmail_thread_id?: string | null
+  gmail_labels?: string[] | null
 }
 
 // Detail item - full data for selected conversation
@@ -82,6 +85,10 @@ export interface MessageItem {
   sender_id: string | null
   created_at: string
   metadata: Record<string, unknown>
+  gmail_id?: string | null
+  gmail_internal_date?: string | null
+  received_at?: string | null
+  status?: "received" | "read" | "replied"
 }
 
 export interface ConversationDetail {
@@ -121,7 +128,12 @@ export interface ConversationDetail {
     outcome?: "pending" | "confirmed" | "cancelled" | "no_response"
     outcome_notes?: string
   } | null
+
+  gmail_thread_id?: string | null
+  gmail_labels?: string[] | null
 }
+
+export type GmailLabel = "INBOX" | "SENT" | "DRAFT" | "SPAM" | "TRASH" | "STARRED" | "ALL"
 
 // Query options
 export interface ConversationListOptions {
@@ -131,4 +143,6 @@ export interface ConversationListOptions {
   offset?: number
   search?: string
   filter?: "all" | "action_needed" | "high_priority"
+  mode?: "smart" | "gmail"
+  gmail_label?: GmailLabel
 }
