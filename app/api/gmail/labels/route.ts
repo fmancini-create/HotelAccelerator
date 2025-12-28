@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
-import { gmailFetch } from "@/lib/gmail-client"
+import { getGmailLabelsWithCounts } from "@/lib/gmail-client"
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,31 +18,43 @@ export async function GET(request: NextRequest) {
       .single()
 
     if (channelError || !channel) {
-      // Return empty labels if no channel configured
-      return NextResponse.json({ labels: [] })
+      return NextResponse.json({ labels: [], systemLabels: [] })
     }
 
-    // Fetch labels from Gmail API
-    const { data, error } = await gmailFetch(channel.id, "labels")
+    const { labels, error } = await getGmailLabelsWithCounts(channel.id)
 
-    if (error || !data?.labels) {
+    if (error) {
       console.error("[v0] Error fetching Gmail labels:", error)
-      return NextResponse.json({ labels: [] })
+      return NextResponse.json({ labels: [], systemLabels: [] })
     }
 
-    // Filter to user-created labels (exclude system labels)
-    const userLabels = data.labels
-      .filter((label: any) => label.type === "user")
-      .map((label: any) => ({
+    // Separate system and user labels
+    const systemLabels = labels
+      .filter((label) => label.type === "system")
+      .map((label) => ({
+        id: label.id,
+        name: label.name,
+        messagesUnread: label.messagesUnread || 0,
+        threadsUnread: label.threadsUnread || 0,
+      }))
+
+    const userLabels = labels
+      .filter((label) => label.type === "user")
+      .map((label) => ({
         id: label.id,
         name: label.name,
         color: label.color?.backgroundColor || null,
+        messagesUnread: label.messagesUnread || 0,
+        threadsUnread: label.threadsUnread || 0,
       }))
-      .sort((a: any, b: any) => a.name.localeCompare(b.name))
+      .sort((a, b) => a.name.localeCompare(b.name))
 
-    return NextResponse.json({ labels: userLabels })
+    return NextResponse.json({
+      labels: userLabels,
+      systemLabels,
+    })
   } catch (error) {
     console.error("[v0] Gmail labels error:", error)
-    return NextResponse.json({ labels: [] })
+    return NextResponse.json({ labels: [], systemLabels: [] })
   }
 }

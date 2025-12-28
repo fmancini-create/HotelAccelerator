@@ -226,3 +226,208 @@ export async function sendGmailEmail(
     return { success: false, error: "Errore durante l'invio dell'email" }
   }
 }
+
+/**
+ * Modifies Gmail message labels (add/remove)
+ */
+export async function modifyGmailMessage(
+  channelId: string,
+  messageId: string,
+  addLabels: string[] = [],
+  removeLabels: string[] = [],
+): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        addLabelIds: addLabels,
+        removeLabelIds: removeLabels,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error("[v0] Gmail modify error:", response.status, errorBody)
+      return { success: false, error: `Errore Gmail API: ${response.status}` }
+    }
+
+    return { success: true }
+  } catch (err) {
+    console.error("[v0] Gmail modify exception:", err)
+    return { success: false, error: "Errore durante la modifica del messaggio" }
+  }
+}
+
+/**
+ * Marks a Gmail message as read
+ */
+export async function markGmailAsRead(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailMessage(channelId, messageId, [], ["UNREAD"])
+}
+
+/**
+ * Marks a Gmail message as unread
+ */
+export async function markGmailAsUnread(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailMessage(channelId, messageId, ["UNREAD"], [])
+}
+
+/**
+ * Stars a Gmail message
+ */
+export async function starGmailMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailMessage(channelId, messageId, ["STARRED"], [])
+}
+
+/**
+ * Unstars a Gmail message
+ */
+export async function unstarGmailMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailMessage(channelId, messageId, [], ["STARRED"])
+}
+
+/**
+ * Archives a Gmail message (removes from INBOX)
+ */
+export async function archiveGmailMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailMessage(channelId, messageId, [], ["INBOX"])
+}
+
+/**
+ * Moves a Gmail message to trash
+ */
+export async function trashGmailMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      return { success: false, error: `Errore Gmail API: ${response.status}` }
+    }
+
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: "Errore durante lo spostamento nel cestino" }
+  }
+}
+
+/**
+ * Restores a Gmail message from trash
+ */
+export async function untrashGmailMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/untrash`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      return { success: false, error: `Errore Gmail API: ${response.status}` }
+    }
+
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: "Errore durante il ripristino dal cestino" }
+  }
+}
+
+/**
+ * Moves a Gmail message to spam
+ */
+export async function spamGmailMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailMessage(channelId, messageId, ["SPAM"], ["INBOX"])
+}
+
+/**
+ * Gets Gmail labels with unread counts
+ */
+export async function getGmailLabelsWithCounts(channelId: string): Promise<{
+  labels: Array<{
+    id: string
+    name: string
+    type: string
+    messagesTotal?: number
+    messagesUnread?: number
+    threadsTotal?: number
+    threadsUnread?: number
+    color?: { backgroundColor?: string; textColor?: string }
+  }>
+  error?: string
+}> {
+  const { data, error } = await gmailFetch(channelId, "labels")
+
+  if (error || !data?.labels) {
+    return { labels: [], error: error || "Errore caricamento etichette" }
+  }
+
+  // Get detailed info for each label to get counts
+  const labelsWithCounts = await Promise.all(
+    data.labels.map(async (label: any) => {
+      const { data: labelData } = await gmailFetch(channelId, `labels/${label.id}`)
+      return {
+        id: label.id,
+        name: label.name,
+        type: label.type,
+        messagesTotal: labelData?.messagesTotal || 0,
+        messagesUnread: labelData?.messagesUnread || 0,
+        threadsTotal: labelData?.threadsTotal || 0,
+        threadsUnread: labelData?.threadsUnread || 0,
+        color: labelData?.color,
+      }
+    }),
+  )
+
+  return { labels: labelsWithCounts }
+}

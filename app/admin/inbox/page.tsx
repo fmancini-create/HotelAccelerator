@@ -29,6 +29,8 @@ import {
   Tag,
   Edit3,
   ChevronDown,
+  MailOpen,
+  ArchiveRestore,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -53,6 +55,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 type InboxMode = "smart" | "gmail"
 
 type GmailLabel = "INBOX" | "SENT" | "DRAFT" | "SPAM" | "TRASH" | "STARRED" | "ALL"
+
+interface GmailLabelInfo {
+  id: string
+  name: string
+  messagesUnread?: number
+  threadsUnread?: number
+  color?: string | null
+}
 
 interface Contact {
   id: string
@@ -93,6 +103,7 @@ interface Message {
   channel?: string
   gmail_id?: string
   gmail_internal_date?: string
+  gmail_labels?: string[]
 }
 
 const channelConfig = {
@@ -109,17 +120,14 @@ const statusConfig = {
   spam: { label: "Spam", color: "bg-red-100 text-red-700" },
 }
 
-const gmailLabelsConfig: Record<
-  GmailLabel,
-  { label: string; icon: React.ElementType; section: "system" | "category" }
-> = {
-  INBOX: { label: "Posta in arrivo", icon: Inbox, section: "system" },
-  STARRED: { label: "Speciali", icon: Star, section: "system" },
-  SENT: { label: "Posta inviata", icon: Send, section: "system" },
-  DRAFT: { label: "Bozze", icon: FileText, section: "system" },
-  SPAM: { label: "Spam", icon: AlertCircle, section: "system" },
-  TRASH: { label: "Cestino", icon: Trash2, section: "system" },
-  ALL: { label: "Tutti i messaggi", icon: Mail, section: "system" },
+const gmailLabelsConfig: Record<GmailLabel, { label: string; icon: React.ElementType; gmailId: string }> = {
+  INBOX: { label: "Posta in arrivo", icon: Inbox, gmailId: "INBOX" },
+  STARRED: { label: "Speciali", icon: Star, gmailId: "STARRED" },
+  SENT: { label: "Posta inviata", icon: Send, gmailId: "SENT" },
+  DRAFT: { label: "Bozze", icon: FileText, gmailId: "DRAFT" },
+  SPAM: { label: "Spam", icon: AlertCircle, gmailId: "SPAM" },
+  TRASH: { label: "Cestino", icon: Trash2, gmailId: "TRASH" },
+  ALL: { label: "Tutti i messaggi", icon: Mail, gmailId: "ALL" },
 }
 
 export default function InboxPage() {
@@ -128,7 +136,8 @@ export default function InboxPage() {
 
   const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
   const [gmailLabel, setGmailLabel] = useState<GmailLabel>("INBOX")
-  const [customGmailLabels, setCustomGmailLabels] = useState<Array<{ id: string; name: string; color?: string }>>([])
+  const [customGmailLabels, setCustomGmailLabels] = useState<GmailLabelInfo[]>([])
+  const [systemGmailLabels, setSystemGmailLabels] = useState<GmailLabelInfo[]>([])
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
@@ -143,6 +152,8 @@ export default function InboxPage() {
   const [error, setError] = useState<string | null>(null)
   const [rateLimitError, setRateLimitError] = useState(false)
   const [attachments, setAttachments] = useState<File[]>([])
+
+  const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -172,11 +183,17 @@ export default function InboxPage() {
       if (res.ok) {
         const data = await res.json()
         setCustomGmailLabels(data.labels || [])
+        setSystemGmailLabels(data.systemLabels || [])
       }
     } catch (error) {
       console.error("Error loading Gmail labels:", error)
     }
   }, [])
+
+  const getSystemLabelUnreadCount = (labelId: string): number => {
+    const label = systemGmailLabels.find((l) => l.id === labelId)
+    return label?.threadsUnread || 0
+  }
 
   useEffect(() => {
     if (inboxMode === "gmail" && adminUser) {
@@ -873,10 +890,160 @@ export default function InboxPage() {
     </>
   )
 
+  const renderGmailMessageActions = (message: Message) => {
+    const isStarred = message.gmail_labels?.includes("STARRED")
+    const isInTrash = message.gmail_labels?.includes("TRASH")
+    const isRead = message.status === "read" || message.sender_type === "agent"
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isActionLoading === message.gmail_id}>
+            {isActionLoading === message.gmail_id ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <MoreVertical className="h-4 w-4 text-gray-400" />
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {!isRead ? (
+            <DropdownMenuItem onClick={() => handleGmailMarkRead(message)}>
+              <MailOpen className="mr-2 h-4 w-4" />
+              Segna come letto
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => handleGmailMarkUnread(message)}>
+              <Mail className="mr-2 h-4 w-4" />
+              Segna come non letto
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={() => handleGmailStar(message)}>
+            <Star className={`mr-2 h-4 w-4 ${isStarred ? "fill-yellow-400 text-yellow-400" : ""}`} />
+            {isStarred ? "Rimuovi stella" : "Aggiungi stella"}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleGmailArchive(message)}>
+            <Archive className="mr-2 h-4 w-4" />
+            Archivia
+          </DropdownMenuItem>
+          {isInTrash ? (
+            <DropdownMenuItem onClick={() => handleGmailUntrash(message)}>
+              <ArchiveRestore className="mr-2 h-4 w-4" />
+              Ripristina
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem onClick={() => handleGmailTrash(message)} className="text-red-600">
+              <Trash2 className="mr-2 h-4 w-4" />
+              Elimina
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onClick={() => handleGmailSpam(message)} className="text-red-600">
+            <AlertCircle className="mr-2 h-4 w-4" />
+            Segna come spam
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
+  const handleGmailAction = async (
+    action: string,
+    gmailMessageId: string,
+    options?: { addLabels?: string[]; removeLabels?: string[] },
+  ) => {
+    setIsActionLoading(gmailMessageId)
+    try {
+      const res = await fetch(`/api/gmail/messages/${gmailMessageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          addLabels: options?.addLabels,
+          removeLabels: options?.removeLabels,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        console.error("[v0] Gmail action failed:", data.error)
+        return false
+      }
+
+      // Refresh data after action
+      await loadConversations()
+      await loadGmailLabels()
+
+      if (selectedConversationId) {
+        await loadMessages(selectedConversationId, false)
+      }
+
+      return true
+    } catch (error) {
+      console.error("[v0] Gmail action error:", error)
+      return false
+    } finally {
+      setIsActionLoading(null)
+    }
+  }
+
+  const handleGmailStar = async (message: Message, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    if (!message.gmail_id) return
+
+    const isStarred = message.gmail_labels?.includes("STARRED")
+    await handleGmailAction(isStarred ? "unstar" : "star", message.gmail_id)
+  }
+
+  const handleGmailMarkRead = async (message: Message) => {
+    if (!message.gmail_id) return
+    await handleGmailAction("markAsRead", message.gmail_id)
+  }
+
+  const handleGmailMarkUnread = async (message: Message) => {
+    if (!message.gmail_id) return
+    await handleGmailAction("markAsUnread", message.gmail_id)
+  }
+
+  const handleGmailArchive = async (message: Message) => {
+    if (!message.gmail_id) return
+    await handleGmailAction("archive", message.gmail_id)
+  }
+
+  const handleGmailTrash = async (message: Message) => {
+    if (!message.gmail_id) return
+    await handleGmailAction("trash", message.gmail_id)
+  }
+
+  const handleGmailUntrash = async (message: Message) => {
+    if (!message.gmail_id) return
+    await handleGmailAction("untrash", message.gmail_id)
+  }
+
+  const handleGmailSpam = async (message: Message) => {
+    if (!message.gmail_id) return
+    await handleGmailAction("spam", message.gmail_id)
+  }
+
   const GmailMessageListItem = ({ conv }: { conv: Conversation }) => {
     const isSelected = selectedConversation?.id === conv.id
-    const isUnread = conv.unread_count > 0
+    const isUnread = conv.gmail_labels?.includes("UNREAD") || conv.unread_count > 0
+    const isStarred = conv.is_starred || conv.gmail_labels?.includes("STARRED")
     const dateStr = conv.last_message_at ? format(new Date(conv.last_message_at), "d MMM", { locale: it }) : ""
+
+    const handleStarClick = async (e: React.MouseEvent) => {
+      e.stopPropagation()
+      // Find first message with gmail_id in this conversation
+      if (selectedConversation?.id === conv.id && messages.length > 0) {
+        const firstMessageWithGmailId = messages.find((m) => m.gmail_id)
+        if (firstMessageWithGmailId) {
+          await handleGmailAction(isStarred ? "unstar" : "star", firstMessageWithGmailId.gmail_id!)
+        }
+      } else {
+        // Fallback to local toggle
+        handleToggleStar(conv, e)
+      }
+    }
 
     return (
       <div
@@ -889,19 +1056,17 @@ export default function InboxPage() {
       >
         <Checkbox checked={false} onClick={(e) => e.stopPropagation()} className="h-4 w-4" />
 
-        <Button variant="ghost" size="icon" className="h-6 w-6 p-0" onClick={(e) => handleToggleStar(conv, e)}>
+        <Button variant="ghost" size="icon" className="h-6 w-6 p-0" onClick={handleStarClick}>
           <Star
-            className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-gray-400"}`}
+            className={`h-4 w-4 ${isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-gray-400"}`}
           />
         </Button>
 
         <div className="flex-1 min-w-0 flex items-center gap-3">
-          {/* Sender - Gmail style: bold if unread */}
           <span className={`w-40 truncate text-sm ${isUnread ? "font-semibold text-gray-900" : "text-gray-600"}`}>
             {conv.contact?.name || conv.contact?.email?.split("@")[0] || "Sconosciuto"}
           </span>
 
-          {/* Subject + snippet */}
           <div className="flex-1 min-w-0 flex items-center gap-1">
             <span className={`truncate text-sm ${isUnread ? "font-semibold text-gray-900" : "text-gray-600"}`}>
               {conv.subject || "(nessun oggetto)"}
@@ -911,7 +1076,6 @@ export default function InboxPage() {
           </div>
         </div>
 
-        {/* Date - Gmail style */}
         <span className={`text-xs flex-shrink-0 ${isUnread ? "font-semibold text-gray-900" : "text-gray-500"}`}>
           {dateStr}
         </span>
@@ -968,6 +1132,75 @@ export default function InboxPage() {
 
     return <div className="text-sm text-gray-900 whitespace-pre-wrap">{content}</div>
   }
+
+  const renderGmailFolderSidebar = () => (
+    <div className="w-52 border-r border-gray-200 flex flex-col bg-gray-50">
+      {/* Compose button */}
+      <div className="p-3">
+        <Button
+          className="w-full bg-white hover:bg-gray-100 text-gray-700 border shadow-sm rounded-2xl h-14 justify-start gap-3"
+          variant="outline"
+        >
+          <Edit3 className="h-5 w-5" />
+          <span className="font-medium">Scrivi</span>
+        </Button>
+      </div>
+
+      {/* Gmail system folders */}
+      <nav className="flex-1 overflow-y-auto">
+        {(Object.keys(gmailLabelsConfig) as GmailLabel[]).map((label) => {
+          const config = gmailLabelsConfig[label]
+          const Icon = config.icon
+          const isActive = gmailLabel === label
+          const unreadCount = getSystemLabelUnreadCount(config.gmailId)
+
+          return (
+            <button
+              key={label}
+              onClick={() => setGmailLabel(label)}
+              className={`
+                w-full flex items-center gap-4 pl-6 pr-3 py-1.5 text-sm transition-colors text-left
+                ${
+                  isActive
+                    ? "bg-blue-100 text-blue-800 font-semibold rounded-r-full mr-2"
+                    : "text-gray-700 hover:bg-gray-100 rounded-r-full mr-2"
+                }
+              `}
+            >
+              <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-blue-800" : "text-gray-600"}`} />
+              <span className="flex-1 truncate">{config.label}</span>
+              {unreadCount > 0 && (
+                <span className={`text-xs font-semibold ${isActive ? "text-blue-800" : "text-gray-600"}`}>
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          )
+        })}
+
+        {/* Separator */}
+        <div className="my-3 mx-4 border-t border-gray-200" />
+
+        {/* Labels section header */}
+        <div className="px-6 py-2 flex items-center justify-between text-sm text-gray-700">
+          <span className="font-medium">Etichette</span>
+          <ChevronDown className="h-4 w-4" />
+        </div>
+
+        {/* Custom Gmail labels from API with counts */}
+        {customGmailLabels.map((label) => (
+          <button
+            key={label.id}
+            className="w-full flex items-center gap-4 pl-6 pr-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-r-full mr-2"
+          >
+            <Tag className="h-4 w-4" style={label.color ? { color: label.color } : undefined} />
+            <span className="flex-1 truncate">{label.name}</span>
+            {(label.threadsUnread || 0) > 0 && <span className="text-xs text-gray-600">{label.threadsUnread}</span>}
+          </button>
+        ))}
+      </nav>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-background">
@@ -1073,73 +1306,9 @@ export default function InboxPage() {
           </div>
         </div>
       ) : (
-        // ==================== GMAIL MIRROR LAYOUT (1:1 replica) ====================
+        // ==================== GMAIL MIRROR LAYOUT ====================
         <div className="flex h-[calc(100vh-64px)] bg-white">
-          {/* LEFT SIDEBAR - Gmail Folders (narrow, ~200px like Gmail) */}
-          <div className="w-52 border-r border-gray-200 flex flex-col bg-gray-50">
-            {/* Compose button */}
-            <div className="p-3">
-              <Button
-                className="w-full bg-white hover:bg-gray-100 text-gray-700 border shadow-sm rounded-2xl h-14 justify-start gap-3"
-                variant="outline"
-              >
-                <Edit3 className="h-5 w-5" />
-                <span className="font-medium">Scrivi</span>
-              </Button>
-            </div>
-
-            {/* Gmail system folders */}
-            <nav className="flex-1 overflow-y-auto">
-              {(Object.keys(gmailLabelsConfig) as GmailLabel[]).map((label) => {
-                const config = gmailLabelsConfig[label]
-                const Icon = config.icon
-                const isActive = gmailLabel === label
-                // Gmail counts - simulate from data
-                const count = label === "INBOX" ? conversations.filter((c) => c.unread_count > 0).length : 0
-
-                return (
-                  <button
-                    key={label}
-                    onClick={() => setGmailLabel(label)}
-                    className={`
-                      w-full flex items-center gap-4 pl-6 pr-3 py-1.5 text-sm transition-colors text-left
-                      ${
-                        isActive
-                          ? "bg-blue-100 text-blue-800 font-semibold rounded-r-full mr-2"
-                          : "text-gray-700 hover:bg-gray-100 rounded-r-full mr-2"
-                      }
-                    `}
-                  >
-                    <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-blue-800" : "text-gray-600"}`} />
-                    <span className="flex-1 truncate">{config.label}</span>
-                    {count > 0 && (
-                      <span className={`text-xs ${isActive ? "text-blue-800" : "text-gray-600"}`}>{count}</span>
-                    )}
-                  </button>
-                )
-              })}
-
-              {/* Separator */}
-              <div className="my-3 mx-4 border-t border-gray-200" />
-
-              {/* Labels section header */}
-              <div className="px-6 py-2 flex items-center justify-between text-sm text-gray-700">
-                <span className="font-medium">Etichette</span>
-                <ChevronDown className="h-4 w-4" />
-              </div>
-
-              {/* Custom Gmail labels from API */}
-              {customGmailLabels.map((label) => (
-                <button
-                  key={label.id}
-                  className="w-full flex items-center gap-4 pl-6 pr-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-r-full mr-2"
-                >
-                  <Tag className="h-4 w-4 text-gray-500" />
-                  <span className="truncate">{label.name}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
+          {renderGmailFolderSidebar()}
 
           {/* CENTER - Message List (Gmail style, takes more space) */}
           <div className="flex-1 flex flex-col border-r border-gray-200 max-w-2xl">
@@ -1185,7 +1354,7 @@ export default function InboxPage() {
             </div>
           </div>
 
-          {/* RIGHT - Message Content (Gmail reading pane style) */}
+          {/* RIGHT - Message Content with updated actions */}
           <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
             {selectedConversation ? (
               <>
@@ -1201,16 +1370,14 @@ export default function InboxPage() {
                   </div>
                 </div>
 
-                {/* Messages - Gmail thread style */}
+                {/* Messages - Gmail thread style with real actions */}
                 <div className="flex-1 overflow-y-auto">
-                  {Array.from(new Map(messages.map((m) => [m.id, m])).values()).map((message, index) => (
+                  {Array.from(new Map(messages.map((m) => [m.id, m])).values()).map((message) => (
                     <div key={message.id} className="border-b border-gray-100">
                       {/* Message header - Gmail style */}
                       <div className="px-4 py-3 flex items-start gap-3">
-                        <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium flex-shrink-0">
-                          {(selectedConversation.contact?.name ||
-                            selectedConversation.contact?.email ||
-                            "U")[0].toUpperCase()}
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Users className="h-5 w-5 text-primary" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between">
@@ -1238,22 +1405,21 @@ export default function InboxPage() {
                           <div className="text-sm text-gray-500">a me</div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Star className="h-4 w-4 text-gray-400" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={(e) => handleGmailStar(message, e)}
+                          >
+                            <Star
+                              className={`h-4 w-4 ${
+                                message.gmail_labels?.includes("STARRED")
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-gray-400"
+                              }`}
+                            />
                           </Button>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4 text-gray-400" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>Rispondi</DropdownMenuItem>
-                              <DropdownMenuItem>Inoltra</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem>Elimina</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {renderGmailMessageActions(message)}
                         </div>
                       </div>
 
