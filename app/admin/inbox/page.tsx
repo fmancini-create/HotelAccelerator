@@ -358,13 +358,20 @@ export default function InboxPage() {
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
-    console.log("[v0] DEBUG: Gmail mode useEffect triggered", { inboxMode, adminUser: !!adminUser })
-    if (inboxMode === "gmail" && adminUser) {
-      console.log("[v0] DEBUG: Calling loadGmailLabels and loadGmailThreads from useEffect")
+    console.log("[v0] DEBUG: Gmail mode useEffect triggered", { inboxMode, authLoading, hasAdminUser: !!adminUser })
+    if (inboxMode === "gmail" && !authLoading && adminUser) {
+      console.log("[v0] DEBUG: Calling loadGmailLabels and loadGmailThreads")
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
+
+      const gmailPollInterval = setInterval(() => {
+        console.log("[v0] Gmail auto-refresh triggered")
+        loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
+      }, 30000)
+
+      return () => clearInterval(gmailPollInterval)
     }
-  }, [inboxMode, adminUser, loadGmailLabels, loadGmailThreads, gmailLabelId])
+  }, [inboxMode, authLoading, adminUser, loadGmailLabels, loadGmailThreads, gmailLabelId, gmailSearchQuery])
 
   // Load Gmail thread when selected
   useEffect(() => {
@@ -645,22 +652,24 @@ export default function InboxPage() {
               margin: 0;
               padding: 16px;
               word-wrap: break-word;
+              overflow-x: hidden;
             }
             img { max-width: 100%; height: auto; }
             a { color: #2563eb; }
             blockquote { border-left: 3px solid #d1d5db; margin: 1em 0; padding-left: 1em; color: #6b7280; }
-            pre, code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-size: 13px; }
+            pre, code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-size: 13px; overflow-x: auto; }
             table { border-collapse: collapse; max-width: 100%; }
             td, th { padding: 8px; border: 1px solid #e5e7eb; }
           </style></head><body>${content}</body></html>`}
-          className="w-full border-0"
-          style={{ minHeight: "300px", height: "auto" }}
+          className="w-full border-0 block"
+          style={{ minHeight: "400px", height: "600px" }}
           onLoad={(e) => {
             const iframe = e.target as HTMLIFrameElement
             if (iframe.contentWindow?.document.body) {
               const height = iframe.contentWindow.document.body.scrollHeight
-              iframe.style.height = Math.max(height + 32, 300) + "px"
-              console.log("[v0] iframe height set to:", iframe.style.height)
+              const finalHeight = Math.min(Math.max(height + 40, 400), 800)
+              iframe.style.height = finalHeight + "px"
+              console.log("[v0] iframe height set to:", finalHeight)
             }
           }}
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
@@ -917,7 +926,7 @@ export default function InboxPage() {
                       className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`rounded-lg ${message.sender_type === "agent" ? "max-w-[80%] bg-primary text-primary-foreground p-3" : "max-w-[95%] bg-muted p-0"}`}
+                        className={`rounded-lg ${message.sender_type === "agent" ? "max-w-[80%] bg-primary text-primary-foreground p-3" : "w-full bg-muted p-0"}`}
                       >
                         {message.sender_type === "agent" ? (
                           <div className="text-sm whitespace-pre-wrap">{message.content}</div>
