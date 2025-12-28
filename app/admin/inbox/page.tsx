@@ -27,6 +27,8 @@ import {
   Zap,
   Settings,
   Tag,
+  Edit3,
+  ChevronDown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,7 +45,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DemandCalendar } from "@/components/admin/demand-calendar"
 import { AdminHeader } from "@/components/admin/admin-header"
-import { formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow, format } from "date-fns"
 import { it } from "date-fns/locale"
 import { EmailKpiBar } from "@/components/admin/email-kpi-bar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -126,6 +128,7 @@ export default function InboxPage() {
 
   const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
   const [gmailLabel, setGmailLabel] = useState<GmailLabel>("INBOX")
+  const [customGmailLabels, setCustomGmailLabels] = useState<Array<{ id: string; name: string; color?: string }>>([])
 
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
@@ -162,6 +165,24 @@ export default function InboxPage() {
       hasScrolledRef.current = true
     }
   }
+
+  const loadGmailLabels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gmail/labels")
+      if (res.ok) {
+        const data = await res.json()
+        setCustomGmailLabels(data.labels || [])
+      }
+    } catch (error) {
+      console.error("Error loading Gmail labels:", error)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (inboxMode === "gmail" && adminUser) {
+      loadGmailLabels()
+    }
+  }, [inboxMode, adminUser, loadGmailLabels])
 
   const loadConversations = useCallback(async () => {
     if (isPausedRef.current) return
@@ -852,6 +873,102 @@ export default function InboxPage() {
     </>
   )
 
+  const GmailMessageListItem = ({ conv }: { conv: Conversation }) => {
+    const isSelected = selectedConversation?.id === conv.id
+    const isUnread = conv.unread_count > 0
+    const dateStr = conv.last_message_at ? format(new Date(conv.last_message_at), "d MMM", { locale: it }) : ""
+
+    return (
+      <div
+        onClick={() => handleSelectConversation(conv)}
+        className={`
+          flex items-center gap-2 px-2 py-1.5 cursor-pointer border-b border-gray-100
+          ${isSelected ? "bg-blue-50" : "hover:bg-gray-50"}
+          ${isUnread ? "bg-white" : "bg-gray-50/50"}
+        `}
+      >
+        <Checkbox checked={false} onClick={(e) => e.stopPropagation()} className="h-4 w-4" />
+
+        <Button variant="ghost" size="icon" className="h-6 w-6 p-0" onClick={(e) => handleToggleStar(conv, e)}>
+          <Star
+            className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 hover:text-gray-400"}`}
+          />
+        </Button>
+
+        <div className="flex-1 min-w-0 flex items-center gap-3">
+          {/* Sender - Gmail style: bold if unread */}
+          <span className={`w-40 truncate text-sm ${isUnread ? "font-semibold text-gray-900" : "text-gray-600"}`}>
+            {conv.contact?.name || conv.contact?.email?.split("@")[0] || "Sconosciuto"}
+          </span>
+
+          {/* Subject + snippet */}
+          <div className="flex-1 min-w-0 flex items-center gap-1">
+            <span className={`truncate text-sm ${isUnread ? "font-semibold text-gray-900" : "text-gray-600"}`}>
+              {conv.subject || "(nessun oggetto)"}
+            </span>
+            <span className="text-gray-400 mx-1">-</span>
+            <span className="truncate text-sm text-gray-500">{conv.lastMessage?.content?.slice(0, 80) || ""}</span>
+          </div>
+        </div>
+
+        {/* Date - Gmail style */}
+        <span className={`text-xs flex-shrink-0 ${isUnread ? "font-semibold text-gray-900" : "text-gray-500"}`}>
+          {dateStr}
+        </span>
+      </div>
+    )
+  }
+
+  const renderGmailEmailContent = (content: string) => {
+    const isHtml = /<[a-z][\s\S]*>/i.test(content)
+
+    if (isHtml) {
+      return (
+        <iframe
+          srcDoc={`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                body {
+                  font-family: Roboto, RobotoDraft, Helvetica, Arial, sans-serif;
+                  font-size: 14px;
+                  line-height: 20px;
+                  color: #222;
+                  margin: 0;
+                  padding: 0;
+                  background: white;
+                }
+                img { max-width: 100%; height: auto; }
+                a { color: #1a73e8; }
+                blockquote {
+                  border-left: 1px solid #ccc;
+                  margin: 0 0 0 0.8ex;
+                  padding-left: 1ex;
+                }
+              </style>
+            </head>
+            <body>${content}</body>
+            </html>
+          `}
+          className="w-full border-0"
+          style={{ minHeight: "200px", height: "auto" }}
+          onLoad={(e) => {
+            const iframe = e.target as HTMLIFrameElement
+            if (iframe.contentWindow?.document.body) {
+              iframe.style.height = iframe.contentWindow.document.body.scrollHeight + "px"
+            }
+          }}
+          sandbox="allow-same-origin"
+        />
+      )
+    }
+
+    return <div className="text-sm text-gray-900 whitespace-pre-wrap">{content}</div>
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader
@@ -885,7 +1002,7 @@ export default function InboxPage() {
       {inboxMode === "smart" && <EmailKpiBar />}
 
       {inboxMode === "smart" ? (
-        // ==================== SMART MODE LAYOUT ====================
+        // ==================== SMART MODE LAYOUT (unchanged) ====================
         <div className="flex h-[calc(100vh-140px)]">
           {/* Sidebar - Conversation List with filters */}
           <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
@@ -956,84 +1073,240 @@ export default function InboxPage() {
           </div>
         </div>
       ) : (
-        // ==================== GMAIL MODE LAYOUT ====================
-        <div className="flex h-[calc(100vh-80px)]">
-          {/* LEFT SIDEBAR - Gmail Folders */}
-          <div className="w-56 border-r bg-card flex flex-col overflow-hidden">
-            <div className="p-3 border-b">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-red-500" />
-                  Gmail Mirror
-                </h2>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  onClick={loadConversations}
-                  disabled={rateLimitError}
-                >
-                  <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+        // ==================== GMAIL MIRROR LAYOUT (1:1 replica) ====================
+        <div className="flex h-[calc(100vh-64px)] bg-white">
+          {/* LEFT SIDEBAR - Gmail Folders (narrow, ~200px like Gmail) */}
+          <div className="w-52 border-r border-gray-200 flex flex-col bg-gray-50">
+            {/* Compose button */}
+            <div className="p-3">
+              <Button
+                className="w-full bg-white hover:bg-gray-100 text-gray-700 border shadow-sm rounded-2xl h-14 justify-start gap-3"
+                variant="outline"
+              >
+                <Edit3 className="h-5 w-5" />
+                <span className="font-medium">Scrivi</span>
+              </Button>
             </div>
 
-            {/* Gmail folders list */}
-            <nav className="flex-1 overflow-y-auto py-2">
+            {/* Gmail system folders */}
+            <nav className="flex-1 overflow-y-auto">
               {(Object.keys(gmailLabelsConfig) as GmailLabel[]).map((label) => {
                 const config = gmailLabelsConfig[label]
                 const Icon = config.icon
                 const isActive = gmailLabel === label
+                // Gmail counts - simulate from data
+                const count = label === "INBOX" ? conversations.filter((c) => c.unread_count > 0).length : 0
 
                 return (
                   <button
                     key={label}
                     onClick={() => setGmailLabel(label)}
-                    className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left ${
-                      isActive
-                        ? "bg-red-50 text-red-700 font-medium border-r-2 border-red-600"
-                        : "text-muted-foreground hover:bg-accent"
-                    }`}
+                    className={`
+                      w-full flex items-center gap-4 pl-6 pr-3 py-1.5 text-sm transition-colors text-left
+                      ${
+                        isActive
+                          ? "bg-blue-100 text-blue-800 font-semibold rounded-r-full mr-2"
+                          : "text-gray-700 hover:bg-gray-100 rounded-r-full mr-2"
+                      }
+                    `}
                   >
-                    <Icon className={`h-4 w-4 ${isActive ? "text-red-600" : ""}`} />
-                    <span>{config.label}</span>
+                    <Icon className={`h-4 w-4 flex-shrink-0 ${isActive ? "text-blue-800" : "text-gray-600"}`} />
+                    <span className="flex-1 truncate">{config.label}</span>
+                    {count > 0 && (
+                      <span className={`text-xs ${isActive ? "text-blue-800" : "text-gray-600"}`}>{count}</span>
+                    )}
                   </button>
                 )
               })}
 
               {/* Separator */}
-              <div className="my-2 mx-4 border-t" />
+              <div className="my-3 mx-4 border-t border-gray-200" />
 
-              {/* Custom labels section */}
-              <div className="px-4 py-2">
-                <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                  <Tag className="h-3 w-3" />
-                  Etichette
-                </div>
+              {/* Labels section header */}
+              <div className="px-6 py-2 flex items-center justify-between text-sm text-gray-700">
+                <span className="font-medium">Etichette</span>
+                <ChevronDown className="h-4 w-4" />
               </div>
+
+              {/* Custom Gmail labels from API */}
+              {customGmailLabels.map((label) => (
+                <button
+                  key={label.id}
+                  className="w-full flex items-center gap-4 pl-6 pr-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-r-full mr-2"
+                >
+                  <Tag className="h-4 w-4 text-gray-500" />
+                  <span className="truncate">{label.name}</span>
+                </button>
+              ))}
             </nav>
           </div>
 
-          {/* CENTER - Conversation List */}
-          <div className="w-80 border-r flex flex-col bg-card overflow-hidden">
-            <div className="p-3 border-b">
+          {/* CENTER - Message List (Gmail style, takes more space) */}
+          <div className="flex-1 flex flex-col border-r border-gray-200 max-w-2xl">
+            {/* Gmail toolbar */}
+            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-white">
+              <Checkbox className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={loadConversations}>
+                <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
+              </Button>
+              <div className="flex-1" />
+              <span className="text-xs text-gray-500">
+                {conversations.length > 0 && `1-${Math.min(50, conversations.length)} di ${conversations.length}`}
+              </span>
+            </div>
+
+            {/* Search bar - Gmail style */}
+            <div className="px-2 py-2 border-b border-gray-200 bg-white">
               <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Cerca in Gmail..."
-                  className="pl-8 h-9"
+                  placeholder="Cerca in Gmail"
+                  className="pl-10 h-9 bg-gray-100 border-0 rounded-lg focus:bg-white focus:ring-1 focus:ring-blue-500"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
             </div>
 
-            <ConversationList />
+            {/* Message list - Gmail style */}
+            <div className="flex-1 overflow-y-auto bg-white">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                </div>
+              ) : filteredConversations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+                  <Inbox className="h-12 w-12 mb-4 text-gray-300" />
+                  <p className="text-sm">Nessun messaggio in {gmailLabelsConfig[gmailLabel]?.label}</p>
+                </div>
+              ) : (
+                filteredConversations.map((conv) => <GmailMessageListItem key={conv.id} conv={conv} />)
+              )}
+            </div>
           </div>
 
-          {/* RIGHT - Message Content */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <MessagePanel />
+          {/* RIGHT - Message Content (Gmail reading pane style) */}
+          <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
+            {selectedConversation ? (
+              <>
+                {/* Email header - Gmail style */}
+                <div className="p-4 border-b border-gray-200">
+                  <h1 className="text-xl font-normal text-gray-900 mb-2">
+                    {selectedConversation.subject || "(nessun oggetto)"}
+                  </h1>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs font-normal">
+                      {gmailLabelsConfig[gmailLabel]?.label}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Messages - Gmail thread style */}
+                <div className="flex-1 overflow-y-auto">
+                  {Array.from(new Map(messages.map((m) => [m.id, m])).values()).map((message, index) => (
+                    <div key={message.id} className="border-b border-gray-100">
+                      {/* Message header - Gmail style */}
+                      <div className="px-4 py-3 flex items-start gap-3">
+                        <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium flex-shrink-0">
+                          {(selectedConversation.contact?.name ||
+                            selectedConversation.contact?.email ||
+                            "U")[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900">
+                                {message.sender_type === "agent"
+                                  ? "io"
+                                  : selectedConversation.contact?.name ||
+                                    selectedConversation.contact?.email?.split("@")[0]}
+                              </span>
+                              <span className="text-sm text-gray-500">
+                                {"<"}
+                                {message.sender_type === "agent" ? "me" : selectedConversation.contact?.email}
+                                {">"}
+                              </span>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {format(
+                                new Date(message.gmail_internal_date || message.received_at || message.created_at),
+                                "d MMM yyyy, HH:mm",
+                                { locale: it },
+                              )}
+                            </span>
+                          </div>
+                          <div className="text-sm text-gray-500">a me</div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Star className="h-4 w-4 text-gray-400" />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4 text-gray-400" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>Rispondi</DropdownMenuItem>
+                              <DropdownMenuItem>Inoltra</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem>Elimina</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+
+                      {/* Message body - Gmail style */}
+                      <div className="px-4 pb-4 pl-16">{renderGmailEmailContent(message.content)}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Reply box - Gmail style */}
+                <div className="border-t border-gray-200 p-4 bg-gray-50">
+                  <div className="bg-white rounded-lg border border-gray-300 shadow-sm">
+                    <div className="p-3">
+                      <Textarea
+                        placeholder="Clicca qui per rispondere"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        className="min-h-[60px] border-0 p-0 focus-visible:ring-0 resize-none"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          onClick={handleSendReply}
+                          disabled={!replyText.trim() || isSending}
+                          className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                        >
+                          {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Invia"}
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Paperclip className="h-4 w-4 text-gray-600" />
+                        </Button>
+                        <input type="file" multiple ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-400">
+                <div className="text-center">
+                  <Mail className="h-16 w-16 mx-auto mb-4 text-gray-200" />
+                  <p className="text-sm">Seleziona un messaggio per leggerlo</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
