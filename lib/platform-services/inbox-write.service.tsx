@@ -112,6 +112,8 @@ export class InboxWriteService {
       }
     }
 
+    await this.repository.markMessagesAsReplied(command.conversationId, command.propertyId)
+
     const message = await this.repository.insertMessage(
       command.conversationId,
       command.propertyId,

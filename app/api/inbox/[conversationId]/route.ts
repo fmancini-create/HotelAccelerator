@@ -20,13 +20,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Conversation not found", code: "NOT_FOUND" }, { status: 404 })
     }
 
+    const sortedMessages = (conversation.messages || []).sort((a: any, b: any) => {
+      const dateA = new Date(a.received_at || a.created_at).getTime()
+      const dateB = new Date(b.received_at || b.created_at).getTime()
+      return dateA - dateB
+    })
+
     return NextResponse.json({
       conversation: {
         ...conversation,
         contact: conversation.contact,
         assigned: conversation.assigned,
       },
-      messages: conversation.messages,
+      messages: sortedMessages,
     })
   } catch (error) {
     const { status, json } = handleServiceError(error)

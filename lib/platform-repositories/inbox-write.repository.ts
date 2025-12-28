@@ -111,4 +111,17 @@ export class InboxWriteRepository {
     if (error) throw error
     return data
   }
+
+  async markMessagesAsReplied(conversationId: string, propertyId: string) {
+    const { data, error } = await this.supabase
+      .from("messages")
+      .update({ status: "replied" })
+      .eq("conversation_id", conversationId)
+      .eq("property_id", propertyId)
+      .eq("sender_type", "customer")
+      .in("status", ["received", "read"])
+      .select("id")
+    if (error) throw error
+    return data
+  }
 }

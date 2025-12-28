@@ -72,6 +72,8 @@ interface Message {
   sender_id: string | null
   content_type: string
   created_at: string
+  received_at?: string
+  status?: "received" | "read" | "replied"
   attachments: any[]
   channel?: string
 }
@@ -111,6 +113,7 @@ export default function InboxPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const realtimeChannelRef = useRef<any>(null)
+  const markedAsReadRef = useRef<Set<string>>(new Set())
 
   const isPausedRef = useRef(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -205,6 +208,29 @@ export default function InboxPage() {
     }
   }
 
+  const markMessagesAsRead = useCallback(async (messageIds: string[], conversationId: string) => {
+    // Filter out already marked messages
+    const newIds = messageIds.filter((id) => !markedAsReadRef.current.has(id))
+    if (newIds.length === 0) return
+
+    try {
+      const res = await fetch(`/api/inbox/${conversationId}/messages/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ messageIds: newIds }),
+      })
+      if (!res.ok) {
+        console.error("Error marking messages as read:", res.status)
+        return
+      }
+      // Mark as processed locally
+      newIds.forEach((id) => markedAsReadRef.current.add(id))
+    } catch (error) {
+      console.error("Error marking messages as read:", error)
+    }
+  }, [])
+
   useEffect(() => {
     if (!authLoading && adminUser) {
       loadConversations()
@@ -249,6 +275,19 @@ export default function InboxPage() {
       }
     }
   }, [selectedConversationId])
+
+  useEffect(() => {
+    if (messages.length > 0 && selectedConversationId) {
+      // Get customer messages with status 'received'
+      const receivedCustomerMessages = messages
+        .filter((m) => m.sender_type === "customer" && m.status === "received")
+        .map((m) => m.id)
+
+      if (receivedCustomerMessages.length > 0) {
+        markMessagesAsRead(receivedCustomerMessages, selectedConversationId)
+      }
+    }
+  }, [messages, selectedConversationId, markMessagesAsRead])
 
   const handleSelectConversation = useCallback((conv: Conversation) => {
     setSelectedConversation(conv)
@@ -746,7 +785,7 @@ export default function InboxPage() {
               </div>
 
               <div ref={messagesEndRef} className="flex-1 overflow-y-auto p-4 space-y-4">
-                {messages.map((message) => (
+                {Array.from(new Map(messages.map((m) => [m.id, m])).values()).map((message) => (
                   <div
                     key={message.id}
                     className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}
@@ -770,7 +809,7 @@ export default function InboxPage() {
                             : "text-muted-foreground px-3 pb-2"
                         }`}
                       >
-                        {new Date(message.created_at).toLocaleString("it-IT")}
+                        {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
                       </div>
                     </div>
                   </div>

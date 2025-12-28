@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
+import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import type { OAuthProvider } from "@/lib/oauth-config"
 
-// Sync emails from Gmail or Outlook
 export async function POST(request: NextRequest) {
   try {
     const { channel_id, property_id } = await request.json()
@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Get channel
     const { data: channel, error: channelError } = await supabase
       .from("email_channels")
       .select("*")
@@ -31,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
 
     const provider = channel.provider as OAuthProvider
-    let emails: any[] = []
+    let emails: InboundEmail[] = []
 
     if (provider === "gmail") {
       const { token, error: tokenError } = await getValidGmailToken(channel_id)
@@ -43,11 +42,20 @@ export async function POST(request: NextRequest) {
       emails = await fetchOutlookMessages(channel.oauth_access_token)
     }
 
-    // Process and save emails
+    // Process with centralized EmailProcessor
+    const processor = new EmailProcessor(supabase)
     let imported = 0
+    let duplicates = 0
+
     for (const email of emails) {
-      const result = await processInboundEmail(supabase, email, channel, property_id)
-      if (result) imported++
+      const result = await processor.processInboundEmail(email, channel.id, property_id)
+      if (result.success) {
+        if (result.isDuplicate) {
+          duplicates++
+        } else {
+          imported++
+        }
+      }
     }
 
     // Update last sync time
@@ -62,6 +70,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       imported,
+      duplicates,
       total: emails.length,
     })
   } catch (error) {
@@ -70,17 +79,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function fetchGmailMessages(accessToken: string): Promise<any[]> {
+async function fetchGmailMessages(accessToken: string): Promise<InboundEmail[]> {
   try {
-    // Get list of messages (last 50, unread first)
     const listResponse = await fetch(
       "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=in:inbox",
       { headers: { Authorization: `Bearer ${accessToken}` } },
     )
 
     if (!listResponse.ok) {
-      const errorText = await listResponse.text()
-      console.error(`Gmail list error (${listResponse.status}):`, errorText)
       if (listResponse.status === 429) {
         throw new Error("Gmail rate limit exceeded. Riprova tra qualche minuto.")
       }
@@ -90,8 +96,8 @@ async function fetchGmailMessages(accessToken: string): Promise<any[]> {
     const listData = await listResponse.json()
     if (!listData.messages) return []
 
-    const messages: any[] = []
-    const messagesToFetch = listData.messages.slice(0, 15) // Reduced from 20 to 15
+    const messages: InboundEmail[] = []
+    const messagesToFetch = listData.messages.slice(0, 15)
 
     for (const msg of messagesToFetch) {
       try {
@@ -100,38 +106,33 @@ async function fetchGmailMessages(accessToken: string): Promise<any[]> {
           { headers: { Authorization: `Bearer ${accessToken}` } },
         )
 
-        if (msgResponse.status === 429) {
-          console.warn("Gmail rate limit hit, stopping fetch")
-          break // Stop fetching more messages
-        }
+        if (msgResponse.status === 429) break
 
         if (msgResponse.ok) {
           const msgData = await msgResponse.json()
-          messages.push(msgData)
+          messages.push(parseGmailMessage(msgData))
         }
 
-        // Small delay between requests to avoid rate limiting
         await new Promise((resolve) => setTimeout(resolve, 100))
       } catch (error) {
         console.error(`Error fetching message ${msg.id}:`, error)
       }
     }
 
-    return messages.map(parseGmailMessage)
+    return messages
   } catch (error) {
     console.error("Gmail fetch error:", error)
-    throw error // Re-throw to show error to user
+    throw error
   }
 }
 
-function parseGmailMessage(msg: any) {
+function parseGmailMessage(msg: any): InboundEmail {
   const headers = msg.payload?.headers || []
   const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || ""
 
   let body = ""
-  let contentType = "text"
+  let contentType: "text" | "html" = "text"
 
-  // Helper to decode base64url content
   const decodeContent = (data: string) => {
     try {
       return Buffer.from(data, "base64url").toString("utf-8")
@@ -140,12 +141,9 @@ function parseGmailMessage(msg: any) {
     }
   }
 
-  // Helper to find parts recursively (for nested multipart)
   const findPart = (parts: any[], mimeType: string): any => {
     for (const part of parts) {
-      if (part.mimeType === mimeType && part.body?.data) {
-        return part
-      }
+      if (part.mimeType === mimeType && part.body?.data) return part
       if (part.parts) {
         const found = findPart(part.parts, mimeType)
         if (found) return found
@@ -154,13 +152,10 @@ function parseGmailMessage(msg: any) {
     return null
   }
 
-  // Try to get HTML first, then plain text
   if (msg.payload?.body?.data) {
-    // Single part message
     body = decodeContent(msg.payload.body.data)
     contentType = msg.payload.mimeType?.includes("html") ? "html" : "text"
   } else if (msg.payload?.parts) {
-    // Multipart message - prefer HTML
     const htmlPart = findPart(msg.payload.parts, "text/html")
     const textPart = findPart(msg.payload.parts, "text/plain")
 
@@ -173,21 +168,24 @@ function parseGmailMessage(msg: any) {
     }
   }
 
+  const dateStr = getHeader("Date")
+
   return {
-    id: msg.id,
+    externalId: msg.id,
     threadId: msg.threadId,
     from: getHeader("From"),
     to: getHeader("To"),
     subject: getHeader("Subject"),
-    date: getHeader("Date"),
-    body,
-    contentType, // Include content type in parsed message
-    snippet: msg.snippet,
+    body: body || msg.snippet || "",
+    contentType,
+    receivedAt: dateStr ? new Date(dateStr) : new Date(),
+    inReplyTo: getHeader("In-Reply-To"),
+    references: getHeader("References"),
     labelIds: msg.labelIds || [],
   }
 }
 
-async function fetchOutlookMessages(accessToken: string): Promise<any[]> {
+async function fetchOutlookMessages(accessToken: string): Promise<InboundEmail[]> {
   try {
     const response = await fetch(
       "https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=20&$orderby=receivedDateTime desc",
@@ -197,140 +195,21 @@ async function fetchOutlookMessages(accessToken: string): Promise<any[]> {
     if (!response.ok) return []
 
     const data = await response.json()
-    return (data.value || []).map(parseOutlookMessage)
+    return (data.value || []).map(
+      (msg: any): InboundEmail => ({
+        externalId: msg.id,
+        threadId: msg.conversationId,
+        from: msg.from?.emailAddress?.address || "",
+        fromName: msg.from?.emailAddress?.name,
+        to: msg.toRecipients?.[0]?.emailAddress?.address || "",
+        subject: msg.subject || "",
+        body: msg.body?.content || "",
+        contentType: msg.body?.contentType === "html" ? "html" : "text",
+        receivedAt: new Date(msg.receivedDateTime),
+      }),
+    )
   } catch (error) {
     console.error("Outlook fetch error:", error)
     return []
-  }
-}
-
-function parseOutlookMessage(msg: any) {
-  return {
-    id: msg.id,
-    threadId: msg.conversationId,
-    from: msg.from?.emailAddress?.address || "",
-    fromName: msg.from?.emailAddress?.name || "",
-    to: msg.toRecipients?.[0]?.emailAddress?.address || "",
-    subject: msg.subject || "",
-    date: msg.receivedDateTime,
-    body: msg.body?.content || "",
-    snippet: msg.bodyPreview || "",
-    isRead: msg.isRead,
-  }
-}
-
-async function processInboundEmail(supabase: any, email: any, channel: any, property_id: string): Promise<boolean> {
-  try {
-    // Extract sender email
-    const fromMatch = email.from.match(/<(.+)>/)
-    const senderEmail = fromMatch ? fromMatch[1] : email.from.trim()
-    const senderName = email.fromName || email.from.split("<")[0].trim().replace(/"/g, "")
-
-    // Find or create contact
-    let { data: contact } = await supabase
-      .from("contacts")
-      .select("id")
-      .eq("property_id", property_id)
-      .eq("email", senderEmail)
-      .maybeSingle()
-
-    if (!contact) {
-      const { data: newContact, error: contactError } = await supabase
-        .from("contacts")
-        .insert({
-          property_id,
-          email: senderEmail,
-          name: senderName || senderEmail.split("@")[0],
-        })
-        .select("id")
-        .single()
-
-      if (contactError) {
-        console.error("Error creating contact:", contactError)
-        return false
-      }
-      contact = newContact
-    }
-
-    // Find or create conversation by thread ID
-    let { data: conversation } = await supabase
-      .from("conversations")
-      .select("id")
-      .eq("property_id", property_id)
-      .eq("gmail_thread_id", email.threadId)
-      .maybeSingle()
-
-    if (!conversation) {
-      const { data: newConv, error: convError } = await supabase
-        .from("conversations")
-        .insert({
-          property_id,
-          contact_id: contact.id,
-          channel_id: channel.id,
-          channel: "email",
-          subject: email.subject || "(Nessun oggetto)",
-          status: "open",
-          gmail_thread_id: email.threadId,
-          gmail_message_id: email.id,
-          unread_count: 1,
-          last_message_at: new Date(email.date).toISOString(),
-        })
-        .select("id")
-        .single()
-
-      if (convError) {
-        console.error("Error creating conversation:", convError)
-        return false
-      }
-      conversation = newConv
-    }
-
-    // Check if message already exists
-    const { data: existingMsg } = await supabase.from("messages").select("id").eq("gmail_id", email.id).maybeSingle()
-
-    if (existingMsg) {
-      return false // Already imported
-    }
-
-    const { error: msgError } = await supabase.from("messages").insert({
-      property_id,
-      conversation_id: conversation.id,
-      sender_type: "customer",
-      content: email.body || email.snippet || "",
-      content_type: email.contentType || "text", // Use content type from parsed message
-      gmail_id: email.id,
-      metadata: {
-        from: email.from,
-        to: email.to,
-        subject: email.subject,
-      },
-      created_at: new Date(email.date).toISOString(),
-    })
-
-    if (msgError) {
-      console.error("Error creating message:", msgError)
-      return false
-    }
-
-    // Update conversation last message
-    const { data: currentConv } = await supabase
-      .from("conversations")
-      .select("unread_count")
-      .eq("id", conversation.id)
-      .single()
-
-    await supabase
-      .from("conversations")
-      .update({
-        last_message_at: new Date(email.date).toISOString(),
-        unread_count: (currentConv?.unread_count || 0) + 1,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", conversation.id)
-
-    return true
-  } catch (error) {
-    console.error("Error processing email:", error)
-    return false
   }
 }
