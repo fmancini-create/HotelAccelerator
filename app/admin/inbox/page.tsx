@@ -1,10 +1,10 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useAdminAuth } from "@/lib/admin-hooks"
+import { createClient } from "@/lib/supabase/client"
 import {
   MessageCircle,
   Mail,
@@ -90,7 +90,7 @@ const statusConfig = {
   spam: { label: "Spam", color: "bg-red-100 text-red-700" },
 }
 
-export default function AdminInboxPage() {
+export default function InboxPage() {
   const router = useRouter()
   const { adminUser, isLoading: authLoading } = useAdminAuth()
 
@@ -110,6 +110,7 @@ export default function AdminInboxPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const realtimeChannelRef = useRef<any>(null)
 
   const isPausedRef = useRef(false)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -461,6 +462,57 @@ export default function AdminInboxPage() {
 
     return <div className="whitespace-pre-wrap break-words text-sm">{content}</div>
   }
+
+  useEffect(() => {
+    if (!adminUser) return
+
+    const supabase = createClient()
+
+    // Subscribe to new messages and conversation updates
+    const channel = supabase
+      .channel("inbox-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages",
+        },
+        (payload) => {
+          console.log("[v0] Realtime: New message received", payload)
+          // Reload conversations to update last message and unread count
+          loadConversations()
+          // If this message is for the selected conversation, reload messages
+          if (payload.new && payload.new.conversation_id === selectedConversationIdRef.current) {
+            loadMessages(selectedConversationIdRef.current, false)
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "conversations",
+        },
+        (payload) => {
+          console.log("[v0] Realtime: Conversation updated", payload)
+          loadConversations()
+        },
+      )
+      .subscribe((status) => {
+        console.log("[v0] Realtime subscription status:", status)
+      })
+
+    realtimeChannelRef.current = channel
+
+    return () => {
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current)
+        realtimeChannelRef.current = null
+      }
+    }
+  }, [adminUser, loadConversations])
 
   if (authLoading) {
     return (
