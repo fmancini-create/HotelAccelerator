@@ -527,6 +527,7 @@ export async function untrashGmailMessage(
     console.log(`[v0] Gmail message ${messageId} restored from trash`)
     return { success: true }
   } catch (err) {
+    console.error("[v0] Gmail thread untrash exception:", err)
     return { success: false, error: "Errore durante il ripristino dal cestino" }
   }
 }
@@ -677,5 +678,43 @@ export async function getGmailLabelsWithCounts(channelId: string): Promise<{
 
   return {
     labels: [...labelsWithCounts, ...remainingSystemLabels, ...remainingUserLabels],
+  }
+}
+
+/**
+ * Gets all message IDs in a Gmail thread
+ * Required for HARDEN step in SPAM archive
+ */
+export async function getGmailThreadMessages(
+  channelId: string,
+  threadId: string,
+): Promise<{ messageIds: string[]; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { messageIds: [], error: error || "Token non disponibile" }
+  }
+
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=minimal`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error("[GMAIL-SPAM-FIX] Thread fetch error:", response.status, errorBody)
+      return { messageIds: [], error: `Errore Gmail API: ${response.status}` }
+    }
+
+    const data = await response.json()
+    const messageIds = (data.messages || []).map((m: any) => m.id)
+
+    console.log(`[GMAIL-SPAM-FIX] Thread ${threadId} contains ${messageIds.length} messages:`, messageIds)
+    return { messageIds }
+  } catch (err) {
+    console.error("[GMAIL-SPAM-FIX] Thread fetch exception:", err)
+    return { messageIds: [], error: "Errore durante il fetch del thread" }
   }
 }

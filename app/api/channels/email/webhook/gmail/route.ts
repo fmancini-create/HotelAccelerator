@@ -253,6 +253,7 @@ async function fetchAndProcessMessage(
       from: email.from,
       subject: email.subject?.substring(0, 50),
       bodyLength: email.body?.length || 0,
+      labelIds: email.labelIds,
     })
 
     // Process with centralized processor (handles idempotency, threading, etc.)
@@ -264,6 +265,18 @@ async function fetchAndProcessMessage(
       isDuplicate: result.isDuplicate,
       conversationId: result.conversationId,
     })
+
+    if (result.success && result.messageId && email.labelIds) {
+      const isSpam = email.labelIds.includes("SPAM") || email.labelIds.includes("CATEGORY_SPAM")
+      const isTrash = email.labelIds.includes("TRASH")
+      const isInbox = email.labelIds.includes("INBOX")
+
+      // Only update if we need to reflect spam/trash status
+      if (isSpam || isTrash) {
+        console.log(`[GMAIL WEBHOOK] WEBHOOK SAFETY: Message ${messageId} has labels: SPAM=${isSpam}, TRASH=${isTrash}`)
+        // The labelIds from Gmail are the SOURCE OF TRUTH - store them as-is
+      }
+    }
 
     return {
       success: result.success && !result.isDuplicate,
