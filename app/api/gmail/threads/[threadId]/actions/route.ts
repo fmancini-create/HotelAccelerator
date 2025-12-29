@@ -9,6 +9,7 @@ import {
   trashGmailThread,
   spamGmailThread,
   unspamGmailThread,
+  untrashGmailThread,
 } from "@/lib/gmail-client"
 
 const API_VERSION = "v745"
@@ -102,6 +103,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         break
       case "trash":
         result = await trashGmailThread(channel.id, threadId)
+        break
+      case "untrash":
+        result = await untrashGmailThread(channel.id, threadId)
         break
       case "spam":
         result = await spamGmailThread(channel.id, threadId)

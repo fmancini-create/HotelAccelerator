@@ -541,6 +541,41 @@ export async function spamGmailMessage(
   return modifyGmailMessage(channelId, messageId, ["SPAM"], ["INBOX"])
 }
 
+/**
+ * Restores an entire Gmail thread from trash
+ */
+export async function untrashGmailThread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}/untrash`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error("[v0] Gmail thread untrash error:", response.status, errorBody)
+      return { success: false, error: `Errore Gmail API: ${response.status}` }
+    }
+
+    console.log(`[v0] Gmail thread ${threadId} restored from trash`)
+    return { success: true }
+  } catch (err) {
+    console.error("[v0] Gmail thread untrash exception:", err)
+    return { success: false, error: "Errore durante il ripristino dal cestino" }
+  }
+}
+
 function chunkArray<T>(array: T[], size: number): T[][] {
   const chunks: T[][] = []
   for (let i = 0; i < array.length; i += size) {

@@ -68,7 +68,7 @@ interface GmailThread {
   isStarred: boolean
   internalDate: number
   date: string
-  messagesCount: number
+  messagesCount: number // Assuming this might be useful, though not explicitly in the original JSON example
 }
 
 interface GmailMessage {
@@ -368,7 +368,7 @@ export default function InboxPage() {
   const handleGmailAction = async (threadId: string, action: string) => {
     try {
       console.log(`[v0] Gmail action: ${action} on thread ${threadId}`)
-      setIsActionLoading(threadId) // Use threadId for general action loading indicator
+      setIsActionLoading(threadId)
       const res = await fetch(`/api/gmail/threads/${threadId}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -391,6 +391,39 @@ export default function InboxPage() {
     } finally {
       setIsActionLoading(null)
     }
+  }
+
+  const getSmartArchiveAction = (labels: string[]): string => {
+    if (labels.includes("SPAM")) return "unspam"
+    if (labels.includes("TRASH")) return "untrash"
+    return "archive"
+  }
+
+  const handleSmartArchiveForMessage = async (messageGmailId: string) => {
+    // Use selected thread labels OR current folder to determine action
+    const labels = selectedGmailThread?.labels || []
+    // Also check current folder being viewed
+    if (gmailLabelId === "SPAM" && !labels.includes("SPAM")) {
+      labels.push("SPAM")
+    }
+    if (gmailLabelId === "TRASH" && !labels.includes("TRASH")) {
+      labels.push("TRASH")
+    }
+
+    const action = getSmartArchiveAction(labels)
+    console.log(`[v0] Smart archive for message: labels=${labels.join(",")}, folder=${gmailLabelId}, action=${action}`)
+
+    // Use thread ID if available, otherwise use message ID
+    const targetId = selectedGmailThread?.id || messageGmailId
+    const success = await handleGmailAction(targetId, action)
+
+    if (success && selectedGmailThread) {
+      setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread.id))
+      setSelectedGmailThread(null)
+      setGmailMessages([])
+    }
+
+    return success
   }
 
   const handleGmailStarToggle = async (thread: GmailThread, e?: React.MouseEvent) => {
@@ -419,7 +452,19 @@ export default function InboxPage() {
 
   const handleGmailArchive = async (thread: GmailThread, e?: React.MouseEvent) => {
     e?.stopPropagation()
-    const success = await handleGmailAction(thread.id, "archive")
+
+    const labels = [...thread.labels]
+    if (gmailLabelId === "SPAM" && !labels.includes("SPAM")) {
+      labels.push("SPAM")
+    }
+    if (gmailLabelId === "TRASH" && !labels.includes("TRASH")) {
+      labels.push("TRASH")
+    }
+
+    const action = getSmartArchiveAction(labels)
+    console.log(`[v0] Smart archive: thread labels=${labels.join(",")}, folder=${gmailLabelId}, using action=${action}`)
+
+    const success = await handleGmailAction(thread.id, action)
     if (success) {
       setGmailThreads((prev) => prev.filter((t) => t.id !== thread.id))
       if (selectedGmailThread?.id === thread.id) {
@@ -1594,7 +1639,7 @@ export default function InboxPage() {
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => handleGmailAction(message.gmail_id, "archive")}>
+                                <DropdownMenuItem onClick={() => handleSmartArchiveForMessage(message.gmail_id)}>
                                   <Archive className="mr-2 h-4 w-4" />
                                   Archivia
                                 </DropdownMenuItem>
