@@ -454,6 +454,10 @@ export default function InboxPage() {
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
     async (threadId: string, action: string, currentLabels?: string[]) => {
+      console.error(`[FRONTEND] v771 Calling actions API: threadId=${threadId}, action=${action}`)
+      console.error(`[FRONTEND] v771 selectedGmailThread?.labels=${JSON.stringify(selectedGmailThread?.labels)}`)
+      console.error(`[FRONTEND] v771 currentLabels param=${JSON.stringify(currentLabels)}`)
+
       if (!canPerformGmailAction()) {
         console.warn(`[v0] v771: ACTION BLOCKED - thread not ready`)
         setError("Caricamento thread in corso, riprova tra un istante")
@@ -462,9 +466,12 @@ export default function InboxPage() {
 
       const labelsToUse = selectedGmailThread?.labels || currentLabels
 
+      console.error(`[FRONTEND] v771 FINAL labelsToUse=${JSON.stringify(labelsToUse)}`)
+
       // HARD ASSERT #1: Labels must be defined
       if (labelsToUse === undefined) {
         console.error(`[v0] FRONTEND: ❌ FATAL BUG - labels undefined after guard check`)
+        console.error(`[FRONTEND] v771 ❌ selectedGmailThread=${JSON.stringify(selectedGmailThread)}`)
         setError("BUG INTERNO: Labels mancanti - ricarica la pagina")
         return false
       }

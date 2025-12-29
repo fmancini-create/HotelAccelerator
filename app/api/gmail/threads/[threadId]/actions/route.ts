@@ -13,7 +13,8 @@ import {
   getValidGmailToken,
 } from "@/lib/gmail-client"
 
-const API_VERSION = "v767-actions"
+const API_VERSION = "v771-actions-final"
+const ACTIONS_BUILD = "v771-actions-final"
 
 function isInSpam(labels: string[]): boolean {
   return labels.includes("SPAM") || labels.includes("CATEGORY_SPAM")
@@ -108,7 +109,8 @@ async function verifyThreadExists(
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
-  console.log(`[GMAIL-ACTIONS] ========== BUILD v767-actions ==========`)
+  console.log(`[GMAIL-ACTIONS] BUILD = ${ACTIONS_BUILD}`)
+  console.log(`[GMAIL-ACTIONS] ========== BUILD ${ACTIONS_BUILD} ==========`)
   console.log(`[GMAIL-THREAD-VERIFY] ========== GMAIL THREAD ACTIONS API ${API_VERSION} ==========`)
 
   try {
