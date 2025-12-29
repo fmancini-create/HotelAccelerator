@@ -390,8 +390,18 @@ export async function spamGmailMessage(
   return modifyGmailMessage(channelId, messageId, ["SPAM"], ["INBOX"])
 }
 
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size))
+  }
+  return chunks
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 /**
- * Gets Gmail labels with unread counts
+ * Gets Gmail labels with unread counts - OPTIMIZED to avoid rate limiting
  */
 export async function getGmailLabelsWithCounts(channelId: string): Promise<{
   labels: Array<{
@@ -412,22 +422,74 @@ export async function getGmailLabelsWithCounts(channelId: string): Promise<{
     return { labels: [], error: error || "Errore caricamento etichette" }
   }
 
-  // Get detailed info for each label to get counts
-  const labelsWithCounts = await Promise.all(
-    data.labels.map(async (label: any) => {
-      const { data: labelData } = await gmailFetch(channelId, `labels/${label.id}`)
-      return {
-        id: label.id,
-        name: label.name,
-        type: label.type,
-        messagesTotal: labelData?.messagesTotal || 0,
-        messagesUnread: labelData?.messagesUnread || 0,
-        threadsTotal: labelData?.threadsTotal || 0,
-        threadsUnread: labelData?.threadsUnread || 0,
-        color: labelData?.color,
-      }
-    }),
-  )
+  const essentialSystemLabelIds = ["INBOX", "SENT", "DRAFT", "SPAM", "TRASH", "STARRED", "UNREAD"]
 
-  return { labels: labelsWithCounts }
+  const systemLabels = data.labels.filter((l: any) => l.type === "system")
+  const userLabels = data.labels.filter((l: any) => l.type === "user")
+
+  // Only fetch details for essential system labels
+  const labelsToFetchDetails = [
+    ...systemLabels.filter((l: any) => essentialSystemLabelIds.includes(l.id)),
+    ...userLabels.slice(0, 20), // Limit user labels to first 20 to avoid rate limiting
+  ]
+
+  const labelsWithCounts: any[] = []
+
+  const BATCH_SIZE = 3
+  const labelChunks = chunkArray(labelsToFetchDetails, BATCH_SIZE)
+
+  for (let i = 0; i < labelChunks.length; i++) {
+    const chunk = labelChunks[i]
+
+    const chunkResults = await Promise.all(
+      chunk.map(async (label: any) => {
+        const { data: labelData } = await gmailFetch(channelId, `labels/${label.id}`)
+        return {
+          id: label.id,
+          name: label.name,
+          type: label.type,
+          messagesTotal: labelData?.messagesTotal || 0,
+          messagesUnread: labelData?.messagesUnread || 0,
+          threadsTotal: labelData?.threadsTotal || 0,
+          threadsUnread: labelData?.threadsUnread || 0,
+          color: labelData?.color,
+        }
+      }),
+    )
+
+    labelsWithCounts.push(...chunkResults)
+
+    // Add delay between batches to avoid rate limiting
+    if (i < labelChunks.length - 1) {
+      await delay(200)
+    }
+  }
+
+  const fetchedIds = new Set(labelsWithCounts.map((l) => l.id))
+  const remainingSystemLabels = systemLabels
+    .filter((l: any) => !fetchedIds.has(l.id))
+    .map((l: any) => ({
+      id: l.id,
+      name: l.name,
+      type: l.type,
+      messagesTotal: 0,
+      messagesUnread: 0,
+      threadsTotal: 0,
+      threadsUnread: 0,
+    }))
+
+  // Add remaining user labels without counts
+  const remainingUserLabels = userLabels.slice(20).map((l: any) => ({
+    id: l.id,
+    name: l.name,
+    type: "user",
+    messagesTotal: 0,
+    messagesUnread: 0,
+    threadsTotal: 0,
+    threadsUnread: 0,
+  }))
+
+  return {
+    labels: [...labelsWithCounts, ...remainingSystemLabels, ...remainingUserLabels],
+  }
 }

@@ -1,9 +1,38 @@
-// Gmail Threads API - Direct Gmail API source of truth - NO LOCAL LIMITS
+// Gmail Threads API - Direct Gmail API source of truth - with rate limiting protection
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 
-const API_VERSION = "v743" // Debug marker - updated
+const API_VERSION = "v744" // Debug marker - rate limit fix
+
+function chunkArray<T>(array: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size))
+  }
+  return chunks
+}
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const res = await fetch(url, options)
+
+    if (res.status === 429) {
+      // Rate limited - wait and retry with exponential backoff
+      const waitTime = Math.pow(2, attempt) * 1000 // 1s, 2s, 4s
+      console.log(`[v0] ${API_VERSION} - Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}`)
+      await delay(waitTime)
+      continue
+    }
+
+    return res
+  }
+
+  // Return last response even if it failed
+  return fetch(url, options)
+}
 
 export async function GET(request: NextRequest) {
   console.log(`[v0] GMAIL THREADS API ${API_VERSION} HIT`)
@@ -24,7 +53,6 @@ export async function GET(request: NextRequest) {
   const { data: adminUser } = await supabase.from("admin_users").select("role").eq("id", user.id).single()
 
   if (adminUser?.role === "super_admin") {
-    // Super admin: access to first active Gmail channel
     console.log(`[v0] ${API_VERSION} - User is super_admin, getting first active Gmail channel`)
     const { data: channel } = await supabase
       .from("email_channels")
@@ -36,7 +64,6 @@ export async function GET(request: NextRequest) {
 
     channelId = channel?.id || null
   } else {
-    // 2. Try user_channel_permissions
     const { data: channelPermission } = await supabase
       .from("user_channel_permissions")
       .select("channel_id")
@@ -47,7 +74,6 @@ export async function GET(request: NextRequest) {
     if (channelPermission) {
       channelId = channelPermission.channel_id
     } else {
-      // 3. Try email_channel_assignments
       const { data: channelAssignment } = await supabase
         .from("email_channel_assignments")
         .select("channel_id")
@@ -80,14 +106,9 @@ export async function GET(request: NextRequest) {
   const pageToken = searchParams.get("pageToken") || undefined
   const q = searchParams.get("q") || undefined
 
-  console.log(`[v0] ${API_VERSION} - Fetching Gmail threads:`, {
-    labelId,
-    pageToken: pageToken ? "present" : "none",
-    q,
-  })
+  console.log(`[v0] ${API_VERSION} - Fetching Gmail threads:`, { labelId, pageToken: pageToken ? "present" : "none" })
 
   try {
-    // Gmail API maxResults max is 500 for threads.list
     const params = new URLSearchParams()
     if (labelId && labelId !== "ALL") {
       params.set("labelIds", labelId)
@@ -95,13 +116,12 @@ export async function GET(request: NextRequest) {
     if (pageToken) {
       params.set("pageToken", pageToken)
     }
-    params.set("maxResults", "100")
+    params.set("maxResults", "25")
     if (q) {
       params.set("q", q)
     }
 
-    // Fetch threads list from Gmail API
-    const threadsListRes = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads?${params}`, {
+    const threadsListRes = await fetchWithRetry(`https://gmail.googleapis.com/gmail/v1/users/me/threads?${params}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
@@ -116,75 +136,77 @@ export async function GET(request: NextRequest) {
 
     const threadsListData = await threadsListRes.json()
 
-    console.log(`[v0] ${API_VERSION} - Gmail threads.list raw response:`, {
+    console.log(`[v0] ${API_VERSION} - Gmail threads.list response:`, {
       threadsCount: threadsListData.threads?.length || 0,
       resultSizeEstimate: threadsListData.resultSizeEstimate,
       nextPageToken: threadsListData.nextPageToken ? "present" : "none",
-      labelId,
     })
 
     const threadIds = threadsListData.threads?.map((t: any) => t.id) || []
 
-    // Fetch full thread data for each thread (parallel batch)
-    const threads = await Promise.all(
-      threadIds.map(async (threadId: string) => {
-        const threadRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        )
+    const BATCH_SIZE = 5
+    const threadChunks = chunkArray(threadIds, BATCH_SIZE)
+    const allThreads: any[] = []
 
-        if (!threadRes.ok) {
-          console.error(`[v0] ${API_VERSION} - thread.get error for`, threadId, threadRes.status)
-          return null
-        }
+    for (let i = 0; i < threadChunks.length; i++) {
+      const chunk = threadChunks[i]
 
-        const threadData = await threadRes.json()
-        const messages = threadData.messages || []
-        const lastMessage = messages[messages.length - 1]
+      const chunkResults = await Promise.all(
+        chunk.map(async (threadId: string) => {
+          const threadRes = await fetchWithRetry(
+            `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+            { headers: { Authorization: `Bearer ${token}` } },
+          )
 
-        // Extract headers from last message
-        const headers = lastMessage?.payload?.headers || []
-        const getHeader = (name: string) =>
-          headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || ""
+          if (!threadRes.ok) {
+            console.error(`[v0] ${API_VERSION} - thread.get error for`, threadId, threadRes.status)
+            return null
+          }
 
-        // Get labels from last message
-        const labels = lastMessage?.labelIds || []
-        const isUnread = labels.includes("UNREAD")
-        const isStarred = labels.includes("STARRED")
+          const threadData = await threadRes.json()
+          const messages = threadData.messages || []
+          const lastMessage = messages[messages.length - 1]
 
-        // Get sender info
-        const fromHeader = getHeader("From")
-        const fromMatch = fromHeader.match(/^(?:"?([^"<]*)"?\s*)?<?([^>]*)>?$/)
-        const senderName = fromMatch?.[1]?.trim() || fromMatch?.[2]?.split("@")[0] || ""
-        const senderEmail = fromMatch?.[2] || fromHeader
+          const headers = lastMessage?.payload?.headers || []
+          const getHeader = (name: string) =>
+            headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || ""
 
-        // Get date from internalDate (milliseconds timestamp)
-        const internalDate = lastMessage?.internalDate ? Number.parseInt(lastMessage.internalDate) : Date.now()
+          const labels = lastMessage?.labelIds || []
+          const isUnread = labels.includes("UNREAD")
+          const isStarred = labels.includes("STARRED")
 
-        return {
-          id: threadId,
-          gmail_thread_id: threadId,
-          historyId: threadData.historyId,
-          messagesCount: messages.length,
-          subject: getHeader("Subject") || "(nessun oggetto)",
-          snippet: lastMessage?.snippet || "",
-          from: {
-            name: senderName,
-            email: senderEmail,
-          },
-          labels,
-          isUnread,
-          isStarred,
-          internalDate,
-          date: new Date(internalDate).toISOString(),
-        }
-      }),
-    )
+          const fromHeader = getHeader("From")
+          const fromMatch = fromHeader.match(/^(?:"?([^"<]*)"?\s*)?<?([^>]*)>?$/)
+          const senderName = fromMatch?.[1]?.trim() || fromMatch?.[2]?.split("@")[0] || ""
+          const senderEmail = fromMatch?.[2] || fromHeader
 
-    // Filter out nulls and sort by internalDate descending (newest first)
-    const validThreads = threads.filter(Boolean).sort((a: any, b: any) => b.internalDate - a.internalDate)
+          const internalDate = lastMessage?.internalDate ? Number.parseInt(lastMessage.internalDate) : Date.now()
+
+          return {
+            id: threadId,
+            gmail_thread_id: threadId,
+            historyId: threadData.historyId,
+            messagesCount: messages.length,
+            subject: getHeader("Subject") || "(nessun oggetto)",
+            snippet: lastMessage?.snippet || "",
+            from: { name: senderName, email: senderEmail },
+            labels,
+            isUnread,
+            isStarred,
+            internalDate,
+            date: new Date(internalDate).toISOString(),
+          }
+        }),
+      )
+
+      allThreads.push(...chunkResults)
+
+      if (i < threadChunks.length - 1) {
+        await delay(100)
+      }
+    }
+
+    const validThreads = allThreads.filter(Boolean).sort((a: any, b: any) => b.internalDate - a.internalDate)
 
     console.log(`[v0] ${API_VERSION} - Returning ${validThreads.length} threads`)
 
