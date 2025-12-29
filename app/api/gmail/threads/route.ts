@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 
-const API_VERSION = "v767"
+const API_VERSION = "v774"
 
 function chunkArray<T>(array: T[], size: number): T[][] {
   const chunks: T[][] = []
@@ -33,7 +33,7 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 }
 
 export async function GET(request: NextRequest) {
-  console.log(`[GMAIL-THREADS] ========== BUILD v767 ==========`)
+  console.log(`[GMAIL-THREADS] ========== BUILD v774 ==========`)
   console.log(`[GMAIL-THREAD-VERIFY] ========== GMAIL THREADS API ${API_VERSION} ==========`)
 
   const supabase = await createClient()
