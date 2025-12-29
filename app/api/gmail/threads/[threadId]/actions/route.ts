@@ -1,16 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import {
-  markGmailAsRead,
-  markGmailAsUnread,
-  starGmailMessage,
-  unstarGmailMessage,
-  archiveGmailMessage,
-  trashGmailMessage,
-  spamGmailMessage,
+  markGmailThreadAsRead,
+  markGmailThreadAsUnread,
+  starGmailThread,
+  unstarGmailThread,
+  archiveGmailThread,
+  trashGmailThread,
+  spamGmailThread,
+  unspamGmailThread,
 } from "@/lib/gmail-client"
 
-const API_VERSION = "v744"
+const API_VERSION = "v745"
 
 async function getEmailChannelForUser(supabase: any, userId: string) {
   // Check if user is super_admin
@@ -83,30 +84,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let result: { success: boolean; error?: string }
 
-    // Thread actions apply to the first message or entire thread
-    // For star/unstar, archive, trash, spam - we typically use thread ID
-    // Gmail API accepts thread ID for these operations
     switch (action) {
       case "markAsRead":
-        result = await markGmailAsRead(channel.id, threadId)
+        result = await markGmailThreadAsRead(channel.id, threadId)
         break
       case "markAsUnread":
-        result = await markGmailAsUnread(channel.id, threadId)
+        result = await markGmailThreadAsUnread(channel.id, threadId)
         break
       case "star":
-        result = await starGmailMessage(channel.id, threadId)
+        result = await starGmailThread(channel.id, threadId)
         break
       case "unstar":
-        result = await unstarGmailMessage(channel.id, threadId)
+        result = await unstarGmailThread(channel.id, threadId)
         break
       case "archive":
-        result = await archiveGmailMessage(channel.id, threadId)
+        result = await archiveGmailThread(channel.id, threadId)
         break
       case "trash":
-        result = await trashGmailMessage(channel.id, threadId)
+        result = await trashGmailThread(channel.id, threadId)
         break
       case "spam":
-        result = await spamGmailMessage(channel.id, threadId)
+        result = await spamGmailThread(channel.id, threadId)
+        break
+      case "unspam":
+        result = await unspamGmailThread(channel.id, threadId)
         break
       default:
         return NextResponse.json({ error: "Azione non valida", debugVersion: API_VERSION }, { status: 400 })

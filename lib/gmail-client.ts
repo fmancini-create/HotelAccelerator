@@ -261,11 +261,160 @@ export async function modifyGmailMessage(
       return { success: false, error: `Errore Gmail API: ${response.status}` }
     }
 
+    console.log(
+      `[v0] Gmail message ${messageId} modified successfully - added: [${addLabels}], removed: [${removeLabels}]`,
+    )
     return { success: true }
   } catch (err) {
     console.error("[v0] Gmail modify exception:", err)
     return { success: false, error: "Errore durante la modifica del messaggio" }
   }
+}
+
+/**
+ * Modifies Gmail THREAD labels (add/remove) - applies to all messages in thread
+ */
+export async function modifyGmailThread(
+  channelId: string,
+  threadId: string,
+  addLabels: string[] = [],
+  removeLabels: string[] = [],
+): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}/modify`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        addLabelIds: addLabels,
+        removeLabelIds: removeLabels,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error("[v0] Gmail thread modify error:", response.status, errorBody)
+      return { success: false, error: `Errore Gmail API: ${response.status}` }
+    }
+
+    console.log(
+      `[v0] Gmail thread ${threadId} modified successfully - added: [${addLabels}], removed: [${removeLabels}]`,
+    )
+    return { success: true }
+  } catch (err) {
+    console.error("[v0] Gmail thread modify exception:", err)
+    return { success: false, error: "Errore durante la modifica del thread" }
+  }
+}
+
+/**
+ * Marks an entire Gmail thread as read
+ */
+export async function markGmailThreadAsRead(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailThread(channelId, threadId, [], ["UNREAD"])
+}
+
+/**
+ * Marks an entire Gmail thread as unread
+ */
+export async function markGmailThreadAsUnread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailThread(channelId, threadId, ["UNREAD"], [])
+}
+
+/**
+ * Stars an entire Gmail thread
+ */
+export async function starGmailThread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailThread(channelId, threadId, ["STARRED"], [])
+}
+
+/**
+ * Unstars an entire Gmail thread
+ */
+export async function unstarGmailThread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailThread(channelId, threadId, [], ["STARRED"])
+}
+
+/**
+ * Archives an entire Gmail thread (removes from INBOX)
+ */
+export async function archiveGmailThread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailThread(channelId, threadId, [], ["INBOX"])
+}
+
+/**
+ * Moves an entire Gmail thread to trash
+ */
+export async function trashGmailThread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}/trash`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      return { success: false, error: `Errore Gmail API: ${response.status}` }
+    }
+
+    console.log(`[v0] Gmail thread ${threadId} moved to trash`)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: "Errore durante lo spostamento nel cestino" }
+  }
+}
+
+/**
+ * Moves an entire Gmail thread to spam
+ */
+export async function spamGmailThread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailThread(channelId, threadId, ["SPAM"], ["INBOX"])
+}
+
+/**
+ * Removes spam label from thread and moves to inbox
+ */
+export async function unspamGmailThread(
+  channelId: string,
+  threadId: string,
+): Promise<{ success: boolean; error?: string }> {
+  return modifyGmailThread(channelId, threadId, ["INBOX"], ["SPAM"])
 }
 
 /**
@@ -343,6 +492,7 @@ export async function trashGmailMessage(
       return { success: false, error: `Errore Gmail API: ${response.status}` }
     }
 
+    console.log(`[v0] Gmail message ${messageId} moved to trash`)
     return { success: true }
   } catch (err) {
     return { success: false, error: "Errore durante lo spostamento nel cestino" }
@@ -374,6 +524,7 @@ export async function untrashGmailMessage(
       return { success: false, error: `Errore Gmail API: ${response.status}` }
     }
 
+    console.log(`[v0] Gmail message ${messageId} restored from trash`)
     return { success: true }
   } catch (err) {
     return { success: false, error: "Errore durante il ripristino dal cestino" }
