@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 
-const API_VERSION = "v744" // Debug marker - rate limit fix
+const API_VERSION = "v752-DATA-FIX"
 
 function chunkArray<T>(array: T[], size: number): T[][] {
   const chunks: T[][] = []
@@ -20,9 +20,8 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
     const res = await fetch(url, options)
 
     if (res.status === 429) {
-      // Rate limited - wait and retry with exponential backoff
-      const waitTime = Math.pow(2, attempt) * 1000 // 1s, 2s, 4s
-      console.log(`[v0] ${API_VERSION} - Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}`)
+      const waitTime = Math.pow(2, attempt) * 1000
+      console.log(`[GMAIL-THREAD-VERIFY] Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}`)
       await delay(waitTime)
       continue
     }
@@ -30,12 +29,11 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
     return res
   }
 
-  // Return last response even if it failed
   return fetch(url, options)
 }
 
 export async function GET(request: NextRequest) {
-  console.log(`[v0] GMAIL THREADS API ${API_VERSION} HIT`)
+  console.log(`[GMAIL-THREAD-VERIFY] ========== GMAIL THREADS API ${API_VERSION} ==========`)
 
   const supabase = await createClient()
   const {
@@ -43,17 +41,16 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    console.log(`[v0] ${API_VERSION} - No user found`)
+    console.log(`[GMAIL-THREAD-VERIFY] No user found`)
     return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
   }
 
   let channelId: string | null = null
 
-  // 1. Check if user is super_admin in admin_users
   const { data: adminUser } = await supabase.from("admin_users").select("role").eq("id", user.id).single()
 
   if (adminUser?.role === "super_admin") {
-    console.log(`[v0] ${API_VERSION} - User is super_admin, getting first active Gmail channel`)
+    console.log(`[GMAIL-THREAD-VERIFY] User is super_admin, getting first active Gmail channel`)
     const { data: channel } = await supabase
       .from("email_channels")
       .select("id")
@@ -86,15 +83,15 @@ export async function GET(request: NextRequest) {
   }
 
   if (!channelId) {
-    console.log(`[v0] ${API_VERSION} - No Gmail channel found for user`)
+    console.log(`[GMAIL-THREAD-VERIFY] No Gmail channel found for user`)
     return NextResponse.json({ error: "Canale Gmail non configurato", debugVersion: API_VERSION }, { status: 404 })
   }
 
-  console.log(`[v0] ${API_VERSION} - Found channel:`, channelId)
+  console.log(`[GMAIL-THREAD-VERIFY] Found channel: ${channelId}`)
 
   const { token, error: tokenError } = await getValidGmailToken(channelId)
   if (!token) {
-    console.log(`[v0] ${API_VERSION} - Token error:`, tokenError)
+    console.log(`[GMAIL-THREAD-VERIFY] Token error: ${tokenError}`)
     return NextResponse.json(
       { error: tokenError || "Token non disponibile", debugVersion: API_VERSION },
       { status: 401 },
@@ -106,7 +103,9 @@ export async function GET(request: NextRequest) {
   const pageToken = searchParams.get("pageToken") || undefined
   const q = searchParams.get("q") || undefined
 
-  console.log(`[v0] ${API_VERSION} - Fetching Gmail threads:`, { labelId, pageToken: pageToken ? "present" : "none" })
+  console.log(
+    `[GMAIL-THREAD-VERIFY] Fetching Gmail threads: labelId=${labelId}, pageToken=${pageToken ? "present" : "none"}`,
+  )
 
   try {
     const params = new URLSearchParams()
@@ -127,7 +126,7 @@ export async function GET(request: NextRequest) {
 
     if (!threadsListRes.ok) {
       const errorBody = await threadsListRes.text()
-      console.error(`[v0] ${API_VERSION} - Gmail API threads.list error:`, threadsListRes.status, errorBody)
+      console.error(`[GMAIL-THREAD-VERIFY] Gmail API threads.list error: ${threadsListRes.status} ${errorBody}`)
       return NextResponse.json(
         { error: "Errore Gmail API", debugVersion: API_VERSION },
         { status: threadsListRes.status },
@@ -136,17 +135,16 @@ export async function GET(request: NextRequest) {
 
     const threadsListData = await threadsListRes.json()
 
-    console.log(`[v0] ${API_VERSION} - Gmail threads.list response:`, {
-      threadsCount: threadsListData.threads?.length || 0,
-      resultSizeEstimate: threadsListData.resultSizeEstimate,
-      nextPageToken: threadsListData.nextPageToken ? "present" : "none",
-    })
+    console.log(
+      `[GMAIL-THREAD-VERIFY] threads.list response: count=${threadsListData.threads?.length || 0}, nextPageToken=${threadsListData.nextPageToken ? "present" : "none"}`,
+    )
 
     const threadIds = threadsListData.threads?.map((t: any) => t.id) || []
 
     const BATCH_SIZE = 5
     const threadChunks = chunkArray(threadIds, BATCH_SIZE)
     const allThreads: any[] = []
+    const dataBugThreads: string[] = []
 
     for (let i = 0; i < threadChunks.length; i++) {
       const chunk = threadChunks[i]
@@ -154,12 +152,12 @@ export async function GET(request: NextRequest) {
       const chunkResults = await Promise.all(
         chunk.map(async (threadId: string) => {
           const threadRes = await fetchWithRetry(
-            `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`,
+            `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`,
             { headers: { Authorization: `Bearer ${token}` } },
           )
 
           if (!threadRes.ok) {
-            console.error(`[v0] ${API_VERSION} - thread.get error for`, threadId, threadRes.status)
+            console.error(`[GMAIL-THREAD-VERIFY] thread.get FAILED for ${threadId}: ${threadRes.status}`)
             return null
           }
 
@@ -171,7 +169,31 @@ export async function GET(request: NextRequest) {
           const getHeader = (name: string) =>
             headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || ""
 
-          const labels = lastMessage?.labelIds || []
+          const allLabelsSet = new Set<string>()
+          const messageIds: string[] = []
+
+          messages.forEach((msg: any) => {
+            messageIds.push(msg.id)
+            const msgLabels = msg.labelIds || []
+            msgLabels.forEach((label: string) => allLabelsSet.add(label))
+          })
+
+          const labels = Array.from(allLabelsSet)
+
+          if (labelId && labelId !== "ALL" && labelId !== "INBOX" && !labels.includes(labelId)) {
+            labels.push(labelId)
+          }
+
+          if (labels.length === 0) {
+            console.error(`[GMAIL-THREAD-VERIFY] ❌ DATA BUG: Thread ${threadId} has NO LABELS`)
+            dataBugThreads.push(threadId)
+            // Still include thread but mark it
+          }
+
+          console.log(
+            `[GMAIL-THREAD-VERIFY] Thread ${threadId}: messageIds=[${messageIds.join(",")}], labels=[${labels.join(",")}]`,
+          )
+
           const isUnread = labels.includes("UNREAD")
           const isStarred = labels.includes("STARRED")
 
@@ -187,14 +209,16 @@ export async function GET(request: NextRequest) {
             gmail_thread_id: threadId,
             historyId: threadData.historyId,
             messagesCount: messages.length,
+            messageIds, // Include message IDs for verification
             subject: getHeader("Subject") || "(nessun oggetto)",
             snippet: lastMessage?.snippet || "",
             from: { name: senderName, email: senderEmail },
-            labels,
+            labels, // Now contains ALL labels from ALL messages
             isUnread,
             isStarred,
             internalDate,
             date: new Date(internalDate).toISOString(),
+            _hasDataBug: labels.length === 0,
           }
         }),
       )
@@ -206,9 +230,19 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const validThreads = allThreads.filter(Boolean).sort((a: any, b: any) => b.internalDate - a.internalDate)
+    const validThreads = allThreads
+      .filter((t) => t !== null && !t._hasDataBug)
+      .sort((a: any, b: any) => b.internalDate - a.internalDate)
 
-    console.log(`[v0] ${API_VERSION} - Returning ${validThreads.length} threads`)
+    if (dataBugThreads.length > 0) {
+      console.error(
+        `[GMAIL-THREAD-VERIFY] ⚠️ ${dataBugThreads.length} threads had DATA BUG (no labels) and were excluded: [${dataBugThreads.join(",")}]`,
+      )
+    }
+
+    console.log(
+      `[GMAIL-THREAD-VERIFY] Returning ${validThreads.length} valid threads (${dataBugThreads.length} excluded for DATA BUG)`,
+    )
 
     return NextResponse.json({
       threads: validThreads,
@@ -219,12 +253,13 @@ export async function GET(request: NextRequest) {
         version: API_VERSION,
         rawThreadsCount: threadIds.length,
         processedThreadsCount: validThreads.length,
+        dataBugCount: dataBugThreads.length,
         hasNextPage: !!threadsListData.nextPageToken,
         labelId,
       },
     })
   } catch (error) {
-    console.error(`[v0] ${API_VERSION} - Error:`, error)
+    console.error(`[GMAIL-THREAD-VERIFY] Error:`, error)
     return NextResponse.json(
       { error: "Errore durante il recupero dei thread", debugVersion: API_VERSION },
       { status: 500 },

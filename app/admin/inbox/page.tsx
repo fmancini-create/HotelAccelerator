@@ -254,6 +254,11 @@ export default function InboxPage() {
 
   // ==================== GMAIL MODE FUNCTIONS (Direct API calls) ====================
 
+  // Helper to check if thread has valid labels
+  const isThreadDataValid = (thread: GmailThread): boolean => {
+    return thread.labels && Array.isArray(thread.labels) && thread.labels.length > 0
+  }
+
   const loadGmailLabels = useCallback(async () => {
     console.log("[v0] DEBUG: loadGmailLabels CALLED")
     try {
@@ -372,6 +377,13 @@ export default function InboxPage() {
       try {
         console.log(`[v0] FRONTEND: Starting Gmail action: ${action} on thread ${threadId}`)
         console.log(`[v0] FRONTEND: Current labels: ${JSON.stringify(currentLabels)}`)
+
+        if (!currentLabels || currentLabels.length === 0) {
+          console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread data incomplete (no labels)`)
+          setError("Dati thread incompleti – ricarica la pagina")
+          return false
+        }
+
         setIsActionLoading(threadId)
 
         const url = `/api/gmail/threads/${threadId}/actions`
@@ -394,7 +406,12 @@ export default function InboxPage() {
             error = { message: responseText }
           }
           console.error("[v0] FRONTEND: Gmail action failed:", error)
-          setError(error.error || error.message || `Errore durante ${action}`)
+
+          if (error.dataBug) {
+            setError("Errore dati thread – ricarica la pagina")
+          } else {
+            setError(error.error || error.message || `Errore durante ${action}`)
+          }
           return false
         }
 
@@ -416,6 +433,12 @@ export default function InboxPage() {
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
       console.log(`[v0] FRONTEND: Not spam action for thread ${thread.id}`)
+
+      if (!isThreadDataValid(thread)) {
+        console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread ${thread.id} has no labels`)
+        setError("Thread data incomplete – reload")
+        return false
+      }
 
       const success = await handleGmailAction(thread.id, "not_spam", thread.labels)
       if (success) {
@@ -475,6 +498,13 @@ export default function InboxPage() {
 
   const handleGmailStarToggle = async (thread: GmailThread, e?: React.MouseEvent) => {
     e?.stopPropagation()
+
+    if (!isThreadDataValid(thread)) {
+      console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread ${thread.id} has no labels`)
+      setError("Thread data incomplete – reload")
+      return
+    }
+
     const action = thread.isStarred ? "unstar" : "star"
     const success = await handleGmailAction(thread.id, action, thread.labels)
     if (success) {
@@ -488,6 +518,12 @@ export default function InboxPage() {
 
   const handleGmailMarkAsRead = useCallback(
     async (thread: GmailThread) => {
+      if (!isThreadDataValid(thread)) {
+        console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread ${thread.id} has no labels`)
+        setError("Thread data incomplete – reload")
+        return false
+      }
+
       const action = thread.isUnread ? "markAsRead" : "markAsUnread"
       const success = await handleGmailAction(thread.id, action, thread.labels)
       if (success) {
@@ -496,7 +532,7 @@ export default function InboxPage() {
           setSelectedGmailThread({ ...selectedGmailThread, isUnread: !selectedGmailThread.isUnread })
         }
       }
-      return success // return success for chaining
+      return success
     },
     [selectedGmailThread, handleGmailAction],
   ) // Added handleGmailAction as dependency
@@ -504,6 +540,12 @@ export default function InboxPage() {
   const handleGmailArchive = useCallback(
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
+
+      if (!isThreadDataValid(thread)) {
+        console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread ${thread.id} has no labels`)
+        setError("Thread data incomplete – reload")
+        return false
+      }
 
       const labels = [...thread.labels]
       if (gmailLabelId === "SPAM" && !labels.includes("SPAM")) {
@@ -537,6 +579,13 @@ export default function InboxPage() {
   const handleGmailTrash = useCallback(
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
+
+      if (!isThreadDataValid(thread)) {
+        console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread ${thread.id} has no labels`)
+        setError("Thread data incomplete – reload")
+        return false
+      }
+
       const success = await handleGmailAction(thread.id, "trash", thread.labels)
       if (success) {
         setGmailThreads((prev) => prev.filter((t) => t.id !== thread.id))
