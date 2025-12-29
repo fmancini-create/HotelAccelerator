@@ -12,7 +12,7 @@ import {
   modifyGmailThread,
 } from "@/lib/gmail-client"
 
-const API_VERSION = "v746"
+const API_VERSION = "v747"
 
 async function getEmailChannelForUser(supabase: any, userId: string) {
   // Check if user is super_admin
@@ -111,10 +111,52 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const isInTrash = currentLabels.includes("TRASH")
 
         if (isInSpam) {
-          // Thread is in SPAM - remove SPAM label (and INBOX if present)
-          console.log("[v0] SMART ARCHIVE: Thread is in SPAM, removing SPAM label")
+          // CRITICAL TWO-STEP FIX for SPAM
+          // Gmail re-classifies as spam if you only remove SPAM label
+          // MUST: 1) Remove SPAM + Add INBOX, 2) Remove INBOX
+          console.log("[v0] ========== TWO-STEP SPAM ARCHIVE ==========")
+
+          // STEP 1: Force safe classification - Remove SPAM, Add INBOX
+          console.log("[v0] STEP 1: Removing SPAM, Adding INBOX (force safe classification)")
+          const step1Result = await modifyGmailThread(channel.id, threadId, ["INBOX"], ["SPAM"])
+          console.log(`[v0] STEP 1 Result: ${JSON.stringify(step1Result)}`)
+
+          if (!step1Result.success) {
+            console.log(`[v0] ❌ STEP 1 FAILED: ${step1Result.error}`)
+            return NextResponse.json(
+              {
+                error: `SPAM fix step 1 failed: ${step1Result.error}`,
+                debugVersion: API_VERSION,
+              },
+              { status: 500 },
+            )
+          }
+
+          // Small delay to ensure Gmail processes step 1
+          await new Promise((resolve) => setTimeout(resolve, 200))
+
+          // STEP 2: Archive - Remove INBOX
+          console.log("[v0] STEP 2: Removing INBOX (archive)")
+          const step2Result = await modifyGmailThread(channel.id, threadId, [], ["INBOX"])
+          console.log(`[v0] STEP 2 Result: ${JSON.stringify(step2Result)}`)
+
+          if (!step2Result.success) {
+            console.log(`[v0] ❌ STEP 2 FAILED: ${step2Result.error}`)
+            // Step 1 succeeded but step 2 failed - thread is in INBOX now, not spam
+            return NextResponse.json(
+              {
+                error: `SPAM fix step 2 failed: ${step2Result.error}`,
+                debugVersion: API_VERSION,
+                partialSuccess: true,
+                message: "Thread moved to INBOX but not archived",
+              },
+              { status: 500 },
+            )
+          }
+
+          console.log("[v0] ✅ TWO-STEP SPAM ARCHIVE COMPLETE")
+          result = { success: true }
           labelsRemoved = ["SPAM", "INBOX"]
-          result = await modifyGmailThread(channel.id, threadId, [], labelsRemoved)
         } else if (isInTrash) {
           // Thread is in TRASH - use untrash
           console.log("[v0] SMART ARCHIVE: Thread is in TRASH, using untrash")
@@ -148,9 +190,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         labelsAdded = ["INBOX"]
         break
       case "archiveFromSpam":
-        console.log("[v0] archiveFromSpam: Removing SPAM label explicitly")
+        console.log("[v0] ========== TWO-STEP archiveFromSpam ==========")
+
+        // STEP 1: Remove SPAM, Add INBOX
+        console.log("[v0] STEP 1: Removing SPAM, Adding INBOX")
+        const afStep1 = await modifyGmailThread(channel.id, threadId, ["INBOX"], ["SPAM"])
+        console.log(`[v0] STEP 1 Result: ${JSON.stringify(afStep1)}`)
+
+        if (!afStep1.success) {
+          return NextResponse.json(
+            {
+              error: `archiveFromSpam step 1 failed: ${afStep1.error}`,
+              debugVersion: API_VERSION,
+            },
+            { status: 500 },
+          )
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 200))
+
+        // STEP 2: Remove INBOX
+        console.log("[v0] STEP 2: Removing INBOX")
+        const afStep2 = await modifyGmailThread(channel.id, threadId, [], ["INBOX"])
+        console.log(`[v0] STEP 2 Result: ${JSON.stringify(afStep2)}`)
+
+        if (!afStep2.success) {
+          return NextResponse.json(
+            {
+              error: `archiveFromSpam step 2 failed: ${afStep2.error}`,
+              debugVersion: API_VERSION,
+            },
+            { status: 500 },
+          )
+        }
+
+        result = { success: true }
         labelsRemoved = ["SPAM", "INBOX"]
-        result = await modifyGmailThread(channel.id, threadId, [], labelsRemoved)
         break
       default:
         return NextResponse.json({ error: "Azione non valida", debugVersion: API_VERSION }, { status: 400 })
