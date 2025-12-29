@@ -454,57 +454,52 @@ export default function InboxPage() {
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
     async (threadId: string, action: string, currentLabels?: string[]) => {
-      console.error(`[FRONTEND] v771 Calling actions API: threadId=${threadId}, action=${action}`)
-      console.error(`[FRONTEND] v771 selectedGmailThread?.labels=${JSON.stringify(selectedGmailThread?.labels)}`)
-      console.error(`[FRONTEND] v771 currentLabels param=${JSON.stringify(currentLabels)}`)
+      // v772: FIRST THING - log to prove this code runs
+      console.log(`%c[FRONTEND v772] handleGmailAction CALLED`, "background: red; color: white; font-size: 20px")
+      console.log(`[FRONTEND v772] threadId=${threadId}, action=${action}`)
+      console.log(`[FRONTEND v772] currentLabels param=`, currentLabels)
+      console.log(`[FRONTEND v772] selectedGmailThread?.labels=`, selectedGmailThread?.labels)
 
       if (!canPerformGmailAction()) {
-        console.warn(`[v0] v771: ACTION BLOCKED - thread not ready`)
+        console.warn(`[v0] v772: ACTION BLOCKED - thread not ready`)
         setError("Caricamento thread in corso, riprova tra un istante")
         return false
       }
 
-      const labelsToUse = selectedGmailThread?.labels || currentLabels
+      // v772: SINGLE SOURCE OF TRUTH - always use selectedGmailThread.labels
+      const labelsToUse = selectedGmailThread?.labels
 
-      console.error(`[FRONTEND] v771 FINAL labelsToUse=${JSON.stringify(labelsToUse)}`)
+      console.log(`[FRONTEND v772] FINAL labelsToUse=`, labelsToUse)
 
-      // HARD ASSERT #1: Labels must be defined
-      if (labelsToUse === undefined) {
-        console.error(`[v0] FRONTEND: ❌ FATAL BUG - labels undefined after guard check`)
-        console.error(`[FRONTEND] v771 ❌ selectedGmailThread=${JSON.stringify(selectedGmailThread)}`)
-        setError("BUG INTERNO: Labels mancanti - ricarica la pagina")
-        return false
-      }
-
-      // HARD ASSERT #2: Labels must be an array
-      if (!Array.isArray(labelsToUse)) {
-        console.error(`[v0] FRONTEND: ❌ FATAL BUG - labels not array: ${typeof labelsToUse}`)
-        setError("BUG INTERNO: Labels non valide - ricarica la pagina")
-        return false
-      }
-
-      // HARD ASSERT #3: Labels array must not be empty
-      if (labelsToUse.length === 0) {
-        console.error(`[v0] FRONTEND: ❌ BLOCKED - empty labels after guard check`)
-        setError("Dati thread incompleti – ricarica la pagina")
+      // v772: HARD BLOCK - throw error immediately if no labels
+      if (!labelsToUse || !Array.isArray(labelsToUse) || labelsToUse.length === 0) {
+        const errorMsg = `[v772 FATAL] Labels invalid: ${JSON.stringify(labelsToUse)}, selectedGmailThread=${JSON.stringify(selectedGmailThread)}`
+        console.error(errorMsg)
+        alert(`BUG FRONTEND v772: ${errorMsg}`) // HARD ALERT to prove code runs
+        setError("BUG: Labels mancanti - ricarica la pagina")
         return false
       }
 
       try {
-        console.log(`[v0] v771: Gmail action: ${action} on thread ${threadId}`)
-        console.log(`[v0] v771: Labels (from selectedGmailThread): ${JSON.stringify(labelsToUse)}`)
+        console.log(`[v0] v772: Gmail action: ${action} on thread ${threadId}`)
+        console.log(`[v0] v772: Labels: ${JSON.stringify(labelsToUse)}`)
 
         setIsActionLoading(threadId)
 
         const url = `/api/gmail/threads/${threadId}/actions`
+        const body = JSON.stringify({ action, currentLabels: labelsToUse })
+
+        console.log(`[FRONTEND v772] FETCH URL: ${url}`)
+        console.log(`[FRONTEND v772] FETCH BODY: ${body}`)
+
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action, currentLabels: labelsToUse }),
+          body: body,
         })
 
         const responseText = await res.text()
-        console.log(`[v0] v771: Response: ${res.status}, body: ${responseText}`)
+        console.log(`[v0] v772: Response: ${res.status}, body: ${responseText}`)
 
         if (!res.ok) {
           let error
@@ -513,7 +508,7 @@ export default function InboxPage() {
           } catch {
             error = { message: responseText }
           }
-          console.error("[v0] v771: Action failed:", error)
+          console.error("[v0] v772: Action failed:", error)
 
           if (error.dataBug) {
             setError("Errore dati thread – ricarica la pagina")
@@ -523,11 +518,11 @@ export default function InboxPage() {
           return false
         }
 
-        console.log(`[v0] v771: ✓ Action ${action} successful`)
+        console.log(`[v0] v772: ✓ Action ${action} successful`)
         setTimeout(() => loadGmailThreads(), 500)
         return true
       } catch (error) {
-        console.error("[v0] v771: Network error:", error)
+        console.error("[v0] v772: Network error:", error)
         setError("Errore di rete durante l'azione")
         return false
       } finally {
