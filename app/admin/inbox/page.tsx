@@ -572,32 +572,37 @@ export default function InboxPage() {
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
 
-      if (!isThreadReady || !selectedGmailThread) {
-        setError("Caricamento thread in corso, riprova tra un istante")
+      // This allows starring threads from the list without selecting them first
+      if (!thread || !thread.id) {
+        console.error("[v0] handleGmailStarToggle: No thread provided")
         return false
       }
 
-      // v774: Determine action based on current star status from selectedGmailThread
-      const isStarred = selectedGmailThread.isStarred
+      // Determine action based on current star status from the passed thread
+      const isStarred = thread.isStarred
       const action = isStarred ? "unstar" : "star"
 
-      const success = await handleGmailAction(selectedGmailThread.id, action)
+      console.log(`[v0] Star toggle: thread=${thread.id}, isStarred=${isStarred}, action=${action}`)
+
+      const success = await handleGmailAction(thread.id, action)
       if (success) {
-        // Update local state to reflect the change
-        setSelectedGmailThread((prev) =>
-          prev
-            ? {
-                ...prev,
-                isStarred: !isStarred, // Toggle the starred status
-              }
-            : null,
-        )
-        // Refresh the thread list to ensure UI consistency
-        loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
+        setGmailThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, isStarred: !isStarred } : t)))
+
+        // Also update selectedGmailThread if it's the same thread
+        if (selectedGmailThread?.id === thread.id) {
+          setSelectedGmailThread((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  isStarred: !isStarred,
+                }
+              : null,
+          )
+        }
       }
       return success
     },
-    [handleGmailAction, isThreadReady, selectedGmailThread, gmailLabelId, gmailSearchQuery],
+    [handleGmailAction, selectedGmailThread],
   )
 
   const handleGmailMarkAsRead = useCallback(
@@ -1737,7 +1742,7 @@ export default function InboxPage() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 p-0"
-                      onClick={(e) => handleGmailStarToggle(thread, e)}
+                      onClick={(e) => handleGmailStarToggle(thread, e)} // Modified to pass thread
                     >
                       <Star
                         className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
