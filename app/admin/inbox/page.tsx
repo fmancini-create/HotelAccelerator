@@ -412,6 +412,24 @@ export default function InboxPage() {
     [loadGmailThreads],
   )
 
+  const handleGmailNotSpam = useCallback(
+    async (thread: GmailThread, e?: React.MouseEvent) => {
+      e?.stopPropagation()
+      console.log(`[v0] FRONTEND: Not spam action for thread ${thread.id}`)
+
+      const success = await handleGmailAction(thread.id, "not_spam", thread.labels)
+      if (success) {
+        setGmailThreads((prev) => prev.filter((t) => t.id !== thread.id))
+        if (selectedGmailThread?.id === thread.id) {
+          setSelectedGmailThread(null)
+          setGmailMessages([])
+        }
+      }
+      return success
+    },
+    [selectedGmailThread, handleGmailAction],
+  )
+
   // Actions work on threads, not individual messages
   const handleMessageActionOnThread = async (action: string) => {
     if (!selectedGmailThread) {
@@ -495,6 +513,12 @@ export default function InboxPage() {
         labels.push("TRASH")
       }
 
+      const isSpam = labels.includes("SPAM") || labels.includes("CATEGORY_SPAM") || gmailLabelId === "SPAM"
+      if (isSpam) {
+        console.log(`[v0] FRONTEND: Archive blocked on SPAM, using not_spam instead`)
+        return handleGmailNotSpam(thread, e)
+      }
+
       console.log(`[v0] FRONTEND: Archive thread ${thread.id} with labels: ${JSON.stringify(labels)}`)
 
       const success = await handleGmailAction(thread.id, "archive", labels)
@@ -507,7 +531,7 @@ export default function InboxPage() {
       }
       return success
     },
-    [gmailLabelId, selectedGmailThread, handleGmailAction],
+    [gmailLabelId, selectedGmailThread, handleGmailAction, handleGmailNotSpam],
   ) // Added handleGmailAction as dependency
 
   const handleGmailTrash = useCallback(
@@ -1480,24 +1504,45 @@ export default function InboxPage() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        // Implement bulk archive
-                        Promise.all(
-                          Array.from(selectedGmailThreadIds).map((id) => {
-                            const thread = gmailThreads.find((t) => t.id === id)
-                            return thread ? handleGmailArchive(thread) : Promise.resolve(false)
-                          }),
-                        ).then((results) => {
-                          if (results.every((r) => r)) {
-                            setSelectedGmailThreadIds(new Set()) // Clear selection on success
-                            loadGmailThreads(gmailLabelId) // Refresh thread list
-                          }
-                        })
-                      }}
-                    >
-                      <Archive className="mr-2 h-4 w-4" /> Archivia
-                    </DropdownMenuItem>
+                    {gmailLabelId === "SPAM" ? (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          // Bulk not_spam
+                          Promise.all(
+                            Array.from(selectedGmailThreadIds).map((id) => {
+                              const thread = gmailThreads.find((t) => t.id === id)
+                              return thread ? handleGmailNotSpam(thread) : Promise.resolve(false)
+                            }),
+                          ).then((results) => {
+                            if (results.every((r) => r)) {
+                              setSelectedGmailThreadIds(new Set())
+                              loadGmailThreads(gmailLabelId)
+                            }
+                          })
+                        }}
+                      >
+                        <Inbox className="mr-2 h-4 w-4" /> Non è spam
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          // Implement bulk archive
+                          Promise.all(
+                            Array.from(selectedGmailThreadIds).map((id) => {
+                              const thread = gmailThreads.find((t) => t.id === id)
+                              return thread ? handleGmailArchive(thread) : Promise.resolve(false)
+                            }),
+                          ).then((results) => {
+                            if (results.every((r) => r)) {
+                              setSelectedGmailThreadIds(new Set())
+                              loadGmailThreads(gmailLabelId)
+                            }
+                          })
+                        }}
+                      >
+                        <Archive className="mr-2 h-4 w-4" /> Archivia
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       onClick={() => {
                         // Implement bulk trash

@@ -13,7 +13,7 @@ import {
   getGmailThreadMessages,
 } from "@/lib/gmail-client"
 
-const API_VERSION = "v749-SPAM-FIX"
+const API_VERSION = "v750-FINAL-SPAM-FIX"
 
 function isInSpam(labels: string[]): boolean {
   return labels.includes("SPAM") || labels.includes("CATEGORY_SPAM")
@@ -63,33 +63,30 @@ async function getEmailChannelForUser(supabase: any, userId: string) {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
-  console.log(`[GMAIL-SPAM-FIX] ========== GMAIL THREAD ACTIONS API ${API_VERSION} ==========`)
+  console.log(`[GMAIL] ========== GMAIL THREAD ACTIONS API ${API_VERSION} ==========`)
 
   try {
     const { threadId } = await params
     const body = await request.json()
     const { action, currentLabels } = body
 
-    // ========== HARD ASSERT FRONTEND ==========
-    if (action === "archive") {
-      if (!currentLabels || !Array.isArray(currentLabels)) {
-        console.error(`[GMAIL-SPAM-FIX] ❌ BUG FRONTEND: currentLabels missing or not array`)
-        console.error(`[GMAIL-SPAM-FIX] Body received:`, JSON.stringify(body))
-        return NextResponse.json(
-          {
-            error: "BUG FRONTEND: currentLabels missing - action=archive richiede currentLabels array",
-            debugVersion: API_VERSION,
-            receivedBody: body,
-          },
-          { status: 400 },
-        )
-      }
-    }
-
     const labelsForLogging = currentLabels || []
-    console.log(`[GMAIL-SPAM-FIX] Action: ${action}`)
-    console.log(`[GMAIL-SPAM-FIX] Thread ID: ${threadId}`)
-    console.log(`[GMAIL-SPAM-FIX] Current Labels RECEIVED: ${JSON.stringify(labelsForLogging)}`)
+    console.log(`[GMAIL] Action: ${action}`)
+    console.log(`[GMAIL] Thread ID: ${threadId}`)
+    console.log(`[GMAIL] Current Labels: ${JSON.stringify(labelsForLogging)}`)
+
+    if (action === "archive" && isInSpam(labelsForLogging)) {
+      console.warn(`[GMAIL] ⚠️ Archive BLOCKED: thread is in SPAM. Use "not_spam" action instead.`)
+      return NextResponse.json(
+        {
+          error: "Archive non disponibile per messaggi SPAM. Usa 'Non è spam' per spostare in Posta in arrivo.",
+          debugVersion: API_VERSION,
+          blocked: true,
+          suggestion: "not_spam",
+        },
+        { status: 400 },
+      )
+    }
 
     const supabase = await createClient()
     const {
@@ -98,18 +95,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      console.log("[GMAIL-SPAM-FIX] Auth error:", authError)
+      console.log("[GMAIL] Auth error:", authError)
       return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
     }
 
     const channel = await getEmailChannelForUser(supabase, user.id)
 
     if (!channel) {
-      console.log("[GMAIL-SPAM-FIX] No email channel found for user")
+      console.log("[GMAIL] No email channel found for user")
       return NextResponse.json({ error: "Canale email non configurato", debugVersion: API_VERSION }, { status: 400 })
     }
 
-    console.log(`[GMAIL-SPAM-FIX] Using channel: ${channel.email_address}`)
+    console.log(`[GMAIL] Using channel: ${channel.email_address}`)
 
     let result: { success: boolean; error?: string }
     let labelsRemoved: string[] = []
@@ -117,125 +114,67 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     switch (action) {
       case "markAsRead":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: markAsRead - removing UNREAD label`)
+        console.log(`[GMAIL] ACTION: markAsRead - removing UNREAD label`)
         result = await markGmailThreadAsRead(channel.id, threadId)
         labelsRemoved = ["UNREAD"]
         break
 
       case "markAsUnread":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: markAsUnread - adding UNREAD label`)
+        console.log(`[GMAIL] ACTION: markAsUnread - adding UNREAD label`)
         result = await markGmailThreadAsUnread(channel.id, threadId)
         labelsAdded = ["UNREAD"]
         break
 
       case "star":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: star - adding STARRED label`)
+        console.log(`[GMAIL] ACTION: star - adding STARRED label`)
         result = await starGmailThread(channel.id, threadId)
         labelsAdded = ["STARRED"]
         break
 
       case "unstar":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: unstar - removing STARRED label`)
+        console.log(`[GMAIL] ACTION: unstar - removing STARRED label`)
         result = await unstarGmailThread(channel.id, threadId)
         labelsRemoved = ["STARRED"]
         break
 
+      case "not_spam": {
+        console.log(`[GMAIL] ACTION: not_spam - removing SPAM, adding INBOX (replicate Gmail Web)`)
+
+        // Get all message IDs in thread for comprehensive spam removal
+        const { messageIds, error: fetchError } = await getGmailThreadMessages(channel.id, threadId)
+
+        if (fetchError) {
+          console.warn(`[GMAIL] Warning fetching messages: ${fetchError}`)
+        }
+
+        // Apply to ALL messages in thread
+        if (messageIds && messageIds.length > 0) {
+          console.log(`[GMAIL] Applying not_spam to ${messageIds.length} messages`)
+          for (const messageId of messageIds) {
+            console.log(`[GMAIL] messages.modify ${messageId}: remove SPAM/CATEGORY_SPAM, add INBOX`)
+            await modifyGmailMessage(channel.id, messageId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
+          }
+        }
+
+        // Also apply at thread level for good measure
+        console.log(`[GMAIL] threads.modify: remove SPAM/CATEGORY_SPAM, add INBOX`)
+        result = await modifyGmailThread(channel.id, threadId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
+        labelsRemoved = ["SPAM", "CATEGORY_SPAM"]
+        labelsAdded = ["INBOX"]
+        break
+      }
+
       case "archive": {
-        const threadIsInSpam = isInSpam(labelsForLogging)
+        // Note: SPAM case already blocked above
         const threadIsInTrash = isInTrash(labelsForLogging)
 
-        console.log(`[GMAIL-SPAM-FIX] ARCHIVE CHECK: isInSpam=${threadIsInSpam}, isInTrash=${threadIsInTrash}`)
-
-        if (threadIsInSpam) {
-          // ========== DEFINITIVE SPAM ARCHIVE FIX ==========
-          console.log(`[GMAIL-SPAM-FIX] ========== DEFINITIVE SPAM ARCHIVE START ==========`)
-
-          // STEP A - THREAD SAFE CLASSIFICATION
-          console.log(`[GMAIL-SPAM-FIX] STEP A: threads.modify`)
-          console.log(`[GMAIL-SPAM-FIX]   removeLabelIds: ["SPAM", "CATEGORY_SPAM"]`)
-          console.log(`[GMAIL-SPAM-FIX]   addLabelIds: ["INBOX"]`)
-
-          const stepAResult = await modifyGmailThread(channel.id, threadId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
-          console.log(`[GMAIL-SPAM-FIX] STEP A RESULT: ${JSON.stringify(stepAResult)}`)
-
-          if (!stepAResult.success) {
-            console.error(`[GMAIL-SPAM-FIX] ❌ STEP A FAILED: ${stepAResult.error}`)
-            return NextResponse.json(
-              {
-                error: `SPAM archive STEP A failed: ${stepAResult.error}`,
-                debugVersion: API_VERSION,
-                step: "A",
-              },
-              { status: 500 },
-            )
-          }
-
-          // Wait 300ms as per spec
-          console.log(`[GMAIL-SPAM-FIX] STEP A SUCCESS - waiting 300ms...`)
-          await new Promise((resolve) => setTimeout(resolve, 300))
-
-          // STEP B - ARCHIVE
-          console.log(`[GMAIL-SPAM-FIX] STEP B: threads.modify`)
-          console.log(`[GMAIL-SPAM-FIX]   removeLabelIds: ["INBOX"]`)
-          console.log(`[GMAIL-SPAM-FIX]   addLabelIds: []`)
-
-          const stepBResult = await modifyGmailThread(channel.id, threadId, [], ["INBOX"])
-          console.log(`[GMAIL-SPAM-FIX] STEP B RESULT: ${JSON.stringify(stepBResult)}`)
-
-          if (!stepBResult.success) {
-            console.error(`[GMAIL-SPAM-FIX] ❌ STEP B FAILED: ${stepBResult.error}`)
-            return NextResponse.json(
-              {
-                error: `SPAM archive STEP B failed: ${stepBResult.error}`,
-                debugVersion: API_VERSION,
-                step: "B",
-                partialSuccess: true,
-                message: "Thread moved to INBOX but not archived",
-              },
-              { status: 500 },
-            )
-          }
-
-          // STEP C - HARDEN (OBBLIGATORIO)
-          console.log(`[GMAIL-SPAM-FIX] STEP C: HARDEN - fetching all messageIds in thread`)
-
-          const { messageIds, error: fetchError } = await getGmailThreadMessages(channel.id, threadId)
-
-          if (fetchError) {
-            console.error(`[GMAIL-SPAM-FIX] ⚠️ STEP C FETCH WARNING: ${fetchError}`)
-            // Continue anyway - thread modify already succeeded
-          } else {
-            console.log(`[GMAIL-SPAM-FIX] STEP C: Found ${messageIds.length} messages: ${JSON.stringify(messageIds)}`)
-
-            // Call messages.modify for EACH message to remove SPAM
-            for (const messageId of messageIds) {
-              console.log(`[GMAIL-SPAM-FIX] STEP C: messages.modify for ${messageId}`)
-              console.log(`[GMAIL-SPAM-FIX]   removeLabelIds: ["SPAM", "CATEGORY_SPAM"]`)
-
-              const msgResult = await modifyGmailMessage(channel.id, messageId, [], ["SPAM", "CATEGORY_SPAM"])
-              console.log(`[GMAIL-SPAM-FIX] STEP C message ${messageId} result: ${JSON.stringify(msgResult)}`)
-
-              if (!msgResult.success) {
-                console.error(`[GMAIL-SPAM-FIX] ⚠️ STEP C message ${messageId} FAILED: ${msgResult.error}`)
-                // Continue with other messages
-              }
-            }
-          }
-
-          console.log(`[GMAIL-SPAM-FIX] ========== DEFINITIVE SPAM ARCHIVE COMPLETE ==========`)
-          console.log(`[GMAIL-SPAM-FIX] FINAL STATE EXPECTED: Thread in ALL MAIL (no SPAM, no INBOX, no CATEGORY_SPAM)`)
-
-          result = { success: true }
-          labelsRemoved = ["SPAM", "CATEGORY_SPAM", "INBOX"]
-        } else if (threadIsInTrash) {
-          // Thread is in TRASH - restore it
-          console.log(`[GMAIL-SPAM-FIX] ACTION: archive from TRASH - using untrash`)
+        if (threadIsInTrash) {
+          console.log(`[GMAIL] ACTION: archive from TRASH - using untrash`)
           result = await untrashGmailThread(channel.id, threadId)
           labelsRemoved = ["TRASH"]
         } else {
           // Normal archive - just remove INBOX
-          console.log(`[GMAIL-SPAM-FIX] ACTION: normal archive - removing INBOX label`)
-          console.log(`[GMAIL-SPAM-FIX] threads.modify({ addLabelIds: [], removeLabelIds: ["INBOX"] })`)
+          console.log(`[GMAIL] ACTION: normal archive - removing INBOX label`)
           result = await modifyGmailThread(channel.id, threadId, [], ["INBOX"])
           labelsRemoved = ["INBOX"]
         }
@@ -243,56 +182,54 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
 
       case "trash":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: trash - moving to trash`)
+        console.log(`[GMAIL] ACTION: trash - moving to trash`)
         result = await trashGmailThread(channel.id, threadId)
         labelsAdded = ["TRASH"]
         labelsRemoved = ["INBOX", "SPAM"]
         break
 
       case "untrash":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: untrash - restoring from trash`)
+        console.log(`[GMAIL] ACTION: untrash - restoring from trash`)
         result = await untrashGmailThread(channel.id, threadId)
         labelsRemoved = ["TRASH"]
         break
 
       case "spam":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: spam - adding SPAM, removing INBOX`)
+        console.log(`[GMAIL] ACTION: spam - adding SPAM, removing INBOX`)
         result = await spamGmailThread(channel.id, threadId)
         labelsAdded = ["SPAM"]
         labelsRemoved = ["INBOX"]
         break
 
       case "unspam":
-        console.log(`[GMAIL-SPAM-FIX] ACTION: unspam - removing SPAM, adding INBOX`)
-        console.log(
-          `[GMAIL-SPAM-FIX] threads.modify({ addLabelIds: ["INBOX"], removeLabelIds: ["SPAM", "CATEGORY_SPAM"] })`,
-        )
+        // Legacy alias for not_spam
+        console.log(`[GMAIL] ACTION: unspam (legacy) - redirecting to not_spam logic`)
+        const { messageIds: msgIds } = await getGmailThreadMessages(channel.id, threadId)
+        if (msgIds && msgIds.length > 0) {
+          for (const messageId of msgIds) {
+            await modifyGmailMessage(channel.id, messageId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
+          }
+        }
         result = await modifyGmailThread(channel.id, threadId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
         labelsRemoved = ["SPAM", "CATEGORY_SPAM"]
         labelsAdded = ["INBOX"]
         break
 
       default:
-        console.error(`[GMAIL-SPAM-FIX] Unknown action: ${action}`)
+        console.error(`[GMAIL] Unknown action: ${action}`)
         return NextResponse.json({ error: "Azione non valida", debugVersion: API_VERSION }, { status: 400 })
     }
 
-    // Calculate expected final state
-    const labelsAfter = labelsForLogging
-      .filter((l: string) => !labelsRemoved.includes(l))
-      .concat(labelsAdded.filter((l: string) => !labelsForLogging.includes(l)))
-
-    console.log(`[GMAIL-SPAM-FIX] ========== ACTION COMPLETE ==========`)
-    console.log(`[GMAIL-SPAM-FIX] Labels REMOVED: ${JSON.stringify(labelsRemoved)}`)
-    console.log(`[GMAIL-SPAM-FIX] Labels ADDED: ${JSON.stringify(labelsAdded)}`)
-    console.log(`[GMAIL-SPAM-FIX] Labels EXPECTED AFTER: ${JSON.stringify(labelsAfter)}`)
+    console.log(`[GMAIL] ========== ACTION COMPLETE ==========`)
+    console.log(`[GMAIL] Labels REMOVED: ${JSON.stringify(labelsRemoved)}`)
+    console.log(`[GMAIL] Labels ADDED: ${JSON.stringify(labelsAdded)}`)
 
     if (!result.success) {
-      console.error(`[GMAIL-SPAM-FIX] ❌ Gmail action FAILED: ${result.error}`)
+      console.error(`[GMAIL] ❌ Action FAILED: ${result.error}`)
       return NextResponse.json({ error: result.error, debugVersion: API_VERSION }, { status: 500 })
     }
 
-    console.log(`[GMAIL-SPAM-FIX] ✅ Gmail thread action "${action}" SUCCESSFUL`)
+    console.log(`[GMAIL] ✅ Action "${action}" SUCCESSFUL`)
 
     return NextResponse.json({
       success: true,
@@ -300,10 +237,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       action,
       labelsRemoved,
       labelsAdded,
-      labelsExpectedAfter: labelsAfter,
     })
   } catch (error) {
-    console.error("[GMAIL-SPAM-FIX] Gmail thread action exception:", error)
+    console.error("[GMAIL] Exception:", error)
     return NextResponse.json({ error: "Errore interno", debugVersion: API_VERSION }, { status: 500 })
   }
 }
