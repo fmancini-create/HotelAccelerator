@@ -373,16 +373,33 @@ export default function InboxPage() {
 
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
-    async (threadId: string, action: string, currentLabels: string[] = []) => {
+    async (threadId: string, action: string, currentLabels?: string[]) => {
+      // HARD ASSERT #1: Labels must be defined
+      if (currentLabels === undefined) {
+        console.error(`[v0] FRONTEND: ❌ FATAL BUG - handleGmailAction called with undefined labels`)
+        console.error(`[v0] FRONTEND: threadId=${threadId}, action=${action}`)
+        console.error(`[v0] FRONTEND: This is a frontend bug - caller must pass labels`)
+        setError("BUG INTERNO: Labels mancanti - ricarica la pagina")
+        return false
+      }
+
+      // HARD ASSERT #2: Labels must be an array
+      if (!Array.isArray(currentLabels)) {
+        console.error(`[v0] FRONTEND: ❌ FATAL BUG - currentLabels is not an array: ${typeof currentLabels}`)
+        setError("BUG INTERNO: Labels non valide - ricarica la pagina")
+        return false
+      }
+
+      // HARD ASSERT #3: Labels array must not be empty
+      if (currentLabels.length === 0) {
+        console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread data incomplete (empty labels array)`)
+        setError("Dati thread incompleti – ricarica la pagina")
+        return false
+      }
+
       try {
         console.log(`[v0] FRONTEND: Starting Gmail action: ${action} on thread ${threadId}`)
         console.log(`[v0] FRONTEND: Current labels: ${JSON.stringify(currentLabels)}`)
-
-        if (!currentLabels || currentLabels.length === 0) {
-          console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread data incomplete (no labels)`)
-          setError("Dati thread incompleti – ricarica la pagina")
-          return false
-        }
 
         setIsActionLoading(threadId)
 
@@ -460,7 +477,7 @@ export default function InboxPage() {
       return false
     }
     console.log(`[v0] Message action ${action} routed to thread ${selectedGmailThread.id}`)
-    return handleGmailAction(selectedGmailThread.id, action)
+    return handleGmailAction(selectedGmailThread.id, action, selectedGmailThread.labels)
   }
 
   const getSmartArchiveAction = (labels: string[]): string => {
@@ -485,7 +502,7 @@ export default function InboxPage() {
 
     // Use thread ID if available, otherwise use message ID
     const targetId = selectedGmailThread?.id || messageGmailId
-    const success = await handleGmailAction(targetId, action)
+    const success = await handleGmailAction(targetId, action, labels)
 
     if (success && selectedGmailThread) {
       setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread.id))
@@ -580,11 +597,29 @@ export default function InboxPage() {
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
 
+      // HARD ASSERT: thread.labels must exist and be valid
+      if (!thread) {
+        console.error(`[v0] FRONTEND: ❌ FATAL BUG - handleGmailTrash called with null/undefined thread`)
+        setError("BUG INTERNO: Thread mancante")
+        return false
+      }
+
+      if (!thread.labels) {
+        console.error(`[v0] FRONTEND: ❌ FATAL BUG - thread.labels is undefined for thread ${thread.id}`)
+        console.error(`[v0] FRONTEND: Full thread object:`, JSON.stringify(thread))
+        setError("BUG INTERNO: Labels mancanti nel thread")
+        return false
+      }
+
       if (!isThreadDataValid(thread)) {
         console.error(`[v0] FRONTEND: ❌ BLOCKED - Thread ${thread.id} has no labels`)
         setError("Thread data incomplete – reload")
         return false
       }
+
+      console.log(
+        `[v0] FRONTEND: handleGmailTrash - thread.id=${thread.id}, thread.labels=${JSON.stringify(thread.labels)}`,
+      )
 
       const success = await handleGmailAction(thread.id, "trash", thread.labels)
       if (success) {
@@ -1799,7 +1834,7 @@ export default function InboxPage() {
                               onClick={() => {
                                 if (selectedGmailThread) {
                                   const action = selectedGmailThread.isStarred ? "unstar" : "star"
-                                  handleGmailAction(selectedGmailThread.id, action)
+                                  handleGmailAction(selectedGmailThread.id, action, selectedGmailThread.labels)
                                 }
                               }}
                             >
@@ -1826,7 +1861,12 @@ export default function InboxPage() {
                                 {selectedGmailThread?.isUnread ? (
                                   <DropdownMenuItem
                                     onClick={() =>
-                                      selectedGmailThread && handleGmailAction(selectedGmailThread.id, "markAsRead")
+                                      selectedGmailThread &&
+                                      handleGmailAction(
+                                        selectedGmailThread.id,
+                                        "markAsRead",
+                                        selectedGmailThread.labels,
+                                      )
                                     }
                                   >
                                     <MailOpen className="mr-2 h-4 w-4" />
@@ -1835,7 +1875,12 @@ export default function InboxPage() {
                                 ) : (
                                   <DropdownMenuItem
                                     onClick={() =>
-                                      selectedGmailThread && handleGmailAction(selectedGmailThread.id, "markAsUnread")
+                                      selectedGmailThread &&
+                                      handleGmailAction(
+                                        selectedGmailThread.id,
+                                        "markAsUnread",
+                                        selectedGmailThread.labels,
+                                      )
                                     }
                                   >
                                     <Mail className="mr-2 h-4 w-4" />
