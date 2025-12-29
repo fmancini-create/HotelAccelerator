@@ -233,6 +233,8 @@ export default function InboxPage() {
   const [statusFilter, setStatusFilter] = useState<string>("open")
   const [isLoading, setIsLoading] = useState(true)
   const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null) // Added for debug info in smart mode
+  const [lastSyncStatus, setLastSyncStatus] = useState<string>("") // Added for last sync status
 
   // ==================== SHARED STATE ====================
   const [replyText, setReplyText] = useState("")
@@ -271,7 +273,7 @@ export default function InboxPage() {
   }, [])
 
   const loadGmailThreads = useCallback(
-    async (labelId: string, pageToken?: string, query?: string, isNextPage = false) => {
+    async (labelId: string = gmailLabelId, pageToken?: string, query?: string, isNextPage = false) => {
       console.log("[v0] DEBUG: loadGmailThreads CALLED with labelId:", labelId)
       setGmailLoading(true)
       try {
@@ -327,7 +329,7 @@ export default function InboxPage() {
         setGmailLoading(false)
       }
     },
-    [],
+    [gmailLabelId, gmailSearchQuery], // Added dependencies
   )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
@@ -367,25 +369,38 @@ export default function InboxPage() {
   // Gmail actions
   const handleGmailAction = async (threadId: string, action: string) => {
     try {
-      console.log(`[v0] Gmail action: ${action} on thread ${threadId}`)
+      console.log(`[v0] FRONTEND: Starting Gmail action: ${action} on thread ${threadId}`)
       setIsActionLoading(threadId)
-      const res = await fetch(`/api/gmail/threads/${threadId}/actions`, {
+
+      const url = `/api/gmail/threads/${threadId}/actions`
+      console.log(`[v0] FRONTEND: POST to ${url}`)
+
+      const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),
       })
 
+      const responseText = await res.text()
+      console.log(`[v0] FRONTEND: Response status: ${res.status}, body: ${responseText}`)
+
       if (!res.ok) {
-        const error = await res.json()
-        console.error("[v0] Gmail action failed:", error)
-        setError(error.message || `Errore durante ${action}`)
+        let error
+        try {
+          error = JSON.parse(responseText)
+        } catch {
+          error = { message: responseText }
+        }
+        console.error("[v0] FRONTEND: Gmail action failed:", error)
+        setError(error.error || error.message || `Errore durante ${action}`)
         return false
       }
 
-      console.log(`[v0] Gmail action ${action} successful`)
+      console.log(`[v0] FRONTEND: Gmail action ${action} successful`)
+      setTimeout(() => loadGmailThreads(), 500)
       return true
     } catch (error) {
-      console.error("[v0] Gmail action error:", error)
+      console.error("[v0] FRONTEND: Gmail action network error:", error)
       setError("Errore di rete durante l'azione")
       return false
     } finally {
@@ -662,6 +677,63 @@ export default function InboxPage() {
     }
   }, [])
 
+  const performInitialSmartSync = async () => {
+    if (inboxMode !== "smart") return
+
+    console.log("[v0] FRONTEND: Performing initial Smart sync...")
+    setLastSyncStatus("Sincronizzazione in corso...")
+
+    try {
+      // Get channel info for sync
+      const channelRes = await fetch("/api/inbox/debug")
+      if (!channelRes.ok) {
+        console.log("[v0] FRONTEND: Debug API failed, skipping sync")
+        setLastSyncStatus("Errore: impossibile ottenere info canale")
+        return
+      }
+
+      const debugData = await channelRes.json()
+      setDebugInfo(debugData)
+
+      if (!debugData.channel?.id || !debugData.channel?.property_id) {
+        console.log("[v0] FRONTEND: No channel configured for Smart sync")
+        setLastSyncStatus("Nessun canale configurato")
+        return
+      }
+
+      // Trigger sync to populate database with latest emails
+      const syncRes = await fetch("/api/channels/email/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel_id: debugData.channel.id,
+          property_id: debugData.channel.property_id,
+        }),
+      })
+
+      if (syncRes.ok) {
+        const syncData = await syncRes.json()
+        console.log("[v0] FRONTEND: Smart sync result:", syncData)
+        setLastSyncStatus(`Sincronizzato: ${syncData.imported} nuovi, ${syncData.duplicates} duplicati`)
+        // Reload conversations after sync
+        loadConversations()
+      } else {
+        const errorText = await syncRes.text()
+        console.log("[v0] FRONTEND: Smart sync failed:", errorText)
+        setLastSyncStatus(`Errore sync: ${syncRes.status}`)
+      }
+    } catch (error) {
+      console.error("[v0] FRONTEND: Smart sync error:", error)
+      setLastSyncStatus(`Errore: ${error}`)
+    }
+  }
+
+  useEffect(() => {
+    if (inboxMode === "smart") {
+      performInitialSmartSync()
+    }
+  }, [inboxMode])
+
   useEffect(() => {
     if (inboxMode === "smart" && !authLoading && adminUser) {
       console.log("[v0] Smart mode: initializing DB-only mode with Realtime")
@@ -810,7 +882,7 @@ export default function InboxPage() {
           setReplyText("")
           await loadGmailThread(selectedGmailThread.id)
           // Refresh thread list to update unread status if needed
-          await loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
+          await loadGmailThreads(gmailLabelId)
         } else {
           const data = await res.json()
           setError(data.error || "Errore durante l'invio della risposta")
@@ -1106,7 +1178,7 @@ export default function InboxPage() {
                   <Zap className="h-4 w-4 text-amber-500" />
                   Smart Inbox
                 </h2>
-                {/* Add debug button for Smart Mode */}
+                {/* Add manual refresh button for Smart mode in sidebar header */}
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" onClick={() => setShowDebugPanel(!showDebugPanel)}>
                     <Bug className="h-4 w-4" />
