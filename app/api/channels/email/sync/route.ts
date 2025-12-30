@@ -4,7 +4,17 @@ import { getValidGmailToken } from "@/lib/gmail-client"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import type { OAuthProvider } from "@/lib/oauth-config"
 
-const API_VERSION = "v775-smart-sync"
+const API_VERSION = "v779-base64url-fix"
+
+function decodeBase64UrlToString(input: string): string {
+  if (!input) return ""
+  // Gmail uses base64url (RFC 4648 URL-safe): replace - with +, _ with /
+  let b64 = input.replace(/-/g, "+").replace(/_/g, "/")
+  // Pad to multiple of 4
+  const pad = b64.length % 4
+  if (pad) b64 += "=".repeat(4 - pad)
+  return Buffer.from(b64, "base64").toString("utf-8")
+}
 
 export async function POST(request: NextRequest) {
   console.log(`[SMART-SYNC] ========== BUILD ${API_VERSION} ==========`)
@@ -161,11 +171,7 @@ function parseGmailMessage(msg: any): InboundEmail {
   let contentType: "text" | "html" = "text"
 
   const decodeContent = (data: string) => {
-    try {
-      return Buffer.from(data, "base64url").toString("utf-8")
-    } catch {
-      return Buffer.from(data, "base64").toString("utf-8")
-    }
+    return decodeBase64UrlToString(data)
   }
 
   const findPart = (parts: any[], mimeType: string): any => {

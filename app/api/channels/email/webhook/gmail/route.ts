@@ -3,13 +3,23 @@ import { createClient } from "@/lib/supabase/server"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 
 // Gmail Pub/Sub webhook endpoint
-// VERSION: v744 - With HARD logging for debugging
+// VERSION: v779-base64url-fix - Fixed base64url decoding
+
+function decodeBase64UrlToString(input: string): string {
+  if (!input) return ""
+  // Gmail uses base64url (RFC 4648 URL-safe): replace - with +, _ with /
+  let b64 = input.replace(/-/g, "+").replace(/_/g, "/")
+  // Pad to multiple of 4
+  const pad = b64.length % 4
+  if (pad) b64 += "=".repeat(4 - pad)
+  return Buffer.from(b64, "base64").toString("utf-8")
+}
 
 export async function GET(request: NextRequest) {
   return NextResponse.json({
     status: "ok",
     message: "Gmail webhook endpoint is active",
-    version: "v744",
+    version: "v779-base64url-fix",
     timestamp: new Date().toISOString(),
   })
 }
@@ -18,7 +28,7 @@ export async function POST(request: NextRequest) {
   const receivedAt = new Date()
 
   console.log("==================================================")
-  console.log("[GMAIL WEBHOOK v744] HIT at", receivedAt.toISOString())
+  console.log("[GMAIL WEBHOOK v779-base64url-fix] HIT at", receivedAt.toISOString())
   console.log("==================================================")
 
   try {
@@ -34,7 +44,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "ok" })
     }
 
-    const decodedData = Buffer.from(message.data, "base64").toString()
+    const decodedData = decodeBase64UrlToString(message.data)
     const notification = JSON.parse(decodedData)
     const { emailAddress, historyId } = notification
 
@@ -102,7 +112,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("==================================================")
-    console.log("[GMAIL WEBHOOK v744] COMPLETE")
+    console.log("[GMAIL WEBHOOK v779-base64url-fix] COMPLETE")
     console.log("==================================================")
 
     return NextResponse.json({ status: "ok" })
@@ -296,11 +306,7 @@ function parseGmailMessage(msg: any): InboundEmail {
   let contentType: "text" | "html" = "text"
 
   const decodeContent = (data: string) => {
-    try {
-      return Buffer.from(data, "base64url").toString("utf-8")
-    } catch {
-      return Buffer.from(data, "base64").toString("utf-8")
-    }
+    return decodeBase64UrlToString(data)
   }
 
   const findPart = (parts: any[], mimeType: string): any => {
