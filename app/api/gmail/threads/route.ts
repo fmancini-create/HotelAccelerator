@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 
-const API_VERSION = "v779-rate-limit-fix"
+const API_VERSION = "v813-rate-limit-content-check"
 
 function chunkArray<T>(array: T[], size: number): T[][] {
   const chunks: T[][] = []
@@ -40,6 +40,14 @@ async function fetchWithRetry(
 
       if (!res.ok) {
         const errorText = await res.text()
+        if (errorText.toLowerCase().includes("too many requests") || errorText.toLowerCase().includes("rate limit")) {
+          const waitTime = Math.pow(2, attempt + 1) * 1000
+          console.log(
+            `[GMAIL-RATE-LIMIT] Rate limit detected in response body, waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries}`,
+          )
+          await delay(waitTime)
+          continue
+        }
         console.error(`[GMAIL-FETCH] Error ${res.status}: ${errorText.substring(0, 200)}`)
         return { ok: false, status: res.status, error: errorText }
       }
@@ -50,6 +58,14 @@ async function fetchWithRetry(
         return { ok: true, status: res.status, data }
       } else {
         const text = await res.text()
+        if (text.toLowerCase().includes("too many requests") || text.toLowerCase().includes("rate limit")) {
+          const waitTime = Math.pow(2, attempt + 1) * 1000
+          console.log(
+            `[GMAIL-RATE-LIMIT] Rate limit detected in 200 response body, waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries}`,
+          )
+          await delay(waitTime)
+          continue
+        }
         // Try to parse as JSON anyway (some APIs don't set content-type correctly)
         try {
           const data = JSON.parse(text)
