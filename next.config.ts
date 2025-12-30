@@ -1,6 +1,8 @@
 import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
+  // reactCompiler: false, // NOT ENABLED
+
   images: {
     remotePatterns: [
       {
@@ -41,7 +43,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  reactCompiler: true,
   async headers() {
     return [
       {
