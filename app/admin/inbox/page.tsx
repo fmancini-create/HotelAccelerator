@@ -1747,7 +1747,11 @@ export default function InboxPage() {
                 checked={selectedGmailThreadIds.size === gmailThreads.length && gmailThreads.length > 0}
                 onCheckedChange={handleSelectAllGmailThreads}
                 className="h-4 w-4"
-                indeterminate={selectedGmailThreadIds.size > 0 && selectedGmailThreadIds.size < gmailThreads.length}
+                indeterminate={
+                  selectedGmailThreadIds.size > 0 && selectedGmailThreadIds.size < gmailThreads.length
+                    ? true
+                    : undefined
+                }
               />
               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => loadGmailThreads(gmailLabelId)}>
                 <RefreshCw className={`h-4 w-4 ${gmailLoading ? "animate-spin" : ""}`} />
