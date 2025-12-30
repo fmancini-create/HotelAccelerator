@@ -1,8 +1,7 @@
 "use client"
 
-// v777 BUILD MARKER - This comment forces a new bundle hash
-// v777 BUILD MARKER - Added v777 marker for debugging
-const FRONTEND_BUILD = "v777-debug"
+// v773 BUILD MARKER - This comment forces a new bundle hash
+const FRONTEND_BUILD = "v773-final"
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
@@ -262,11 +261,9 @@ export default function InboxPage() {
   const canPerformGmailAction = useCallback((): boolean => {
     if (!selectedGmailThread) return false
     if (!isThreadReady) return false
-    // v774: REMOVED explicit label check here - it's handled within the specific action handlers if needed,
-    // but the core requirement is just thread readiness for basic actions like star, archive, etc.
-    // if (!selectedGmailThread.labels) return false
-    // if (!Array.isArray(selectedGmailThread.labels)) return false
-    // if (selectedGmailThread.labels.length === 0) return false
+    if (!selectedGmailThread.labels) return false
+    if (!Array.isArray(selectedGmailThread.labels)) return false
+    if (selectedGmailThread.labels.length === 0) return false
     return true
   }, [selectedGmailThread, isThreadReady])
 
@@ -459,26 +456,53 @@ export default function InboxPage() {
 
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
-    async (threadId: string, action: string) => {
-      console.log(`[v0] v774: handleGmailAction - threadId=${threadId}, action=${action}`)
+    async (threadId: string, action: string, currentLabels?: string[]) => {
+      // v772: FIRST THING - log to prove this code runs
+      console.log(`%c[FRONTEND v772] handleGmailAction CALLED`, "background: red; color: white; font-size: 20px")
+      console.log(`[FRONTEND v772] threadId=${threadId}, action=${action}`)
+      console.log(`[FRONTEND v772] currentLabels param=`, currentLabels)
+      console.log(`[FRONTEND v772] selectedGmailThread?.labels=`, selectedGmailThread?.labels)
 
-      if (!isThreadReady || !selectedGmailThread) {
-        console.warn(`[v0] v774: ACTION BLOCKED - thread not ready`)
+      if (!canPerformGmailAction()) {
+        console.warn(`[v0] v772: ACTION BLOCKED - thread not ready`)
         setError("Caricamento thread in corso, riprova tra un istante")
         return false
       }
 
+      // v772: SINGLE SOURCE OF TRUTH - always use selectedGmailThread.labels
+      const labelsToUse = selectedGmailThread?.labels
+
+      console.log(`[FRONTEND v772] FINAL labelsToUse=`, labelsToUse)
+
+      // v772: HARD BLOCK - throw error immediately if no labels
+      if (!labelsToUse || !Array.isArray(labelsToUse) || labelsToUse.length === 0) {
+        const errorMsg = `[v772 FATAL] Labels invalid: ${JSON.stringify(labelsToUse)}, selectedGmailThread=${JSON.stringify(selectedGmailThread)}`
+        console.error(errorMsg)
+        alert(`BUG FRONTEND v772: ${errorMsg}`) // HARD ALERT to prove code runs
+        setError("BUG: Labels mancanti - ricarica la pagina")
+        return false
+      }
+
       try {
+        console.log(`[v0] v772: Gmail action: ${action} on thread ${threadId}`)
+        console.log(`[v0] v772: Labels: ${JSON.stringify(labelsToUse)}`)
+
         setIsActionLoading(threadId)
 
-        const res = await fetch(`/api/gmail/threads/${threadId}/actions`, {
+        const url = `/api/gmail/threads/${threadId}/actions`
+        const body = JSON.stringify({ action, currentLabels: labelsToUse })
+
+        console.log(`[FRONTEND v772] FETCH URL: ${url}`)
+        console.log(`[FRONTEND v772] FETCH BODY: ${body}`)
+
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: body,
         })
 
         const responseText = await res.text()
-        console.log(`[v0] v774: Response: ${res.status}`)
+        console.log(`[v0] v772: Response: ${res.status}, body: ${responseText}`)
 
         if (!res.ok) {
           let error
@@ -487,153 +511,166 @@ export default function InboxPage() {
           } catch {
             error = { message: responseText }
           }
-          console.error("[v0] v774: Action failed:", error)
-          setError(error.error || error.message || `Errore durante ${action}`)
+          console.error("[v0] v772: Action failed:", error)
+
+          if (error.dataBug) {
+            setError("Errore dati thread – ricarica la pagina")
+          } else {
+            setError(error.error || error.message || `Errore durante ${action}`)
+          }
           return false
         }
 
-        console.log(`[v0] v774: Action ${action} successful`)
+        console.log(`[v0] v772: ✓ Action ${action} successful`)
         setTimeout(() => loadGmailThreads(), 500)
         return true
       } catch (error) {
-        console.error("[v0] v774: Network error:", error)
+        console.error("[v0] v772: Network error:", error)
         setError("Errore di rete durante l'azione")
         return false
       } finally {
         setIsActionLoading(null)
       }
     },
-    [loadGmailThreads, isThreadReady, selectedGmailThread],
+    [loadGmailThreads, canPerformGmailAction, selectedGmailThread],
   )
 
   const handleGmailNotSpam = useCallback(
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
 
-      if (!isThreadReady || !selectedGmailThread) {
+      if (!canPerformGmailAction()) {
         setError("Caricamento thread in corso, riprova tra un istante")
         return false
       }
 
-      const success = await handleGmailAction(selectedGmailThread.id, "not_spam")
+      // Use selectedGmailThread (SINGLE SOURCE OF TRUTH)
+      const success = await handleGmailAction(selectedGmailThread!.id, "not_spam", selectedGmailThread!.labels)
       if (success) {
-        setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread.id))
+        setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread!.id))
         setSelectedGmailThread(null)
-        setGmailMessages([]) // Clear messages too
-        setIsThreadReady(false) // Ensure thread is not marked as ready
+        setGmailMessages([])
+        setIsThreadReady(false)
       }
       return success
     },
-    [handleGmailAction, isThreadReady, selectedGmailThread],
+    [selectedGmailThread, handleGmailAction, canPerformGmailAction],
+  )
+
+  const handleGmailStarToggle = async (thread: GmailThread, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+
+    if (!canPerformGmailAction()) {
+      setError("Caricamento thread in corso, riprova tra un istante")
+      return
+    }
+
+    const action = selectedGmailThread!.isStarred ? "unstar" : "star"
+    const success = await handleGmailAction(selectedGmailThread!.id, action, selectedGmailThread!.labels)
+    if (success) {
+      setGmailThreads((prev) =>
+        prev.map((t) => (t.id === selectedGmailThread!.id ? { ...t, isStarred: !t.isStarred } : t)),
+      )
+      setSelectedGmailThread({ ...selectedGmailThread!, isStarred: !selectedGmailThread!.isStarred })
+    }
+  }
+
+  const handleGmailMarkAsRead = useCallback(
+    async (thread: GmailThread) => {
+      if (!canPerformGmailAction()) {
+        setError("Caricamento thread in corso, riprova tra un istante")
+        return false
+      }
+
+      const action = selectedGmailThread!.isUnread ? "markAsRead" : "markAsUnread"
+      const success = await handleGmailAction(selectedGmailThread!.id, action, selectedGmailThread!.labels)
+      if (success) {
+        setGmailThreads((prev) =>
+          prev.map((t) => (t.id === selectedGmailThread!.id ? { ...t, isUnread: !t.isUnread } : t)),
+        )
+        setSelectedGmailThread({ ...selectedGmailThread!, isUnread: !selectedGmailThread!.isUnread })
+      }
+      return success
+    },
+    [selectedGmailThread, handleGmailAction, canPerformGmailAction],
   )
 
   const handleGmailArchive = useCallback(
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
 
-      if (!isThreadReady || !selectedGmailThread) {
+      if (!canPerformGmailAction()) {
         setError("Caricamento thread in corso, riprova tra un istante")
         return false
       }
 
-      const success = await handleGmailAction(selectedGmailThread.id, "archive")
+      const labels = [...selectedGmailThread!.labels]
+      if (gmailLabelId === "SPAM" && !labels.includes("SPAM")) {
+        labels.push("SPAM")
+      }
+      if (gmailLabelId === "TRASH" && !labels.includes("TRASH")) {
+        labels.push("TRASH")
+      }
+
+      const isSpam = labels.includes("SPAM") || labels.includes("CATEGORY_SPAM") || gmailLabelId === "SPAM"
+      if (isSpam) {
+        console.log(`[v0] v771: Archive blocked on SPAM, using not_spam`)
+        return handleGmailNotSpam(thread, e)
+      }
+
+      const success = await handleGmailAction(selectedGmailThread!.id, "archive", labels)
       if (success) {
-        setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread.id))
+        setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread!.id))
         setSelectedGmailThread(null)
         setGmailMessages([])
         setIsThreadReady(false)
       }
       return success
     },
-    [handleGmailAction, isThreadReady, selectedGmailThread],
+    [gmailLabelId, selectedGmailThread, handleGmailAction, handleGmailNotSpam, canPerformGmailAction],
   )
 
   const handleGmailTrash = useCallback(
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
 
-      if (!isThreadReady || !selectedGmailThread) {
+      if (!canPerformGmailAction()) {
         setError("Caricamento thread in corso, riprova tra un istante")
         return false
       }
 
-      const success = await handleGmailAction(selectedGmailThread.id, "trash")
+      const success = await handleGmailAction(selectedGmailThread!.id, "trash", selectedGmailThread!.labels)
       if (success) {
-        setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread.id))
+        setGmailThreads((prev) => prev.filter((t) => t.id !== selectedGmailThread!.id))
         setSelectedGmailThread(null)
         setGmailMessages([])
         setIsThreadReady(false)
       }
       return success
     },
-    [handleGmailAction, isThreadReady, selectedGmailThread],
+    [selectedGmailThread, handleGmailAction, canPerformGmailAction],
   )
 
-  const handleGmailStarToggle = useCallback(
-    async (thread: GmailThread, e?: React.MouseEvent) => {
-      e?.stopPropagation()
-
-      // This allows starring threads from the list without selecting them first
-      if (!thread || !thread.id) {
-        console.error("[v0] handleGmailStarToggle: No thread provided")
-        return false
+  const handleGmailCheckboxToggle = (threadId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation()
+    setSelectedGmailThreadIds((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(threadId)) {
+        newSet.delete(threadId)
+      } else {
+        newSet.add(threadId)
       }
+      return newSet
+    })
+  }
 
-      // Determine action based on current star status from the passed thread
-      const isStarred = thread.isStarred
-      const action = isStarred ? "unstar" : "star"
-
-      console.log(`[v0] Star toggle: thread=${thread.id}, isStarred=${isStarred}, action=${action}`)
-
-      const success = await handleGmailAction(thread.id, action)
-      if (success) {
-        setGmailThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, isStarred: !isStarred } : t)))
-
-        // Also update selectedGmailThread if it's the same thread
-        if (selectedGmailThread?.id === thread.id) {
-          setSelectedGmailThread((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  isStarred: !isStarred,
-                }
-              : null,
-          )
-        }
-      }
-      return success
-    },
-    [handleGmailAction, selectedGmailThread],
-  )
-
-  const handleGmailMarkAsRead = useCallback(
-    async (thread: GmailThread, markAsUnread = false, e?: React.MouseEvent) => {
-      e?.stopPropagation()
-
-      if (!isThreadReady || !selectedGmailThread) {
-        setError("Caricamento thread in corso, riprova tra un istante")
-        return false
-      }
-
-      const action = markAsUnread ? "markAsUnread" : "markAsRead"
-      const success = await handleGmailAction(selectedGmailThread.id, action)
-      if (success) {
-        // Update local state to reflect the change
-        setSelectedGmailThread((prev) =>
-          prev
-            ? {
-                ...prev,
-                isUnread: markAsUnread, // Set the unread status
-              }
-            : null,
-        )
-        // Refresh the thread list to ensure UI consistency
-        loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
-      }
-      return success
-    },
-    [handleGmailAction, isThreadReady, selectedGmailThread, gmailLabelId, gmailSearchQuery],
-  )
+  const handleSelectAllGmailThreads = () => {
+    if (selectedGmailThreadIds.size === gmailThreads.length) {
+      setSelectedGmailThreadIds(new Set())
+    } else {
+      setSelectedGmailThreadIds(new Set(gmailThreads.map((t) => t.id)))
+    }
+  }
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
@@ -709,29 +746,6 @@ export default function InboxPage() {
   const handleGmailSearch = () => {
     loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
   }
-
-  const handleSelectAllGmailThreads = useCallback(
-    (checked: boolean | "indeterminate") => {
-      if (checked === true) {
-        setSelectedGmailThreadIds(new Set(gmailThreads.map((t) => t.id)))
-      } else {
-        setSelectedGmailThreadIds(new Set())
-      }
-    },
-    [gmailThreads],
-  )
-
-  const handleGmailCheckboxToggle = useCallback((threadId: string) => {
-    setSelectedGmailThreadIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(threadId)) {
-        next.delete(threadId)
-      } else {
-        next.add(threadId)
-      }
-      return next
-    })
-  }, [])
 
   // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
@@ -1743,7 +1757,7 @@ export default function InboxPage() {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 p-0"
-                      onClick={(e) => handleGmailStarToggle(thread, e)} // Modified to pass thread
+                      onClick={(e) => handleGmailStarToggle(thread, e)}
                     >
                       <Star
                         className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
@@ -1836,8 +1850,8 @@ export default function InboxPage() {
                               disabled={!isThreadReady || isActionLoading === selectedGmailThread?.id}
                               onClick={() => {
                                 if (selectedGmailThread && isThreadReady) {
-                                  // v774: Use the simplified handleGmailStarToggle directly
-                                  handleGmailStarToggle(selectedGmailThread)
+                                  const action = selectedGmailThread.isStarred ? "unstar" : "star"
+                                  handleGmailAction(selectedGmailThread.id, action, selectedGmailThread.labels)
                                 }
                               }}
                             >
@@ -1863,11 +1877,14 @@ export default function InboxPage() {
                               <DropdownMenuContent align="end">
                                 {selectedGmailThread?.isUnread ? (
                                   <DropdownMenuItem
-                                    onClick={
-                                      () =>
-                                        selectedGmailThread &&
-                                        isThreadReady && // Add check for isThreadReady
-                                        handleGmailMarkAsRead(selectedGmailThread, false) // Use false for markAsRead
+                                    onClick={() =>
+                                      selectedGmailThread &&
+                                      isThreadReady && // Add check for isThreadReady
+                                      handleGmailAction(
+                                        selectedGmailThread.id,
+                                        "markAsRead",
+                                        selectedGmailThread.labels,
+                                      )
                                     }
                                   >
                                     <MailOpen className="mr-2 h-4 w-4" />
@@ -1875,11 +1892,14 @@ export default function InboxPage() {
                                   </DropdownMenuItem>
                                 ) : (
                                   <DropdownMenuItem
-                                    onClick={
-                                      () =>
-                                        selectedGmailThread &&
-                                        isThreadReady && // Add check for isThreadReady
-                                        handleGmailMarkAsRead(selectedGmailThread, true) // Use true for markAsUnread
+                                    onClick={() =>
+                                      selectedGmailThread &&
+                                      isThreadReady && // Add check for isThreadReady
+                                      handleGmailAction(
+                                        selectedGmailThread.id,
+                                        "markAsUnread",
+                                        selectedGmailThread.labels,
+                                      )
                                     }
                                   >
                                     <Mail className="mr-2 h-4 w-4" />

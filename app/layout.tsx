@@ -17,12 +17,9 @@ const inter = Inter({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
+  maximumScale: 5, // Allow zoom for accessibility
   userScalable: true,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
-  ],
+  themeColor: "#0a0a0a",
 }
 
 export const metadata: Metadata = {
@@ -47,11 +44,6 @@ export const metadata: Metadata = {
     "analytics hotel",
     "prenotazioni dirette hotel",
     "fidelizzazione ospiti",
-    "hotel management software",
-    "hospitality software",
-    "booking engine hotel",
-    "channel manager hotel",
-    "revenue management hotel",
   ],
   authors: [{ name: "HotelAccelerator", url: "https://hotelaccelerator.com" }],
   creator: "HotelAccelerator",
@@ -61,37 +53,16 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "32x32" },
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/icon-192.jpg", sizes: "192x192", type: "image/png" },
-      { url: "/icon-512.jpg", sizes: "512x512", type: "image/png" },
-    ],
-    shortcut: "/favicon.ico",
-    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
-    other: [
-      {
-        rel: "mask-icon",
-        url: "/icon.svg",
-        color: "#0d9488",
-      },
-    ],
-  },
   metadataBase: new URL("https://hotelaccelerator.com"),
   alternates: {
     canonical: "https://hotelaccelerator.com",
     languages: {
       "it-IT": "https://hotelaccelerator.com",
-      "en-US": "https://hotelaccelerator.com/en",
-      "de-DE": "https://hotelaccelerator.com/de",
-      "fr-FR": "https://hotelaccelerator.com/fr",
     },
   },
   openGraph: {
     type: "website",
     locale: "it_IT",
-    alternateLocale: ["en_US", "de_DE", "fr_FR"],
     url: "https://hotelaccelerator.com",
     siteName: "HotelAccelerator",
     title: "HotelAccelerator - La Piattaforma Completa per Hotel",
@@ -128,17 +99,6 @@ export const metadata: Metadata = {
   },
   category: "technology",
   manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "default",
-    title: "HotelAccelerator",
-  },
-  applicationName: "HotelAccelerator",
-  other: {
-    "llms-txt": "https://hotelaccelerator.com/llms.txt",
-    "msapplication-TileColor": "#0d9488",
-    "msapplication-config": "/browserconfig.xml",
-  },
     generator: 'v0.app'
 }
 

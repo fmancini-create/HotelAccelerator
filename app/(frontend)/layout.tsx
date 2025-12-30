@@ -3,8 +3,8 @@ import type { Metadata } from "next"
 import Script from "next/script"
 import { getCurrentTenant, isPlatformDomain } from "@/lib/get-tenant"
 import { getCurrentDomain } from "@/lib/seo-utils"
-import { HotelSchema, LocalBusinessSchema, WebSiteSchema } from "@/components/schema-org"
-import { ChatWidgetWrapper } from "./chat-widget-wrapper"
+import { ChatWidget } from "@/components/chat-widget"
+import { HotelSchema, LocalBusinessSchema } from "@/components/schema-org"
 
 export async function generateMetadata(): Promise<Metadata> {
   const isPlatform = await isPlatformDomain()
@@ -12,14 +12,6 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: "HotelAccelerator - Piattaforma SaaS per Hotel",
       description: "La piattaforma all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI.",
-      icons: {
-        icon: [
-          { url: "/favicon.ico", sizes: "32x32" },
-          { url: "/icon.svg", type: "image/svg+xml" },
-        ],
-        shortcut: "/favicon.ico",
-        apple: "/apple-icon.png",
-      },
     }
   }
 
@@ -30,10 +22,6 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: "Sito non trovato",
       description: "Nessun sito configurato per questo dominio",
-      icons: {
-        icon: "/favicon.ico",
-        shortcut: "/favicon.ico",
-      },
     }
   }
 
@@ -44,7 +32,6 @@ export async function generateMetadata(): Promise<Metadata> {
     `Benvenuti a ${tenantName}. Prenota direttamente sul sito ufficiale per le migliori tariffe garantite.`
   const seoOgImage = tenant?.seo_og_image
   const seoKeywords = tenant?.seo_keywords
-  const tenantFavicon = tenant?.favicon_url || "/favicon.ico"
 
   const ogImages = seoOgImage ? [`${domain}${seoOgImage.startsWith("/") ? seoOgImage : `/${seoOgImage}`}`] : undefined
 
@@ -55,23 +42,9 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     description: seoDescription,
     ...(seoKeywords && { keywords: seoKeywords }),
-    icons: {
-      icon: [
-        { url: tenantFavicon, sizes: "32x32" },
-        { url: "/icon.svg", type: "image/svg+xml" },
-      ],
-      shortcut: tenantFavicon,
-      apple: "/apple-icon.png",
-    },
     metadataBase: new URL(domain),
     alternates: {
       canonical: domain,
-      languages: {
-        "it-IT": domain,
-        "en-US": `${domain}/en`,
-        "de-DE": `${domain}/de`,
-        "fr-FR": `${domain}/fr`,
-      },
     },
     openGraph: {
       title: seoTitle,
@@ -79,7 +52,6 @@ export async function generateMetadata(): Promise<Metadata> {
       url: domain,
       siteName: tenantName,
       locale: "it_IT",
-      alternateLocale: ["en_US", "de_DE", "fr_FR"],
       type: "website",
       ...(ogImages && { images: ogImages }),
     },
@@ -92,21 +64,6 @@ export async function generateMetadata(): Promise<Metadata> {
     robots: {
       index: true,
       follow: true,
-      googleBot: {
-        index: true,
-        follow: true,
-        "max-video-preview": -1,
-        "max-image-preview": "large",
-        "max-snippet": -1,
-      },
-    },
-    verification: {
-      google: "your-google-verification-code",
-    },
-    category: "travel",
-    classification: "Hotel, Resort, Spa",
-    other: {
-      "llms-txt": `${domain}/llms.txt`,
     },
   }
 }
@@ -118,12 +75,15 @@ export default async function FrontendLayout({
 }) {
   const isPlatform = await isPlatformDomain()
 
+  console.log("[v0] FrontendLayout - isPlatform:", isPlatform)
+
   if (isPlatform) {
     return <>{children}</>
   }
 
   const tenant = await getCurrentTenant()
-  const domain = await getCurrentDomain()
+
+  console.log("[v0] FrontendLayout - tenant:", tenant?.name || "null")
 
   if (!tenant) {
     return (
@@ -139,6 +99,7 @@ export default async function FrontendLayout({
     )
   }
 
+  // Se il frontend è disabilitato per questo tenant
   if (!tenant.frontend_enabled) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -154,10 +115,8 @@ export default async function FrontendLayout({
     <div data-tenant-id={tenant.id} data-tenant-slug={tenant.slug}>
       <HotelSchema />
       <LocalBusinessSchema />
-      <WebSiteSchema baseUrl={domain} />
 
-      {/* Google Tag Manager - loaded after interactive */}
-      <Script id="google-tag-manager" strategy="lazyOnload">
+      <Script id="google-tag-manager" strategy="afterInteractive">
         {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
 new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
 j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
@@ -165,8 +124,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 })(window,document,'script','dataLayer','GTM-MS49CVF2');`}
       </Script>
 
-      {/* Yandex Metrika - loaded lazily */}
-      <Script id="yandex-metrika" strategy="lazyOnload">
+      <Script id="yandex-metrika" strategy="afterInteractive">
         {`(function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
    m[i].l=1*new Date();
    for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
@@ -198,7 +156,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 
       {children}
 
-      <ChatWidgetWrapper />
+      <ChatWidget />
     </div>
   )
 }

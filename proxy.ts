@@ -5,7 +5,6 @@
 
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { securityHeaders } from "@/lib/security-headers"
 
 export default function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
@@ -25,10 +24,6 @@ export default function proxy(request: NextRequest) {
   if (isPlatformDomain) {
     const response = NextResponse.next()
     response.headers.set("x-is-platform-domain", "true")
-    // Add security headers
-    Object.entries(securityHeaders).forEach(([key, value]) => {
-      response.headers.set(key, value)
-    })
     return response
   }
 
@@ -37,19 +32,9 @@ export default function proxy(request: NextRequest) {
 
   // Se c'è un subdomain valido, aggiungi header per il tenant
   if (subdomain) {
-    // Validate subdomain format (alphanumeric and hyphens only)
-    if (!/^[a-z0-9-]+$/i.test(subdomain)) {
-      console.error("[SECURITY] Invalid subdomain format:", subdomain)
-      return new NextResponse("Invalid subdomain", { status: 400 })
-    }
-
     const response = NextResponse.next()
     response.headers.set("x-tenant-identifier", subdomain)
     response.headers.set("x-tenant-type", "subdomain")
-    // Add security headers
-    Object.entries(securityHeaders).forEach(([key, value]) => {
-      response.headers.set(key, value)
-    })
     return response
   }
 
@@ -59,10 +44,6 @@ export default function proxy(request: NextRequest) {
     const response = NextResponse.next()
     response.headers.set("x-tenant-identifier", customDomain)
     response.headers.set("x-tenant-type", "custom_domain")
-    // Add security headers
-    Object.entries(securityHeaders).forEach(([key, value]) => {
-      response.headers.set(key, value)
-    })
     return response
   }
 
