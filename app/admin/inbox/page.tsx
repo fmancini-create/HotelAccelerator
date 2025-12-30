@@ -568,6 +568,7 @@ export default function InboxPage() {
     [handleGmailAction, isThreadReady, selectedGmailThread],
   )
 
+  // v774: Updated handleGmailStarToggle to force refetch after action
   const handleGmailStarToggle = useCallback(
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
@@ -584,8 +585,25 @@ export default function InboxPage() {
 
       console.log(`[v0] Star toggle: thread=${thread.id}, isStarred=${isStarred}, action=${action}`)
 
-      const success = await handleGmailAction(thread.id, action)
-      if (success) {
+      try {
+        setIsActionLoading(thread.id)
+
+        const res = await fetch(`/api/gmail/threads/${thread.id}/actions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        })
+
+        if (!res.ok) {
+          const error = await res.json() // Correctly parse JSON error response
+          console.error("[v0] Star toggle failed:", error)
+          setError(error.error || "Errore durante l'azione stella")
+          return false
+        }
+
+        console.log(`[v0] Star toggle successful, forcing refetch`)
+
+        // v774: Update local state immediately for responsive UI
         setGmailThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, isStarred: !isStarred } : t)))
 
         // Also update selectedGmailThread if it's the same thread
@@ -599,10 +617,20 @@ export default function InboxPage() {
               : null,
           )
         }
+
+        // v774: Force refetch after 500ms to ensure Gmail state is synced
+        setTimeout(() => loadGmailThreads(), 500)
+
+        return true
+      } catch (error) {
+        console.error("[v0] Star toggle error:", error)
+        setError("Errore di rete")
+        return false
+      } finally {
+        setIsActionLoading(null)
       }
-      return success
     },
-    [handleGmailAction, selectedGmailThread],
+    [loadGmailThreads, selectedGmailThread],
   )
 
   const handleGmailMarkAsRead = useCallback(

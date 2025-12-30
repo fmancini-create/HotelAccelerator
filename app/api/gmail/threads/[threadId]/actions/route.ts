@@ -1,19 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import {
-  markGmailThreadAsRead,
-  markGmailThreadAsUnread,
-  starGmailThread,
-  unstarGmailThread,
-  trashGmailThread,
-  spamGmailThread,
-  untrashGmailThread,
-  modifyGmailThread,
-  modifyGmailMessage,
-  getValidGmailToken,
-} from "@/lib/gmail-client"
+import { modifyGmailMessage, getValidGmailToken } from "@/lib/gmail-client"
 
-const API_VERSION = "v774-backend-label-authority"
+const API_VERSION = "v778-message-id-fix"
 
 function isInSpam(labels: string[]): boolean {
   return labels.includes("SPAM") || labels.includes("CATEGORY_SPAM")
@@ -58,7 +47,7 @@ async function getEmailChannelForUser(supabase: any, userId: string) {
   return assignment?.email_channels || null
 }
 
-async function getThreadLabelsFromGmail(
+async function getThreadData(
   channelId: string,
   threadId: string,
 ): Promise<{ success: boolean; messageIds: string[]; labels: string[]; error?: string }> {
@@ -69,20 +58,20 @@ async function getThreadLabelsFromGmail(
   }
 
   try {
-    console.log(`[GMAIL-BACKEND-LABELS] Fetching labels for thread ${threadId} from Gmail API...`)
+    console.log(`[GMAIL-ACTION] Fetching thread ${threadId} from Gmail API...`)
 
     const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata`, {
       headers: { Authorization: `Bearer ${token}` },
     })
 
     if (response.status === 404) {
-      console.error(`[GMAIL-BACKEND-LABELS] Thread ${threadId} NOT FOUND in Gmail`)
+      console.error(`[GMAIL-ACTION] Thread ${threadId} NOT FOUND in Gmail`)
       return { success: false, messageIds: [], labels: [], error: `Thread ${threadId} non trovato` }
     }
 
     if (!response.ok) {
       const errorBody = await response.text()
-      console.error(`[GMAIL-BACKEND-LABELS] Gmail API error: ${response.status} ${errorBody}`)
+      console.error(`[GMAIL-ACTION] Gmail API error: ${response.status} ${errorBody}`)
       return { success: false, messageIds: [], labels: [], error: `Gmail API error: ${response.status}` }
     }
 
@@ -96,28 +85,85 @@ async function getThreadLabelsFromGmail(
     })
     const labels = Array.from(labelsSet)
 
-    console.log(`[GMAIL-BACKEND-LABELS] threadId=${threadId}`)
-    console.log(`[GMAIL-BACKEND-LABELS] labelsFromGmail=[${labels.join(",")}]`)
-    console.log(`[GMAIL-BACKEND-LABELS] messageIds=[${messageIds.join(",")}]`)
+    console.log(
+      `[GMAIL-ACTION] threadId=${threadId}, messageIds=[${messageIds.join(",")}], labels=[${labels.join(",")}]`,
+    )
 
     return { success: true, messageIds, labels }
   } catch (err) {
-    console.error(`[GMAIL-BACKEND-LABELS] Exception:`, err)
+    console.error(`[GMAIL-ACTION] Exception:`, err)
     return { success: false, messageIds: [], labels: [], error: "Errore durante il fetch delle labels" }
   }
 }
 
+async function trashGmailMessage(channelId: string, messageId: string): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    console.log(`[GMAIL-ACTION] Trashing message ${messageId}`)
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error(`[GMAIL-ACTION] Trash error: ${response.status} ${errorBody}`)
+      return { success: false, error: `Gmail API error: ${response.status}` }
+    }
+
+    console.log(`[GMAIL-ACTION] Message ${messageId} trashed successfully`)
+    return { success: true }
+  } catch (err) {
+    console.error(`[GMAIL-ACTION] Trash exception:`, err)
+    return { success: false, error: "Errore durante lo spostamento nel cestino" }
+  }
+}
+
+async function untrashGmailMessage(
+  channelId: string,
+  messageId: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { token, error } = await getValidGmailToken(channelId)
+
+  if (!token) {
+    return { success: false, error: error || "Token non disponibile" }
+  }
+
+  try {
+    console.log(`[GMAIL-ACTION] Untrashing message ${messageId}`)
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/untrash`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      console.error(`[GMAIL-ACTION] Untrash error: ${response.status} ${errorBody}`)
+      return { success: false, error: `Gmail API error: ${response.status}` }
+    }
+
+    console.log(`[GMAIL-ACTION] Message ${messageId} untrashed successfully`)
+    return { success: true }
+  } catch (err) {
+    console.error(`[GMAIL-ACTION] Untrash exception:`, err)
+    return { success: false, error: "Errore durante il ripristino" }
+  }
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
-  console.log(`[GMAIL-ACTIONS] ========== BUILD ${API_VERSION} ==========`)
+  console.log(`[GMAIL-ACTION] ========== BUILD ${API_VERSION} ==========`)
 
   try {
     const { threadId } = await params
     const body = await request.json()
-
     const { action } = body
 
-    console.log(`[GMAIL-ACTIONS] INPUT: threadId=${threadId}, action=${action}`)
-    console.log(`[GMAIL-ACTIONS] NOTE: Labels will be fetched from Gmail (backend authority)`)
+    console.log(`[GMAIL-ACTION] INPUT: threadId=${threadId}, action=${action}`)
 
     // Validate action
     const validActions = [
@@ -143,39 +189,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } = await supabase.auth.getUser()
 
     if (authError || !user) {
-      console.log("[GMAIL-ACTIONS] Auth error:", authError)
+      console.log("[GMAIL-ACTION] Auth error:", authError)
       return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
     }
 
     const channel = await getEmailChannelForUser(supabase, user.id)
 
     if (!channel) {
-      console.log("[GMAIL-ACTIONS] No email channel found for user")
+      console.log("[GMAIL-ACTION] No email channel found for user")
       return NextResponse.json({ error: "Canale email non configurato", debugVersion: API_VERSION }, { status: 400 })
     }
 
-    console.log(`[GMAIL-ACTIONS] Using channel: ${channel.email_address}`)
+    console.log(`[GMAIL-ACTION] Using channel: ${channel.email_address}`)
 
-    const gmailData = await getThreadLabelsFromGmail(channel.id, threadId)
+    const threadData = await getThreadData(channel.id, threadId)
 
-    if (!gmailData.success) {
-      console.error(`[GMAIL-ACTIONS] Failed to fetch thread labels from Gmail`)
+    if (!threadData.success || threadData.messageIds.length === 0) {
+      console.error(`[GMAIL-ACTION] Failed to fetch thread data`)
       return NextResponse.json(
-        {
-          error: gmailData.error || "Thread non trovato",
-          debugVersion: API_VERSION,
-        },
+        { error: threadData.error || "Thread non trovato", debugVersion: API_VERSION },
         { status: 404 },
       )
     }
 
-    const labels = gmailData.labels
-    const messageIds = gmailData.messageIds
+    const { messageIds, labels } = threadData
 
-    console.log(`[GMAIL-ACTIONS] AUTHORITATIVE labels from Gmail: [${labels.join(",")}]`)
+    console.log(`[GMAIL-ACTION] Found ${messageIds.length} messages in thread`)
+    console.log(`[GMAIL-ACTION] Labels from Gmail: [${labels.join(",")}]`)
 
+    // Block archive on SPAM
     if (action === "archive" && isInSpam(labels)) {
-      console.error(`[GMAIL-ACTIONS] SPAM RULE: Archive blocked on SPAM thread`)
+      console.error(`[GMAIL-ACTION] SPAM RULE: Archive blocked on SPAM thread`)
       return NextResponse.json(
         {
           error: "Archive non disponibile per messaggi SPAM. Usa 'Non è spam' per spostare in Posta in arrivo.",
@@ -187,84 +231,108 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       )
     }
 
-    let result: { success: boolean; error?: string }
+    let result: { success: boolean; error?: string } = { success: true }
     let labelsRemoved: string[] = []
     let labelsAdded: string[] = []
 
     switch (action) {
       case "markAsRead":
-        console.log(`[GMAIL-ACTIONS] Executing: markAsRead`)
-        result = await markGmailThreadAsRead(channel.id, threadId)
+        console.log(`[GMAIL-ACTION] Executing: markAsRead on ${messageIds.length} messages`)
+        for (const messageId of messageIds) {
+          console.log(`[GMAIL-ACTION] messages.modify ${messageId}: -UNREAD`)
+          const r = await modifyGmailMessage(channel.id, messageId, [], ["UNREAD"])
+          if (!r.success) result = r
+        }
         labelsRemoved = ["UNREAD"]
         break
 
       case "markAsUnread":
-        console.log(`[GMAIL-ACTIONS] Executing: markAsUnread`)
-        result = await markGmailThreadAsUnread(channel.id, threadId)
+        console.log(`[GMAIL-ACTION] Executing: markAsUnread on ${messageIds.length} messages`)
+        for (const messageId of messageIds) {
+          console.log(`[GMAIL-ACTION] messages.modify ${messageId}: +UNREAD`)
+          const r = await modifyGmailMessage(channel.id, messageId, ["UNREAD"], [])
+          if (!r.success) result = r
+        }
         labelsAdded = ["UNREAD"]
         break
 
       case "star":
-        console.log(`[GMAIL-ACTIONS] Executing: star`)
-        result = await starGmailThread(channel.id, threadId)
+        console.log(`[GMAIL-ACTION] Executing: star on ${messageIds.length} messages`)
+        for (const messageId of messageIds) {
+          console.log(`[GMAIL-ACTION] messages.modify ${messageId}: +STARRED`)
+          const r = await modifyGmailMessage(channel.id, messageId, ["STARRED"], [])
+          if (!r.success) result = r
+        }
         labelsAdded = ["STARRED"]
         break
 
       case "unstar":
-        console.log(`[GMAIL-ACTIONS] Executing: unstar`)
-        result = await unstarGmailThread(channel.id, threadId)
+        console.log(`[GMAIL-ACTION] Executing: unstar on ${messageIds.length} messages`)
+        for (const messageId of messageIds) {
+          console.log(`[GMAIL-ACTION] messages.modify ${messageId}: -STARRED`)
+          const r = await modifyGmailMessage(channel.id, messageId, [], ["STARRED"])
+          if (!r.success) result = r
+        }
         labelsRemoved = ["STARRED"]
         break
 
       case "not_spam":
-      case "unspam": {
-        console.log(`[GMAIL-ACTIONS] Executing: not_spam`)
-        console.log(`[GMAIL-ACTIONS] Applying to ${messageIds.length} messages`)
-
-        // Apply to ALL messages in thread first
+      case "unspam":
+        console.log(`[GMAIL-ACTION] Executing: not_spam on ${messageIds.length} messages`)
         for (const messageId of messageIds) {
-          console.log(`[GMAIL-ACTIONS] messages.modify ${messageId}: -SPAM,-CATEGORY_SPAM +INBOX`)
-          await modifyGmailMessage(channel.id, messageId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
+          console.log(`[GMAIL-ACTION] messages.modify ${messageId}: -SPAM,-CATEGORY_SPAM +INBOX`)
+          const r = await modifyGmailMessage(channel.id, messageId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
+          if (!r.success) result = r
         }
-
-        // Then apply at thread level
-        console.log(`[GMAIL-ACTIONS] threads.modify ${threadId}: -SPAM,-CATEGORY_SPAM +INBOX`)
-        result = await modifyGmailThread(channel.id, threadId, ["INBOX"], ["SPAM", "CATEGORY_SPAM"])
         labelsRemoved = ["SPAM", "CATEGORY_SPAM"]
         labelsAdded = ["INBOX"]
         break
-      }
 
-      case "archive": {
-        // Backend determines correct action based on Gmail labels
+      case "archive":
         if (isInTrash(labels)) {
-          console.log(`[GMAIL-ACTIONS] Executing: archive from TRASH -> untrash`)
-          result = await untrashGmailThread(channel.id, threadId)
+          console.log(`[GMAIL-ACTION] Executing: archive from TRASH -> untrash on ${messageIds.length} messages`)
+          for (const messageId of messageIds) {
+            const r = await untrashGmailMessage(channel.id, messageId)
+            if (!r.success) result = r
+          }
           labelsRemoved = ["TRASH"]
         } else {
-          console.log(`[GMAIL-ACTIONS] Executing: archive -> remove INBOX`)
-          result = await modifyGmailThread(channel.id, threadId, [], ["INBOX"])
+          console.log(`[GMAIL-ACTION] Executing: archive -> remove INBOX on ${messageIds.length} messages`)
+          for (const messageId of messageIds) {
+            console.log(`[GMAIL-ACTION] messages.modify ${messageId}: -INBOX`)
+            const r = await modifyGmailMessage(channel.id, messageId, [], ["INBOX"])
+            if (!r.success) result = r
+          }
           labelsRemoved = ["INBOX"]
         }
         break
-      }
 
       case "trash":
-        console.log(`[GMAIL-ACTIONS] Executing: trash`)
-        result = await trashGmailThread(channel.id, threadId)
+        console.log(`[GMAIL-ACTION] Executing: trash on ${messageIds.length} messages`)
+        for (const messageId of messageIds) {
+          const r = await trashGmailMessage(channel.id, messageId)
+          if (!r.success) result = r
+        }
         labelsAdded = ["TRASH"]
         labelsRemoved = ["INBOX", "SPAM"]
         break
 
       case "untrash":
-        console.log(`[GMAIL-ACTIONS] Executing: untrash`)
-        result = await untrashGmailThread(channel.id, threadId)
+        console.log(`[GMAIL-ACTION] Executing: untrash on ${messageIds.length} messages`)
+        for (const messageId of messageIds) {
+          const r = await untrashGmailMessage(channel.id, messageId)
+          if (!r.success) result = r
+        }
         labelsRemoved = ["TRASH"]
         break
 
       case "spam":
-        console.log(`[GMAIL-ACTIONS] Executing: spam`)
-        result = await spamGmailThread(channel.id, threadId)
+        console.log(`[GMAIL-ACTION] Executing: spam on ${messageIds.length} messages`)
+        for (const messageId of messageIds) {
+          console.log(`[GMAIL-ACTION] messages.modify ${messageId}: +SPAM -INBOX`)
+          const r = await modifyGmailMessage(channel.id, messageId, ["SPAM"], ["INBOX"])
+          if (!r.success) result = r
+        }
         labelsAdded = ["SPAM"]
         labelsRemoved = ["INBOX"]
         break
@@ -273,17 +341,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({ error: "Azione non valida", debugVersion: API_VERSION }, { status: 400 })
     }
 
-    console.log(`[GMAIL-ACTIONS] ========== RESULT ==========`)
-    console.log(`[GMAIL-ACTIONS] Success: ${result.success}`)
-    console.log(`[GMAIL-ACTIONS] Labels REMOVED: [${labelsRemoved.join(",")}]`)
-    console.log(`[GMAIL-ACTIONS] Labels ADDED: [${labelsAdded.join(",")}]`)
+    console.log(`[GMAIL-ACTION] ========== RESULT ==========`)
+    console.log(`[GMAIL-ACTION] Success: ${result.success}`)
+    console.log(`[GMAIL-ACTION] Labels REMOVED: [${labelsRemoved.join(",")}]`)
+    console.log(`[GMAIL-ACTION] Labels ADDED: [${labelsAdded.join(",")}]`)
 
     if (!result.success) {
-      console.error(`[GMAIL-ACTIONS] Action FAILED: ${result.error}`)
+      console.error(`[GMAIL-ACTION] Action FAILED: ${result.error}`)
       return NextResponse.json({ error: result.error, debugVersion: API_VERSION }, { status: 500 })
     }
 
-    console.log(`[GMAIL-ACTIONS] Action "${action}" SUCCESSFUL`)
+    console.log(`[GMAIL-ACTION] Action "${action}" SUCCESSFUL`)
 
     return NextResponse.json({
       success: true,
@@ -291,10 +359,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       action,
       labelsRemoved,
       labelsAdded,
-      gmailLabels: labels,
+      messageCount: messageIds.length,
     })
   } catch (error) {
-    console.error("[GMAIL-ACTIONS] Exception:", error)
+    console.error("[GMAIL-ACTION] Exception:", error)
     return NextResponse.json({ error: "Errore interno", debugVersion: API_VERSION }, { status: 500 })
   }
 }
