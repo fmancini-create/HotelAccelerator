@@ -199,19 +199,19 @@ const GMAIL_SYSTEM_FOLDERS = [
   { id: "TRASH", label: "Cestino", icon: Trash2 },
 ]
 
-// Create GmailMessageBody component for iframe height auto-resize
 const GmailMessageBody = memo(({ content, contentType }: { content: string; contentType?: string }) => {
   const iframeRef = React.useRef<HTMLIFrameElement>(null)
-  const [iframeHeight, setIframeHeight] = React.useState(200)
+  const [iframeHeight, setIframeHeight] = React.useState(300)
 
   const isHtml = contentType === "text/html" || (content && /<[a-z][\s\S]*>/i.test(content))
-  const isEmpty = !content || content.length === 0
+  const isEmpty = !content || content.trim().length === 0
 
-  // Sanitize HTML: remove only scripts and event handlers, keep everything else
+  // Sanitize HTML: remove only dangerous elements, keep all styles
   const sanitizeForGmail = (html: string): string => {
-    // Remove <script> tags and their content
-    let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    // Remove event handlers (onclick, onload, onerror, etc.)
+    let sanitized = html
+    // Remove <script> tags and content
+    sanitized = sanitized.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    // Remove event handlers
     sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, "")
     sanitized = sanitized.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, "")
     // Remove javascript: URLs
@@ -223,37 +223,49 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
     if (!isHtml || !iframeRef.current || isEmpty) return
 
     const iframe = iframeRef.current
-    const resizeObserver = new ResizeObserver(() => {
+    let resizeObserver: ResizeObserver | null = null
+
+    const updateHeight = () => {
       try {
         const doc = iframe.contentDocument || iframe.contentWindow?.document
         if (doc?.body) {
-          const height = doc.body.scrollHeight
-          if (height > 0) {
-            setIframeHeight(height + 32) // Add padding
+          // Use multiple methods to get accurate height
+          const bodyHeight = doc.body.scrollHeight
+          const docHeight = doc.documentElement?.scrollHeight || 0
+          const height = Math.max(bodyHeight, docHeight, 100)
+          if (height > 0 && height !== iframeHeight) {
+            setIframeHeight(height + 40)
           }
         }
       } catch (e) {
-        // Ignore cross-origin errors
+        // Cross-origin error - use default height
       }
-    })
+    }
 
     const handleLoad = () => {
+      updateHeight()
+
       try {
         const doc = iframe.contentDocument || iframe.contentWindow?.document
         if (doc?.body) {
-          // Initial height
-          const height = doc.body.scrollHeight
-          if (height > 0) {
-            setIframeHeight(height + 32)
-          }
-          // Observe for changes
+          // Observe body for dynamic content changes
+          resizeObserver = new ResizeObserver(() => {
+            updateHeight()
+          })
           resizeObserver.observe(doc.body)
 
           // Make all links open in new tab
-          const links = doc.querySelectorAll("a")
-          links.forEach((link) => {
+          doc.querySelectorAll("a").forEach((link) => {
             link.setAttribute("target", "_blank")
             link.setAttribute("rel", "noopener noreferrer")
+          })
+
+          // Re-check height after images load
+          doc.querySelectorAll("img").forEach((img) => {
+            if (!img.complete) {
+              img.addEventListener("load", updateHeight)
+              img.addEventListener("error", updateHeight)
+            }
           })
         }
       } catch (e) {
@@ -262,25 +274,99 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
     }
 
     iframe.addEventListener("load", handleLoad)
+
+    // Also check height after a delay for slow-rendering content
+    const timeoutId = setTimeout(updateHeight, 500)
+
     return () => {
       iframe.removeEventListener("load", handleLoad)
-      resizeObserver.disconnect()
+      resizeObserver?.disconnect()
+      clearTimeout(timeoutId)
     }
-  }, [content, isHtml, isEmpty])
+  }, [content, isHtml, isEmpty, iframeHeight])
 
   if (isEmpty) {
-    return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-        <strong>Errore:</strong> Contenuto email vuoto
-      </div>
-    )
+    return <div className="p-4 text-muted-foreground text-sm italic">(Nessun contenuto)</div>
   }
 
   if (isHtml) {
     const sanitizedContent = sanitizeForGmail(content)
 
+    // Gmail-identical CSS reset and styling
+    const gmailStyles = `
+      /* Gmail-identical base reset */
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        min-height: auto;
+        background: #fff;
+      }
+      body {
+        padding: 0;
+        font-family: Roboto, RobotoDraft, Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        line-height: 20px;
+        color: #202124;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+      
+      /* Preserve original email styles but ensure readability */
+      a { color: #1a73e8; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      
+      /* Images */
+      img { 
+        max-width: 100%; 
+        height: auto; 
+        display: inline-block;
+      }
+      
+      /* Tables - preserve email layouts */
+      table { 
+        max-width: 100%; 
+        border-collapse: collapse;
+      }
+      
+      /* Gmail quote styling */
+      .gmail_quote, 
+      .gmail_attr {
+        margin: 0;
+        padding-left: 1ex;
+        border-left: 1px solid #ccc;
+        color: #5f6368;
+      }
+      blockquote {
+        margin: 0 0 0 0.8ex;
+        padding-left: 1ex;
+        border-left: 1px solid #ccc;
+        color: #5f6368;
+      }
+      
+      /* Pre/code blocks */
+      pre, code {
+        font-family: monospace;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      
+      /* Lists */
+      ul, ol { padding-left: 20px; margin: 0.5em 0; }
+      
+      /* Paragraphs */
+      p { margin: 0 0 1em 0; }
+      
+      /* Headers - keep original styling if present */
+      h1, h2, h3, h4, h5, h6 { margin: 0.5em 0; }
+      
+      /* Horizontal rules */
+      hr { border: none; border-top: 1px solid #dadce0; margin: 1em 0; }
+    `
+
     return (
-      <div className="gmail-message-body" style={{ maxWidth: "100%", overflowWrap: "break-word" }}>
+      <div className="gmail-message-body w-full">
         <iframe
           ref={iframeRef}
           srcDoc={`<!DOCTYPE html>
@@ -289,35 +375,7 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <base target="_blank">
-<style>
-/* Minimal reset - only for consistent baseline */
-body {
-  margin: 0;
-  padding: 16px;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  color: #222;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
-/* Ensure images don't overflow */
-img { max-width: 100%; height: auto; }
-/* Ensure tables don't overflow */
-table { max-width: 100%; }
-/* Quoted text styling like Gmail */
-.gmail_quote {
-  margin: 0 0 0 0.8ex;
-  border-left: 1px solid #ccc;
-  padding-left: 1ex;
-}
-blockquote {
-  margin: 0 0 0 0.8ex;
-  border-left: 1px solid #ccc;
-  padding-left: 1ex;
-  color: #666;
-}
-</style>
+<style>${gmailStyles}</style>
 </head>
 <body>${sanitizedContent}</body>
 </html>`}
@@ -326,7 +384,7 @@ blockquote {
             height: `${iframeHeight}px`,
             border: "none",
             display: "block",
-            overflow: "hidden",
+            backgroundColor: "#fff",
           }}
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           title="Email content"
@@ -335,18 +393,17 @@ blockquote {
     )
   }
 
-  // Plain text fallback
+  // Plain text fallback - Gmail style
   return (
     <div
-      className="gmail-message-body"
+      className="gmail-message-body w-full"
       style={{
         whiteSpace: "pre-wrap",
-        fontFamily: "Arial, Helvetica, sans-serif",
+        fontFamily: "Roboto, RobotoDraft, Helvetica, Arial, sans-serif",
         fontSize: "14px",
-        lineHeight: "1.5",
-        color: "#222",
-        padding: "16px",
-        maxWidth: "100%",
+        lineHeight: "20px",
+        color: "#202124",
+        wordWrap: "break-word",
         overflowWrap: "break-word",
       }}
     >
