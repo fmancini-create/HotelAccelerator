@@ -3,8 +3,7 @@
 // v773 BUILD MARKER - This comment forces a new bundle hash
 const FRONTEND_BUILD = "v773-final"
 
-import type React from "react"
-import { useState, useEffect, useRef, useCallback } from "react"
+import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
 import { useAdminAuth } from "@/lib/admin-hooks"
 import { createClient } from "@/lib/supabase/client"
@@ -199,6 +198,163 @@ const GMAIL_SYSTEM_FOLDERS = [
   { id: "SPAM", label: "Spam", icon: AlertCircle },
   { id: "TRASH", label: "Cestino", icon: Trash2 },
 ]
+
+// Create GmailMessageBody component for iframe height auto-resize
+const GmailMessageBody = memo(({ content, contentType }: { content: string; contentType?: string }) => {
+  const iframeRef = React.useRef<HTMLIFrameElement>(null)
+  const [iframeHeight, setIframeHeight] = React.useState(200)
+
+  const isHtml = contentType === "text/html" || (content && /<[a-z][\s\S]*>/i.test(content))
+  const isEmpty = !content || content.length === 0
+
+  // Sanitize HTML: remove only scripts and event handlers, keep everything else
+  const sanitizeForGmail = (html: string): string => {
+    // Remove <script> tags and their content
+    let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    // Remove event handlers (onclick, onload, onerror, etc.)
+    sanitized = sanitized.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, "")
+    sanitized = sanitized.replace(/\s*on\w+\s*=\s*[^\s>]*/gi, "")
+    // Remove javascript: URLs
+    sanitized = sanitized.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"')
+    return sanitized
+  }
+
+  useEffect(() => {
+    if (!isHtml || !iframeRef.current || isEmpty) return
+
+    const iframe = iframeRef.current
+    const resizeObserver = new ResizeObserver(() => {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document
+        if (doc?.body) {
+          const height = doc.body.scrollHeight
+          if (height > 0) {
+            setIframeHeight(height + 32) // Add padding
+          }
+        }
+      } catch (e) {
+        // Ignore cross-origin errors
+      }
+    })
+
+    const handleLoad = () => {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document
+        if (doc?.body) {
+          // Initial height
+          const height = doc.body.scrollHeight
+          if (height > 0) {
+            setIframeHeight(height + 32)
+          }
+          // Observe for changes
+          resizeObserver.observe(doc.body)
+
+          // Make all links open in new tab
+          const links = doc.querySelectorAll("a")
+          links.forEach((link) => {
+            link.setAttribute("target", "_blank")
+            link.setAttribute("rel", "noopener noreferrer")
+          })
+        }
+      } catch (e) {
+        // Ignore cross-origin errors
+      }
+    }
+
+    iframe.addEventListener("load", handleLoad)
+    return () => {
+      iframe.removeEventListener("load", handleLoad)
+      resizeObserver.disconnect()
+    }
+  }, [content, isHtml, isEmpty])
+
+  if (isEmpty) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <strong>Errore:</strong> Contenuto email vuoto
+      </div>
+    )
+  }
+
+  if (isHtml) {
+    const sanitizedContent = sanitizeForGmail(content)
+
+    return (
+      <div className="gmail-message-body" style={{ maxWidth: "100%", overflowWrap: "break-word" }}>
+        <iframe
+          ref={iframeRef}
+          srcDoc={`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<base target="_blank">
+<style>
+/* Minimal reset - only for consistent baseline */
+body {
+  margin: 0;
+  padding: 16px;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #222;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+/* Ensure images don't overflow */
+img { max-width: 100%; height: auto; }
+/* Ensure tables don't overflow */
+table { max-width: 100%; }
+/* Quoted text styling like Gmail */
+.gmail_quote {
+  margin: 0 0 0 0.8ex;
+  border-left: 1px solid #ccc;
+  padding-left: 1ex;
+}
+blockquote {
+  margin: 0 0 0 0.8ex;
+  border-left: 1px solid #ccc;
+  padding-left: 1ex;
+  color: #666;
+}
+</style>
+</head>
+<body>${sanitizedContent}</body>
+</html>`}
+          style={{
+            width: "100%",
+            height: `${iframeHeight}px`,
+            border: "none",
+            display: "block",
+            overflow: "hidden",
+          }}
+          sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+          title="Email content"
+        />
+      </div>
+    )
+  }
+
+  // Plain text fallback
+  return (
+    <div
+      className="gmail-message-body"
+      style={{
+        whiteSpace: "pre-wrap",
+        fontFamily: "Arial, Helvetica, sans-serif",
+        fontSize: "14px",
+        lineHeight: "1.5",
+        color: "#222",
+        padding: "16px",
+        maxWidth: "100%",
+        overflowWrap: "break-word",
+      }}
+    >
+      {content}
+    </div>
+  )
+})
+GmailMessageBody.displayName = "GmailMessageBody"
 
 export default function InboxPage() {
   const router = useRouter()
@@ -1055,46 +1211,7 @@ export default function InboxPage() {
 
   // Email content renderer
   const renderEmailContent = (content: string, contentType?: string) => {
-    // Handle empty content
-    if (!content || content.length === 0) {
-      return (
-        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
-          <strong>Errore:</strong> Contenuto email vuoto
-        </div>
-      )
-    }
-
-    const isHtml = contentType === "text/html" || /<[a-z][\s\S]*>/i.test(content)
-
-    if (isHtml) {
-      return (
-        <iframe
-          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-              font-size: 14px;
-              line-height: 1.6;
-              color: #1f2937;
-              margin: 0;
-              padding: 16px;
-              word-wrap: break-word;
-              overflow-x: hidden;
-            }
-            img { max-width: 100%; height: auto; }
-            a { color: #2563eb; }
-            blockquote { border-left: 3px solid #d1d5db; margin: 1em 0; padding-left: 1em; color: #6b7280; }
-            pre, code { background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-size: 13px; overflow-x: auto; }
-            table { border-collapse: collapse; max-width: 100%; }
-            td, th { padding: 8px; border: 1px solid #e5e7eb; }
-          </style></head><body>${content}</body></html>`}
-          className="w-full h-full min-h-full border-0 block"
-          sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-        />
-      )
-    }
-
-    // Plain text
-    return <div className="text-sm whitespace-pre-wrap leading-relaxed text-gray-800 p-4 h-full">{content}</div>
+    return <GmailMessageBody content={content} contentType={contentType} />
   }
 
   const handleComposeEmail = async () => {
