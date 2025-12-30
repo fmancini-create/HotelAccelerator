@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 
-const API_VERSION = "v745-base64url-fix"
+const API_VERSION = "v812-kill-switch"
 
 function decodeBase64Url(base64url: string): string {
   // Convert base64url to standard base64
