@@ -123,7 +123,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ]
 
     const message = messageParts.join("\r\n")
-    const encodedMessage = Buffer.from(message).toString("base64url")
+    const base64Message = Buffer.from(message).toString("base64")
+    // Convert base64 to base64url: replace + with -, / with _, remove padding =
+    const encodedMessage = base64Message.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 
     console.log("[v0] Sending reply to:", replyTo, "subject:", replySubject)
 
