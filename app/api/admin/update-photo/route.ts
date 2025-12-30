@@ -1,31 +1,63 @@
 import { NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { photoUpdateSchema, validateInput, sanitizeHtml } from "@/lib/input-validation"
+import type { NextRequest } from "next/server"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerClient()
-
-    // Verifica autenticazione
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
+    // Get authenticated user's property
+    const propertyId = await getAuthenticatedPropertyId(request)
+    if (!propertyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { photoId, alt, isPublished, categoryIds } = body
+    const supabase = await createClient()
 
-    // Aggiorna foto
+    const body = await request.json()
+
+    // Validate input
+    let validatedBody
+    try {
+      validatedBody = validateInput(photoUpdateSchema, body)
+    } catch (e) {
+      return NextResponse.json({ error: "Invalid input" }, { status: 400 })
+    }
+
+    const { photoId, alt, isPublished, categoryIds } = validatedBody
+
+    // Verify photo belongs to user's property BEFORE updating
+    const { data: existingPhoto, error: fetchError } = await supabase
+      .from("photos")
+      .select("property_id")
+      .eq("id", photoId)
+      .single()
+
+    if (fetchError || !existingPhoto) {
+      return NextResponse.json({ error: "Photo not found" }, { status: 404 })
+    }
+
+    // CRITICAL: Verify photo belongs to user's property
+    if (existingPhoto.property_id && existingPhoto.property_id !== propertyId) {
+      console.error(
+        `[SECURITY] Cross-tenant update attempt: user property ${propertyId}, photo property ${existingPhoto.property_id}`,
+      )
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+    }
+
+    // Sanitize alt text to prevent XSS
+    const sanitizedAlt = alt ? sanitizeHtml(alt) : undefined
+
+    // Aggiorna foto (filter by property_id for extra safety)
     const { error: updateError } = await supabase
       .from("photos")
       .update({
-        alt,
-        is_published: isPublished,
+        ...(sanitizedAlt !== undefined && { alt: sanitizedAlt }),
+        ...(isPublished !== undefined && { is_published: isPublished }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", photoId)
+      .eq("property_id", propertyId) // Extra safety
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 500 })
@@ -49,6 +81,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    if (error instanceof Error && error.message === "Non autenticato") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     console.error("Update error:", error)
     return NextResponse.json({ error: "Update failed" }, { status: 500 })
   }

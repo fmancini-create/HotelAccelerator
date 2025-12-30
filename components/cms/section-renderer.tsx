@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import type { JSX } from "react"
+import Image from "next/image"
 
 import { HeroSlider } from "@/components/hero-slider"
 import { AboutSection } from "@/components/about-section"
@@ -205,10 +206,12 @@ async function VillaRoomGallerySection({ data }: { data: Record<string, unknown>
         <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-${columns} gap-4`}>
           {images.map((image, index) => (
             <div key={index} className="aspect-[4/3] relative overflow-hidden rounded-lg group cursor-pointer">
-              <img
+              <Image
                 src={image.src || "/placeholder.svg"}
                 alt={image.alt}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                layout="fill"
+                objectFit="cover"
+                className="transition-transform duration-500 group-hover:scale-110"
               />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
             </div>
@@ -362,7 +365,17 @@ function ImageSection({ data }: { data: Record<string, unknown> }) {
   return (
     <section className="py-8 px-6">
       <figure className="max-w-4xl mx-auto">
-        <img src={src || "/placeholder.svg"} alt={alt || ""} className="w-full rounded-lg shadow-lg" loading="lazy" />
+        <div className="relative aspect-video w-full overflow-hidden rounded-lg shadow-lg">
+          <Image
+            src={src || "/placeholder.svg"}
+            alt={alt || ""}
+            layout="fill"
+            objectFit="cover"
+            className="group-hover:scale-105 transition-transform duration-300"
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
         {caption && <figcaption className="text-center text-muted-foreground mt-4">{caption}</figcaption>}
       </figure>
     </section>
@@ -397,11 +410,14 @@ function GallerySection({ data }: { data: Record<string, unknown> }) {
         <div className={`grid ${gridCols} gap-4`}>
           {images.map((image, index) => (
             <figure key={index} className="group relative overflow-hidden rounded-lg">
-              <img
+              <Image
                 src={image.src || "/placeholder.svg"}
                 alt={image.alt || ""}
-                className="w-full aspect-square object-cover group-hover:scale-105 transition-transform duration-300"
+                layout="fill"
+                objectFit="cover"
+                className="group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
+                decoding="async"
               />
               {image.caption && (
                 <figcaption className="absolute bottom-0 left-0 right-0 bg-black/60 text-white p-2 text-sm">
@@ -512,9 +528,11 @@ function TestimonialsSection({ data }: { data: Record<string, unknown> }) {
                 <blockquote className="text-lg mb-4">&quot;{item.quote}&quot;</blockquote>
                 <div className="flex items-center gap-3">
                   {item.avatar && (
-                    <img
+                    <Image
                       src={item.avatar || "/placeholder.svg"}
                       alt={item.name}
+                      width={40}
+                      height={40}
                       className="w-10 h-10 rounded-full object-cover"
                     />
                   )}

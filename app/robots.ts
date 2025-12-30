@@ -3,9 +3,8 @@ import { headers } from "next/headers"
 import { getCurrentTenant, isPlatformDomain } from "@/lib/get-tenant"
 
 /**
- * Robots.txt dinamico multi-tenant con SEO ottimizzato
- * - Platform domain: indicizza landing pages
- * - Tenant domain: indicizza sito tenant se frontend_enabled
+ * Robots.txt dinamico multi-tenant con SEO ottimizzato per AI
+ * Supporta: Googlebot, Bingbot, ChatGPT, Claude, Perplexity
  */
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const headersList = await headers()
@@ -15,20 +14,39 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const isPlatform = await isPlatformDomain()
 
   if (isPlatform) {
-    // Robots per dominio piattaforma (hotelaccelerator.com)
     const baseUrl = `${protocol}://${host || "hotelaccelerator.com"}`
 
     return {
       rules: [
         {
           userAgent: "*",
-          allow: ["/", "/features/"],
+          allow: ["/", "/features/", "/llms.txt", "/llms-full.txt"],
           disallow: ["/admin/", "/api/", "/_next/", "/scripts/", "/super-admin/"],
         },
         {
           userAgent: "Googlebot",
-          allow: ["/", "/features/"],
-          disallow: ["/admin/", "/api/", "/_next/", "/scripts/", "/super-admin/"],
+          allow: ["/", "/features/", "/llms.txt"],
+          disallow: ["/admin/", "/api/", "/_next/", "/scripts/"],
+        },
+        {
+          userAgent: "GPTBot",
+          allow: ["/", "/features/", "/llms.txt", "/llms-full.txt"],
+          disallow: ["/admin/", "/api/"],
+        },
+        {
+          userAgent: "Claude-Web",
+          allow: ["/", "/features/", "/llms.txt", "/llms-full.txt"],
+          disallow: ["/admin/", "/api/"],
+        },
+        {
+          userAgent: "PerplexityBot",
+          allow: ["/", "/features/", "/llms.txt", "/llms-full.txt"],
+          disallow: ["/admin/", "/api/"],
+        },
+        {
+          userAgent: "Google-Extended",
+          allow: ["/", "/features/", "/llms.txt", "/llms-full.txt"],
+          disallow: ["/admin/", "/api/"],
         },
       ],
       sitemap: `${baseUrl}/sitemap.xml`,
@@ -41,12 +59,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
 
   if (!tenant || !tenant.frontend_enabled) {
     return {
-      rules: [
-        {
-          userAgent: "*",
-          disallow: ["/"],
-        },
-      ],
+      rules: [{ userAgent: "*", disallow: ["/"] }],
     }
   }
 
@@ -65,8 +78,28 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: [
       {
         userAgent: "*",
-        allow: "/",
+        allow: ["/", "/llms.txt", "/llms-full.txt"],
         disallow: ["/admin/", "/api/", "/_next/", "/scripts/"],
+      },
+      {
+        userAgent: "GPTBot",
+        allow: ["/", "/llms.txt", "/llms-full.txt"],
+        disallow: ["/admin/", "/api/"],
+      },
+      {
+        userAgent: "Claude-Web",
+        allow: ["/", "/llms.txt", "/llms-full.txt"],
+        disallow: ["/admin/", "/api/"],
+      },
+      {
+        userAgent: "PerplexityBot",
+        allow: ["/", "/llms.txt", "/llms-full.txt"],
+        disallow: ["/admin/", "/api/"],
+      },
+      {
+        userAgent: "Google-Extended",
+        allow: ["/", "/llms.txt", "/llms-full.txt"],
+        disallow: ["/admin/", "/api/"],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,

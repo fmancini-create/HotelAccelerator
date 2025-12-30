@@ -1,31 +1,39 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { put, del, list } from "@vercel/blob"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { categorySchema, validateInput } from "@/lib/input-validation"
+import { z } from "zod"
 
-// Helper per verificare autenticazione (semplificato - in produzione usare JWT/session)
-function isAuthenticated(request: NextRequest): boolean {
-  // In produzione, verificare token JWT o session
-  return true
-}
-
-// GET - Lista tutte le foto dal Blob storage
+// GET - Lista tutte le foto dal Blob storage (authenticated)
 export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    const propertyId = await getAuthenticatedPropertyId(request)
+    if (!propertyId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { blobs } = await list()
     return NextResponse.json({
       success: true,
       files: blobs.map((b) => ({ url: b.url, pathname: b.pathname })),
     })
   } catch (error) {
+    if (error instanceof Error && error.message === "Non autenticato") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     console.error("Errore lista foto:", error)
     return NextResponse.json({ error: "Errore durante il caricamento" }, { status: 500 })
   }
 }
 
-// POST - Upload nuove foto
+// POST - Upload nuove foto (authenticated + validated)
 export async function POST(request: NextRequest) {
   try {
-    if (!isAuthenticated(request)) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    // Verify authentication
+    const propertyId = await getAuthenticatedPropertyId(request)
+    if (!propertyId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const formData = await request.formData()
@@ -36,8 +44,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nessun file fornito" }, { status: 400 })
     }
 
-    if (!category) {
-      return NextResponse.json({ error: "Categoria non specificata" }, { status: 400 })
+    // Validate category
+    try {
+      validateInput(categorySchema, category)
+    } catch {
+      return NextResponse.json({ error: "Categoria non valida" }, { status: 400 })
+    }
+
+    // Validate files
+    const maxFileSize = 10 * 1024 * 1024 // 10MB
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"]
+
+    for (const file of files) {
+      if (file.size > maxFileSize) {
+        return NextResponse.json({ error: `File ${file.name} troppo grande (max 10MB)` }, { status: 400 })
+      }
+      if (!allowedTypes.includes(file.type)) {
+        return NextResponse.json({ error: `Tipo file non supportato: ${file.type}` }, { status: 400 })
+      }
     }
 
     // Mappa categoria a percorso
@@ -54,15 +78,11 @@ export async function POST(request: NextRequest) {
     }
 
     const categoryPath = categoryPaths[category]
-    if (!categoryPath) {
-      return NextResponse.json({ error: "Categoria non valida" }, { status: 400 })
-    }
-
     const uploadedFiles: string[] = []
 
     for (const file of files) {
-      // Genera nome file sicuro
-      const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, "-")
+      // Genera nome file sicuro (sanitize)
+      const originalName = file.name.replace(/[^a-zA-Z0-9.-]/g, "-").substring(0, 100)
       const timestamp = Date.now()
       const fileName = `${timestamp}-${originalName}`
       const pathname = `${categoryPath}/${fileName}`
@@ -81,23 +101,51 @@ export async function POST(request: NextRequest) {
       files: uploadedFiles,
     })
   } catch (error) {
+    if (error instanceof Error && error.message === "Non autenticato") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     console.error("Errore upload:", error)
     return NextResponse.json({ error: "Errore durante l'upload" }, { status: 500 })
   }
 }
 
-// DELETE - Elimina foto
+// DELETE - Elimina foto (authenticated + validated)
 export async function DELETE(request: NextRequest) {
   try {
-    if (!isAuthenticated(request)) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    // Verify authentication
+    const propertyId = await getAuthenticatedPropertyId(request)
+    if (!propertyId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
-    const { files } = body as { files: string[] }
 
-    if (!files || files.length === 0) {
-      return NextResponse.json({ error: "Nessun file specificato" }, { status: 400 })
+    // Validate input
+    const schema = z.object({
+      files: z.array(z.string().url()).min(1).max(100),
+    })
+
+    let validatedBody
+    try {
+      validatedBody = validateInput(schema, body)
+    } catch (e) {
+      return NextResponse.json({ error: "Input non valido" }, { status: 400 })
+    }
+
+    const { files } = validatedBody
+
+    // Validate URLs are from allowed domains
+    const allowedDomains = ["blob.vercel-storage.com", "public.blob.vercel-storage.com"]
+    for (const fileUrl of files) {
+      try {
+        const url = new URL(fileUrl)
+        const isAllowed = allowedDomains.some((d) => url.hostname.endsWith(d))
+        if (!isAllowed) {
+          return NextResponse.json({ error: `URL non consentito: ${fileUrl}` }, { status: 400 })
+        }
+      } catch {
+        return NextResponse.json({ error: `URL non valido: ${fileUrl}` }, { status: 400 })
+      }
     }
 
     const deletedFiles: string[] = []
@@ -105,7 +153,6 @@ export async function DELETE(request: NextRequest) {
 
     for (const fileUrl of files) {
       try {
-        // Vercel Blob delete richiede l'URL completo
         await del(fileUrl)
         deletedFiles.push(fileUrl)
       } catch (err) {
@@ -120,24 +167,46 @@ export async function DELETE(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
+    if (error instanceof Error && error.message === "Non autenticato") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     console.error("Errore eliminazione:", error)
     return NextResponse.json({ error: "Errore durante l'eliminazione" }, { status: 500 })
   }
 }
 
-// PATCH - Sposta foto tra categorie (copia + elimina)
+// PATCH - Sposta foto tra categorie (authenticated + validated)
 export async function PATCH(request: NextRequest) {
   try {
-    if (!isAuthenticated(request)) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    // Verify authentication
+    const propertyId = await getAuthenticatedPropertyId(request)
+    if (!propertyId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
-    const { moves } = body as { moves: { from: string; toCategory: string }[] }
 
-    if (!moves || moves.length === 0) {
-      return NextResponse.json({ error: "Nessuno spostamento specificato" }, { status: 400 })
+    // Validate input
+    const schema = z.object({
+      moves: z
+        .array(
+          z.object({
+            from: z.string().url(),
+            toCategory: categorySchema,
+          }),
+        )
+        .min(1)
+        .max(50),
+    })
+
+    let validatedBody
+    try {
+      validatedBody = validateInput(schema, body)
+    } catch {
+      return NextResponse.json({ error: "Input non valido" }, { status: 400 })
     }
+
+    const { moves } = validatedBody
 
     const categoryPaths: Record<string, string> = {
       suite: "images/suite",
@@ -159,14 +228,18 @@ export async function PATCH(request: NextRequest) {
         const { from, toCategory } = move
         const targetPath = categoryPaths[toCategory]
 
-        if (!targetPath) {
-          errors.push(`Categoria non valida: ${toCategory}`)
+        // Validate source URL
+        const allowedDomains = ["blob.vercel-storage.com", "public.blob.vercel-storage.com"]
+        const url = new URL(from)
+        const isAllowed = allowedDomains.some((d) => url.hostname.endsWith(d))
+        if (!isAllowed) {
+          errors.push(`URL non consentito: ${from}`)
           continue
         }
 
-        // Estrai nome file dall'URL
+        // Estrai nome file dall'URL (sanitized)
         const urlParts = from.split("/")
-        const fileName = urlParts[urlParts.length - 1]
+        const fileName = urlParts[urlParts.length - 1].replace(/[^a-zA-Z0-9.-]/g, "-").substring(0, 100)
         const newPathname = `${targetPath}/${fileName}`
 
         // Scarica il file originale
@@ -202,6 +275,9 @@ export async function PATCH(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
+    if (error instanceof Error && error.message === "Non autenticato") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     console.error("Errore spostamento:", error)
     return NextResponse.json({ error: "Errore durante lo spostamento" }, { status: 500 })
   }

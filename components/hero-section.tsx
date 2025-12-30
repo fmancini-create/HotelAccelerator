@@ -1,38 +1,50 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, memo } from "react"
+import Image from "next/image"
 import { ArrowDown } from "lucide-react"
 
-export function HeroSection() {
+const images = [
+  "/images/hero/index1.jpg",
+  "/images/hero/index16.jpg",
+  "/images/hero/index17.jpg",
+  "/images/hero/index3.jpg",
+  "/images/hero/index18.jpg",
+]
+
+function HeroSectionComponent() {
   const [currentImage, setCurrentImage] = useState(0)
 
-  const images = [
-    "https://www.ibarronci.com/img/TOP/index1.jpg",
-    "https://www.ibarronci.com/img/TOP/index16.jpg",
-    "https://www.ibarronci.com/img/TOP/index17.jpg",
-    "https://www.ibarronci.com/img/TOP/index3.jpg",
-    "https://www.ibarronci.com/img/TOP/index18.jpg",
-  ]
+  const nextImage = useCallback(() => {
+    setCurrentImage((prev) => (prev + 1) % images.length)
+  }, [])
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentImage((prev) => (prev + 1) % images.length)
-    }, 5000)
+    const interval = setInterval(nextImage, 5000)
     return () => clearInterval(interval)
-  }, [images.length])
+  }, [nextImage])
+
+  const handleScroll = useCallback(() => {
+    document.getElementById("panorama")?.scrollIntoView({ behavior: "smooth" })
+  }, [])
 
   return (
     <section className="relative h-screen flex items-center justify-center">
       {images.map((img, index) => (
         <div
           key={img}
-          className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-opacity duration-1000 ${
-            index === currentImage ? "opacity-100" : "opacity-0"
-          }`}
-          style={{
-            backgroundImage: `url('${img}')`,
-          }}
+          className={`absolute inset-0 transition-opacity duration-1000 ${index === currentImage ? "opacity-100" : "opacity-0"}`}
         >
+          <Image
+            src={img || "/placeholder.svg"}
+            alt={`Villa I Barronci ${index + 1}`}
+            fill
+            className="object-cover"
+            priority={index === 0}
+            loading={index === 0 ? "eager" : "lazy"}
+            sizes="100vw"
+            quality={85}
+          />
           <div className="absolute inset-0 bg-black/20" />
         </div>
       ))}
@@ -45,14 +57,15 @@ export function HeroSection() {
       </div>
 
       <button
-        onClick={() => {
-          document.getElementById("panorama")?.scrollIntoView({ behavior: "smooth" })
-        }}
+        onClick={handleScroll}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white animate-bounce"
-        aria-label="Scroll down"
+        aria-label="Scorri verso il basso"
       >
         <ArrowDown size={32} />
       </button>
     </section>
   )
 }
+
+export const HeroSection = memo(HeroSectionComponent)
+export default HeroSection

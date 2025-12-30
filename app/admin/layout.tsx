@@ -8,6 +8,14 @@ export const metadata: Metadata = {
     template: "%s | HotelAccelerator Admin",
   },
   description: "Dashboard amministrativa HotelAccelerator",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-icon.png",
+  },
 }
 
 export default function AdminLayout({
