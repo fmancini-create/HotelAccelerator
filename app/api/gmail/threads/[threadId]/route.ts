@@ -3,10 +3,22 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 
-const API_VERSION = "v744"
+const API_VERSION = "v745-base64url-fix"
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
-  const { threadId } = await params
+function decodeBase64Url(base64url: string): string {
+  // Convert base64url to standard base64
+  let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/")
+  // Add padding if needed
+  const padding = base64.length % 4
+  if (padding) {
+    base64 += "=".repeat(4 - padding)
+  }
+  // Decode using standard base64
+  return Buffer.from(base64, "base64").toString("utf-8")
+}
+
+export async function GET(request: NextRequest, { params }: { params: { threadId: string } }) {
+  const { threadId } = params
   console.log(`[v0] GMAIL THREAD DETAIL API ${API_VERSION} - threadId:`, threadId)
 
   const supabase = await createClient()
@@ -116,7 +128,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Direct body data
         if (part.body?.data) {
           try {
-            const decoded = Buffer.from(part.body.data, "base64url").toString("utf-8")
+            const decoded = decodeBase64Url(part.body.data)
             console.log(`[v0] ${indent}Found body data: mimeType=${part.mimeType}, length=${decoded.length}`)
             return { body: decoded, contentType: part.mimeType || "text/plain", source: `direct-${part.mimeType}` }
           } catch (e) {
