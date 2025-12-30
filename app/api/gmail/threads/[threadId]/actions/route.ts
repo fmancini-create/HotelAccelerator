@@ -13,7 +13,7 @@ import {
   getValidGmailToken,
 } from "@/lib/gmail-client"
 
-const API_VERSION = "v774-backend-label-authority"
+const API_VERSION = "v777-backend-label-authority"
 
 function isInSpam(labels: string[]): boolean {
   return labels.includes("SPAM") || labels.includes("CATEGORY_SPAM")
@@ -107,11 +107,11 @@ async function getThreadLabelsFromGmail(
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: { threadId: string } }) {
   console.log(`[GMAIL-ACTIONS] ========== BUILD ${API_VERSION} ==========`)
 
   try {
-    const { threadId } = await params
+    const { threadId } = params
     const body = await request.json()
 
     const { action } = body

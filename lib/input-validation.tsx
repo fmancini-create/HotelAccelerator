@@ -1,25 +1,18 @@
-import { z } from "zod"
+import { z, type ZodSchema } from "zod"
 
 /**
- * Common validation schemas for API inputs
+ * UUID schema for validating IDs
  */
+export const uuidSchema = z.string().uuid()
 
-// UUID validation
-export const uuidSchema = z.string().uuid("Invalid UUID format")
+/**
+ * Email schema for validating email addresses
+ */
+export const emailSchema = z.string().email()
 
-// Email validation
-export const emailSchema = z.string().email("Invalid email format").max(255)
-
-// Safe string (no script injection)
-export const safeStringSchema = z
-  .string()
-  .max(1000)
-  .refine((val) => !/<script/i.test(val), "Script tags not allowed")
-
-// Photo ID validation
-export const photoIdSchema = uuidSchema
-
-// Category validation
+/**
+ * Category schema for photo categories
+ */
 export const categorySchema = z.enum([
   "suite",
   "suite-private-access",
@@ -32,74 +25,114 @@ export const categorySchema = z.enum([
   "common",
 ])
 
-// File upload validation
-export const fileUploadSchema = z.object({
-  name: z.string().max(255),
-  type: z.string().regex(/^image\/(jpeg|png|gif|webp|svg\+xml)$/, "Invalid image type"),
-  size: z.number().max(10 * 1024 * 1024, "File too large (max 10MB)"),
-})
-
-// Photo update schema
-export const photoUpdateSchema = z.object({
-  photoId: uuidSchema,
-  alt: safeStringSchema.optional(),
-  isPublished: z.boolean().optional(),
-  categoryIds: z.array(uuidSchema).optional(),
-})
-
-// Photo delete schema
-export const photoDeleteSchema = z.object({
-  photoId: uuidSchema,
-})
-
-// Pagination schema
-export const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-})
+/**
+ * URL schema
+ */
+export const urlSchema = z.string().url()
 
 /**
- * Validate and sanitize input, returning typed result or throwing
+ * Non-empty string schema
  */
-export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): T {
+export const nonEmptyStringSchema = z.string().min(1)
+
+/**
+ * Generic validation function
+ * Throws error if validation fails
+ */
+export function validateInput<T>(schema: ZodSchema<T>, data: unknown): T {
   const result = schema.safeParse(data)
   if (!result.success) {
-    const errors = result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", ")
-    throw new ValidationError(`Validation failed: ${errors}`)
+    throw new Error(`Validation error: ${result.error.message}`)
   }
   return result.data
 }
 
 /**
- * Custom validation error
+ * Safe validation function - returns null instead of throwing
  */
-export class ValidationError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = "ValidationError"
+export function safeValidateInput<T>(schema: ZodSchema<T>, data: unknown): T | null {
+  const result = schema.safeParse(data)
+  if (!result.success) {
+    return null
   }
+  return result.data
 }
 
 /**
- * Sanitize HTML to prevent XSS
+ * File validation schema
+ */
+export const fileValidationSchema = z.object({
+  maxSize: z.number().default(10 * 1024 * 1024), // 10MB default
+  allowedTypes: z.array(z.string()).default(["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"]),
+})
+
+/**
+ * Validate a file
+ */
+export function validateFile(
+  file: File,
+  options: { maxSize?: number; allowedTypes?: string[] } = {},
+): { valid: boolean; error?: string } {
+  const maxSize = options.maxSize || 10 * 1024 * 1024 // 10MB
+  const allowedTypes = options.allowedTypes || ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"]
+
+  if (file.size > maxSize) {
+    return { valid: false, error: `File too large (max ${maxSize / 1024 / 1024}MB)` }
+  }
+
+  if (!allowedTypes.includes(file.type)) {
+    return { valid: false, error: `File type not allowed: ${file.type}` }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * Sanitize filename
+ */
+export function sanitizeFilename(filename: string): string {
+  return filename
+    .replace(/[^a-zA-Z0-9.-]/g, "-")
+    .replace(/-+/g, "-")
+    .substring(0, 100)
+}
+
+/**
+ * Photo delete schema
+ */
+export const photoDeleteSchema = z.object({
+  url: z.string().url(),
+})
+
+/**
+ * Photo update schema
+ */
+export const photoUpdateSchema = z.object({
+  url: z.string().url(),
+  alt: z.string().max(500).optional(),
+  title: z.string().max(200).optional(),
+  category: categorySchema.optional(),
+})
+
+/**
+ * Sanitize HTML - removes dangerous tags and attributes
  */
 export function sanitizeHtml(input: string): string {
-  return input
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#x27;")
-    .replace(/\//g, "&#x2F;")
-}
+  if (!input) return ""
 
-/**
- * Validate URL is from allowed domains
- */
-export function isAllowedUrl(url: string, allowedDomains: string[]): boolean {
-  try {
-    const parsed = new URL(url)
-    return allowedDomains.some((domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`))
-  } catch {
-    return false
-  }
+  return (
+    input
+      // Remove script tags and content
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+      // Remove event handlers
+      .replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, "")
+      // Remove javascript: URLs
+      .replace(/javascript:/gi, "")
+      // Remove dangerous tags
+      .replace(/<(iframe|object|embed|link|style|meta)[^>]*>/gi, "")
+      // Escape remaining HTML entities
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .trim()
+  )
 }

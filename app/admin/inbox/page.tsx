@@ -1,7 +1,8 @@
 "use client"
 
-// v773 BUILD MARKER - This comment forces a new bundle hash
-const FRONTEND_BUILD = "v773-final"
+// v777 BUILD MARKER - This comment forces a new bundle hash
+// v777 BUILD MARKER - Added v777 marker for debugging
+const FRONTEND_BUILD = "v777-debug"
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
