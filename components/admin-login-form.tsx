@@ -15,6 +15,10 @@ const DEV_CREDENTIALS = {
     email: "f.mancini@ibarronci.com",
     password: "Pippolo75@",
   },
+  superAdmin: {
+    email: "f.mancini@4bid.it",
+    password: "Pippolo75@",
+  },
 }
 
 export default function AdminLoginForm() {
@@ -45,6 +49,11 @@ export default function AdminLoginForm() {
   const handleQuickLogin = () => {
     setEmail(DEV_CREDENTIALS.admin.email)
     setPassword(DEV_CREDENTIALS.admin.password)
+  }
+
+  const handleQuickLoginSuperAdmin = () => {
+    setEmail(DEV_CREDENTIALS.superAdmin.email)
+    setPassword(DEV_CREDENTIALS.superAdmin.password)
   }
 
   const getSupabase = () => {
@@ -358,16 +367,28 @@ export default function AdminLoginForm() {
       {isDevEnvironment && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
           <p className="text-xs text-amber-700 mb-2 font-medium">Accesso rapido (solo dev/preview)</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleQuickLogin}
-            className="w-full border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
-          >
-            <Zap className="w-4 h-4 mr-2" />
-            Admin Villa I Barronci
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleQuickLogin}
+              className="w-full border-green-300 text-green-700 hover:bg-green-100 bg-transparent"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Admin Villa I Barronci
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleQuickLoginSuperAdmin}
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Super Admin
+            </Button>
+          </div>
         </div>
       )}
 
