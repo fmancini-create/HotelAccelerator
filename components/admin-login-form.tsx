@@ -106,8 +106,8 @@ export default function AdminLoginForm() {
       }
 
       console.log("[v0] User authenticated:", data.user.id)
-      console.log("[v0] Checking admin_users table...")
 
+      console.log("[v0] Checking admin_users table...")
       const { data: adminUser, error: adminError } = await supabase
         .from("admin_users")
         .select("*")
@@ -116,18 +116,40 @@ export default function AdminLoginForm() {
 
       console.log("[v0] admin_users query result:", { adminUser, adminError })
 
-      if (adminError || !adminUser) {
-        console.log("[v0] User not authorized:", adminError?.message)
-        setError("Utente non autorizzato")
-        await supabase.auth.signOut()
-        setIsLoading(false)
+      if (adminUser) {
+        console.log("[v0] Admin user found:", adminUser)
+        console.log("[v0] Redirecting to /admin/dashboard...")
+        window.location.href = "/admin/dashboard"
         return
       }
 
-      console.log("[v0] Admin user found:", adminUser)
-      console.log("[v0] Redirecting to /admin/dashboard...")
+      console.log("[v0] User not in admin_users, checking platform_collaborators...")
+      const { data: collaborator, error: collaboratorError } = await supabase
+        .from("platform_collaborators")
+        .select("*")
+        .eq("email", data.user.email)
+        .single()
 
-      window.location.href = "/admin/dashboard"
+      console.log("[v0] platform_collaborators query result:", { collaborator, collaboratorError })
+
+      if (collaborator && collaborator.role === "super_admin" && collaborator.is_active) {
+        console.log("[v0] Super admin found:", collaborator)
+
+        // Update last login
+        await supabase
+          .from("platform_collaborators")
+          .update({ last_login_at: new Date().toISOString() })
+          .eq("id", collaborator.id)
+
+        console.log("[v0] Redirecting to /super-admin...")
+        window.location.href = "/super-admin"
+        return
+      }
+
+      console.log("[v0] User not authorized in admin_users or platform_collaborators")
+      setError("Utente non autorizzato")
+      await supabase.auth.signOut()
+      setIsLoading(false)
     } catch (err) {
       console.error("[v0] Login error:", err)
       setError("Si è verificato un errore durante l'accesso")
