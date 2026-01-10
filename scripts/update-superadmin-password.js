@@ -1,5 +1,5 @@
 // Script per aggiornare la password del super admin
-// Esegui questo script dalla console v0
+// Esegui questo script per cambiare la password di f.mancini@4bid.it
 
 import { createClient } from "@supabase/supabase-js"
 
@@ -7,7 +7,7 @@ const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
+  console.error("[v0] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY")
   process.exit(1)
 }
 
@@ -33,7 +33,8 @@ async function updatePassword() {
     process.exit(1)
   }
 
-  console.log("[v0] Password updated successfully for:", data.user?.email)
+  console.log("[v0] Password updated successfully!")
+  console.log("[v0] User:", data.user.email)
 }
 
 updatePassword()
