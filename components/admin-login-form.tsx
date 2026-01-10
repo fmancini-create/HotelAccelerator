@@ -3,12 +3,19 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, Mail, ArrowLeft, User } from "lucide-react"
+import { Lock, Eye, EyeOff, Mail, ArrowLeft, User, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
 
 type FormMode = "login" | "register" | "recovery"
+
+const DEV_CREDENTIALS = {
+  admin: {
+    email: "f.mancini@ibarronci.com",
+    password: "Pippolo75@",
+  },
+}
 
 export default function AdminLoginForm() {
   const [email, setEmail] = useState("")
@@ -20,11 +27,25 @@ export default function AdminLoginForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [mode, setMode] = useState<FormMode>("login")
   const [isClient, setIsClient] = useState(false)
+  const [isDevEnvironment, setIsDevEnvironment] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     setIsClient(true)
+    const hostname = window.location.hostname
+    const isDev =
+      hostname === "localhost" ||
+      hostname.includes("preview") ||
+      hostname.includes("vercel.app") ||
+      hostname.includes("vusercontent.net") ||
+      process.env.NODE_ENV === "development"
+    setIsDevEnvironment(isDev)
   }, [])
+
+  const handleQuickLogin = () => {
+    setEmail(DEV_CREDENTIALS.admin.email)
+    setPassword(DEV_CREDENTIALS.admin.password)
+  }
 
   const getSupabase = () => {
     if (!isClient) return null
@@ -334,6 +355,22 @@ export default function AdminLoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
+      {isDevEnvironment && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+          <p className="text-xs text-amber-700 mb-2 font-medium">Accesso rapido (solo dev/preview)</p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleQuickLogin}
+            className="w-full border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            Admin Villa I Barronci
+          </Button>
+        </div>
+      )}
+
       <div>
         <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
         <div className="relative">
