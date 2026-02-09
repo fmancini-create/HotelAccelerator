@@ -4,11 +4,17 @@ import { getValidGmailToken } from "@/lib/gmail-client"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import type { OAuthProvider } from "@/lib/oauth-config"
 
+const API_VERSION = "v775-smart-sync"
+
 export async function POST(request: NextRequest) {
+  console.log(`[SMART-SYNC] ========== BUILD ${API_VERSION} ==========`)
+
   try {
     const { channel_id, property_id } = await request.json()
+    console.log(`[SMART-SYNC] INPUT: channel_id=${channel_id}, property_id=${property_id}`)
 
     if (!channel_id || !property_id) {
+      console.error("[SMART-SYNC] Missing channel_id or property_id")
       return NextResponse.json({ error: "channel_id e property_id obbligatori" }, { status: 400 })
     }
 
@@ -22,10 +28,14 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (channelError || !channel) {
+      console.error("[SMART-SYNC] Channel not found:", channelError)
       return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
     }
 
+    console.log(`[SMART-SYNC] Channel found: provider=${channel.provider}, email=${channel.email_address}`)
+
     if (!channel.oauth_access_token || !channel.provider) {
+      console.error("[SMART-SYNC] Channel not configured with OAuth")
       return NextResponse.json({ error: "Canale non configurato con OAuth" }, { status: 400 })
     }
 
@@ -33,28 +43,39 @@ export async function POST(request: NextRequest) {
     let emails: InboundEmail[] = []
 
     if (provider === "gmail") {
+      console.log("[SMART-SYNC] Fetching Gmail messages...")
       const { token, error: tokenError } = await getValidGmailToken(channel_id)
       if (!token) {
+        console.error("[SMART-SYNC] Token error:", tokenError)
         return NextResponse.json({ error: tokenError || "Token non valido" }, { status: 401 })
       }
       emails = await fetchGmailMessages(token)
+      console.log(`[SMART-SYNC] Fetched ${emails.length} Gmail messages`)
     } else if (provider === "outlook") {
       emails = await fetchOutlookMessages(channel.oauth_access_token)
+      console.log(`[SMART-SYNC] Fetched ${emails.length} Outlook messages`)
     }
 
     // Process with centralized EmailProcessor
     const processor = new EmailProcessor(supabase)
     let imported = 0
     let duplicates = 0
+    let errors = 0
 
     for (const email of emails) {
-      const result = await processor.processInboundEmail(email, channel.id, property_id)
-      if (result.success) {
-        if (result.isDuplicate) {
-          duplicates++
-        } else {
-          imported++
+      try {
+        const result = await processor.processInboundEmail(email, channel.id, property_id)
+        if (result.success) {
+          if (result.isDuplicate) {
+            duplicates++
+          } else {
+            imported++
+            console.log(`[SMART-SYNC] Imported: ${email.subject?.substring(0, 50)}...`)
+          }
         }
+      } catch (err) {
+        errors++
+        console.error(`[SMART-SYNC] Error processing email ${email.externalId}:`, err)
       }
     }
 
@@ -67,14 +88,20 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", channel_id)
 
-    return NextResponse.json({
+    const result = {
       success: true,
       imported,
       duplicates,
+      errors,
       total: emails.length,
-    })
+      version: API_VERSION,
+    }
+
+    console.log(`[SMART-SYNC] Result:`, result)
+
+    return NextResponse.json(result)
   } catch (error) {
-    console.error("Email sync error:", error)
+    console.error("[SMART-SYNC] Fatal error:", error)
     return NextResponse.json({ error: "Errore durante la sincronizzazione" }, { status: 500 })
   }
 }
