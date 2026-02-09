@@ -3,12 +3,23 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, Mail, ArrowLeft, User } from "lucide-react"
+import { Lock, Eye, EyeOff, Mail, ArrowLeft, User, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
 
 type FormMode = "login" | "register" | "recovery"
+
+const DEV_CREDENTIALS = {
+  admin: {
+    email: "f.mancini@ibarronci.com",
+    password: "Pippolo75@",
+  },
+  superAdmin: {
+    email: "f.mancini@4bid.it",
+    password: "Pippolo75@",
+  },
+}
 
 export default function AdminLoginForm() {
   const [email, setEmail] = useState("")
@@ -20,11 +31,30 @@ export default function AdminLoginForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [mode, setMode] = useState<FormMode>("login")
   const [isClient, setIsClient] = useState(false)
+  const [isDevEnvironment, setIsDevEnvironment] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     setIsClient(true)
+    const hostname = window.location.hostname
+    const isDev =
+      hostname === "localhost" ||
+      hostname.includes("preview") ||
+      hostname.includes("vercel.app") ||
+      hostname.includes("vusercontent.net") ||
+      process.env.NODE_ENV === "development"
+    setIsDevEnvironment(isDev)
   }, [])
+
+  const handleQuickLogin = () => {
+    setEmail(DEV_CREDENTIALS.admin.email)
+    setPassword(DEV_CREDENTIALS.admin.password)
+  }
+
+  const handleQuickLoginSuperAdmin = () => {
+    setEmail(DEV_CREDENTIALS.superAdmin.email)
+    setPassword(DEV_CREDENTIALS.superAdmin.password)
+  }
 
   const getSupabase = () => {
     if (!isClient) return null
@@ -76,8 +106,8 @@ export default function AdminLoginForm() {
       }
 
       console.log("[v0] User authenticated:", data.user.id)
-      console.log("[v0] Checking admin_users table...")
 
+      console.log("[v0] Checking admin_users table...")
       const { data: adminUser, error: adminError } = await supabase
         .from("admin_users")
         .select("*")
@@ -86,18 +116,40 @@ export default function AdminLoginForm() {
 
       console.log("[v0] admin_users query result:", { adminUser, adminError })
 
-      if (adminError || !adminUser) {
-        console.log("[v0] User not authorized:", adminError?.message)
-        setError("Utente non autorizzato")
-        await supabase.auth.signOut()
-        setIsLoading(false)
+      if (adminUser) {
+        console.log("[v0] Admin user found:", adminUser)
+        console.log("[v0] Redirecting to /admin/dashboard...")
+        window.location.href = "/admin/dashboard"
         return
       }
 
-      console.log("[v0] Admin user found:", adminUser)
-      console.log("[v0] Redirecting to /admin/dashboard...")
+      console.log("[v0] User not in admin_users, checking platform_collaborators...")
+      const { data: collaborator, error: collaboratorError } = await supabase
+        .from("platform_collaborators")
+        .select("*")
+        .eq("email", data.user.email)
+        .single()
 
-      window.location.href = "/admin/dashboard"
+      console.log("[v0] platform_collaborators query result:", { collaborator, collaboratorError })
+
+      if (collaborator && collaborator.role === "super_admin" && collaborator.is_active) {
+        console.log("[v0] Super admin found:", collaborator)
+
+        // Update last login
+        await supabase
+          .from("platform_collaborators")
+          .update({ last_login_at: new Date().toISOString() })
+          .eq("id", collaborator.id)
+
+        console.log("[v0] Redirecting to /super-admin...")
+        window.location.href = "/super-admin"
+        return
+      }
+
+      console.log("[v0] User not authorized in admin_users or platform_collaborators")
+      setError("Utente non autorizzato")
+      await supabase.auth.signOut()
+      setIsLoading(false)
     } catch (err) {
       console.error("[v0] Login error:", err)
       setError("Si è verificato un errore durante l'accesso")
@@ -334,6 +386,34 @@ export default function AdminLoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
+      {isDevEnvironment && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+          <p className="text-xs text-amber-700 mb-2 font-medium">Accesso rapido (solo dev/preview)</p>
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleQuickLogin}
+              className="w-full border-green-300 text-green-700 hover:bg-green-100 bg-transparent"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Admin Villa I Barronci
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleQuickLoginSuperAdmin}
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              Super Admin
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div>
         <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
         <div className="relative">
