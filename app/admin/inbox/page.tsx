@@ -1,8 +1,5 @@
 "use client"
 
-// v773 BUILD MARKER - This comment forces a new bundle hash
-const FRONTEND_BUILD = "v773-final"
-
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
@@ -275,17 +272,13 @@ export default function InboxPage() {
   }
 
   const loadGmailLabels = useCallback(async () => {
-    console.log("[v0] DEBUG: loadGmailLabels CALLED")
     try {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
         const data = await res.json()
         setGmailSystemLabels(data.systemLabels || [])
         setGmailUserLabels(data.labels || [])
-        console.log("[v0] Gmail labels loaded:", {
-          systemCount: data.systemLabels?.length || 0,
-          userCount: data.labels?.length || 0,
-        })
+
       }
     } catch (error) {
       console.error("[Gmail] Error loading labels:", error)
@@ -294,7 +287,6 @@ export default function InboxPage() {
 
   const loadGmailThreads = useCallback(
     async (labelId: string = gmailLabelId, pageToken?: string, query?: string, isNextPage = false) => {
-      console.log("[v0] DEBUG: loadGmailThreads CALLED with labelId:", labelId)
       setGmailLoading(true)
       try {
         const params = new URLSearchParams()
@@ -303,17 +295,10 @@ export default function InboxPage() {
         if (query) params.set("q", query)
 
         const fullUrl = `/api/gmail/threads?${params}`
-        console.log("[v0] DEBUG: FULL REQUEST URL:", fullUrl)
-        console.log("[v0] DEBUG: About to fetch /api/gmail/threads")
-
         const res = await fetch(fullUrl)
-
-        console.log("[v0] DEBUG: Fetch completed, status:", res.status)
 
         if (res.ok) {
           const data = await res.json()
-
-          console.log("[v0] FRONTEND: FULL API RESPONSE:", JSON.stringify(data, null, 2))
 
           setGmailApiVersion(data.debugVersion || null)
           setGmailThreads(data.threads || [])
@@ -328,21 +313,12 @@ export default function InboxPage() {
             resultSizeEstimate: data.resultSizeEstimate,
           })
 
-          console.log("[v0] FRONTEND: Gmail threads loaded:", {
-            apiVersion: data.debugVersion,
-            count: data.threads?.length || 0,
-            total: data.resultSizeEstimate,
-            hasNextPage: !!data.nextPageToken,
-            debug: data._debug,
-          })
+
         } else {
-          const errorBody = await res.text()
-          console.error("[v0] FRONTEND: Error loading threads:", res.status, errorBody)
           setGmailThreads([])
           setGmailApiVersion(null)
         }
       } catch (error) {
-        console.error("[v0] DEBUG: Exception in loadGmailThreads:", error)
         setGmailThreads([])
         setGmailApiVersion(null)
       } finally {
@@ -353,42 +329,22 @@ export default function InboxPage() {
   )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
-    console.log("[v0] loadGmailThread CALLED with threadId:", threadId)
     setGmailThreadLoading(true)
     setGmailMessages([])
     try {
       const res = await fetch(`/api/gmail/threads/${threadId}`)
-      console.log("[v0] loadGmailThread response status:", res.status)
       if (res.ok) {
         const data = await res.json()
-        console.log("[v0] loadGmailThread FULL RESPONSE:", JSON.stringify(data, null, 2))
-        console.log("[v0] Messages count:", data.messages?.length || 0)
-
-        // Log body info for each message
-        data.messages?.forEach((msg: any, idx: number) => {
-          console.log(
-            `[v0] Message ${idx + 1}: bodyLength=${msg.content?.length || 0}, contentType=${msg.content_type}, source=${msg._debug?.bodySource}`,
-          )
-          if (!msg.content || msg.content.length === 0) {
-            console.error(`[v0] WARNING: Message ${idx + 1} has EMPTY body!`)
-          }
-        })
-
         setGmailMessages(data.messages || [])
-      } else {
-        const errorBody = await res.text()
-        console.error("[v0] loadGmailThread error:", res.status, errorBody)
       }
     } catch (error) {
-      console.error("[v0] loadGmailThread exception:", error)
+      // Network error loading thread
     } finally {
       setGmailThreadLoading(false)
     }
   }, [])
 
   const handleSelectGmailThread = useCallback(async (thread: GmailThread) => {
-    console.log(`[v0] v771: handleSelectGmailThread START - thread.id=${thread.id}`)
-
     // Reset state for new selection
     setIsThreadReady(false)
     setGmailMessages([])
@@ -403,8 +359,6 @@ export default function InboxPage() {
       const res = await fetch(`/api/gmail/threads/${thread.id}`)
 
       if (!res.ok) {
-        const errorBody = await res.text()
-        console.error(`[v0] v771: Failed to load thread detail: ${res.status}`, errorBody)
         setError("Errore caricamento thread")
         return
       }
@@ -1809,10 +1763,6 @@ export default function InboxPage() {
             {selectedGmailThread ? (
               <>
                 <div className="p-4 border-b border-gray-200 flex-shrink-0">
-                  {/* v773 BUILD MARKER: Add visible build marker after line ~1540 where Gmail mode header is */}
-                  <div className="text-sm text-gray-500 mb-1">
-                    Build: <span className="font-semibold text-gray-700">{FRONTEND_BUILD}</span>
-                  </div>
                   <h1 className="text-xl font-normal text-gray-900">{selectedGmailThread.subject}</h1>
                 </div>
 
