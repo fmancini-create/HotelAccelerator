@@ -3,12 +3,15 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxReadService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
+    const guard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (guard) return guard
     const supabase = await createClient()
     const service = new InboxReadService(supabase)
 
@@ -43,6 +46,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
+    const patchGuard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (patchGuard) return patchGuard
 
     const supabase = await createClient()
     const { conversationId } = await params

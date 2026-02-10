@@ -3,10 +3,13 @@ import { NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxWriteRepository } from "@/lib/platform-repositories"
 import { InboxWriteService } from "@/lib/platform-services"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 export async function POST(request: Request, { params }: { params: { conversationId: string } }) {
   try {
     const propertyId = await getAuthenticatedPropertyId()
+    const guard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (guard) return guard
     const { conversationId } = params
     const body = await request.json()
 

@@ -1,6 +1,7 @@
 import { createServerClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { validatePage, ZodError } from "@/lib/cms/section-schemas"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 // GET /api/cms/pages/[id] - Singola pagina
 export async function GET(request: Request, { params }: { params: { id: string } }) {
@@ -60,6 +61,12 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     if (!adminUser) {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+    }
+
+    // Verifica modulo CMS abilitato
+    if (adminUser.property_id) {
+      const cmsGuard = await checkModuleEnabledForProperty(adminUser.property_id, "cms_enabled")
+      if (cmsGuard) return cmsGuard
     }
 
     // Verifica che la pagina appartenga alla property dell'admin

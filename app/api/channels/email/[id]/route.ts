@@ -3,11 +3,14 @@ import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { EmailChannelService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
+    const guard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (guard) return guard
 
     const service = new EmailChannelService(supabase)
     const channel = await service.getChannel(params.id, propertyId)
@@ -27,6 +30,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   try {
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
+    const putGuard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (putGuard) return putGuard
 
     const body = await request.json()
     const { email_address, display_name, is_active, assigned_users } = body
@@ -50,6 +55,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
+    const delGuard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (delGuard) return delGuard
 
     const service = new EmailChannelService(supabase)
     await service.deleteChannel(params.id, propertyId)
@@ -65,6 +72,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   try {
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
+    const patchGuard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (patchGuard) return patchGuard
 
     const service = new EmailChannelService(supabase)
     const channel = await service.toggleChannelStatus(params.id, propertyId)
