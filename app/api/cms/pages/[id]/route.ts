@@ -138,6 +138,12 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
     }
 
+    // Verifica modulo CMS abilitato
+    if (adminUser.property_id) {
+      const cmsGuard = await checkModuleEnabledForProperty(adminUser.property_id, "cms_enabled")
+      if (cmsGuard) return cmsGuard
+    }
+
     // Verifica che la pagina appartenga alla property dell'admin
     const { data: existingPage } = await supabase.from("cms_pages").select("property_id").eq("id", id).single()
 

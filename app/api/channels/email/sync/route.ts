@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import type { OAuthProvider } from "@/lib/oauth-config"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 const API_VERSION = "v775-smart-sync"
 
@@ -17,6 +18,9 @@ export async function POST(request: NextRequest) {
       console.error("[SMART-SYNC] Missing channel_id or property_id")
       return NextResponse.json({ error: "channel_id e property_id obbligatori" }, { status: 400 })
     }
+
+    const guard = await checkModuleEnabledForProperty(property_id, "inbox_enabled")
+    if (guard) return guard
 
     const supabase = await createClient()
 
