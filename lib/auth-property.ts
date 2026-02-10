@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server"
+import { cookies } from "next/headers"
 import { createClient, createClientWithToken } from "@/lib/supabase/server"
 
 function getTokenFromRequest(request: NextRequest): string | undefined {
@@ -77,13 +78,22 @@ export async function getAuthenticatedPropertyId(request?: NextRequest): Promise
   }
 
   // Check impersonazione: se super_admin e cookie presente, usa il property_id impersonato
+  let impersonatedPropertyId: string | null = null
   if (request) {
-    const impersonatedPropertyId = getImpersonatedPropertyId(request)
-    if (impersonatedPropertyId && user.email) {
-      const isSuper = await checkIsSuperAdmin(user.email)
-      if (isSuper) {
-        return impersonatedPropertyId
-      }
+    impersonatedPropertyId = getImpersonatedPropertyId(request)
+  } else {
+    // Server-side: leggi il cookie direttamente
+    try {
+      const cookieStore = await cookies()
+      impersonatedPropertyId = cookieStore.get("x-impersonate-property-id")?.value || null
+    } catch {
+      // cookies() non disponibile fuori da un request context
+    }
+  }
+  if (impersonatedPropertyId && user.email) {
+    const isSuper = await checkIsSuperAdmin(user.email)
+    if (isSuper) {
+      return impersonatedPropertyId
     }
   }
 

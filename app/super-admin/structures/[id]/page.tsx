@@ -119,7 +119,7 @@ export default function StructureDetailPage() {
       const res = await fetch("/api/super-admin/impersonate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ property_id: structure.property_id }),
+        body: JSON.stringify({ property_id: structure.id }),
       })
       if (!res.ok) {
         const data = await res.json()
