@@ -110,10 +110,29 @@ export default function StructureDetailPage() {
     }
   }
 
-  const handleImpersonate = () => {
+  const [impersonating, setImpersonating] = useState(false)
+
+  const handleImpersonate = async () => {
     if (!structure) return
-    console.log(`Impersonating structure: ${structure.name}`)
-    alert("Impersonation: Feature coming soon - will redirect to tenant view in READ-ONLY mode")
+    setImpersonating(true)
+    try {
+      const res = await fetch("/api/super-admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ property_id: structure.property_id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || "Errore durante l'impersonazione")
+        return
+      }
+      // Redirect alla dashboard admin del tenant
+      router.push("/admin/dashboard")
+    } catch {
+      alert("Errore di rete")
+    } finally {
+      setImpersonating(false)
+    }
   }
 
   if (loading) {
@@ -153,9 +172,9 @@ export default function StructureDetailPage() {
                 </div>
               </div>
             </div>
-            <Button onClick={handleImpersonate} variant="outline">
+            <Button onClick={handleImpersonate} variant="outline" disabled={impersonating}>
               <User className="w-4 h-4 mr-2" />
-              View as tenant
+              {impersonating ? "Accesso in corso..." : "Entra come tenant"}
             </Button>
           </div>
         </div>
@@ -284,13 +303,18 @@ export default function StructureDetailPage() {
               <div className="space-y-3">
                 <Alert>
                   <AlertDescription>
-                    Impersonation mode grants you READ-ONLY access to this tenant's dashboard. All actions will be
-                    logged.
+                    La modalita' impersonazione ti permette di accedere alla dashboard di questo tenant per supporto e
+                    debug. Il cookie scade automaticamente dopo 4 ore.
                   </AlertDescription>
                 </Alert>
-                <Button onClick={handleImpersonate} variant="outline" className="w-full bg-transparent">
+                <Button
+                  onClick={handleImpersonate}
+                  variant="outline"
+                  className="w-full bg-transparent"
+                  disabled={impersonating}
+                >
                   <User className="w-4 h-4 mr-2" />
-                  View as tenant (Read-only)
+                  {impersonating ? "Accesso in corso..." : "Entra come tenant"}
                 </Button>
               </div>
             </CardContent>
