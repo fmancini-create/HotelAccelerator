@@ -5,12 +5,12 @@ import { InboxWriteRepository } from "@/lib/platform-repositories"
 import { InboxWriteService } from "@/lib/platform-services"
 import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
-export async function POST(request: Request, { params }: { params: { conversationId: string } }) {
+export async function POST(request: Request, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
     const propertyId = await getAuthenticatedPropertyId()
     const guard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
     if (guard) return guard
-    const { conversationId } = params
+    const { conversationId } = await params
     const body = await request.json()
 
     const { outcome, booking_data } = body

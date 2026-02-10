@@ -11,7 +11,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(collaborators)
   } catch (error) {
-    return handleServiceError(error)
+    const { status, json } = handleServiceError(error)
+    return NextResponse.json(json, { status })
   }
 }
 
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(collaborator, { status: 201 })
   } catch (error) {
-    return handleServiceError(error)
+    const { status, json } = handleServiceError(error)
+    return NextResponse.json(json, { status })
   }
 }
