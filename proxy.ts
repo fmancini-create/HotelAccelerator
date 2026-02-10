@@ -10,15 +10,12 @@ export default function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
-  console.log("[v0] Proxy - hostname:", hostname, "pathname:", pathname)
-
   // Skip per risorse statiche e API interne
   if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next()
   }
 
   const isPlatformDomain = isBaseDomain(hostname)
-  console.log("[v0] Proxy - isPlatformDomain:", isPlatformDomain)
 
   const requestHeaders = new Headers(request.headers)
 

@@ -75,15 +75,11 @@ export default async function FrontendLayout({
 }) {
   const isPlatform = await isPlatformDomain()
 
-  console.log("[v0] FrontendLayout - isPlatform:", isPlatform)
-
   if (isPlatform) {
     return <>{children}</>
   }
 
   const tenant = await getCurrentTenant()
-
-  console.log("[v0] FrontendLayout - tenant:", tenant?.name || "null")
 
   if (!tenant) {
     return (
