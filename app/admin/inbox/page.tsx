@@ -431,7 +431,6 @@ export default function InboxPage() {
         })
 
         const responseText = await res.text()
-        console.log(`[v0] v774: Response: ${res.status}`)
 
         if (!res.ok) {
           let error
@@ -440,16 +439,13 @@ export default function InboxPage() {
           } catch {
             error = { message: responseText }
           }
-          console.error("[v0] v774: Action failed:", error)
           setError(error.error || error.message || `Errore durante ${action}`)
           return false
         }
 
-        console.log(`[v0] v774: Action ${action} successful`)
         setTimeout(() => loadGmailThreads(), 500)
         return true
       } catch (error) {
-        console.error("[v0] v774: Network error:", error)
         setError("Errore di rete durante l'azione")
         return false
       } finally {
@@ -529,15 +525,12 @@ export default function InboxPage() {
 
       // This allows starring threads from the list without selecting them first
       if (!thread || !thread.id) {
-        console.error("[v0] handleGmailStarToggle: No thread provided")
         return false
       }
 
       // Determine action based on current star status from the passed thread
       const isStarred = thread.isStarred
       const action = isStarred ? "unstar" : "star"
-
-      console.log(`[v0] Star toggle: thread=${thread.id}, isStarred=${isStarred}, action=${action}`)
 
       try {
         setIsActionLoading(thread.id)
@@ -549,15 +542,12 @@ export default function InboxPage() {
         })
 
         if (!res.ok) {
-          const error = await res.json() // Correctly parse JSON error response
-          console.error("[v0] Star toggle failed:", error)
+          const error = await res.json()
           setError(error.error || "Errore durante l'azione stella")
           return false
         }
 
-        console.log(`[v0] Star toggle successful, forcing refetch`)
-
-        // v774: Update local state immediately for responsive UI
+        // Update local state immediately for responsive UI
         setGmailThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, isStarred: !isStarred } : t)))
 
         // Also update selectedGmailThread if it's the same thread
@@ -577,7 +567,6 @@ export default function InboxPage() {
 
         return true
       } catch (error) {
-        console.error("[v0] Star toggle error:", error)
         setError("Errore di rete")
         return false
       } finally {
@@ -618,14 +607,11 @@ export default function InboxPage() {
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
-    console.log("[v0] DEBUG: Gmail mode useEffect triggered", { inboxMode, authLoading, hasAdminUser: !!adminUser })
     if (inboxMode === "gmail" && !authLoading && adminUser) {
-      console.log("[v0] DEBUG: Calling loadGmailLabels and loadGmailThreads")
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
 
       const gmailPollInterval = setInterval(() => {
-        console.log("[v0] Gmail auto-refresh triggered")
         loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
       }, 30000)
 
@@ -717,7 +703,6 @@ export default function InboxPage() {
   // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
   const loadConversations = useCallback(async () => {
-    console.log("[v0] Smart mode: loadConversations from DB")
     try {
       const queryParams = new URLSearchParams()
       if (statusFilter) queryParams.set("status", statusFilter)
@@ -730,7 +715,6 @@ export default function InboxPage() {
 
       const data = await res.json()
       setConversations(data.conversations || [])
-      console.log("[v0] Smart mode: loaded", data.conversations?.length || 0, "conversations from DB")
     } catch (error) {
       console.error("Error loading conversations:", error)
     } finally {
@@ -746,10 +730,9 @@ export default function InboxPage() {
       if (res.ok) {
         const data = await res.json()
         setSmartDebugInfo(data)
-        console.log("[v0] Smart debug info loaded:", data)
       }
     } catch (error) {
-      console.error("[v0] Error loading smart debug info:", error)
+      // Error loading debug info
     }
   }, [])
 
@@ -795,14 +778,12 @@ export default function InboxPage() {
   const performInitialSmartSync = async () => {
     if (inboxMode !== "smart") return
 
-    console.log("[v0] FRONTEND: Performing initial Smart sync...")
     setLastSyncStatus("Sincronizzazione in corso...")
 
     try {
       // Get channel info for sync
       const channelRes = await fetch("/api/inbox/debug")
       if (!channelRes.ok) {
-        console.log("[v0] FRONTEND: Debug API failed, skipping sync")
         setLastSyncStatus("Errore: impossibile ottenere info canale")
         return
       }
@@ -811,7 +792,6 @@ export default function InboxPage() {
       setDebugInfo(debugData)
 
       if (!debugData.channel?.id || !debugData.channel?.property_id) {
-        console.log("[v0] FRONTEND: No channel configured for Smart sync")
         setLastSyncStatus("Nessun canale configurato")
         return
       }
@@ -828,18 +808,14 @@ export default function InboxPage() {
 
       if (syncRes.ok) {
         const syncData = await syncRes.json()
-        console.log("[v0] FRONTEND: Smart sync result:", syncData)
         setLastSyncStatus(`Sincronizzato: ${syncData.imported} nuovi, ${syncData.duplicates} duplicati`)
         // Reload conversations after sync
         loadConversations()
       } else {
-        const errorText = await syncRes.text()
-        console.log("[v0] FRONTEND: Smart sync failed:", errorText)
         setLastSyncStatus(`Errore sync: ${syncRes.status}`)
       }
     } catch (error) {
-      console.error("[v0] FRONTEND: Smart sync error:", error)
-      setLastSyncStatus(`Errore: ${error}`)
+      setLastSyncStatus("Errore durante la sincronizzazione")
     }
   }
 
@@ -851,8 +827,6 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (inboxMode === "smart" && !authLoading && adminUser) {
-      console.log("[v0] Smart mode: initializing DB-only mode with Realtime")
-
       // Load conversations from DB
       loadConversations()
 
@@ -860,7 +834,6 @@ export default function InboxPage() {
       loadSmartDebugInfo()
 
       pollIntervalRef.current = setInterval(() => {
-        console.log("[v0] Smart mode: polling DB for new conversations")
         loadConversations()
       }, 30000)
 
