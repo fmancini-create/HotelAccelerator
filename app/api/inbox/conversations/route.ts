@@ -32,14 +32,10 @@ export async function GET(request: NextRequest) {
       gmail_label: gmailLabel || undefined,
     }
 
-    console.log("[v0] Inbox options:", options)
-
     const conversations = await service.listConversations(propertyId, options)
-    console.log("[v0] Found conversations:", conversations.length)
 
     return NextResponse.json({ conversations })
   } catch (error) {
-    console.error("[v0] Inbox conversations error:", error)
     const { status, json } = handleServiceError(error)
     return NextResponse.json(json, { status })
   }
@@ -101,7 +97,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ conversation })
   } catch (error) {
-    console.error("[v0] Inbox conversations POST error:", error)
     const { status, json } = handleServiceError(error)
     return NextResponse.json(json, { status })
   }

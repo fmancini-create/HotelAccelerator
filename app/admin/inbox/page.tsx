@@ -232,6 +232,7 @@ export default function InboxPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("open")
+  const [channelFilter, setChannelFilter] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
   const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null) // Added for debug info in smart mode
@@ -696,9 +697,9 @@ export default function InboxPage() {
   const loadConversations = useCallback(async () => {
     try {
       const queryParams = new URLSearchParams()
-      if (statusFilter) queryParams.set("status", statusFilter)
-      queryParams.set("channel", "email") // Assuming email channels for smart mode
-      queryParams.set("mode", "smart")
+  if (statusFilter) queryParams.set("status", statusFilter)
+  if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
+  queryParams.set("mode", "smart")
       if (searchQuery) queryParams.set("search", searchQuery)
 
       const res = await fetch(`/api/inbox/conversations?${queryParams}`)
@@ -711,7 +712,7 @@ export default function InboxPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter, searchQuery])
+  }, [statusFilter, channelFilter, searchQuery])
 
   // Database is the single source of truth, updated only by webhook
 
@@ -988,7 +989,6 @@ export default function InboxPage() {
         }
       }
     } catch (error) {
-      console.error("Error sending reply:", error)
       setError("Errore di rete durante l'invio della risposta")
     } finally {
       setIsSending(false)
@@ -1283,6 +1283,30 @@ export default function InboxPage() {
                   </Button>
                 ))}
               </div>
+              {/* Channel filter */}
+              <div className="flex gap-1 mt-1">
+                {[
+                  { id: "all", label: "Tutti", icon: Inbox },
+                  { id: "email", label: "Email", icon: Mail },
+                  { id: "chat", label: "Chat", icon: MessageCircle },
+                  { id: "whatsapp", label: "WA", icon: Phone },
+                  { id: "telegram", label: "TG", icon: Send },
+                ].map((ch) => {
+                  const Icon = ch.icon
+                  return (
+                    <Button
+                      key={ch.id}
+                      variant={channelFilter === ch.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setChannelFilter(ch.id)}
+                      className="flex-1 text-xs px-1"
+                    >
+                      <Icon className="h-3 w-3 mr-0.5" />
+                      {ch.label}
+                    </Button>
+                  )
+                })}
+              </div>
             </div>
             {/* <SmartDebugPanel />  <-- Moved outside the left sidebar, to overlay the whole screen */}
             <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1317,6 +1341,19 @@ export default function InboxPage() {
                           {conv.subject || conv.lastMessage?.content || "Nessun messaggio"}
                         </p>
                         <div className="flex items-center gap-1 mt-1">
+                          {(() => {
+                            const chConf = channelConfig[conv.channel as keyof typeof channelConfig]
+                            if (chConf) {
+                              const ChIcon = chConf.icon
+                              return (
+                                <span className={`inline-flex items-center gap-0.5 text-xs px-1 py-0.5 rounded ${chConf.color}`}>
+                                  <ChIcon className="h-3 w-3" />
+                                  {chConf.name}
+                                </span>
+                              )
+                            }
+                            return null
+                          })()}
                           {conv.unread_count > 0 && (
                             <Badge variant="default" className="h-4 px-1 text-xs">
                               {conv.unread_count}
