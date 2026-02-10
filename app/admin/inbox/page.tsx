@@ -364,8 +364,6 @@ export default function InboxPage() {
       }
 
       const data = await res.json()
-      console.log(`[v0] v771: Thread detail loaded, messages=${data.messages?.length || 0}`)
-
       // Get labels from the response
       // The thread detail API should return labels on each message
       // Aggregate all labels from messages
@@ -378,11 +376,9 @@ export default function InboxPage() {
       thread.labels?.forEach((label: string) => allLabels.add(label))
 
       const finalLabels = Array.from(allLabels)
-      console.log(`[v0] v771: Thread labels aggregated: ${JSON.stringify(finalLabels)}`)
 
       // HARD CHECK: If no labels, this is a data bug
       if (finalLabels.length === 0) {
-        console.error(`[v0] v771: ❌ FATAL - Thread ${thread.id} has NO LABELS after full fetch`)
         setError("Dati thread incompleti - ricarica la pagina")
         setSelectedGmailThread(null)
         setGmailMessages([])
@@ -400,9 +396,7 @@ export default function InboxPage() {
 
       // Mark thread as READY - actions are now enabled
       setIsThreadReady(true)
-      console.log(`[v0] v771: ✓ Thread ${thread.id} READY with ${finalLabels.length} labels`)
     } catch (error) {
-      console.error(`[v0] v771: Exception loading thread:`, error)
       setError("Errore di rete")
       setSelectedGmailThread(null)
     } finally {
@@ -413,10 +407,7 @@ export default function InboxPage() {
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
     async (threadId: string, action: string) => {
-      console.log(`[v0] v774: handleGmailAction - threadId=${threadId}, action=${action}`)
-
       if (!isThreadReady || !selectedGmailThread) {
-        console.warn(`[v0] v774: ACTION BLOCKED - thread not ready`)
         setError("Caricamento thread in corso, riprova tra un istante")
         return false
       }
