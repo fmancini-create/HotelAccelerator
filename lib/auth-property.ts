@@ -1,50 +1,39 @@
 import type { NextRequest } from "next/server"
+import { cookies } from "next/headers"
 import { createClient, createClientWithToken } from "@/lib/supabase/server"
 
 function getTokenFromRequest(request: NextRequest): string | undefined {
-  // Log all cookies for debugging
   const cookies = request.headers.get("cookie") || ""
-  console.log("[v0] getTokenFromRequest - cookies:", cookies.substring(0, 200))
 
   // Try Authorization header first
   const authHeader = request.headers.get("authorization")
-  console.log("[v0] getTokenFromRequest - authHeader:", authHeader ? "present" : "missing")
   if (authHeader?.startsWith("Bearer ")) {
     return authHeader.slice(7)
   }
 
-  // Try to find Supabase auth token cookie - check multiple patterns
-  // Pattern 1: sb-{project-ref}-auth-token
+  // Try to find Supabase auth token cookie
   const tokenMatch = cookies.match(/sb-[a-zA-Z0-9]+-auth-token=([^;]+)/)
-  // Pattern 2: sb-{project-ref}-auth-token-code-verifier (PKCE)
   const tokenMatch2 = cookies.match(/sb-[a-zA-Z0-9]+-auth-token\.0=([^;]+)/)
 
   const matchToUse = tokenMatch || tokenMatch2
-  console.log("[v0] getTokenFromRequest - tokenMatch:", matchToUse ? "found" : "not found")
 
   if (matchToUse) {
     try {
-      // The cookie value is base64 encoded JSON or URL encoded
       let cookieValue = matchToUse[1]
-      // Try URL decode first
       try {
         cookieValue = decodeURIComponent(cookieValue)
       } catch {}
 
-      // Try to parse as JSON (may be array or object)
       const decoded = JSON.parse(cookieValue)
-      console.log("[v0] getTokenFromRequest - decoded type:", typeof decoded, Array.isArray(decoded) ? "array" : "")
 
       if (Array.isArray(decoded) && decoded[0]?.access_token) {
-        console.log("[v0] getTokenFromRequest - found access_token in array")
         return decoded[0].access_token
       }
       if (decoded?.access_token) {
-        console.log("[v0] getTokenFromRequest - found access_token in object")
         return decoded.access_token
       }
-    } catch (e) {
-      console.log("[v0] getTokenFromRequest - parse error:", e)
+    } catch {
+      // Parse error
     }
   }
 
@@ -52,11 +41,31 @@ function getTokenFromRequest(request: NextRequest): string | undefined {
 }
 
 /**
+ * Controlla se l'utente e' un super_admin che sta impersonando un tenant.
+ * Se si', ritorna il property_id impersonato; altrimenti null.
+ */
+function getImpersonatedPropertyId(request: NextRequest): string | null {
+  const cookies = request.headers.get("cookie") || ""
+  const match = cookies.match(/x-impersonate-property-id=([^;]+)/)
+  return match ? match[1] : null
+}
+
+async function checkIsSuperAdmin(userEmail: string): Promise<boolean> {
+  const supabase = await createClient()
+  const { data: collaborator } = await supabase
+    .from("platform_collaborators")
+    .select("role, is_active")
+    .eq("email", userEmail)
+    .maybeSingle()
+  return collaborator?.role === "super_admin" && collaborator?.is_active === true
+}
+
+/**
  * Ottiene il property_id dell'utente autenticato dalla sessione
  * Usato nelle API routes admin per verificare l'accesso
  */
-export async function getAuthenticatedPropertyId(request: NextRequest): Promise<string> {
-  const token = getTokenFromRequest(request)
+export async function getAuthenticatedPropertyId(request?: NextRequest): Promise<string> {
+  const token = request ? getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
@@ -66,6 +75,26 @@ export async function getAuthenticatedPropertyId(request: NextRequest): Promise<
 
   if (authError || !user) {
     throw new Error("Non autenticato")
+  }
+
+  // Check impersonazione: se super_admin e cookie presente, usa il property_id impersonato
+  let impersonatedPropertyId: string | null = null
+  if (request) {
+    impersonatedPropertyId = getImpersonatedPropertyId(request)
+  } else {
+    // Server-side: leggi il cookie direttamente
+    try {
+      const cookieStore = await cookies()
+      impersonatedPropertyId = cookieStore.get("x-impersonate-property-id")?.value || null
+    } catch {
+      // cookies() non disponibile fuori da un request context
+    }
+  }
+  if (impersonatedPropertyId && user.email) {
+    const isSuper = await checkIsSuperAdmin(user.email)
+    if (isSuper) {
+      return impersonatedPropertyId
+    }
   }
 
   const { data: adminUser, error: adminError } = await supabase
@@ -214,5 +243,3 @@ export async function getPropertyFromSession(request: NextRequest): Promise<stri
 export async function getCurrentProperty(request: NextRequest): Promise<string> {
   return getAuthenticatedPropertyId(request)
 }
-
-export { getAuthenticatedPropertyId as default }

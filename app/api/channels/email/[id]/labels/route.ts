@@ -1,12 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 // GET - Carica etichette e il loro stato di sincronizzazione
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: channelId } = params
+    const { id: channelId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
+    const guard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (guard) return guard
 
     const supabase = await createClient()
 
@@ -30,10 +33,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PATCH - Aggiorna stato sincronizzazione etichetta
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: channelId } = params
+    const { id: channelId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
+    const patchGuard = await checkModuleEnabledForProperty(propertyId, "inbox_enabled")
+    if (patchGuard) return patchGuard
     const body = await request.json()
 
     const { labelId, syncEnabled } = body

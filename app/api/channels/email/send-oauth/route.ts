@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import type { OAuthProvider } from "@/lib/oauth-config"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 // Send email via OAuth (Gmail or Outlook API)
 export async function POST(request: NextRequest) {
@@ -10,6 +11,9 @@ export async function POST(request: NextRequest) {
     if (!channel_id || !property_id || !to || !body) {
       return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 })
     }
+
+    const guard = await checkModuleEnabledForProperty(property_id, "inbox_enabled")
+    if (guard) return guard
 
     const supabase = await createClient()
 

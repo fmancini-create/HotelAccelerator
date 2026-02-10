@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import * as nodemailer from "nodemailer"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
     if (!conversation_id || !content || !property_id) {
       return NextResponse.json({ error: "conversation_id, content e property_id sono obbligatori" }, { status: 400 })
     }
+
+    const guard = await checkModuleEnabledForProperty(property_id, "inbox_enabled")
+    if (guard) return guard
 
     // 1. Recupera la conversazione con il contatto
     const { data: conversation, error: convError } = await supabase

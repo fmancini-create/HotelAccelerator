@@ -64,7 +64,6 @@ export async function getCurrentTenant(): Promise<CurrentTenant | null> {
 export async function isPlatformDomain(): Promise<boolean> {
   const headersList = await headers()
   const isPlatform = headersList.get("x-is-platform-domain") === "true"
-  console.log("[v0] isPlatformDomain - header value:", headersList.get("x-is-platform-domain"), "result:", isPlatform)
   return isPlatform
 }
 

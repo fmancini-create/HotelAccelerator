@@ -1,8 +1,5 @@
 "use client"
 
-// v773 BUILD MARKER - This comment forces a new bundle hash
-const FRONTEND_BUILD = "v773-final"
-
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
@@ -235,6 +232,7 @@ export default function InboxPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("open")
+  const [channelFilter, setChannelFilter] = useState<string>("all")
   const [isLoading, setIsLoading] = useState(true)
   const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null) // Added for debug info in smart mode
@@ -275,17 +273,13 @@ export default function InboxPage() {
   }
 
   const loadGmailLabels = useCallback(async () => {
-    console.log("[v0] DEBUG: loadGmailLabels CALLED")
     try {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
         const data = await res.json()
         setGmailSystemLabels(data.systemLabels || [])
         setGmailUserLabels(data.labels || [])
-        console.log("[v0] Gmail labels loaded:", {
-          systemCount: data.systemLabels?.length || 0,
-          userCount: data.labels?.length || 0,
-        })
+
       }
     } catch (error) {
       console.error("[Gmail] Error loading labels:", error)
@@ -294,7 +288,6 @@ export default function InboxPage() {
 
   const loadGmailThreads = useCallback(
     async (labelId: string = gmailLabelId, pageToken?: string, query?: string, isNextPage = false) => {
-      console.log("[v0] DEBUG: loadGmailThreads CALLED with labelId:", labelId)
       setGmailLoading(true)
       try {
         const params = new URLSearchParams()
@@ -303,17 +296,10 @@ export default function InboxPage() {
         if (query) params.set("q", query)
 
         const fullUrl = `/api/gmail/threads?${params}`
-        console.log("[v0] DEBUG: FULL REQUEST URL:", fullUrl)
-        console.log("[v0] DEBUG: About to fetch /api/gmail/threads")
-
         const res = await fetch(fullUrl)
-
-        console.log("[v0] DEBUG: Fetch completed, status:", res.status)
 
         if (res.ok) {
           const data = await res.json()
-
-          console.log("[v0] FRONTEND: FULL API RESPONSE:", JSON.stringify(data, null, 2))
 
           setGmailApiVersion(data.debugVersion || null)
           setGmailThreads(data.threads || [])
@@ -328,21 +314,12 @@ export default function InboxPage() {
             resultSizeEstimate: data.resultSizeEstimate,
           })
 
-          console.log("[v0] FRONTEND: Gmail threads loaded:", {
-            apiVersion: data.debugVersion,
-            count: data.threads?.length || 0,
-            total: data.resultSizeEstimate,
-            hasNextPage: !!data.nextPageToken,
-            debug: data._debug,
-          })
+
         } else {
-          const errorBody = await res.text()
-          console.error("[v0] FRONTEND: Error loading threads:", res.status, errorBody)
           setGmailThreads([])
           setGmailApiVersion(null)
         }
       } catch (error) {
-        console.error("[v0] DEBUG: Exception in loadGmailThreads:", error)
         setGmailThreads([])
         setGmailApiVersion(null)
       } finally {
@@ -353,42 +330,22 @@ export default function InboxPage() {
   )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
-    console.log("[v0] loadGmailThread CALLED with threadId:", threadId)
     setGmailThreadLoading(true)
     setGmailMessages([])
     try {
       const res = await fetch(`/api/gmail/threads/${threadId}`)
-      console.log("[v0] loadGmailThread response status:", res.status)
       if (res.ok) {
         const data = await res.json()
-        console.log("[v0] loadGmailThread FULL RESPONSE:", JSON.stringify(data, null, 2))
-        console.log("[v0] Messages count:", data.messages?.length || 0)
-
-        // Log body info for each message
-        data.messages?.forEach((msg: any, idx: number) => {
-          console.log(
-            `[v0] Message ${idx + 1}: bodyLength=${msg.content?.length || 0}, contentType=${msg.content_type}, source=${msg._debug?.bodySource}`,
-          )
-          if (!msg.content || msg.content.length === 0) {
-            console.error(`[v0] WARNING: Message ${idx + 1} has EMPTY body!`)
-          }
-        })
-
         setGmailMessages(data.messages || [])
-      } else {
-        const errorBody = await res.text()
-        console.error("[v0] loadGmailThread error:", res.status, errorBody)
       }
     } catch (error) {
-      console.error("[v0] loadGmailThread exception:", error)
+      // Network error loading thread
     } finally {
       setGmailThreadLoading(false)
     }
   }, [])
 
   const handleSelectGmailThread = useCallback(async (thread: GmailThread) => {
-    console.log(`[v0] v771: handleSelectGmailThread START - thread.id=${thread.id}`)
-
     // Reset state for new selection
     setIsThreadReady(false)
     setGmailMessages([])
@@ -403,15 +360,11 @@ export default function InboxPage() {
       const res = await fetch(`/api/gmail/threads/${thread.id}`)
 
       if (!res.ok) {
-        const errorBody = await res.text()
-        console.error(`[v0] v771: Failed to load thread detail: ${res.status}`, errorBody)
         setError("Errore caricamento thread")
         return
       }
 
       const data = await res.json()
-      console.log(`[v0] v771: Thread detail loaded, messages=${data.messages?.length || 0}`)
-
       // Get labels from the response
       // The thread detail API should return labels on each message
       // Aggregate all labels from messages
@@ -424,11 +377,9 @@ export default function InboxPage() {
       thread.labels?.forEach((label: string) => allLabels.add(label))
 
       const finalLabels = Array.from(allLabels)
-      console.log(`[v0] v771: Thread labels aggregated: ${JSON.stringify(finalLabels)}`)
 
       // HARD CHECK: If no labels, this is a data bug
       if (finalLabels.length === 0) {
-        console.error(`[v0] v771: ❌ FATAL - Thread ${thread.id} has NO LABELS after full fetch`)
         setError("Dati thread incompleti - ricarica la pagina")
         setSelectedGmailThread(null)
         setGmailMessages([])
@@ -446,9 +397,7 @@ export default function InboxPage() {
 
       // Mark thread as READY - actions are now enabled
       setIsThreadReady(true)
-      console.log(`[v0] v771: ✓ Thread ${thread.id} READY with ${finalLabels.length} labels`)
     } catch (error) {
-      console.error(`[v0] v771: Exception loading thread:`, error)
       setError("Errore di rete")
       setSelectedGmailThread(null)
     } finally {
@@ -459,10 +408,7 @@ export default function InboxPage() {
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
     async (threadId: string, action: string) => {
-      console.log(`[v0] v774: handleGmailAction - threadId=${threadId}, action=${action}`)
-
       if (!isThreadReady || !selectedGmailThread) {
-        console.warn(`[v0] v774: ACTION BLOCKED - thread not ready`)
         setError("Caricamento thread in corso, riprova tra un istante")
         return false
       }
@@ -477,7 +423,6 @@ export default function InboxPage() {
         })
 
         const responseText = await res.text()
-        console.log(`[v0] v774: Response: ${res.status}`)
 
         if (!res.ok) {
           let error
@@ -486,16 +431,13 @@ export default function InboxPage() {
           } catch {
             error = { message: responseText }
           }
-          console.error("[v0] v774: Action failed:", error)
           setError(error.error || error.message || `Errore durante ${action}`)
           return false
         }
 
-        console.log(`[v0] v774: Action ${action} successful`)
         setTimeout(() => loadGmailThreads(), 500)
         return true
       } catch (error) {
-        console.error("[v0] v774: Network error:", error)
         setError("Errore di rete durante l'azione")
         return false
       } finally {
@@ -575,15 +517,12 @@ export default function InboxPage() {
 
       // This allows starring threads from the list without selecting them first
       if (!thread || !thread.id) {
-        console.error("[v0] handleGmailStarToggle: No thread provided")
         return false
       }
 
       // Determine action based on current star status from the passed thread
       const isStarred = thread.isStarred
       const action = isStarred ? "unstar" : "star"
-
-      console.log(`[v0] Star toggle: thread=${thread.id}, isStarred=${isStarred}, action=${action}`)
 
       try {
         setIsActionLoading(thread.id)
@@ -595,15 +534,12 @@ export default function InboxPage() {
         })
 
         if (!res.ok) {
-          const error = await res.json() // Correctly parse JSON error response
-          console.error("[v0] Star toggle failed:", error)
+          const error = await res.json()
           setError(error.error || "Errore durante l'azione stella")
           return false
         }
 
-        console.log(`[v0] Star toggle successful, forcing refetch`)
-
-        // v774: Update local state immediately for responsive UI
+        // Update local state immediately for responsive UI
         setGmailThreads((prev) => prev.map((t) => (t.id === thread.id ? { ...t, isStarred: !isStarred } : t)))
 
         // Also update selectedGmailThread if it's the same thread
@@ -623,7 +559,6 @@ export default function InboxPage() {
 
         return true
       } catch (error) {
-        console.error("[v0] Star toggle error:", error)
         setError("Errore di rete")
         return false
       } finally {
@@ -664,14 +599,11 @@ export default function InboxPage() {
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
-    console.log("[v0] DEBUG: Gmail mode useEffect triggered", { inboxMode, authLoading, hasAdminUser: !!adminUser })
     if (inboxMode === "gmail" && !authLoading && adminUser) {
-      console.log("[v0] DEBUG: Calling loadGmailLabels and loadGmailThreads")
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
 
       const gmailPollInterval = setInterval(() => {
-        console.log("[v0] Gmail auto-refresh triggered")
         loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
       }, 30000)
 
@@ -763,12 +695,11 @@ export default function InboxPage() {
   // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
   const loadConversations = useCallback(async () => {
-    console.log("[v0] Smart mode: loadConversations from DB")
     try {
       const queryParams = new URLSearchParams()
-      if (statusFilter) queryParams.set("status", statusFilter)
-      queryParams.set("channel", "email") // Assuming email channels for smart mode
-      queryParams.set("mode", "smart")
+  if (statusFilter) queryParams.set("status", statusFilter)
+  if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
+  queryParams.set("mode", "smart")
       if (searchQuery) queryParams.set("search", searchQuery)
 
       const res = await fetch(`/api/inbox/conversations?${queryParams}`)
@@ -776,13 +707,12 @@ export default function InboxPage() {
 
       const data = await res.json()
       setConversations(data.conversations || [])
-      console.log("[v0] Smart mode: loaded", data.conversations?.length || 0, "conversations from DB")
     } catch (error) {
       console.error("Error loading conversations:", error)
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter, searchQuery])
+  }, [statusFilter, channelFilter, searchQuery])
 
   // Database is the single source of truth, updated only by webhook
 
@@ -792,10 +722,9 @@ export default function InboxPage() {
       if (res.ok) {
         const data = await res.json()
         setSmartDebugInfo(data)
-        console.log("[v0] Smart debug info loaded:", data)
       }
     } catch (error) {
-      console.error("[v0] Error loading smart debug info:", error)
+      // Error loading debug info
     }
   }, [])
 
@@ -841,14 +770,12 @@ export default function InboxPage() {
   const performInitialSmartSync = async () => {
     if (inboxMode !== "smart") return
 
-    console.log("[v0] FRONTEND: Performing initial Smart sync...")
     setLastSyncStatus("Sincronizzazione in corso...")
 
     try {
       // Get channel info for sync
       const channelRes = await fetch("/api/inbox/debug")
       if (!channelRes.ok) {
-        console.log("[v0] FRONTEND: Debug API failed, skipping sync")
         setLastSyncStatus("Errore: impossibile ottenere info canale")
         return
       }
@@ -857,7 +784,6 @@ export default function InboxPage() {
       setDebugInfo(debugData)
 
       if (!debugData.channel?.id || !debugData.channel?.property_id) {
-        console.log("[v0] FRONTEND: No channel configured for Smart sync")
         setLastSyncStatus("Nessun canale configurato")
         return
       }
@@ -874,18 +800,14 @@ export default function InboxPage() {
 
       if (syncRes.ok) {
         const syncData = await syncRes.json()
-        console.log("[v0] FRONTEND: Smart sync result:", syncData)
         setLastSyncStatus(`Sincronizzato: ${syncData.imported} nuovi, ${syncData.duplicates} duplicati`)
         // Reload conversations after sync
         loadConversations()
       } else {
-        const errorText = await syncRes.text()
-        console.log("[v0] FRONTEND: Smart sync failed:", errorText)
         setLastSyncStatus(`Errore sync: ${syncRes.status}`)
       }
     } catch (error) {
-      console.error("[v0] FRONTEND: Smart sync error:", error)
-      setLastSyncStatus(`Errore: ${error}`)
+      setLastSyncStatus("Errore durante la sincronizzazione")
     }
   }
 
@@ -897,8 +819,6 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (inboxMode === "smart" && !authLoading && adminUser) {
-      console.log("[v0] Smart mode: initializing DB-only mode with Realtime")
-
       // Load conversations from DB
       loadConversations()
 
@@ -906,7 +826,6 @@ export default function InboxPage() {
       loadSmartDebugInfo()
 
       pollIntervalRef.current = setInterval(() => {
-        console.log("[v0] Smart mode: polling DB for new conversations")
         loadConversations()
       }, 30000)
 
@@ -1070,7 +989,6 @@ export default function InboxPage() {
         }
       }
     } catch (error) {
-      console.error("Error sending reply:", error)
       setError("Errore di rete durante l'invio della risposta")
     } finally {
       setIsSending(false)
@@ -1365,6 +1283,30 @@ export default function InboxPage() {
                   </Button>
                 ))}
               </div>
+              {/* Channel filter */}
+              <div className="flex gap-1 mt-1">
+                {[
+                  { id: "all", label: "Tutti", icon: Inbox },
+                  { id: "email", label: "Email", icon: Mail },
+                  { id: "chat", label: "Chat", icon: MessageCircle },
+                  { id: "whatsapp", label: "WA", icon: Phone },
+                  { id: "telegram", label: "TG", icon: Send },
+                ].map((ch) => {
+                  const Icon = ch.icon
+                  return (
+                    <Button
+                      key={ch.id}
+                      variant={channelFilter === ch.id ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setChannelFilter(ch.id)}
+                      className="flex-1 text-xs px-1"
+                    >
+                      <Icon className="h-3 w-3 mr-0.5" />
+                      {ch.label}
+                    </Button>
+                  )
+                })}
+              </div>
             </div>
             {/* <SmartDebugPanel />  <-- Moved outside the left sidebar, to overlay the whole screen */}
             <div className="flex-1 min-h-0 overflow-y-auto">
@@ -1399,6 +1341,19 @@ export default function InboxPage() {
                           {conv.subject || conv.lastMessage?.content || "Nessun messaggio"}
                         </p>
                         <div className="flex items-center gap-1 mt-1">
+                          {(() => {
+                            const chConf = channelConfig[conv.channel as keyof typeof channelConfig]
+                            if (chConf) {
+                              const ChIcon = chConf.icon
+                              return (
+                                <span className={`inline-flex items-center gap-0.5 text-xs px-1 py-0.5 rounded ${chConf.color}`}>
+                                  <ChIcon className="h-3 w-3" />
+                                  {chConf.name}
+                                </span>
+                              )
+                            }
+                            return null
+                          })()}
                           {conv.unread_count > 0 && (
                             <Badge variant="default" className="h-4 px-1 text-xs">
                               {conv.unread_count}
@@ -1809,10 +1764,6 @@ export default function InboxPage() {
             {selectedGmailThread ? (
               <>
                 <div className="p-4 border-b border-gray-200 flex-shrink-0">
-                  {/* v773 BUILD MARKER: Add visible build marker after line ~1540 where Gmail mode header is */}
-                  <div className="text-sm text-gray-500 mb-1">
-                    Build: <span className="font-semibold text-gray-700">{FRONTEND_BUILD}</span>
-                  </div>
                   <h1 className="text-xl font-normal text-gray-900">{selectedGmailThread.subject}</h1>
                 </div>
 

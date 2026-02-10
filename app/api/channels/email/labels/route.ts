@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { gmailFetch } from "@/lib/gmail-client"
+import { checkModuleEnabledForProperty } from "@/lib/module-guard"
 
 // Get Gmail labels for a channel
 export async function GET(request: NextRequest) {
@@ -61,6 +62,9 @@ export async function POST(request: NextRequest) {
     if (!channel_id || !property_id || !labels) {
       return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 })
     }
+
+    const guard = await checkModuleEnabledForProperty(property_id, "inbox_enabled")
+    if (guard) return guard
 
     const supabase = await createClient()
 

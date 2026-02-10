@@ -3,9 +3,13 @@ import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { EmailChannelService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
+import { checkModuleEnabled } from "@/lib/module-guard"
 
 export async function GET(request: NextRequest) {
   try {
+    const guard = await checkModuleEnabled(request, "inbox_enabled")
+    if (guard) return guard
+
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
 
@@ -21,6 +25,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const guard = await checkModuleEnabled(request, "inbox_enabled")
+    if (guard) return guard
+
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
 

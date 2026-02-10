@@ -35,6 +35,7 @@ interface DashboardModule {
   href: string
   color: string
   requiresPermission?: "can_upload" | "can_delete" | "can_move" | "can_manage_users"
+  requiresModuleFlag?: "inbox_enabled" | "cms_enabled" | "ai_enabled" | "frontend_enabled"
   comingSoon?: boolean
 }
 
@@ -54,6 +55,7 @@ const dashboardModules: DashboardModule[] = [
     icon: <Layers className="w-8 h-8" />,
     href: "/admin/cms",
     color: "bg-violet-500",
+    requiresModuleFlag: "cms_enabled",
   },
   {
     id: "channels",
@@ -62,6 +64,7 @@ const dashboardModules: DashboardModule[] = [
     icon: <Radio className="w-8 h-8" />,
     href: "/admin/channels",
     color: "bg-rose-500",
+    requiresModuleFlag: "inbox_enabled",
   },
   {
     id: "inbox",
@@ -70,6 +73,7 @@ const dashboardModules: DashboardModule[] = [
     icon: <Inbox className="w-8 h-8" />,
     href: "/admin/inbox",
     color: "bg-emerald-500",
+    requiresModuleFlag: "inbox_enabled",
   },
   {
     id: "smart-messages",
@@ -102,6 +106,7 @@ const dashboardModules: DashboardModule[] = [
     icon: <Globe className="w-8 h-8" />,
     href: "/admin/settings/domains",
     color: "bg-teal-500",
+    requiresModuleFlag: "frontend_enabled",
   },
   {
     id: "users",
@@ -169,8 +174,22 @@ const dashboardModules: DashboardModule[] = [
 
 export default function AdminDashboardPage() {
   const { isLoading, adminUser, logout } = useAdminAuth()
-  const [property, setProperty] = useState<{ name: string; slug: string; domain: string | null } | null>(null)
+  const [property, setProperty] = useState<{
+    name: string
+    slug: string
+    domain: string | null
+    inbox_enabled: boolean
+    cms_enabled: boolean
+    ai_enabled: boolean
+    frontend_enabled: boolean
+  } | null>(null)
   const [siteUrl, setSiteUrl] = useState<string>("/")
+  const [quickStats, setQuickStats] = useState<{
+    photos: number
+    categories: number
+    users: number
+    conversations: number
+  } | null>(null)
   const [quotas, setQuotas] = useState<{
     pages: { current: number; limit: number }
     photos: { current: number; limit: number }
@@ -190,7 +209,7 @@ export default function AdminDashboardPage() {
 
       const { data } = await supabase
         .from("properties")
-        .select("name, slug, domain")
+        .select("name, slug, domain, inbox_enabled, cms_enabled, ai_enabled, frontend_enabled")
         .eq("id", adminUser.property_id)
         .single()
 
@@ -202,6 +221,36 @@ export default function AdminDashboardPage() {
           setSiteUrl(`/${data.slug}`)
         }
       }
+    }
+
+    async function loadQuickStats() {
+      if (!adminUser?.property_id) return
+
+      const supabase = createClient()
+      if (!supabase) return
+
+      const [photosRes, categoriesRes, usersRes, conversationsRes] = await Promise.all([
+        supabase.from("photos").select("id", { count: "exact", head: true }).eq("property_id", adminUser.property_id),
+        supabase
+          .from("categories")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", adminUser.property_id),
+        supabase
+          .from("admin_users")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", adminUser.property_id),
+        supabase
+          .from("conversations")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", adminUser.property_id),
+      ])
+
+      setQuickStats({
+        photos: photosRes.count ?? 0,
+        categories: categoriesRes.count ?? 0,
+        users: usersRes.count ?? 0,
+        conversations: conversationsRes.count ?? 0,
+      })
     }
 
     async function loadQuotas() {
@@ -219,6 +268,7 @@ export default function AdminDashboardPage() {
     }
 
     loadProperty()
+    loadQuickStats()
     loadQuotas()
   }, [adminUser?.property_id])
 
@@ -235,8 +285,13 @@ export default function AdminDashboardPage() {
   }
 
   const availableModules = dashboardModules.filter((module) => {
+    // Check permesso utente
     if (module.requiresPermission) {
-      return adminUser[module.requiresPermission]
+      if (!adminUser[module.requiresPermission]) return false
+    }
+    // Check flag modulo attivo per la property
+    if (module.requiresModuleFlag && property) {
+      if (!property[module.requiresModuleFlag]) return false
     }
     return true
   })
@@ -411,20 +466,28 @@ export default function AdminDashboardPage() {
           <h3 className="text-lg font-medium text-[#5c5c5c] mb-4">Riepilogo Rapido</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">109</p>
+              <p className="text-2xl font-semibold text-[#8b7355]">
+                {quickStats ? quickStats.photos : <span className="inline-block w-8 h-6 bg-[#e5e5e5] rounded animate-pulse" />}
+              </p>
               <p className="text-sm text-[#8b8b8b]">Foto totali</p>
             </div>
             <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">8</p>
-              <p className="text-sm text-[#8b8b8b]">Categorie camere</p>
+              <p className="text-2xl font-semibold text-[#8b7355]">
+                {quickStats ? quickStats.categories : <span className="inline-block w-8 h-6 bg-[#e5e5e5] rounded animate-pulse" />}
+              </p>
+              <p className="text-sm text-[#8b8b8b]">Categorie</p>
             </div>
             <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">3</p>
+              <p className="text-2xl font-semibold text-[#8b7355]">
+                {quickStats ? quickStats.users : <span className="inline-block w-8 h-6 bg-[#e5e5e5] rounded animate-pulse" />}
+              </p>
               <p className="text-sm text-[#8b8b8b]">Utenti attivi</p>
             </div>
             <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">Online</p>
-              <p className="text-sm text-[#8b8b8b]">Stato sito</p>
+              <p className="text-2xl font-semibold text-[#8b7355]">
+                {quickStats ? quickStats.conversations : <span className="inline-block w-8 h-6 bg-[#e5e5e5] rounded animate-pulse" />}
+              </p>
+              <p className="text-sm text-[#8b8b8b]">Conversazioni</p>
             </div>
           </div>
         </div>

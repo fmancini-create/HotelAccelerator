@@ -1,11 +1,15 @@
+import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { checkModuleEnabled } from "@/lib/module-guard"
 
 // GET /api/cms/pages - Lista pagine per property
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const guard = await checkModuleEnabled(request, "cms_enabled")
+    if (guard) return guard
+
     const propertyId = await getAuthenticatedPropertyId()
 
     const supabase = await createServerClient()
@@ -29,8 +33,11 @@ export async function GET(request: Request) {
 }
 
 // POST /api/cms/pages - Crea nuova pagina
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const guard = await checkModuleEnabled(request, "cms_enabled")
+    if (guard) return guard
+
     const authenticatedPropertyId = await getAuthenticatedPropertyId()
 
     const body = await request.json()

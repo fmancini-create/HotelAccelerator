@@ -59,7 +59,7 @@ const CHANNEL_CATEGORIES = [
         color: "bg-emerald-500",
         configPath: "/admin/channels/whatsapp",
         available: true,
-        comingSoon: true,
+        comingSoon: false,
       },
       {
         id: "telegram",
@@ -69,7 +69,7 @@ const CHANNEL_CATEGORIES = [
         color: "bg-sky-500",
         configPath: "/admin/channels/telegram",
         available: true,
-        comingSoon: true,
+        comingSoon: false,
       },
     ],
   },
@@ -183,6 +183,12 @@ export default function ChannelsPage() {
         .eq("property_id", adminUser.property_id)
         .eq("script_type", "chat")
 
+      // Fetch channel_settings for WhatsApp, Telegram, etc.
+      const { data: channelSettings } = await supabase
+        .from("channel_settings")
+        .select("channel, is_enabled, settings")
+        .eq("property_id", adminUser.property_id)
+
       // Initialize all channel statuses
       const statuses: Record<string, ChannelStatus> = {}
       ALL_CHANNELS.forEach((ch) => {
@@ -201,6 +207,20 @@ export default function ChannelsPage() {
         enabled: chatWidgets?.some((c) => c.is_active) || false,
         configured: (chatWidgets?.length || 0) > 0,
         activeConnections: chatWidgets?.filter((c) => c.is_active).length || 0,
+      }
+
+      // Populate statuses from channel_settings (WhatsApp, Telegram, etc.)
+      if (channelSettings) {
+        for (const cs of channelSettings) {
+          if (statuses[cs.channel]) {
+            statuses[cs.channel] = {
+              id: cs.channel,
+              enabled: cs.is_enabled || false,
+              configured: true,
+              activeConnections: cs.is_enabled ? 1 : 0,
+            }
+          }
+        }
       }
 
       setChannelStatuses(statuses)
