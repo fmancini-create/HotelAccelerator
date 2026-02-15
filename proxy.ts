@@ -78,7 +78,7 @@ function extractSubdomain(hostname: string): string | null {
 function isBaseDomain(hostname: string): boolean {
   const host = hostname.split(":")[0]
 
-  if (host.includes("vusercontent.net")) {
+  if (host.includes("vusercontent.net") || host.includes("vercel.run")) {
     return true
   }
 
