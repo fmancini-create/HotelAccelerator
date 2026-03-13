@@ -6,7 +6,8 @@ function getTokenFromRequest(request: NextRequest): string | undefined {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
   const isDevOrPreview = host.includes("vercel.run") || 
                          host.includes("localhost") || 
-                         host.includes("127.0.0.1")
+                         host.includes("127.0.0.1") ||
+                         host.includes("vusercontent.net")
   
   if (isDevOrPreview) {
     return "dev-dummy-token-for-preview"

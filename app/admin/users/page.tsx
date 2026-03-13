@@ -107,7 +107,7 @@ export default function AdminUsersPage() {
 
   // DEV/PREVIEW MODE: If adminUser is null but we're in dev mode, create a fake one
   const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-  const isDevOrPreview = hostname.includes("vercel.run") || hostname.includes("localhost")
+  const isDevOrPreview = hostname.includes("vercel.run") || hostname.includes("localhost") || hostname.includes("vusercontent.net")
   
   const effectiveAdminUser = adminUser || (isDevOrPreview ? {
     id: "dev-user",

@@ -37,7 +37,8 @@ export function useAdminAuth() {
         const hostname = typeof window !== "undefined" ? window.location.hostname : ""
         const isDevOrPreview = hostname.includes("vercel.run") || 
                                hostname.includes("localhost") || 
-                               hostname.includes("127.0.0.1")
+                               hostname.includes("127.0.0.1") ||
+                               hostname.includes("vusercontent.net")
 
         if (isDevOrPreview) {
           console.log("[v0] ✅ DEV/PREVIEW BYPASS ACTIVE - Setting dev admin user")
