@@ -14,8 +14,7 @@ export default function AdminLoginClient() {
                            hostname.includes("127.0.0.1")
     
     if (isDevOrPreview) {
-      console.log("[v0] DEV/PREVIEW MODE: Auto-redirecting to dashboard")
-      window.location.href = "/admin/dashboard"
+      window.location.href = "/admin/users"
     }
   }, [])
 

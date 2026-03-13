@@ -26,10 +26,9 @@ export function useAdminAuth() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // Only check auth on admin pages, but skip if we're already redirecting
         const isAdminPage = window.location.pathname.startsWith("/admin")
-
         if (!isAdminPage) {
-          // On public pages, just set loading to false without checking auth
           setIsLoading(false)
           return
         }
@@ -41,7 +40,6 @@ export function useAdminAuth() {
                                hostname.includes("127.0.0.1")
 
         if (isDevOrPreview) {
-          console.log("[v0] DEV/PREVIEW MODE (useAdminAuth): Bypassing auth check")
           setAdminUser({
             id: "dev-user",
             email: "dev@hotelaccelerator.local",
