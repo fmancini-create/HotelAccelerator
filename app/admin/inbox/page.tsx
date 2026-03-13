@@ -1561,31 +1561,14 @@ export default function InboxPage() {
                               className={`h-3 w-3 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`}
                             />
                           </Button>
-                          </div>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
-                </>
-              ) : (
-                <div className="flex items-center justify-center h-full text-gray-500">
-                  <div className="text-center">
-                    <MessageSquare className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                    <p>Seleziona un messaggio per leggerlo</p>
-                  </div>
-                </div>
-              )}
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-            {/* CLOSES MESSAGE CONTENT - Right side of split view */}
-          </div>
-          {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          {/* CENTER - Message Panel */}
+            {/* CENTER - Message Panel */}
           <div className="flex-1 flex flex-col min-h-0">
             {selectedConversation ? (
               <>
