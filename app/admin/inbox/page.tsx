@@ -2001,9 +2001,10 @@ export default function InboxPage() {
                                   {message.from.email}
                                   {">"}
                                 </span>
-                              <span className="text-xs text-gray-500">
-                                {format(new Date(message.gmail_internal_date), "d MMM yyyy, HH:mm", { locale: it })}
-                              </span>
+                                <span className="text-xs text-gray-500">
+                                  {format(new Date(message.gmail_internal_date), "d MMM yyyy, HH:mm", { locale: it })}
+                                </span>
+                              </div>
                             </div>
                             <div className="text-sm text-gray-500">a {message.to}</div>
                           </div>
