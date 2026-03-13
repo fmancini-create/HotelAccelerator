@@ -1,20 +1,16 @@
-"use client"
-
-import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ShieldAlert } from "lucide-react"
+import { headers } from "next/headers"
 
-export default function DevButtons() {
-  const [isDevOrPreview, setIsDevOrPreview] = useState(false)
-
-  useEffect(() => {
-    const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-    const isDev = hostname.includes("vercel.run") || 
-                  hostname.includes("localhost") || 
-                  hostname.includes("127.0.0.1")
-    setIsDevOrPreview(isDev)
-  }, [])
+export default async function DevButtons() {
+  // Get hostname from headers (server-side)
+  const headersList = await headers()
+  const host = headersList.get("x-forwarded-host") || headersList.get("host") || ""
+  
+  const isDevOrPreview = host.includes("vercel.run") || 
+                         host.includes("localhost") || 
+                         host.includes("127.0.0.1")
 
   if (!isDevOrPreview) return null
 
