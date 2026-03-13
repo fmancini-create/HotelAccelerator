@@ -1,10 +1,24 @@
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
 import { Lock } from "lucide-react"
 import AdminLoginForm from "@/components/admin-login-form"
 
 export default function AdminLoginClient() {
+  // DEV/PREVIEW BYPASS: Auto-redirect in development/preview environments
+  useEffect(() => {
+    const hostname = window.location.hostname
+    const isDevOrPreview = hostname.includes("vercel.run") || 
+                           hostname.includes("localhost") || 
+                           hostname.includes("127.0.0.1")
+    
+    if (isDevOrPreview) {
+      console.log("[v0] DEV/PREVIEW MODE: Auto-redirecting to dashboard")
+      window.location.href = "/admin/dashboard"
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
