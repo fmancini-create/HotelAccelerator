@@ -17,7 +17,15 @@ export default function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // IMPORTANT: Block /admin and /super-admin paths on platform domains
+  // These are tenant-specific routes and should never be accessed on platform domains
   const isPlatformDomain = isBaseDomain(hostname)
+  
+  if (isPlatformDomain && pathname.startsWith("/admin")) {
+    // Redirect tenant-only admin routes back to home on platform domain
+    return NextResponse.redirect(new URL("/", request.url))
+  }
+
   console.log("[v0] Proxy - isPlatformDomain:", isPlatformDomain)
 
   // Se è dominio piattaforma, aggiungi header e lascia passare
