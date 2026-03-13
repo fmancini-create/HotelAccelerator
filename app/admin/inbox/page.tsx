@@ -1619,8 +1619,8 @@ export default function InboxPage() {
                               {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
                             </div>
                           </div>
-                        )}
-                      </div>
+              )
+            </div>
                     ))}
                     <div ref={messagesEndRef} />
                   </div>
@@ -2140,7 +2140,6 @@ export default function InboxPage() {
                 </div>
               </div>
               )}
-            </div>
             {/* CLOSES MESSAGE CONTENT - Right side of split view */}
           </div>
           {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
