@@ -34,6 +34,28 @@ export function useAdminAuth() {
           return
         }
 
+        // DEV/PREVIEW BYPASS: Auto-login in development/preview environments
+        const hostname = typeof window !== "undefined" ? window.location.hostname : ""
+        const isDevOrPreview = hostname.includes("vercel.run") || 
+                               hostname.includes("localhost") || 
+                               hostname.includes("127.0.0.1")
+
+        if (isDevOrPreview) {
+          console.log("[v0] DEV/PREVIEW MODE (useAdminAuth): Bypassing auth check")
+          setAdminUser({
+            id: "dev-user",
+            email: "dev@hotelaccelerator.local",
+            name: "Dev Admin",
+            role: "admin",
+            can_upload: true,
+            can_delete: true,
+            can_move: true,
+            can_manage_users: true,
+          })
+          setIsLoading(false)
+          return
+        }
+
         const supabase = createClient()
 
         // Check if user is logged in with Supabase
