@@ -1739,8 +1739,10 @@ export default function InboxPage() {
             </nav>
           </div>
 
-          {/* CENTER - Thread List */}
-          <div className="w-[420px] flex flex-col border-r border-gray-200 flex-shrink-0">
+          {/* RIGHT - Thread List + Message Content Combined View */}
+          <div className="flex-1 flex bg-white rounded-tl-2xl rounded-bl-2xl shadow-sm">
+            {/* THREAD LIST - Left side of split view */}
+            <div className="w-[320px] flex flex-col border-r border-gray-200 flex-shrink-0 bg-white">
             <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-white">
               {/* Checkbox for selecting all threads */}
               <Checkbox
@@ -1952,9 +1954,9 @@ export default function InboxPage() {
             </div>
           </div>
 
-          {/* RIGHT - Message Content */}
-          <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 rounded-tl-2xl rounded-bl-2xl shadow-sm ml-0">
-            {selectedGmailThread ? (
+            {/* MESSAGE CONTENT - Right side of split view */}
+            <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
+              {selectedGmailThread ? (
               <>
                 <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
                   <h1 className="text-xl font-normal text-gray-900">{selectedGmailThread.subject || "(nessun oggetto)"}</h1>
@@ -2138,7 +2140,10 @@ export default function InboxPage() {
                 </div>
               </div>
             )}
+            </div>
+            {/* CLOSES MESSAGE CONTENT - Right side of split view */}
           </div>
+          {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
         </div>
       )}
 
