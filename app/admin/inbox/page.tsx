@@ -2001,10 +2001,6 @@ export default function InboxPage() {
                                   {message.from.email}
                                   {">"}
                                 </span>
-        </div>
-      )}
-
-      {showComposeModal && (
                               <span className="text-xs text-gray-500">
                                 {format(new Date(message.gmail_internal_date), "d MMM yyyy, HH:mm", { locale: it })}
                               </span>
@@ -2148,6 +2144,9 @@ export default function InboxPage() {
           </div>
           {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
         </div>
+      )}
+
+      {showComposeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
             <div className="flex items-center justify-between p-4 border-b">
