@@ -11,7 +11,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ structures })
   } catch (error) {
-    return handleServiceError(error)
+    const { status, json } = handleServiceError(error)
+    return NextResponse.json(json, { status })
   }
 }
 
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(structure, { status: 201 })
   } catch (error) {
-    return handleServiceError(error)
+    const { status, json } = handleServiceError(error)
+    return NextResponse.json(json, { status })
   }
 }
