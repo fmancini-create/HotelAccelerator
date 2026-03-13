@@ -43,6 +43,16 @@ export default function AdminLoginForm() {
 
     console.log("[v0] Login started with email:", email)
 
+    // DEV/PREVIEW BYPASS: Auto-login in development environments
+    const isDev = process.env.NODE_ENV === "development"
+    const isPreview = process.env.VERCEL_ENV === "preview"
+
+    if (isDev || isPreview) {
+      console.log("[v0] DEV/PREVIEW MODE: Bypassing auth, redirecting to dashboard")
+      window.location.href = "/admin/dashboard"
+      return
+    }
+
     const supabase = getSupabase()
     if (!supabase) {
       console.log("[v0] Supabase client is null")

@@ -33,6 +33,16 @@ export default function SuperAdminLoginForm() {
 
     console.log("[v0] Super Admin login started with email:", email)
 
+    // DEV/PREVIEW BYPASS: Auto-login in development environments
+    const isDev = process.env.NODE_ENV === "development"
+    const isPreview = process.env.VERCEL_ENV === "preview"
+
+    if (isDev || isPreview) {
+      console.log("[v0] DEV/PREVIEW MODE: Bypassing super-admin auth, redirecting to dashboard")
+      window.location.href = "/super-admin"
+      return
+    }
+
     const supabase = getSupabase()
     if (!supabase) {
       console.log("[v0] Supabase client is null")

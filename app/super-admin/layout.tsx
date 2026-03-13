@@ -43,6 +43,17 @@ export default function SuperAdminLayout({
       try {
         const supabase = createClient()
 
+        // DEV/PREVIEW BYPASS: Auto-login in development environments
+        const isDev = process.env.NODE_ENV === "development"
+        const isPreview = process.env.VERCEL_ENV === "preview"
+        
+        if (isDev || isPreview) {
+          console.log("[v0] DEV/PREVIEW MODE: Bypassing auth check")
+          setUserEmail("dev@hotelaccelerator.local")
+          setIsChecking(false)
+          return
+        }
+
         // Check if user is authenticated
         const {
           data: { user },
