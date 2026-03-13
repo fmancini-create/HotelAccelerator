@@ -9,17 +9,14 @@ function getTokenFromRequest(request: NextRequest): string | undefined {
                          host.includes("127.0.0.1")
   
   if (isDevOrPreview) {
-    console.log("[v0] ✅ DEV/PREVIEW MODE (getTokenFromRequest): Returning dummy token")
     return "dev-dummy-token-for-preview"
   }
 
   // Log all cookies for debugging
   const cookies = request.headers.get("cookie") || ""
-  console.log("[v0] getTokenFromRequest - cookies:", cookies.substring(0, 200))
 
   // Try Authorization header first
   const authHeader = request.headers.get("authorization")
-  console.log("[v0] getTokenFromRequest - authHeader:", authHeader ? "present" : "missing")
   if (authHeader?.startsWith("Bearer ")) {
     return authHeader.slice(7)
   }
@@ -31,7 +28,6 @@ function getTokenFromRequest(request: NextRequest): string | undefined {
   const tokenMatch2 = cookies.match(/sb-[a-zA-Z0-9]+-auth-token\.0=([^;]+)/)
 
   const matchToUse = tokenMatch || tokenMatch2
-  console.log("[v0] getTokenFromRequest - tokenMatch:", matchToUse ? "found" : "not found")
 
   if (matchToUse) {
     try {

@@ -6,16 +6,11 @@ export async function GET(request: NextRequest) {
   try {
     // DEV/PREVIEW BYPASS: Return dummy data in dev/preview mode
     const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-    console.log("[v0] API /admin/users - host header:", host)
-    
     const isDevOrPreview = host.includes("vercel.run") || 
                            host.includes("localhost") || 
                            host.includes("127.0.0.1")
 
-    console.log("[v0] API /admin/users - isDevOrPreview:", isDevOrPreview)
-
     if (isDevOrPreview) {
-      console.log("[v0] ✅ DEV/PREVIEW MODE (GET /api/admin/users): Returning dummy data")
       return NextResponse.json({
         users: [
           {
