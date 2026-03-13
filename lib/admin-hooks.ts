@@ -40,6 +40,7 @@ export function useAdminAuth() {
                                hostname.includes("127.0.0.1")
 
         if (isDevOrPreview) {
+          console.log("[v0] ✅ DEV/PREVIEW BYPASS ACTIVE - Setting dev admin user")
           setAdminUser({
             id: "dev-user",
             email: "dev@hotelaccelerator.local",

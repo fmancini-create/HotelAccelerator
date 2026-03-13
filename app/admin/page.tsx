@@ -1,9 +1,18 @@
 "use client"
 
-import AdminLoginClient from "@/components/admin-login-client"
+import { useEffect } from "react"
 
 export default function AdminPage() {
-  return <AdminLoginClient />
+  useEffect(() => {
+    const hostname = window.location.hostname
+    const isDevOrPreview = hostname.includes("vercel.run") || hostname.includes("localhost")
+    
+    if (isDevOrPreview) {
+      window.location.replace("/admin/users")
+    }
+  }, [])
+
+  return null
 }
 
 

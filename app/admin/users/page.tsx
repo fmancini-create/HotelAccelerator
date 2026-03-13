@@ -51,6 +51,7 @@ interface ExtendedAdminUser extends AdminUser {
 
 export default function AdminUsersPage() {
   const { isLoading, adminUser, logout } = useAdminAuth()
+  console.log("[v0] AdminUsersPage render - isLoading:", isLoading, "adminUser:", adminUser)
   const [users, setUsers] = useState<ExtendedAdminUser[]>([])
   const [groups, setGroups] = useState<UserGroup[]>([])
   const [showAddUser, setShowAddUser] = useState(false)
