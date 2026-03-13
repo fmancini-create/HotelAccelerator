@@ -159,6 +159,18 @@ export async function getAuthenticatedUser(request: NextRequest) {
  * Ottiene l'email dell'utente autenticato
  */
 export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<string> {
+  // DEV/PREVIEW BYPASS
+  if (request) {
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+    const isDevOrPreview = host.includes("vercel.run") || 
+                           host.includes("localhost") || 
+                           host.includes("127.0.0.1") ||
+                           host.includes("vusercontent.net")
+    if (isDevOrPreview) {
+      return "dev@hotelaccelerator.local"
+    }
+  }
+
   const token = request ? getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
@@ -179,6 +191,16 @@ export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<
  * I super admin possono operare su qualsiasi property se specificato nel query param
  */
 export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request: NextRequest): Promise<string> {
+  // DEV/PREVIEW BYPASS
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+  const isDevOrPreview = host.includes("vercel.run") || 
+                         host.includes("localhost") || 
+                         host.includes("127.0.0.1") ||
+                         host.includes("vusercontent.net")
+  if (isDevOrPreview) {
+    return "dev-property-id"
+  }
+
   const token = getTokenFromRequest(request)
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
