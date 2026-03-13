@@ -1674,20 +1674,20 @@ export default function InboxPage() {
         </div>
       ) : (
         // ==================== GMAIL MIRROR LAYOUT (Direct Gmail API - 1:1 parity) ====================
-        <div className="flex h-[calc(100vh-64px)] bg-white">
+        <div className="flex h-[calc(100vh-64px)] bg-[#f6f8fc]">
           {/* LEFT - Gmail Folder Sidebar */}
-          <div className="w-52 border-r flex flex-col bg-muted/30">
-            <div className="p-3">
+          <div className="w-[256px] flex flex-col bg-[#f6f8fc] flex-shrink-0">
+            <div className="p-4">
               <Button
-                className="w-full bg-white hover:bg-gray-100 text-gray-700 border shadow-sm rounded-2xl h-14 justify-start gap-3"
+                className="w-full bg-white hover:bg-blue-50 hover:shadow-md text-gray-700 border border-gray-200 shadow-md rounded-2xl h-14 justify-start gap-4 transition-all"
                 variant="outline"
                 onClick={() => {
-                  setComposeData({ to: "", subject: "", body: "" }) // Clear form on open
+                  setComposeData({ to: "", subject: "", body: "" })
                   setShowComposeModal(true)
                 }}
               >
-                <Edit3 className="h-5 w-5" />
-                <span className="font-medium">Scrivi</span>
+                <Edit3 className="h-6 w-6 text-gray-600" />
+                <span className="font-medium text-[15px]">Scrivi</span>
               </Button>
             </div>
             <nav className="flex-1 overflow-y-auto px-2">
@@ -1699,24 +1699,24 @@ export default function InboxPage() {
                   <button
                     key={folder.id}
                     onClick={() => handleGmailLabelChange(folder.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-1.5 text-sm transition-colors rounded-r-full mb-0.5 ${
-                      isActive ? "bg-blue-100 text-blue-800 font-semibold" : "text-gray-700 hover:bg-gray-100"
+                    className={`w-full flex items-center gap-4 pl-6 pr-4 py-2 text-sm transition-colors rounded-r-full mb-0.5 ${
+                      isActive ? "bg-blue-200/80 text-blue-900 font-semibold" : "text-gray-700 hover:bg-gray-200/60"
                     }`}
                   >
-                    <Icon className={`h-4 w-4 ${isActive ? "text-blue-800" : "text-gray-600"}`} />
+                    <Icon className={`h-5 w-5 ${isActive ? "text-blue-900" : "text-gray-600"}`} />
                     <span className="flex-1 text-left truncate">{folder.label}</span>
-                    {counts.total > 0 && (
-                      <span className="text-xs font-semibold">{counts.unread > 0 ? counts.unread : counts.total}</span>
+                    {counts.unread > 0 && (
+                      <span className={`text-xs font-bold ${isActive ? "text-blue-900" : "text-gray-700"}`}>{counts.unread}</span>
                     )}
                   </button>
                 )
               })}
 
-              <div className="my-3 border-t border-gray-200" />
+              <div className="my-3 mx-4 border-t border-gray-300/50" />
 
               <button
                 onClick={() => setLabelsExpanded(!labelsExpanded)}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-r-full"
+                className="w-full flex items-center gap-4 pl-6 pr-4 py-2 text-sm text-gray-700 hover:bg-gray-200/60 rounded-r-full"
               >
                 {labelsExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                 <span className="font-medium">Etichette</span>
@@ -1727,21 +1727,21 @@ export default function InboxPage() {
                   <button
                     key={label.id}
                     onClick={() => handleGmailLabelChange(label.id)}
-                    className={`w-full flex items-center gap-3 pl-6 pr-4 py-1.5 text-sm text-gray-700 hover:bg-gray-100 rounded-r-full ${
-                      gmailLabelId === label.id ? "bg-blue-100 text-blue-800 font-semibold" : ""
+                    className={`w-full flex items-center gap-4 pl-10 pr-4 py-2 text-sm transition-colors rounded-r-full ${
+                      gmailLabelId === label.id ? "bg-blue-200/80 text-blue-900 font-semibold" : "text-gray-700 hover:bg-gray-200/60"
                     }`}
                   >
-                    <Tag className="h-3.5 w-3.5" style={label.color ? { color: label.color } : undefined} />
+                    <Tag className="h-4 w-4" style={label.color ? { color: label.color } : { color: '#5f6368' }} />
                     <span className="flex-1 text-left truncate">{label.name}</span>
-                    {label.threadsTotal > 0 && <span className="text-xs">{label.threadsTotal}</span>}
+                    {label.threadsTotal > 0 && <span className="text-xs text-gray-600">{label.threadsTotal}</span>}
                   </button>
                 ))}
             </nav>
           </div>
 
           {/* CENTER - Thread List */}
-          <div className="flex-1 flex flex-col border-r border-gray-200 max-w-xl">
-            <div className="flex items-center gap-2 px-2 py-1.5 border-b border-gray-200 bg-white">
+          <div className="w-[420px] flex flex-col border-r border-gray-200 flex-shrink-0">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-white">
               {/* Checkbox for selecting all threads */}
               <Checkbox
                 checked={selectedGmailThreadIds.size === gmailThreads.length && gmailThreads.length > 0}
@@ -1872,18 +1872,16 @@ export default function InboxPage() {
               </div>
             </div>
 
-            <div className="px-2 py-2 border-b border-gray-200 bg-white">
-              <div className="relative flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  <Input
-                    placeholder="Cerca in Gmail"
-                    className="pl-10 h-9 bg-gray-100 border-0 rounded-lg focus:bg-white focus:ring-1"
-                    value={gmailSearchQuery}
-                    onChange={(e) => setGmailSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleGmailSearch()}
-                  />
-                </div>
+            <div className="px-3 py-2 border-b border-gray-200 bg-white">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Cerca nella posta"
+                  className="pl-10 h-10 bg-[#eaf1fb] border-0 rounded-full focus:bg-white focus:ring-2 focus:ring-blue-500 text-sm"
+                  value={gmailSearchQuery}
+                  onChange={(e) => setGmailSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleGmailSearch()}
+                />
               </div>
             </div>
 
@@ -1902,49 +1900,49 @@ export default function InboxPage() {
                   <div
                     key={thread.id}
                     onClick={() => handleSelectGmailThread(thread)}
-                    className={`flex items-center gap-2 px-2 py-2 cursor-pointer border-b border-gray-100 ${
+                    className={`flex items-center gap-3 px-3 py-2 cursor-pointer border-b border-gray-100 transition-colors ${
                       selectedGmailThread?.id === thread.id
-                        ? "bg-blue-50"
+                        ? "bg-blue-100/70 border-l-2 border-l-blue-500"
                         : thread.isUnread
-                          ? "bg-white"
-                          : "bg-gray-50/50"
-                    } hover:bg-gray-50`}
+                          ? "bg-white hover:shadow-sm"
+                          : "bg-gray-50/30 hover:bg-gray-100/50"
+                    }`}
                   >
                     <Checkbox
                       checked={selectedGmailThreadIds.has(thread.id)}
                       onCheckedChange={(checked) => handleGmailCheckboxToggle(thread.id)}
                       onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4"
+                      className="h-4 w-4 flex-shrink-0"
                     />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 p-0"
-                      onClick={(e) => handleGmailStarToggle(thread, e)} // Modified to pass thread
+                    <button
+                      className="flex-shrink-0 p-0.5 hover:bg-gray-200 rounded"
+                      onClick={(e) => handleGmailStarToggle(thread, e)}
                     >
                       <Star
-                        className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+                        className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-400 hover:text-gray-500"}`}
                       />
-                    </Button>
-                    <div className="flex-1 min-w-0 flex items-center gap-2">
-                      <span
-                        className={`w-36 truncate text-sm ${thread.isUnread ? "font-semibold text-gray-900" : "text-gray-600"}`}
-                      >
-                        {thread.from.name || thread.from.email.split("@")[0]}
+                    </button>
+                    <span
+                      className={`w-[140px] truncate text-[13px] flex-shrink-0 ${thread.isUnread ? "font-semibold text-gray-900" : "text-gray-700"}`}
+                    >
+                      {thread.from.name || thread.from.email.split("@")[0]}
+                    </span>
+                    <div className="flex-1 min-w-0 flex items-center overflow-hidden">
+                      <span className={`truncate text-[13px] ${thread.isUnread ? "font-semibold text-gray-900" : "text-gray-700"}`}>
+                        {thread.subject || "(nessun oggetto)"}
                       </span>
-                      <div className="flex-1 min-w-0 flex items-center">
-                        <span className={`truncate text-sm ${thread.isUnread ? "font-semibold" : "text-gray-600"}`}>
-                          {thread.subject}
-                        </span>
-                        <span className="text-gray-400 mx-1 flex-shrink-0">-</span>
-                        <span className="truncate text-sm text-gray-500">{thread.snippet}</span>
-                      </div>
+                      {thread.snippet && (
+                        <>
+                          <span className="text-gray-400 mx-1.5 flex-shrink-0">-</span>
+                          <span className="truncate text-[13px] text-gray-500">{thread.snippet}</span>
+                        </>
+                      )}
                     </div>
                     {thread.messagesCount > 1 && (
-                      <span className="text-xs text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
+                      <span className="text-xs text-gray-500 flex-shrink-0 bg-gray-100 px-1.5 py-0.5 rounded">{thread.messagesCount}</span>
                     )}
                     <span
-                      className={`text-xs flex-shrink-0 ${thread.isUnread ? "font-semibold text-gray-900" : "text-gray-500"}`}
+                      className={`text-xs flex-shrink-0 min-w-[50px] text-right ${thread.isUnread ? "font-semibold text-gray-900" : "text-gray-500"}`}
                     >
                       {format(new Date(thread.date), "d MMM", { locale: it })}
                     </span>
@@ -1955,15 +1953,18 @@ export default function InboxPage() {
           </div>
 
           {/* RIGHT - Message Content */}
-          <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
+          <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0 rounded-tl-2xl rounded-bl-2xl shadow-sm ml-0">
             {selectedGmailThread ? (
               <>
-                <div className="p-4 border-b border-gray-200 flex-shrink-0">
-                  {/* v773 BUILD MARKER: Add visible build marker after line ~1540 where Gmail mode header is */}
-                  <div className="text-sm text-gray-500 mb-1">
-                    Build: <span className="font-semibold text-gray-700">{FRONTEND_BUILD}</span>
+                <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
+                  <h1 className="text-xl font-normal text-gray-900">{selectedGmailThread.subject || "(nessun oggetto)"}</h1>
+                  <div className="flex items-center gap-2 mt-1">
+                    {selectedGmailThread.labels?.filter(l => !['INBOX', 'UNREAD', 'SENT', 'IMPORTANT'].includes(l)).map((label) => (
+                      <Badge key={label} variant="secondary" className="text-xs font-normal bg-gray-100 text-gray-600">
+                        {label.toLowerCase().replace('category_', '')}
+                      </Badge>
+                    ))}
                   </div>
-                  <h1 className="text-xl font-normal text-gray-900">{selectedGmailThread.subject}</h1>
                 </div>
 
                 <div className="flex-1 overflow-y-auto min-h-0">
