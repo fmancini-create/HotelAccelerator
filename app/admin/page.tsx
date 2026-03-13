@@ -1,23 +1,24 @@
-import { redirect } from "next/navigation"
-import { headers } from "next/headers"
+"use client"
+
+import { useEffect } from "react"
 import AdminLoginClient from "@/components/admin-login-client"
 
-export default async function AdminPage() {
-  // Check if we're in dev/preview environment
-  const headersList = await headers()
-  const host = headersList.get("x-forwarded-host") || headersList.get("host") || ""
-  
-  const isDevOrPreview = host.includes("vercel.run") || 
-                         host.includes("localhost") || 
-                         host.includes("127.0.0.1")
+export default function AdminPage() {
+  useEffect(() => {
+    // Check if we're in dev/preview and redirect to users page
+    const hostname = typeof window !== "undefined" ? window.location.hostname : ""
+    const isDevOrPreview = hostname.includes("vercel.run") || 
+                           hostname.includes("localhost") || 
+                           hostname.includes("127.0.0.1")
 
-  // In dev/preview, bypass auth and go directly to users page
-  if (isDevOrPreview) {
-    console.log("[v0] DEV/PREVIEW MODE (/admin): Auto-redirecting to /admin/users, host:", host)
-    redirect("/admin/users")
-  }
+    if (isDevOrPreview) {
+      // Use replace to avoid creating history entries
+      window.location.replace("/admin/users")
+    }
+  }, [])
 
-  // In production, show login
+  // In production or while checking, show login
   return <AdminLoginClient />
 }
+
 
