@@ -50,8 +50,10 @@ export default function SuperAdminLayout({
                                hostname.includes("localhost") || 
                                hostname.includes("127.0.0.1")
         
+        console.log("[v0] SUPER-ADMIN LAYOUT: hostname =", hostname, "isDevOrPreview =", isDevOrPreview)
+
         if (isDevOrPreview) {
-          console.log("[v0] DEV/PREVIEW MODE: Bypassing auth check")
+          console.log("[v0] DEV/PREVIEW MODE: Bypassing auth check, hostname:", hostname)
           setUserEmail("dev@hotelaccelerator.local")
           setIsChecking(false)
           return
@@ -93,6 +95,7 @@ export default function SuperAdminLayout({
         setIsChecking(false)
       } catch (error) {
         console.error("[v0] Auth check error:", error)
+        console.log("[v0] isDevOrPreview should have been checked already")
         router.push("/super-admin/login")
       }
     }
