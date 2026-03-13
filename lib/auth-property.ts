@@ -56,6 +56,17 @@ function getTokenFromRequest(request: NextRequest): string | undefined {
  * Usato nelle API routes admin per verificare l'accesso
  */
 export async function getAuthenticatedPropertyId(request: NextRequest): Promise<string> {
+  // DEV/PREVIEW BYPASS: Check if we're in dev/preview environment
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+  const isDevOrPreview = host.includes("vercel.run") || 
+                         host.includes("localhost") || 
+                         host.includes("127.0.0.1")
+
+  if (isDevOrPreview) {
+    console.log("[v0] DEV/PREVIEW MODE (getAuthenticatedPropertyId): Returning dev property_id")
+    return "dev-property-id"
+  }
+
   const token = getTokenFromRequest(request)
   const supabase = token ? await createClientWithToken(token) : await createClient()
 

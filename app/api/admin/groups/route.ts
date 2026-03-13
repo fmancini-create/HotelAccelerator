@@ -4,6 +4,28 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest) {
   try {
+    // DEV/PREVIEW BYPASS: Return dummy data in dev/preview mode
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+    const isDevOrPreview = host.includes("vercel.run") || 
+                           host.includes("localhost") || 
+                           host.includes("127.0.0.1")
+
+    if (isDevOrPreview) {
+      console.log("[v0] DEV/PREVIEW MODE (GET /api/admin/groups): Returning dummy data")
+      return NextResponse.json({
+        groups: [
+          {
+            id: "dev-group-1",
+            name: "Dev Group",
+            description: "Development group",
+            color: "#3b82f6",
+            created_at: new Date().toISOString(),
+            members: [],
+          },
+        ],
+      })
+    }
+
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
 

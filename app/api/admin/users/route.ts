@@ -4,6 +4,35 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest) {
   try {
+    // DEV/PREVIEW BYPASS: Return dummy data in dev/preview mode
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+    const isDevOrPreview = host.includes("vercel.run") || 
+                           host.includes("localhost") || 
+                           host.includes("127.0.0.1")
+
+    if (isDevOrPreview) {
+      console.log("[v0] DEV/PREVIEW MODE (GET /api/admin/users): Returning dummy data")
+      return NextResponse.json({
+        users: [
+          {
+            id: "dev-user-1",
+            email: "dev@hotelaccelerator.local",
+            name: "Dev Admin",
+            role: "admin",
+            signature: null,
+            signature_html: null,
+            is_tenant_admin: true,
+            can_upload: true,
+            can_delete: true,
+            can_move: true,
+            can_manage_users: true,
+            created_at: new Date().toISOString(),
+            groups: [],
+          },
+        ],
+      })
+    }
+
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
 
