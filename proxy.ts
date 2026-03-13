@@ -10,23 +10,22 @@ export default function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
-  console.log("[v0] Proxy - hostname:", hostname, "pathname:", pathname)
-
   // Skip per risorse statiche e API interne
   if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next()
   }
 
-  // IMPORTANT: Block /admin and /super-admin paths on platform domains
-  // These are tenant-specific routes and should never be accessed on platform domains
   const isPlatformDomain = isBaseDomain(hostname)
   
-  if (isPlatformDomain && pathname.startsWith("/admin")) {
-    // Redirect tenant-only admin routes back to home on platform domain
-    return NextResponse.redirect(new URL("/", request.url))
+  // DEV/PREVIEW MODE: Allow /admin and /super-admin paths on vercel.run domains
+  const isDevOrPreview = hostname.includes("vercel.run") || hostname.includes("localhost")
+  
+  // In dev/preview, allow admin routes to pass through without blocking
+  if (isDevOrPreview && (pathname.startsWith("/admin") || pathname.startsWith("/super-admin"))) {
+    const response = NextResponse.next()
+    response.headers.set("x-is-dev-mode", "true")
+    return response
   }
-
-  console.log("[v0] Proxy - isPlatformDomain:", isPlatformDomain)
 
   // Se è dominio piattaforma, aggiungi header e lascia passare
   if (isPlatformDomain) {

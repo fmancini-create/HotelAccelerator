@@ -22,12 +22,12 @@ export default async function DevButtons() {
           <p className="text-sm text-red-400 font-medium">Dev/Preview Mode - Quick Access:</p>
         </div>
         <div className="flex gap-3 flex-wrap">
-          <Link href="/admin/dashboard">
+          <Link href="/admin/users">
             <Button 
               variant="outline" 
               className="border-red-500/50 text-red-400 hover:bg-red-950/50 bg-transparent"
             >
-              → Tenant Admin Dashboard
+              Tenant Admin (Users)
             </Button>
           </Link>
           <Link href="/super-admin">
@@ -35,7 +35,7 @@ export default async function DevButtons() {
               variant="outline" 
               className="border-red-500/50 text-red-400 hover:bg-red-950/50 bg-transparent"
             >
-              → Platform Super Admin
+              Platform Super Admin
             </Button>
           </Link>
         </div>
