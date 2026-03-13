@@ -62,10 +62,18 @@ export function useAdminAuth() {
         } = await supabase.auth.getUser()
 
         if (!user) {
-          // Not logged in - redirect to login page if not already there
-          if (window.location.pathname !== "/admin" && window.location.pathname !== "/admin/setup") {
-            router.push("/admin")
+          // Not logged in - redirect to login page only if we're ON the login page
+          if (window.location.pathname === "/admin/users" || window.location.pathname === "/admin/setup") {
+            // Don't redirect from content pages back to login
+            setIsLoading(false)
+            return
           }
+          // Only redirect if we're on /admin exactly
+          if (window.location.pathname === "/admin") {
+            setIsLoading(false)
+            return
+          }
+          router.push("/admin")
           setIsLoading(false)
           return
         }
