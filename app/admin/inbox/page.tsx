@@ -1953,10 +1953,11 @@ export default function InboxPage() {
               )}
             </div>
             {/* CLOSES THREAD LIST - Left side of split view */}
+          </div>
 
-            {/* MESSAGE CONTENT - Right side of split view */}
-            <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
-              {selectedGmailThread ? (
+          {/* MESSAGE CONTENT - Right side of split view */}
+          <div className="flex-1 flex flex-col bg-white overflow-hidden min-w-0">
+            {selectedGmailThread ? (
               <>
                 <div className="px-6 py-4 border-b border-gray-200 flex-shrink-0 bg-white">
                   <h1 className="text-xl font-normal text-gray-900">{selectedGmailThread.subject || "(nessun oggetto)"}</h1>
@@ -2141,8 +2142,10 @@ export default function InboxPage() {
               </div>
             )}
           </div>
-          {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
+          {/* CLOSES MESSAGE CONTENT */}
         </div>
+        {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
+      </div>
       )}
 
       {showComposeModal && (
