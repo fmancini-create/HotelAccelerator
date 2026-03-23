@@ -1564,12 +1564,13 @@ export default function InboxPage() {
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  </div>
+                ))
+              )}
             </div>
-            {/* RIGHT - Gmail/Conversation Split View */}
-            <div className="flex-1 flex flex-col min-h-0">
+          </div>
+          {/* RIGHT - Message Panel */}
+          <div className="flex-1 flex flex-col min-h-0">
             {selectedConversation ? (
               <>
                 {/* Header - fixed */}
