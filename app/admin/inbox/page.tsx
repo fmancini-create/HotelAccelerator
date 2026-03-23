@@ -1619,8 +1619,8 @@ export default function InboxPage() {
                               {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
                             </div>
                           </div>
-              )
-            </div>
+                        )}
+                      </div>
                     ))}
                     <div ref={messagesEndRef} />
                   </div>
