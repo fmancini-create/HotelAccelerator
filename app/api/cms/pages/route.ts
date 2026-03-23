@@ -35,22 +35,20 @@ export async function POST(request: Request) {
 
     const body = await request.json()
 
-    // Validazione con Zod
+    // Validazione con Zod (safeParse — campi extra vengono ignorati)
     const validation = validatePage(body)
     if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 })
+      return NextResponse.json({ error: validation.error.flatten() }, { status: 400 })
     }
 
     const pageData = validation.data
-
-    pageData.property_id = authenticatedPropertyId
 
     const supabase = await createServerClient()
 
     const { data: page, error } = await supabase
       .from("cms_pages")
       .insert({
-        property_id: pageData.property_id,
+        property_id: authenticatedPropertyId,
         slug: pageData.slug,
         title: pageData.title,
         status: pageData.status,
