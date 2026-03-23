@@ -96,30 +96,46 @@ function CMSPagesContent() {
   }, [])
 
   async function loadPropertyAndPages() {
+    // DEV/PREVIEW BYPASS
+    const hostname = typeof window !== "undefined" ? window.location.hostname : ""
+    const isDevOrPreview =
+      hostname.includes("vusercontent.net") ||
+      hostname.includes("vercel.run") ||
+      hostname.includes("localhost") ||
+      hostname.includes("127.0.0.1")
+
+    let resolvedPropertyId: string | null = null
+
+    if (isDevOrPreview) {
+      resolvedPropertyId = "dev-property-id"
+    } else {
+      const supabase = createClient()
+      if (!supabase) return
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data: adminUser } = await supabase
+        .from("admin_users")
+        .select("property_id, role")
+        .eq("id", user.id)
+        .single()
+
+      if (!adminUser?.property_id) return
+      resolvedPropertyId = adminUser.property_id
+    }
+
+    setPropertyId(resolvedPropertyId)
+
+    // Carica templates disponibili
     const supabase = createClient()
     if (!supabase) return
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return
-
-    // Carica admin user per ottenere property_id
-    const { data: adminUser } = await supabase
-      .from("admin_users")
-      .select("property_id, role")
-      .eq("id", user.id)
-      .single()
-
-    if (!adminUser?.property_id) return
-    setPropertyId(adminUser.property_id)
-
-    // Carica templates disponibili
     const { data: templatesData } = await supabase
       .from("cms_templates")
       .select("id, name, slug, description, category, is_system")
       .eq("is_active", true)
-      .or(`property_id.is.null,property_id.eq.${adminUser.property_id}`)
+      .or(`property_id.is.null,property_id.eq.${resolvedPropertyId}`)
       .order("is_system", { ascending: false })
 
     if (templatesData) {
@@ -132,7 +148,7 @@ function CMSPagesContent() {
     }
 
     // Carica pagine
-    const response = await fetch(`/api/cms/pages?property_id=${adminUser.property_id}`)
+    const response = await fetch(`/api/cms/pages?property_id=${resolvedPropertyId}`)
     const data = await response.json()
 
     if (data.pages) {
