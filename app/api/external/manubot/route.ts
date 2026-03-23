@@ -1,47 +1,41 @@
 /**
  * POST /api/external/manubot
- * Webhook receiver per task Manubot → HotelAccelerator
  *
- * Manubot non ha webhook nativi, quindi HotelAccelerator fa polling
- * oppure Manubot chiama questo endpoint ad ogni PATCH di status.
+ * Webhook receiver: Manubot → HotelAccelerator
+ * Triggerato da Manubot su: task.created, task.updated
  *
- * Auth: Bearer token statico configurato per property (api_token in properties table)
+ * Configurazione in Manubot:
+ *   URL:   https://[tuodominio]/api/external/manubot
+ *   Token: il campo api_token della property su HotelAccelerator
  *
- * Mapping campi Manubot → todos:
- *   maintenance_tasks.id          → external_id
- *   maintenance_tasks.title       → title
- *   maintenance_tasks.description → description
- *   maintenance_tasks.status      → status (pending→open, in_progress→in_progress, completed→done, cancelled→cancelled)
- *   maintenance_tasks.priority    → priority (low→low, medium→normal, high→high, critical→urgent)
- *   maintenance_tasks.scheduled_date → due_date
- *   maintenance_tasks.company_id  → mappato su property_id via manubot_company_id in properties
+ * Header atteso: Authorization: Bearer <api_token>
+ *
+ * Payload atteso (da docs Manubot):
+ * {
+ *   "event": "task.created" | "task.updated",
+ *   "timestamp": "ISO 8601",
+ *   "data": {
+ *     "id": "UUID",
+ *     "title": "string",
+ *     "description": "string | null",
+ *     "status": "pending | in_progress | completed | cancelled",
+ *     "priority": "low | medium | high | critical",
+ *     "due_date": "ISO 8601 | null",
+ *     "assigned_to_name": "string | null",
+ *     "company_id": "UUID"
+ *   }
+ * }
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-
-// Mapping status Manubot → todos
-const STATUS_MAP: Record<string, string> = {
-  pending: "open",
-  in_progress: "in_progress",
-  completed: "done",
-  cancelled: "cancelled",
-}
-
-// Mapping priority Manubot → todos
-const PRIORITY_MAP: Record<string, string> = {
-  low: "low",
-  medium: "normal",
-  high: "high",
-  critical: "urgent",
-}
+import { MANUBOT_TO_HA_STATUS, MANUBOT_TO_HA_PRIORITY } from "@/lib/manubot"
 
 export async function POST(request: NextRequest) {
   try {
-    // Auth: Bearer token statico per property
+    // Verifica Bearer token
     const authHeader = request.headers.get("authorization") || ""
     const token = authHeader.replace("Bearer ", "").trim()
-
     if (!token) {
       return NextResponse.json({ error: "Token mancante" }, { status: 401 })
     }
@@ -61,8 +55,17 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
-    // Supporta sia un singolo task che un array (per sync batch)
-    const tasks = Array.isArray(body) ? body : [body]
+    // Supporta sia il formato webhook ({ event, timestamp, data }) sia un array batch
+    const tasks: any[] = []
+    if (Array.isArray(body)) {
+      tasks.push(...body)
+    } else if (body.event && body.data) {
+      // Formato webhook ufficiale Manubot
+      tasks.push(body.data)
+    } else {
+      // Fallback: body diretto (per compatibilità)
+      tasks.push(body)
+    }
 
     const results = []
 
@@ -76,29 +79,23 @@ export async function POST(request: NextRequest) {
         property_id: property.id,
         title: task.title,
         description: task.description || null,
-        status: STATUS_MAP[task.status] || "open",
-        priority: PRIORITY_MAP[task.priority] || "normal",
-        due_date: task.scheduled_date || null,
+        status: MANUBOT_TO_HA_STATUS[task.status] || "open",
+        priority: MANUBOT_TO_HA_PRIORITY[task.priority] || "normal",
+        due_date: task.due_date || task.scheduled_date || null,
         external_id: String(task.id),
-        external_source: "manubot",  // corrisponde alla colonna nella UNIQUE constraint
+        external_source: "manubot",
         external_url: `https://manubot.it/tasks/${task.id}`,
         external_data: {
           company_id: task.company_id,
-          asset_id: task.asset_id,
+          assigned_to_name: task.assigned_to_name || task.assigned_profile?.full_name || null,
           asset_name: task.assets?.name || null,
           asset_location: task.assets?.location || null,
-          assigned_to_name: task.assigned_profile?.full_name || null,
-          assigned_to_email: task.assigned_profile?.email || null,
-          estimated_duration_minutes: task.estimated_duration_minutes || null,
-          actual_duration_minutes: task.actual_duration_minutes || null,
-          notes: task.notes || null,
-          manubot_updated_at: task.updated_at,
+          manubot_updated_at: task.updated_at || new Date().toISOString(),
         },
-        tags: ["manubot", ...(task.assets?.category ? [task.assets.category] : [])],
+        tags: ["manubot"],
         updated_at: new Date().toISOString(),
       }
 
-      // Upsert basato su (property_id, external_source, external_id) — unique constraint
       const { data, error } = await supabase
         .from("todos")
         .upsert(todoData, {
@@ -116,41 +113,27 @@ export async function POST(request: NextRequest) {
     }
 
     const successCount = results.filter((r) => r.synced).length
-    return NextResponse.json({
-      synced: successCount,
-      total: tasks.length,
-      results,
-    })
-  } catch (error) {
-    console.error("[Manubot Bridge] Error:", error)
+    return NextResponse.json({ synced: successCount, total: tasks.length, results })
+  } catch (error: any) {
+    console.error("[Manubot Webhook] Error:", error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
 
-/**
- * GET /api/external/manubot/poll
- * Trigger manuale per polling Manubot → importa task aggiornati di recente
- * Richiede: property_id nel query param + autenticazione admin
- */
+// GET — info endpoint per verificare che il bridge sia attivo
 export async function GET(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-  const isDevOrPreview =
-    host.includes("vercel.run") ||
-    host.includes("localhost") ||
-    host.includes("127.0.0.1") ||
-    host.includes("vusercontent.net")
-
   return NextResponse.json({
-    message: "Manubot Bridge attivo",
-    endpoints: {
-      "POST /api/external/manubot": "Riceve task da Manubot (webhook o push manuale)",
-      "GET /api/external/manubot": "Status bridge",
+    service: "HotelAccelerator ↔ Manubot Bridge",
+    version: "2.0",
+    status: "active",
+    webhook_url: `https://${host}/api/external/manubot`,
+    docs: {
+      setup: "Manubot → Impostazioni → Integrazioni → Inserisci URL + Bearer token",
+      events: ["task.created", "task.updated"],
+      payload_schema: "{ event, timestamp, data: { id, title, status, priority, due_date, assigned_to_name, company_id } }",
     },
-    mapping: {
-      status: STATUS_MAP,
-      priority: PRIORITY_MAP,
-    },
-    docs: "https://manubot.it/api",
-    devMode: isDevOrPreview,
+    status_mapping: MANUBOT_TO_HA_STATUS,
+    priority_mapping: MANUBOT_TO_HA_PRIORITY,
   })
 }

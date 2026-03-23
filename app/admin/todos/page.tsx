@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import {
   Plus, CheckCircle2, Circle, Clock, AlertCircle,
   Trash2, ExternalLink, Calendar, Filter, RefreshCw,
-  Users, User, Send, Wrench, Tag, Edit2
+  Users, User, Send, Wrench, Tag, Edit2, Settings
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,9 @@ import { useAdminAuth } from "@/lib/admin-hooks"
 import { format, isToday, isPast, isTomorrow } from "date-fns"
 import { it } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
+
+interface ManubotTeamMember { id: string; full_name: string; email: string; role: string }
+interface ManubotAsset { id: string; name: string; location: string }
 
 type TodoStatus = "open" | "in_progress" | "done" | "cancelled"
 type TodoPriority = "low" | "normal" | "high" | "urgent"
@@ -180,6 +183,9 @@ export default function TodosPage() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
+  const [manubotTeam, setManubotTeam] = useState<ManubotTeamMember[]>([])
+  const [manubotAssets, setManubotAssets] = useState<ManubotAsset[]>([])
+
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -188,6 +194,8 @@ export default function TodosPage() {
     due_date: "",
     tags: "",
     send_to_manubot: false,
+    manubot_assigned_to: "",
+    manubot_asset_id: "",
   })
 
   const dev = isDevOrPreview()
@@ -230,8 +238,24 @@ export default function TodosPage() {
   useEffect(() => { loadUsers() }, [loadUsers])
   useEffect(() => { loadTodos() }, [loadTodos])
 
+  // Carica team e asset Manubot quando send_to_manubot viene attivato
+  useEffect(() => {
+    if (!form.send_to_manubot) return
+    const loadManubot = async () => {
+      try {
+        const [teamRes, assetsRes] = await Promise.all([
+          fetch("/api/admin/manubot/team"),
+          fetch("/api/admin/manubot/assets"),
+        ])
+        if (teamRes.ok) { const d = await teamRes.json(); setManubotTeam(d.team || []) }
+        if (assetsRes.ok) { const d = await assetsRes.json(); setManubotAssets(d.assets || []) }
+      } catch { /* silent */ }
+    }
+    loadManubot()
+  }, [form.send_to_manubot])
+
   const resetForm = () => {
-    setForm({ title: "", description: "", priority: "normal", assigned_to: "", due_date: "", tags: "", send_to_manubot: false })
+    setForm({ title: "", description: "", priority: "normal", assigned_to: "", due_date: "", tags: "", send_to_manubot: false, manubot_assigned_to: "", manubot_asset_id: "" })
     setEditingTodo(null)
     setShowForm(false)
     setError("")
@@ -251,6 +275,8 @@ export default function TodosPage() {
       due_date: form.due_date || undefined,
       tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
       send_to_manubot: form.send_to_manubot,
+      manubot_assigned_to: form.manubot_assigned_to || null,
+      manubot_asset_id: form.manubot_asset_id || null,
     }
 
     if (dev) {
@@ -451,24 +477,87 @@ export default function TodosPage() {
                 />
               </div>
 
-              {/* Send to Manubot */}
-              <label className="flex items-center gap-3 cursor-pointer group w-fit">
-                <div
-                  onClick={() => setForm(f => ({ ...f, send_to_manubot: !f.send_to_manubot }))}
-                  className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${
-                    form.send_to_manubot ? "bg-[#8b7355]" : "bg-gray-200"
-                  }`}
-                >
-                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
-                    form.send_to_manubot ? "left-5" : "left-0.5"
-                  }`} />
-                </div>
-                <span className="flex items-center gap-1.5 text-sm text-gray-600 group-hover:text-gray-800">
-                  <Wrench className="w-3.5 h-3.5 text-[#8b7355]" />
-                  Invia a Manubot
-                  <span className="text-xs text-gray-400 font-normal">(crea intervento di manutenzione)</span>
-                </span>
-              </label>
+              {/* Send to Manubot toggle */}
+              <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer group w-fit">
+                  <div
+                    onClick={() => setForm(f => ({ ...f, send_to_manubot: !f.send_to_manubot }))}
+                    className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${
+                      form.send_to_manubot ? "bg-[#8b7355]" : "bg-gray-200"
+                    }`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
+                      form.send_to_manubot ? "left-5" : "left-0.5"
+                    }`} />
+                  </div>
+                  <span className="flex items-center gap-1.5 text-sm text-gray-700 font-medium group-hover:text-gray-900">
+                    <Wrench className="w-3.5 h-3.5 text-[#8b7355]" />
+                    Invia a Manubot
+                    <span className="text-xs text-gray-400 font-normal">(crea intervento di manutenzione)</span>
+                  </span>
+                </label>
+
+                {/* Campi Manubot — visibili solo se send_to_manubot è attivo */}
+                {form.send_to_manubot && (
+                  <div className="grid grid-cols-2 gap-3 pt-1 border-t border-gray-100">
+                    {/* Tecnico Manubot */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500 flex items-center gap-1">
+                        <Wrench className="w-3 h-3" /> Tecnico Manubot
+                      </label>
+                      <Select
+                        value={form.manubot_assigned_to || "none"}
+                        onValueChange={v => setForm(f => ({ ...f, manubot_assigned_to: v === "none" ? "" : v }))}
+                      >
+                        <SelectTrigger className="text-sm h-9 bg-white">
+                          <SelectValue placeholder="Seleziona tecnico..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            <span className="text-gray-400">Nessun tecnico</span>
+                          </SelectItem>
+                          {manubotTeam.map(m => (
+                            <SelectItem key={m.id} value={m.id}>
+                              <span className="flex items-center gap-2">
+                                <Avatar name={m.full_name} size="sm" />
+                                {m.full_name}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Impianto/Asset Manubot */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-gray-500 flex items-center gap-1">
+                        <Settings className="w-3 h-3" /> Impianto / Asset
+                      </label>
+                      <Select
+                        value={form.manubot_asset_id || "none"}
+                        onValueChange={v => setForm(f => ({ ...f, manubot_asset_id: v === "none" ? "" : v }))}
+                      >
+                        <SelectTrigger className="text-sm h-9 bg-white">
+                          <SelectValue placeholder="Seleziona impianto..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            <span className="text-gray-400">Nessun impianto</span>
+                          </SelectItem>
+                          {manubotAssets.map(a => (
+                            <SelectItem key={a.id} value={a.id}>
+                              <span className="flex flex-col">
+                                <span>{a.name}</span>
+                                {a.location && <span className="text-xs text-gray-400">{a.location}</span>}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {error && <p className="text-xs text-red-500">{error}</p>}
 

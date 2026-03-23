@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getManubotClient, HA_TO_MANUBOT_STATUS, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
 
 function isDevMode(request: NextRequest): boolean {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
@@ -42,6 +43,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (error) throw error
     if (!todo) return NextResponse.json({ error: "Todo non trovato" }, { status: 404 })
+
+    // Se il todo ha external_id Manubot, sincronizza status/priority su Manubot
+    if (todo.external_source === "manubot" && todo.external_id && (body.status || body.priority)) {
+      try {
+        const { data: property } = await supabase
+          .from("properties")
+          .select("manubot_email, manubot_password, manubot_supabase_url")
+          .eq("id", propertyId)
+          .single()
+
+        const client = property ? await getManubotClient(property) : null
+        if (client) {
+          const manubotUpdates: Record<string, any> = {}
+          if (body.status) manubotUpdates.status = HA_TO_MANUBOT_STATUS[body.status] || body.status
+          if (body.priority) manubotUpdates.priority = HA_TO_MANUBOT_PRIORITY[body.priority] || body.priority
+          await client.updateTask(todo.external_id, manubotUpdates)
+        }
+      } catch (e: any) {
+        // Sync silenzioso — l'aggiornamento locale è già salvato
+        console.error("[Manubot] sync failed:", e.message)
+      }
+    }
 
     return NextResponse.json({ todo })
   } catch (error: any) {

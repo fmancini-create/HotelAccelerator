@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
-
-const DEV_PROPERTY_ID = "dev-property-id"
+import { getManubotClient, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
 
 function isDevMode(request: NextRequest): boolean {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
@@ -71,7 +70,10 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const body = await request.json()
 
-    const { title, description, priority, assigned_to, due_date, tags, external_id, external_source, external_url, external_data, send_to_manubot } = body
+    const {
+      title, description, priority, assigned_to, due_date, tags,
+      send_to_manubot, manubot_asset_id, manubot_assigned_to,
+    } = body
 
     if (!title?.trim()) {
       return NextResponse.json({ error: "Il titolo è obbligatorio" }, { status: 400 })
@@ -82,53 +84,52 @@ export async function POST(request: NextRequest) {
       .insert({
         property_id: propertyId,
         title: title.trim(),
-        description,
+        description: description || null,
         priority: priority || "normal",
         assigned_to: assigned_to || null,
         due_date: due_date || null,
         tags: tags || [],
-        external_id: external_id || null,
-        external_source: external_source || null,
-        external_url: external_url || null,
-        external_data: external_data || null,
         send_to_manubot: send_to_manubot || false,
+        external_source: send_to_manubot ? "manubot" : null,
       })
       .select()
       .single()
 
     if (error) throw error
 
-    // Se send_to_manubot è true, prova a fare il push verso Manubot
+    // Push verso Manubot con il client autenticato via JWT
     if (send_to_manubot && todo) {
       try {
-        // Recupera il manubot_webhook_url dalla property
         const { data: property } = await supabase
           .from("properties")
-          .select("manubot_webhook_url, manubot_company_id, api_token")
+          .select("manubot_email, manubot_password, manubot_supabase_url, manubot_company_id")
           .eq("id", propertyId)
           .single()
 
-        if (property?.manubot_webhook_url) {
-          const manubotPayload = {
-            hotelaccelerator_id: todo.id,
+        const client = property ? await getManubotClient(property) : null
+        if (client) {
+          const manubotTask = await client.createTask({
             title: todo.title,
             description: todo.description,
-            priority: todo.priority,
-            due_date: todo.due_date,
-            company_id: property.manubot_company_id,
-            status: "pending",
-          }
-          await fetch(property.manubot_webhook_url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${property.api_token}`,
-            },
-            body: JSON.stringify(manubotPayload),
+            priority: HA_TO_MANUBOT_PRIORITY[todo.priority] || "medium",
+            assigned_to: manubot_assigned_to || null,
+            asset_id: manubot_asset_id || null,
+            scheduled_date: todo.due_date || null,
           })
+          // Salva external_id tornato da Manubot
+          await supabase
+            .from("todos")
+            .update({
+              external_id: manubotTask.id,
+              external_url: `https://manubot.it/tasks/${manubotTask.id}`,
+              external_data: { manubot_task_id: manubotTask.id, company_id: property?.manubot_company_id },
+            })
+            .eq("id", todo.id)
+          todo.external_id = manubotTask.id
         }
-      } catch {
-        // Il push a Manubot fallisce silenziosamente, il todo è già salvato
+      } catch (e: any) {
+        // Push silenzioso — il todo è già salvato localmente
+        console.error("[Manubot] push failed:", e.message)
       }
     }
 
