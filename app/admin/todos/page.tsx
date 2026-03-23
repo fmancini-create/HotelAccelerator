@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   Plus, CheckCircle2, Circle, Clock, AlertCircle,
-  Trash2, ExternalLink, Calendar, Filter, RefreshCw, Users, User
+  Trash2, ExternalLink, Calendar, Filter, RefreshCw,
+  Users, User, Send, Wrench, Tag, Edit2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +14,7 @@ import { AdminHeader } from "@/components/admin/admin-header"
 import { useAdminAuth } from "@/lib/admin-hooks"
 import { format, isToday, isPast, isTomorrow } from "date-fns"
 import { it } from "date-fns/locale"
+import { Badge } from "@/components/ui/badge"
 
 type TodoStatus = "open" | "in_progress" | "done" | "cancelled"
 type TodoPriority = "low" | "normal" | "high" | "urgent"
@@ -37,37 +39,105 @@ interface Todo {
   external_source?: string
   external_url?: string
   tags: string[]
+  send_to_manubot?: boolean
+  manubot_synced?: boolean
   created_at: string
   updated_at: string
   completed_at?: string
 }
 
-const STATUS_CONFIG: Record<TodoStatus, { label: string; icon: typeof Circle; color: string; bg: string }> = {
-  open:        { label: "Da fare",     icon: Circle,       color: "text-gray-400",  bg: "bg-gray-50" },
-  in_progress: { label: "In corso",   icon: Clock,        color: "text-blue-500",  bg: "bg-blue-50" },
-  done:        { label: "Completato", icon: CheckCircle2, color: "text-green-500", bg: "bg-green-50" },
-  cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-red-400",   bg: "bg-red-50" },
+const STATUS_CONFIG: Record<TodoStatus, { label: string; icon: typeof Circle; color: string }> = {
+  open:        { label: "Da fare",     icon: Circle,       color: "text-gray-400"  },
+  in_progress: { label: "In corso",   icon: Clock,        color: "text-blue-500"  },
+  done:        { label: "Completato", icon: CheckCircle2, color: "text-green-500" },
+  cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-red-400"   },
 }
 
-const PRIORITY_CONFIG: Record<TodoPriority, { label: string; dot: string }> = {
-  low:    { label: "Bassa",   dot: "bg-gray-300" },
-  normal: { label: "Normale", dot: "bg-blue-400" },
-  high:   { label: "Alta",    dot: "bg-orange-400" },
-  urgent: { label: "Urgente", dot: "bg-red-500" },
+const PRIORITY_CONFIG: Record<TodoPriority, { label: string; dot: string; text: string }> = {
+  low:    { label: "Bassa",   dot: "bg-gray-300",   text: "text-gray-500"  },
+  normal: { label: "Normale", dot: "bg-blue-400",   text: "text-blue-600"  },
+  high:   { label: "Alta",    dot: "bg-orange-400", text: "text-orange-600"},
+  urgent: { label: "Urgente", dot: "bg-red-500",    text: "text-red-600"   },
 }
 
 const DEV_USERS: AdminUser[] = [
-  { id: "dev-user-1", name: "Marco Rossi",    email: "marco@hotel.it",   role: "admin" },
-  { id: "dev-user-2", name: "Giulia Bianchi", email: "giulia@hotel.it",  role: "manager" },
-  { id: "dev-user-3", name: "Luca Ferrari",   email: "luca@hotel.it",    role: "staff" },
+  { id: "dev-user-1", name: "Marco Rossi",    email: "marco@hotel.it",  role: "admin"   },
+  { id: "dev-user-2", name: "Giulia Bianchi", email: "giulia@hotel.it", role: "manager" },
+  { id: "dev-user-3", name: "Luca Ferrari",   email: "luca@hotel.it",   role: "staff"   },
 ]
 
 const DEV_TODOS: Todo[] = [
-  { id: "dev-1", title: "Preparare preventivo sala conferenze", description: "Cliente Rossi per evento 15 persone", status: "open", priority: "high", assigned_to: "dev-user-1", assigned_to_name: "Marco Rossi", due_date: new Date(Date.now() + 86400000).toISOString(), tags: ["commerciale"], created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: "dev-2", title: "Verifica impianto idraulico camera 204", status: "in_progress", priority: "urgent", assigned_to: "dev-user-3", assigned_to_name: "Luca Ferrari", tags: ["manutenzione"], external_source: "manubot", external_id: "INT-1024", created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: "dev-3", title: "Aggiornare listino prezzi estate", status: "open", priority: "normal", tags: ["revenue"], due_date: new Date(Date.now() + 3 * 86400000).toISOString(), created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-  { id: "dev-4", title: "Check-in VIP prenotazione #8821", status: "done", priority: "high", assigned_to: "dev-user-2", assigned_to_name: "Giulia Bianchi", tags: ["reception"], created_at: new Date().toISOString(), updated_at: new Date().toISOString(), completed_at: new Date().toISOString() },
+  {
+    id: "dev-1",
+    title: "Preparare preventivo sala conferenze",
+    description: "Cliente Rossi per evento 15 persone il 28 marzo",
+    status: "open",
+    priority: "high",
+    assigned_to: "dev-user-1",
+    assigned_to_name: "Marco Rossi",
+    due_date: new Date(Date.now() + 86400000).toISOString(),
+    tags: ["commerciale"],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "dev-2",
+    title: "Verifica impianto idraulico camera 204",
+    description: "Perdita segnalata dal cliente. Intervento urgente.",
+    status: "in_progress",
+    priority: "urgent",
+    assigned_to: "dev-user-3",
+    assigned_to_name: "Luca Ferrari",
+    tags: ["manutenzione"],
+    external_source: "manubot",
+    external_id: "INT-1024",
+    external_url: "https://app.manubot.it/interventi/1024",
+    manubot_synced: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "dev-3",
+    title: "Aggiornare listino prezzi estate 2026",
+    status: "open",
+    priority: "normal",
+    tags: ["revenue"],
+    due_date: new Date(Date.now() + 3 * 86400000).toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "dev-4",
+    title: "Sostituzione condizionatore camera 310",
+    description: "Guasto totale. Da coordinare con tecnico esterno.",
+    status: "open",
+    priority: "high",
+    assigned_to: "dev-user-3",
+    assigned_to_name: "Luca Ferrari",
+    tags: ["manutenzione"],
+    send_to_manubot: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: "dev-5",
+    title: "Check-in VIP prenotazione #8821",
+    status: "done",
+    priority: "high",
+    assigned_to: "dev-user-2",
+    assigned_to_name: "Giulia Bianchi",
+    tags: ["reception"],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    completed_at: new Date().toISOString(),
+  },
 ]
+
+function isDevOrPreview() {
+  if (typeof window === "undefined") return false
+  const h = window.location.hostname
+  return h.includes("vusercontent.net") || h.includes("vercel.run") || h.includes("localhost") || h.includes("127.0.0.1")
+}
 
 function DueDateBadge({ date }: { date?: string }) {
   if (!date) return null
@@ -76,7 +146,7 @@ function DueDateBadge({ date }: { date?: string }) {
   const today = isToday(d)
   const tomorrow = isTomorrow(d)
   return (
-    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded ${
+    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium ${
       overdue  ? "bg-red-100 text-red-600" :
       today    ? "bg-orange-100 text-orange-600" :
       tomorrow ? "bg-yellow-100 text-yellow-700" :
@@ -88,10 +158,14 @@ function DueDateBadge({ date }: { date?: string }) {
   )
 }
 
-function isDevOrPreview() {
-  if (typeof window === "undefined") return false
-  const h = window.location.hostname
-  return h.includes("vusercontent.net") || h.includes("vercel.run") || h.includes("localhost") || h.includes("127.0.0.1")
+function Avatar({ name, size = "sm" }: { name?: string; size?: "sm" | "md" }) {
+  if (!name) return null
+  const s = size === "sm" ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"
+  return (
+    <span className={`${s} rounded-full bg-[#e8ddd0] text-[#8b7355] flex items-center justify-center font-semibold flex-shrink-0`}>
+      {name.charAt(0).toUpperCase()}
+    </span>
+  )
 }
 
 export default function TodosPage() {
@@ -103,6 +177,7 @@ export default function TodosPage() {
   const [filterAssignee, setFilterAssignee] = useState<string>("all")
   const [showForm, setShowForm] = useState(false)
   const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
   const [form, setForm] = useState({
@@ -112,12 +187,12 @@ export default function TodosPage() {
     assigned_to: "",
     due_date: "",
     tags: "",
+    send_to_manubot: false,
   })
 
   const dev = isDevOrPreview()
   const effectiveAdmin = adminUser || (dev ? { id: "dev-user", name: "Dev Admin", email: "dev@hotelaccelerator.local" } : null)
 
-  // Load users for the property
   const loadUsers = useCallback(async () => {
     if (dev) { setUsers(DEV_USERS); return }
     try {
@@ -133,12 +208,11 @@ export default function TodosPage() {
     setLoading(true)
     try {
       if (dev) {
-        await new Promise(r => setTimeout(r, 300))
+        await new Promise(r => setTimeout(r, 200))
         let filtered = DEV_TODOS
         if (filterStatus !== "all") filtered = filtered.filter(t => t.status === filterStatus)
         if (filterAssignee !== "all") filtered = filtered.filter(t => t.assigned_to === filterAssignee)
         setTodos(filtered)
-        setLoading(false)
         return
       }
       const params = new URLSearchParams()
@@ -149,7 +223,7 @@ export default function TodosPage() {
         const data = await res.json()
         setTodos(data.todos || [])
       }
-    } catch { setError("Errore nel caricamento dei task") }
+    } catch { setError("Errore nel caricamento") }
     finally { setLoading(false) }
   }, [filterStatus, filterAssignee, dev])
 
@@ -157,7 +231,7 @@ export default function TodosPage() {
   useEffect(() => { loadTodos() }, [loadTodos])
 
   const resetForm = () => {
-    setForm({ title: "", description: "", priority: "normal", assigned_to: "", due_date: "", tags: "" })
+    setForm({ title: "", description: "", priority: "normal", assigned_to: "", due_date: "", tags: "", send_to_manubot: false })
     setEditingTodo(null)
     setShowForm(false)
     setError("")
@@ -166,6 +240,7 @@ export default function TodosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title.trim()) { setError("Titolo obbligatorio"); return }
+    setSubmitting(true)
 
     const assignedUser = users.find(u => u.id === form.assigned_to)
     const payload = {
@@ -175,6 +250,7 @@ export default function TodosPage() {
       assigned_to: form.assigned_to || null,
       due_date: form.due_date || undefined,
       tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+      send_to_manubot: form.send_to_manubot,
     }
 
     if (dev) {
@@ -193,6 +269,7 @@ export default function TodosPage() {
         setTodos(prev => [newTodo, ...prev])
       }
       resetForm()
+      setSubmitting(false)
       return
     }
 
@@ -204,7 +281,11 @@ export default function TodosPage() {
       if (!res.ok) throw new Error("Errore nel salvataggio")
       await loadTodos()
       resetForm()
-    } catch (e: any) { setError(e.message) }
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const updateStatus = async (todo: Todo, status: TodoStatus) => {
@@ -216,7 +297,9 @@ export default function TodosPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status }),
         })
-      } catch { setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status: todo.status } : t)) }
+      } catch {
+        setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status: todo.status } : t))
+      }
     }
   }
 
@@ -234,6 +317,7 @@ export default function TodosPage() {
       assigned_to: todo.assigned_to || "",
       due_date: todo.due_date ? todo.due_date.slice(0, 10) : "",
       tags: todo.tags.join(", "),
+      send_to_manubot: todo.send_to_manubot || false,
     })
     setEditingTodo(todo)
     setShowForm(true)
@@ -248,7 +332,6 @@ export default function TodosPage() {
   }
   if (!effectiveAdmin) return null
 
-  const allTodos = filterStatus === "all" && filterAssignee === "all" ? todos : todos
   const stats = {
     open:        todos.filter(t => t.status === "open").length,
     in_progress: todos.filter(t => t.status === "in_progress").length,
@@ -272,24 +355,24 @@ export default function TodosPage() {
         }
       />
 
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
 
-        {/* Stats bar */}
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: "Da fare",   value: stats.open,        color: "border-gray-300" },
-            { label: "In corso",  value: stats.in_progress, color: "border-blue-300" },
-            { label: "Completati",value: stats.done,        color: "border-green-300" },
-            { label: "Urgenti",   value: stats.urgent,      color: "border-red-300" },
+            { label: "Da fare",    value: stats.open,        border: "border-gray-300" },
+            { label: "In corso",   value: stats.in_progress, border: "border-blue-300" },
+            { label: "Completati", value: stats.done,        border: "border-green-300" },
+            { label: "Urgenti",    value: stats.urgent,      border: "border-red-300" },
           ].map(s => (
-            <div key={s.label} className={`bg-white rounded-xl border-l-4 ${s.color} px-4 py-3 shadow-sm`}>
+            <div key={s.label} className={`bg-white rounded-xl border-l-4 ${s.border} px-4 py-3 shadow-sm`}>
               <p className="text-2xl font-semibold text-gray-800">{s.value}</p>
               <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
 
-        {/* New / Edit form */}
+        {/* Form */}
         {showForm && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
             <h3 className="text-sm font-semibold text-gray-700 mb-4">
@@ -310,6 +393,7 @@ export default function TodosPage() {
                 rows={2}
                 className="text-sm resize-none"
               />
+
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {/* Priority */}
                 <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v as TodoPriority }))}>
@@ -325,7 +409,10 @@ export default function TodosPage() {
                 </Select>
 
                 {/* Assignee */}
-                <Select value={form.assigned_to || "unassigned"} onValueChange={v => setForm(f => ({ ...f, assigned_to: v === "unassigned" ? "" : v }))}>
+                <Select
+                  value={form.assigned_to || "unassigned"}
+                  onValueChange={v => setForm(f => ({ ...f, assigned_to: v === "unassigned" ? "" : v }))}
+                >
                   <SelectTrigger className="text-sm h-9">
                     <SelectValue placeholder="Assegna a..." />
                   </SelectTrigger>
@@ -339,9 +426,7 @@ export default function TodosPage() {
                     {users.map(u => (
                       <SelectItem key={u.id} value={u.id}>
                         <span className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-[#e8ddd0] text-[#8b7355] text-xs flex items-center justify-center font-medium">
-                            {u.name.charAt(0).toUpperCase()}
-                          </span>
+                          <Avatar name={u.name} size="sm" />
                           {u.name}
                         </span>
                       </SelectItem>
@@ -359,18 +444,45 @@ export default function TodosPage() {
 
                 {/* Tags */}
                 <Input
-                  placeholder="Tag (virgola)"
+                  placeholder="Tag (es: manutenzione)"
                   value={form.tags}
                   onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
                   className="text-sm h-9"
                 />
               </div>
 
+              {/* Send to Manubot */}
+              <label className="flex items-center gap-3 cursor-pointer group w-fit">
+                <div
+                  onClick={() => setForm(f => ({ ...f, send_to_manubot: !f.send_to_manubot }))}
+                  className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${
+                    form.send_to_manubot ? "bg-[#8b7355]" : "bg-gray-200"
+                  }`}
+                >
+                  <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
+                    form.send_to_manubot ? "left-5" : "left-0.5"
+                  }`} />
+                </div>
+                <span className="flex items-center gap-1.5 text-sm text-gray-600 group-hover:text-gray-800">
+                  <Wrench className="w-3.5 h-3.5 text-[#8b7355]" />
+                  Invia a Manubot
+                  <span className="text-xs text-gray-400 font-normal">(crea intervento di manutenzione)</span>
+                </span>
+              </label>
+
               {error && <p className="text-xs text-red-500">{error}</p>}
+
               <div className="flex gap-2 justify-end pt-1">
-                <Button type="button" variant="ghost" size="sm" onClick={resetForm}>Annulla</Button>
-                <Button type="submit" size="sm" className="bg-[#8b7355] hover:bg-[#7a6548] text-white">
-                  {editingTodo ? "Salva modifiche" : "Crea task"}
+                <Button type="button" variant="ghost" size="sm" onClick={resetForm}>
+                  Annulla
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={submitting}
+                  className="bg-[#8b7355] hover:bg-[#7a6548] text-white"
+                >
+                  {submitting ? "Salvataggio..." : editingTodo ? "Salva modifiche" : form.send_to_manubot ? "Crea e invia a Manubot" : "Crea task"}
                 </Button>
               </div>
             </form>
@@ -395,14 +507,12 @@ export default function TodosPage() {
               </button>
             ))}
           </div>
-
-          <div className="flex items-center gap-2">
-            {/* Assignee filter */}
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <Users className="w-4 h-4 text-gray-400" />
               <Select value={filterAssignee} onValueChange={setFilterAssignee}>
                 <SelectTrigger className="h-7 text-xs border-gray-200 w-36">
-                  <SelectValue placeholder="Tutti gli utenti" />
+                  <SelectValue placeholder="Tutti" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tutti</SelectItem>
@@ -412,7 +522,6 @@ export default function TodosPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <button
               onClick={loadTodos}
               className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
@@ -424,13 +533,13 @@ export default function TodosPage() {
 
         {/* Todo list */}
         {loading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#8b7355]" />
           </div>
         ) : todos.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-gray-200 py-16 text-center">
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-16 text-center">
             <CheckCircle2 className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-400">
               {filterStatus === "all" && filterAssignee === "all"
                 ? "Nessun task. Crea il primo."
                 : "Nessun task con questo filtro."}
@@ -439,17 +548,16 @@ export default function TodosPage() {
         ) : (
           <div className="space-y-2">
             {todos.map(todo => {
-              const statusCfg = STATUS_CONFIG[todo.status]
-              const priorityCfg = PRIORITY_CONFIG[todo.priority]
-              const StatusIcon = statusCfg.icon
+              const cfg = STATUS_CONFIG[todo.status]
+              const pCfg = PRIORITY_CONFIG[todo.priority]
+              const StatusIcon = cfg.icon
               const isDone = todo.status === "done"
-              const assignedUser = users.find(u => u.id === todo.assigned_to)
-              const assigneeName = assignedUser?.name || todo.assigned_to_name
+              const assigneeName = users.find(u => u.id === todo.assigned_to)?.name || todo.assigned_to_name
 
               return (
                 <div
                   key={todo.id}
-                  className={`bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-start gap-3 group hover:border-[#c8b99a] transition-colors ${isDone ? "opacity-60" : ""}`}
+                  className={`bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-start gap-3 group hover:border-[#c8b99a] transition-all ${isDone ? "opacity-55" : ""}`}
                 >
                   {/* Status toggle */}
                   <button
@@ -457,61 +565,81 @@ export default function TodosPage() {
                     className="mt-0.5 flex-shrink-0"
                     title={isDone ? "Riapri" : "Segna come completato"}
                   >
-                    <StatusIcon className={`w-5 h-5 ${statusCfg.color} hover:scale-110 transition-transform`} />
+                    <StatusIcon className={`w-5 h-5 ${cfg.color} hover:scale-110 transition-transform`} />
                   </button>
 
-                  {/* Content */}
+                  {/* Main content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
                       <button
                         onClick={() => openEdit(todo)}
                         className={`text-sm font-medium text-left hover:text-[#8b7355] transition-colors ${isDone ? "line-through text-gray-400" : "text-gray-800"}`}
                       >
                         {todo.title}
                       </button>
+
+                      {/* Actions (visible on hover) */}
                       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         {todo.external_url && (
-                          <a href={todo.external_url} target="_blank" rel="noopener noreferrer" title="Apri in sistema esterno">
-                            <ExternalLink className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500" />
+                          <a href={todo.external_url} target="_blank" rel="noopener noreferrer"
+                            className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                            title="Apri in Manubot"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
                           </a>
                         )}
-                        <button onClick={() => deleteTodo(todo.id)}>
-                          <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-500" />
+                        <button
+                          onClick={() => openEdit(todo)}
+                          className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                          title="Modifica"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => deleteTodo(todo.id)}
+                          className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
+                          title="Elimina"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
 
                     {todo.description && (
-                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{todo.description}</p>
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">{todo.description}</p>
                     )}
 
-                    <div className="flex items-center flex-wrap gap-2 mt-1.5">
-                      {/* Priority */}
-                      <span className="flex items-center gap-1 text-xs text-gray-400">
-                        <span className={`w-2 h-2 rounded-full ${priorityCfg.dot}`} />
-                        {priorityCfg.label}
+                    {/* Footer row */}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+
+                      {/* Priority dot */}
+                      <span className={`inline-flex items-center gap-1 text-xs ${pCfg.text}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${pCfg.dot}`} />
+                        {pCfg.label}
                       </span>
 
-                      {/* Status chip for non-open */}
-                      {todo.status !== "open" && (
-                        <Select value={todo.status} onValueChange={v => updateStatus(todo, v as TodoStatus)}>
-                          <SelectTrigger className={`h-5 text-xs px-2 py-0 border-0 ${statusCfg.bg} ${statusCfg.color} rounded-full gap-1 w-auto`}>
+                      {/* Status change */}
+                      {!isDone && (
+                        <Select
+                          value={todo.status}
+                          onValueChange={(v) => updateStatus(todo, v as TodoStatus)}
+                        >
+                          <SelectTrigger className="h-5 text-xs border-0 shadow-none p-0 w-auto gap-1 text-gray-400 hover:text-gray-600 focus:ring-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {(Object.keys(STATUS_CONFIG) as TodoStatus[]).map(s => (
-                              <SelectItem key={s} value={s} className="text-xs">{STATUS_CONFIG[s].label}</SelectItem>
-                            ))}
+                            <SelectItem value="open">Da fare</SelectItem>
+                            <SelectItem value="in_progress">In corso</SelectItem>
+                            <SelectItem value="done">Completato</SelectItem>
+                            <SelectItem value="cancelled">Annullato</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
 
-                      {/* Assignee badge */}
+                      {/* Assignee */}
                       {assigneeName ? (
-                        <span className="inline-flex items-center gap-1 text-xs bg-[#f0ebe4] text-[#8b7355] px-1.5 py-0.5 rounded-full">
-                          <span className="w-3.5 h-3.5 rounded-full bg-[#c8b99a] text-white text-[9px] flex items-center justify-center font-bold">
-                            {assigneeName.charAt(0).toUpperCase()}
-                          </span>
+                        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                          <Avatar name={assigneeName} size="sm" />
                           {assigneeName}
                         </span>
                       ) : (
@@ -521,22 +649,32 @@ export default function TodosPage() {
                         </span>
                       )}
 
+                      {/* Due date */}
                       <DueDateBadge date={todo.due_date} />
-
-                      {/* External badge */}
-                      {todo.external_source && (
-                        <span className="text-xs px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded border border-purple-100">
-                          {todo.external_source}
-                          {todo.external_id && ` #${todo.external_id}`}
-                        </span>
-                      )}
 
                       {/* Tags */}
                       {todo.tags?.map(tag => (
-                        <span key={tag} className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+                        <span key={tag} className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+                          <Tag className="w-2.5 h-2.5" />
                           {tag}
                         </span>
                       ))}
+
+                      {/* Manubot badge */}
+                      {todo.external_source === "manubot" && (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-orange-200 text-orange-600 bg-orange-50 gap-1">
+                          <Wrench className="w-2.5 h-2.5" />
+                          Manubot {todo.external_id && `#${todo.external_id}`}
+                        </Badge>
+                      )}
+
+                      {/* Pending sync to Manubot */}
+                      {todo.send_to_manubot && todo.external_source !== "manubot" && (
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-blue-200 text-blue-500 bg-blue-50 gap-1">
+                          <Send className="w-2.5 h-2.5" />
+                          Da inviare a Manubot
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -544,6 +682,19 @@ export default function TodosPage() {
             })}
           </div>
         )}
+
+        {/* Manubot info box */}
+        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex gap-3">
+          <Wrench className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-orange-700 space-y-1">
+            <p className="font-semibold">Integrazione Manubot</p>
+            <p>I task con badge arancione provengono da Manubot. I task creati qui con "Invia a Manubot" attivo vengono inviati come nuovi interventi non appena Manubot configura il webhook ricevente.</p>
+            <p className="font-mono text-[10px] bg-orange-100 px-2 py-1 rounded mt-1">
+              POST {typeof window !== "undefined" ? window.location.origin : "https://tuodominio"}/api/external/manubot
+            </p>
+          </div>
+        </div>
+
       </div>
     </div>
   )

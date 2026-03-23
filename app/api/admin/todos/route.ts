@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const body = await request.json()
 
-    const { title, description, priority, assigned_to, due_date, tags, external_id, external_source, external_url, external_data } = body
+    const { title, description, priority, assigned_to, due_date, tags, external_id, external_source, external_url, external_data, send_to_manubot } = body
 
     if (!title?.trim()) {
       return NextResponse.json({ error: "Il titolo è obbligatorio" }, { status: 400 })
@@ -91,11 +91,46 @@ export async function POST(request: NextRequest) {
         external_source: external_source || null,
         external_url: external_url || null,
         external_data: external_data || null,
+        send_to_manubot: send_to_manubot || false,
       })
       .select()
       .single()
 
     if (error) throw error
+
+    // Se send_to_manubot è true, prova a fare il push verso Manubot
+    if (send_to_manubot && todo) {
+      try {
+        // Recupera il manubot_webhook_url dalla property
+        const { data: property } = await supabase
+          .from("properties")
+          .select("manubot_webhook_url, manubot_company_id, api_token")
+          .eq("id", propertyId)
+          .single()
+
+        if (property?.manubot_webhook_url) {
+          const manubotPayload = {
+            hotelaccelerator_id: todo.id,
+            title: todo.title,
+            description: todo.description,
+            priority: todo.priority,
+            due_date: todo.due_date,
+            company_id: property.manubot_company_id,
+            status: "pending",
+          }
+          await fetch(property.manubot_webhook_url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${property.api_token}`,
+            },
+            body: JSON.stringify(manubotPayload),
+          })
+        }
+      } catch {
+        // Il push a Manubot fallisce silenziosamente, il todo è già salvato
+      }
+    }
 
     return NextResponse.json({ todo }, { status: 201 })
   } catch (error: any) {
