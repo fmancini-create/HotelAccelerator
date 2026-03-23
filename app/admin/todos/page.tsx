@@ -63,85 +63,6 @@ const PRIORITY_CONFIG: Record<TodoPriority, { label: string; dot: string; text: 
   urgent: { label: "Urgente", dot: "bg-red-500",    text: "text-red-600"   },
 }
 
-const DEV_USERS: AdminUser[] = [
-  { id: "dev-user-1", name: "Marco Rossi",    email: "marco@hotel.it",  role: "admin"   },
-  { id: "dev-user-2", name: "Giulia Bianchi", email: "giulia@hotel.it", role: "manager" },
-  { id: "dev-user-3", name: "Luca Ferrari",   email: "luca@hotel.it",   role: "staff"   },
-]
-
-const DEV_TODOS: Todo[] = [
-  {
-    id: "dev-1",
-    title: "Preparare preventivo sala conferenze",
-    description: "Cliente Rossi per evento 15 persone il 28 marzo",
-    status: "open",
-    priority: "high",
-    assigned_to: "dev-user-1",
-    assigned_to_name: "Marco Rossi",
-    due_date: new Date(Date.now() + 86400000).toISOString(),
-    tags: ["commerciale"],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: "dev-2",
-    title: "Verifica impianto idraulico camera 204",
-    description: "Perdita segnalata dal cliente. Intervento urgente.",
-    status: "in_progress",
-    priority: "urgent",
-    assigned_to: "dev-user-3",
-    assigned_to_name: "Luca Ferrari",
-    tags: ["manutenzione"],
-    external_source: "manubot",
-    external_id: "INT-1024",
-    external_url: "https://app.manubot.it/interventi/1024",
-    manubot_synced: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: "dev-3",
-    title: "Aggiornare listino prezzi estate 2026",
-    status: "open",
-    priority: "normal",
-    tags: ["revenue"],
-    due_date: new Date(Date.now() + 3 * 86400000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: "dev-4",
-    title: "Sostituzione condizionatore camera 310",
-    description: "Guasto totale. Da coordinare con tecnico esterno.",
-    status: "open",
-    priority: "high",
-    assigned_to: "dev-user-3",
-    assigned_to_name: "Luca Ferrari",
-    tags: ["manutenzione"],
-    send_to_manubot: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: "dev-5",
-    title: "Check-in VIP prenotazione #8821",
-    status: "done",
-    priority: "high",
-    assigned_to: "dev-user-2",
-    assigned_to_name: "Giulia Bianchi",
-    tags: ["reception"],
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    completed_at: new Date().toISOString(),
-  },
-]
-
-function isDevOrPreview() {
-  if (typeof window === "undefined") return false
-  const h = window.location.hostname
-  return h.includes("vusercontent.net") || h.includes("vercel.run") || h.includes("localhost") || h.includes("127.0.0.1")
-}
-
 function DueDateBadge({ date }: { date?: string }) {
   if (!date) return null
   const d = new Date(date)
@@ -198,11 +119,7 @@ export default function TodosPage() {
     manubot_asset_id: "",
   })
 
-  const dev = isDevOrPreview()
-  const effectiveAdmin = adminUser || (dev ? { id: "dev-user", name: "Dev Admin", email: "dev@hotelaccelerator.local" } : null)
-
   const loadUsers = useCallback(async () => {
-    if (dev) { setUsers(DEV_USERS); return }
     try {
       const res = await fetch("/api/admin/users")
       if (res.ok) {
@@ -210,19 +127,11 @@ export default function TodosPage() {
         setUsers(data.users || [])
       }
     } catch { /* silent */ }
-  }, [dev])
+  }, [])
 
   const loadTodos = useCallback(async () => {
     setLoading(true)
     try {
-      if (dev) {
-        await new Promise(r => setTimeout(r, 200))
-        let filtered = DEV_TODOS
-        if (filterStatus !== "all") filtered = filtered.filter(t => t.status === filterStatus)
-        if (filterAssignee !== "all") filtered = filtered.filter(t => t.assigned_to === filterAssignee)
-        setTodos(filtered)
-        return
-      }
       const params = new URLSearchParams()
       if (filterStatus !== "all") params.set("status", filterStatus)
       if (filterAssignee !== "all") params.set("assigned_to", filterAssignee)

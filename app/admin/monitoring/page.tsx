@@ -114,19 +114,6 @@ function LoadingSkeleton() {
   )
 }
 
-const DEV_FALLBACK_USER = {
-  property_id: "dev-property-id",
-  name: "Dev Admin",
-  email: "dev@hotelaccelerator.local",
-  role: "admin" as const,
-}
-
-function isDevOrPreview() {
-  if (typeof window === "undefined") return false
-  const h = window.location.hostname
-  return h.includes("vusercontent.net") || h.includes("vercel.run") || h.includes("localhost") || h.includes("127.0.0.1")
-}
-
 export default function MonitoringPage() {
   const { adminUser, isLoading: authLoading } = useAdminAuth()
   const [quotaStatus, setQuotaStatus] = useState<QuotaStatus | null>(null)
@@ -134,24 +121,11 @@ export default function MonitoringPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const effectiveUser = adminUser || (isDevOrPreview() ? DEV_FALLBACK_USER : null)
+  const effectiveUser = adminUser
 
   useEffect(() => {
     async function loadData() {
       if (!effectiveUser?.property_id) return
-
-      // In dev/preview, show mock data instead of hitting the API
-      if (isDevOrPreview() && !adminUser) {
-        setQuotaStatus({
-          usage: { photosCount: 12, pagesCount: 4, emailChannelsCount: 1, conversationsThisMonth: 47, adminUsersCount: 2, messagesToday: 18, eventsToday: 35 },
-          percentages: { photos: 24, pages: 40, emailChannels: 50, conversations: 47, adminUsers: 40 },
-          warnings: [],
-          quotas: { maxPhotosCount: 50, maxPagesCount: 10, maxEmailChannels: 2, maxConversationsPerMonth: 100, maxAdminUsers: 5 },
-        })
-        setStats({ totalConversations: 142, totalMessages: 890, totalContacts: 63, totalEvents: 1240 })
-        setLoading(false)
-        return
-      }
 
       try {
         setLoading(true)

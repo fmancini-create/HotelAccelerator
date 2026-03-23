@@ -68,10 +68,10 @@ export async function getAuthenticatedPropertyId(request: NextRequest): Promise<
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
   const isDevOrPreview = host.includes("vercel.run") || 
                          host.includes("localhost") || 
-                         host.includes("127.0.0.1")
+                         host.includes("127.0.0.1") ||
+                         host.includes("vusercontent.net")
 
   if (isDevOrPreview) {
-    console.log("[v0] DEV/PREVIEW MODE (getAuthenticatedPropertyId): Returning dev property_id")
     return "dev-property-id"
   }
 
@@ -112,10 +112,10 @@ export async function getAuthenticatedUser(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
   const isDevOrPreview = host.includes("vercel.run") || 
                          host.includes("localhost") || 
-                         host.includes("127.0.0.1")
+                         host.includes("127.0.0.1") ||
+                         host.includes("vusercontent.net")
 
   if (isDevOrPreview) {
-    console.log("[v0] ✅ DEV/PREVIEW MODE (getAuthenticatedUser): Returning dev user")
     return {
       id: "dev-user-id",
       property_id: "dev-property-id",

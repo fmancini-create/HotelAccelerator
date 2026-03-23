@@ -239,24 +239,7 @@ export default function AdminDashboardPage() {
     )
   }
 
-  const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-  const isDevOrPreview =
-    hostname.includes("vercel.run") ||
-    hostname.includes("localhost") ||
-    hostname.includes("127.0.0.1") ||
-    hostname.includes("vusercontent.net")
-
-  const effectiveAdmin = adminUser || (isDevOrPreview ? {
-    id: "dev-user",
-    email: "dev@hotelaccelerator.local",
-    name: "Dev Admin",
-    role: "admin" as const,
-    property_id: "dev-property-id",
-    can_upload: true,
-    can_delete: true,
-    can_move: true,
-    can_manage_users: true,
-  } : null)
+  const effectiveAdmin = adminUser
 
   if (!effectiveAdmin) {
     return null
