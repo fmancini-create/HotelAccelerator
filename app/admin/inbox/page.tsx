@@ -497,7 +497,6 @@ export default function InboxPage() {
 
   const loadGmailThreads = useCallback(
     async (labelId: string = gmailLabelId, pageToken?: string, query?: string, isNextPage = false) => {
-   DEBUG: loadGmailThreads CALLED with labelId:", labelId)
       setGmailLoading(true)
       try {
         const params = new URLSearchParams()
@@ -506,17 +505,10 @@ export default function InboxPage() {
         if (query) params.set("q", query)
 
         const fullUrl = `/api/gmail/threads?${params}`
-     DEBUG: FULL REQUEST URL:", fullUrl)
-     DEBUG: About to fetch /api/gmail/threads")
-
         const res = await fetch(fullUrl)
-
-     DEBUG: Fetch completed, status:", res.status)
 
         if (res.ok) {
           const data = await res.json()
-
-       FRONTEND: FULL API RESPONSE:", JSON.stringify(data, null, 2))
 
           setGmailApiVersion(data.debugVersion || null)
           setGmailThreads(data.threads || [])
@@ -561,20 +553,8 @@ export default function InboxPage() {
     setGmailMessages([])
     try {
       const res = await fetch(`/api/gmail/threads/${threadId}`)
-   loadGmailThread response status:", res.status)
       if (res.ok) {
         const data = await res.json()
-     loadGmailThread FULL RESPONSE:", JSON.stringify(data, null, 2))
-     Messages count:", data.messages?.length || 0)
-
-        // Log body info for each message
-        data.messages?.forEach((msg: any, idx: number) => {
-          console.log(
-            `[v0] Message ${idx + 1}: bodyLength=${msg.content?.length || 0}, contentType=${msg.content_type}, source=${msg._debug?.bodySource}`,
-          )
-          if (!msg.content || msg.content.length === 0) {
-            console.error(`[v0] WARNING: Message ${idx + 1} has EMPTY body!`)
-          }
         })
 
         setGmailMessages(data.messages || [])
@@ -839,14 +819,11 @@ export default function InboxPage() {
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
- DEBUG: Gmail mode useEffect triggered", { inboxMode, authLoading, hasAdminUser: !!adminUser })
     if (inboxMode === "gmail" && !authLoading && adminUser) {
-   DEBUG: Calling loadGmailLabels and loadGmailThreads")
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
 
       const gmailPollInterval = setInterval(() => {
-     Gmail auto-refresh triggered")
         loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
       }, 30000)
 
@@ -967,7 +944,6 @@ export default function InboxPage() {
       if (res.ok) {
         const data = await res.json()
         setSmartDebugInfo(data)
-     Smart debug info loaded:", data)
       }
     } catch (error) {
       console.error("[v0] Error loading smart debug info:", error)
@@ -1049,13 +1025,9 @@ export default function InboxPage() {
 
       if (syncRes.ok) {
         const syncData = await syncRes.json()
-     FRONTEND: Smart sync result:", syncData)
         setLastSyncStatus(`Sincronizzato: ${syncData.imported} nuovi, ${syncData.duplicates} duplicati`)
-        // Reload conversations after sync
         loadConversations()
       } else {
-        const errorText = await syncRes.text()
-     FRONTEND: Smart sync failed:", errorText)
         setLastSyncStatus(`Errore sync: ${syncRes.status}`)
       }
     } catch (error) {
@@ -1072,8 +1044,6 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (inboxMode === "smart" && !authLoading && adminUser) {
-   Smart mode: initializing DB-only mode with Realtime")
-
       // Load conversations from DB
       loadConversations()
 
