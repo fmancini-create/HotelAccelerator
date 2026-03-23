@@ -2139,8 +2139,8 @@ export default function InboxPage() {
                   <p className="text-sm">Seleziona un messaggio per leggerlo</p>
                 </div>
               </div>
-              )
-            }
+            )}
+            </div>
             {/* CLOSES MESSAGE CONTENT - Right side of split view */}
           </div>
           {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
