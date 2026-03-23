@@ -11,7 +11,7 @@
  */
 
 const MANUBOT_BASE_URL = "https://manubot.it/api"
-const MANUBOT_SUPABASE_URL = "https://manubot.it" // fallback
+const MANUBOT_SUPABASE_URL = "https://qqcxeksvegvmgajmyqcz.supabase.co"
 
 export interface ManubotTask {
   id: string
@@ -104,7 +104,7 @@ export class ManubotClient {
       `${this.supabaseUrl}/auth/v1/token?grant_type=password`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json", "apikey": "public" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       }
     )
