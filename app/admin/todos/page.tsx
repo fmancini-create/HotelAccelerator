@@ -243,7 +243,7 @@ export default function TodosPage() {
       </div>
     )
   }
-  if (!effectiveAdmin) return null
+  if (!adminUser) return null
 
   const stats = {
     open:        todos.filter(t => t.status === "open").length,
