@@ -21,6 +21,7 @@ import {
   Layers,
   Radio,
   Activity,
+  CheckSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAdminAuth, getRoleLabel } from "@/lib/admin-hooks"
@@ -86,6 +87,14 @@ const dashboardModules: DashboardModule[] = [
     icon: <Calendar className="w-8 h-8" />,
     href: "/admin/tracking/demand",
     color: "bg-amber-500",
+  },
+  {
+    id: "todos",
+    title: "Task & To-Do",
+    description: "Gestisci attività, assegna task al team e sincronizza con Manubot",
+    icon: <CheckSquare className="w-8 h-8" />,
+    href: "/admin/todos",
+    color: "bg-lime-600",
   },
   {
     id: "monitoring",
