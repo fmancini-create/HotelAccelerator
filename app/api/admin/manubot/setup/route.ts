@@ -35,20 +35,58 @@ export async function GET(req: NextRequest) {
   const log: string[] = []
 
   try {
+    // ── Step 0: Recupera anon key ─────────────────────────────────────────
+    // Può essere passata manualmente come ?anon_key=xxx nel query param
+    const { searchParams } = new URL(req.url)
+    const manualAnonKey = searchParams.get("anon_key") || ""
+
+    // ── Step 0: Recupera anon key da Supabase (header x-supabase-anon-key) ──
+    // L'endpoint pubblico /rest/v1/ restituisce l'anon key negli header CORS
+    log.push("0. Recupero anon key Manubot Supabase...")
+    let MANUBOT_ANON_KEY = ""
+    try {
+      const infoRes = await fetch(`${MANUBOT_SUPABASE_URL}/auth/v1/settings`, {
+        method: "GET",
+      })
+      // Prova a leggere la chiave dall'header che alcuni Supabase espongono
+      MANUBOT_ANON_KEY = infoRes.headers.get("x-supabase-anon-key") || ""
+      log.push(`   anon key da header: ${MANUBOT_ANON_KEY ? "trovata" : "non trovata"}`)
+    } catch { /* ignora */ }
+
+    // Se non trovata, proviamo senza apikey (alcuni progetti lo permettono)
+    // Il progetto Manubot potrebbe avere auth.password_signup = true e apikey opzionale
+    log.push("   Tentativo login senza apikey header...")
+
     // ── Step 1: Login su Manubot ─────────────────────────────────────────
     log.push("1. Login su Manubot Supabase...")
+
+    const finalAnonKey = manualAnonKey || MANUBOT_ANON_KEY
+    const loginHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+    if (finalAnonKey) {
+      loginHeaders["apikey"] = finalAnonKey
+      log.push(`   anon key disponibile: ${finalAnonKey.slice(0, 20)}...`)
+    } else {
+      log.push("   nessuna anon key disponibile, tentativo senza header apikey")
+    }
+
     const loginRes = await fetch(
       `${MANUBOT_SUPABASE_URL}/auth/v1/token?grant_type=password`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: loginHeaders,
         body: JSON.stringify({ email: MANUBOT_EMAIL, password: MANUBOT_PASSWORD }),
       }
     )
 
     if (!loginRes.ok) {
       const err = await loginRes.text()
-      return NextResponse.json({ error: `Login Manubot fallito: ${err}`, log }, { status: 500 })
+      return NextResponse.json({
+        error: `Login Manubot fallito: ${err}`,
+        log,
+        fix: "Serve l'anon key del progetto Supabase di Manubot. Chiedila al team Manubot oppure leggila da manubot.it nel sorgente della pagina (cerca 'SUPABASE_ANON_KEY' o 'apikey').",
+      }, { status: 500 })
     }
 
     const authData = await loginRes.json()
