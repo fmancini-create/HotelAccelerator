@@ -1,26 +1,27 @@
 import type { NextRequest } from "next/server"
-import { headers as nextHeaders } from "next/headers"
 import { createClient, createClientWithToken } from "@/lib/supabase/server"
 
-async function getHost(request?: NextRequest): Promise<string> {
-  if (request) {
-    return request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-  }
-  try {
-    const h = await nextHeaders()
-    return h.get("x-forwarded-host") || h.get("host") || ""
-  } catch { /* outside server context */ }
-  return ""
-}
-
-async function getDevBypass(request?: NextRequest): Promise<boolean> {
-  const host = await getHost(request)
+function isDevOrPreviewHost(host: string): boolean {
   return (
     host.includes("vercel.run") ||
     host.includes("localhost") ||
     host.includes("127.0.0.1") ||
     host.includes("vusercontent.net")
   )
+}
+
+async function getDevBypass(request?: NextRequest): Promise<boolean> {
+  // Se request è disponibile, leggi l'host da lì
+  if (request) {
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+    return isDevOrPreviewHost(host)
+  }
+  // Senza request (chiamata senza argomenti): usa env var o NODE_ENV
+  // In produzione NEXT_PUBLIC_APP_URL sarà un dominio reale
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
+  if (appUrl && !isDevOrPreviewHost(appUrl)) return false
+  // Fallback: NODE_ENV
+  return process.env.NODE_ENV === "development"
 }
 
 async function getTokenFromRequest(request: NextRequest): Promise<string | undefined> {
@@ -150,7 +151,7 @@ export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<
     }
   }
 
-  const token = request ? getTokenFromRequest(request) : undefined
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
