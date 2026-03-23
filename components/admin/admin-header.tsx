@@ -37,6 +37,7 @@ const pathMap: Record<string, { label: string; parent?: string }> = {
   "/admin/settings": { label: "Impostazioni", parent: "/admin/dashboard" },
   "/admin/settings/domains": { label: "Domini", parent: "/admin/settings" },
   "/admin/tracking/demand": { label: "Calendario Domanda", parent: "/admin/dashboard" },
+  "/admin/todos": { label: "Task & To-Do", parent: "/admin/dashboard" },
 }
 
 function buildBreadcrumbs(pathname: string): BreadcrumbItem[] {

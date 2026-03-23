@@ -10,7 +10,8 @@ export default async function DevButtons() {
   
   const isDevOrPreview = host.includes("vercel.run") || 
                          host.includes("localhost") || 
-                         host.includes("127.0.0.1")
+                         host.includes("127.0.0.1") ||
+                         host.includes("vusercontent.net")
 
   if (!isDevOrPreview) return null
 
@@ -28,6 +29,22 @@ export default async function DevButtons() {
               className="border-red-500/50 text-red-400 hover:bg-red-950/50 bg-transparent"
             >
               Tenant Admin (Users)
+            </Button>
+          </Link>
+          <Link href="/admin/todos">
+            <Button 
+              variant="outline" 
+              className="border-red-500/50 text-red-400 hover:bg-red-950/50 bg-transparent"
+            >
+              Task & To-Do
+            </Button>
+          </Link>
+          <Link href="/admin/inbox">
+            <Button 
+              variant="outline" 
+              className="border-red-500/50 text-red-400 hover:bg-red-950/50 bg-transparent"
+            >
+              Inbox
             </Button>
           </Link>
           <Link href="/super-admin">
