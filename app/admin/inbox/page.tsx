@@ -2139,12 +2139,12 @@ export default function InboxPage() {
                   <p className="text-sm">Seleziona un messaggio per leggerlo</p>
                 </div>
               </div>
-              )}
+              )
+            }
             {/* CLOSES MESSAGE CONTENT - Right side of split view */}
           </div>
           {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
         </div>
-      )}
 
       {showComposeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
