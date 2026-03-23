@@ -41,17 +41,17 @@ export function useAdminAuth() {
                                hostname.includes("vusercontent.net")
 
         if (isDevOrPreview) {
-          console.log("[v0] ✅ DEV/PREVIEW BYPASS ACTIVE - Setting dev admin user")
           setAdminUser({
             id: "dev-user",
             email: "dev@hotelaccelerator.local",
             name: "Dev Admin",
             role: "admin",
+            property_id: "c16ad260-2c34-4544-9909-5cd444773986",
             can_upload: true,
             can_delete: true,
             can_move: true,
             can_manage_users: true,
-          })
+          } as any)
           setIsLoading(false)
           return
         }
