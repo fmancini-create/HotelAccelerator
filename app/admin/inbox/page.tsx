@@ -2140,8 +2140,6 @@ export default function InboxPage() {
                 </div>
               </div>
             )}
-            </div>
-            {/* CLOSES MESSAGE CONTENT - Right side of split view */}
           </div>
           {/* CLOSES RIGHT - Thread List + Message Content Combined View */}
         </div>
