@@ -142,7 +142,7 @@ export default function TodosPage() {
       }
     } catch { setError("Errore nel caricamento") }
     finally { setLoading(false) }
-  }, [filterStatus, filterAssignee, dev])
+  }, [filterStatus, filterAssignee])
 
   useEffect(() => { loadUsers() }, [loadUsers])
   useEffect(() => { loadTodos() }, [loadTodos])
@@ -188,26 +188,6 @@ export default function TodosPage() {
       manubot_asset_id: form.manubot_asset_id || null,
     }
 
-    if (dev) {
-      const newTodo: Todo = {
-        id: editingTodo?.id || crypto.randomUUID(),
-        ...payload,
-        assigned_to_name: assignedUser?.name,
-        status: editingTodo?.status || "open",
-        tags: payload.tags,
-        created_at: editingTodo?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }
-      if (editingTodo) {
-        setTodos(prev => prev.map(t => t.id === editingTodo.id ? newTodo : t))
-      } else {
-        setTodos(prev => [newTodo, ...prev])
-      }
-      resetForm()
-      setSubmitting(false)
-      return
-    }
-
     try {
       const res = await fetch(
         editingTodo ? `/api/admin/todos/${editingTodo.id}` : "/api/admin/todos",
@@ -225,23 +205,21 @@ export default function TodosPage() {
 
   const updateStatus = async (todo: Todo, status: TodoStatus) => {
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status } : t))
-    if (!dev) {
-      try {
-        await fetch(`/api/admin/todos/${todo.id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
-        })
-      } catch {
-        setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status: todo.status } : t))
-      }
+    try {
+      await fetch(`/api/admin/todos/${todo.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+    } catch {
+      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status: todo.status } : t))
     }
   }
 
   const deleteTodo = async (id: string) => {
     if (!confirm("Eliminare questo task?")) return
     setTodos(prev => prev.filter(t => t.id !== id))
-    if (!dev) await fetch(`/api/admin/todos/${id}`, { method: "DELETE" })
+    await fetch(`/api/admin/todos/${id}`, { method: "DELETE" })
   }
 
   const openEdit = (todo: Todo) => {
