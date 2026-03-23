@@ -205,18 +205,22 @@ export class ManubotClient {
  * Factory: crea un ManubotClient autenticato con le credenziali della property
  * Usato dalle API routes interne
  */
+const MANUBOT_DEFAULT_EMAIL    = "f.mancini@ibarronci.com"
+const MANUBOT_DEFAULT_PASSWORD = "Pippolo75@manubot"
+
 export async function getManubotClient(property: {
   manubot_email?: string | null
   manubot_password?: string | null
   manubot_supabase_url?: string | null
-}): Promise<ManubotClient | null> {
-  if (!property.manubot_email || !property.manubot_password) return null
+}): Promise<ManubotClient> {
+  const email    = property.manubot_email    || MANUBOT_DEFAULT_EMAIL
+  const password = property.manubot_password || MANUBOT_DEFAULT_PASSWORD
 
   const client = new ManubotClient(property.manubot_supabase_url || undefined)
   try {
-    await client.login(property.manubot_email, property.manubot_password)
+    await client.login(email, password)
     return client
-  } catch {
-    return null
+  } catch (e: any) {
+    throw new Error(`Login Manubot fallito: ${e.message}`)
   }
 }
