@@ -489,10 +489,6 @@ export default function InboxPage() {
         const data = await res.json()
         setGmailSystemLabels(data.systemLabels || [])
         setGmailUserLabels(data.labels || [])
-     Gmail labels loaded:", {
-          systemCount: data.systemLabels?.length || 0,
-          userCount: data.labels?.length || 0,
-        })
       }
     } catch (error) {
       console.error("[Gmail] Error loading labels:", error)
