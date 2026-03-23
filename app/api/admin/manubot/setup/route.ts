@@ -11,7 +11,7 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import crypto from "crypto"
 
 const MANUBOT_SUPABASE_URL = "https://qqcxeksvegvmgajmyqcz.supabase.co"
@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
 
     // ── Step 4: Salva su HotelAccelerator Supabase ────────────────────────
     log.push("4. Salvataggio su HotelAccelerator Supabase...")
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     // Trova la property (prova per slug, poi per ID dev)
     const { data: properties } = await supabase

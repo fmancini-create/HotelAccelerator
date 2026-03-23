@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
 const REAL_FILES = [
@@ -29,7 +29,7 @@ const REAL_FILES = [
 
 export async function POST() {
   try {
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     // Get all photos from database
     const { data: photos, error: fetchError } = await supabase.from("photos").select("id, filename, url")

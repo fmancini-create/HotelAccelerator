@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getManubotClient, HA_TO_MANUBOT_STATUS, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
 
@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const allowedFields = ["title", "description", "status", "priority", "assigned_to", "due_date", "tags", "external_id", "external_source", "external_url", "external_data"]
@@ -82,7 +82,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     }
 
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { error } = await supabase
       .from("todos")

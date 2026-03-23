@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   try {
     const propertyId = await getAuthenticatedPropertyId()
 
-    const supabase = await createServerClient()
+    const supabase = createServiceClient()
 
     const { data: pages, error } = await supabase
       .from("cms_pages")
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
     const pageData = validation.data
 
-    const supabase = await createServerClient()
+    const supabase = createServiceClient()
 
     const { data: page, error } = await supabase
       .from("cms_pages")

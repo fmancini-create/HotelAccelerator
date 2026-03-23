@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getManubotClient, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
 
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     }
 
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get("status")
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const {

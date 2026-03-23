@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest) {
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
 
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { data: users, error } = await supabase
       .from("admin_users")
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const { email, password, name, role, is_tenant_admin } = body

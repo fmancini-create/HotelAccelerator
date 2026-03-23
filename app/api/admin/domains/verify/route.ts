@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import dns from "dns"
 import { promisify } from "util"
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId()
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     // Ottieni property con token
     const { data: property, error: fetchError } = await supabase
