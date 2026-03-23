@@ -12,6 +12,7 @@
 
 const MANUBOT_BASE_URL = "https://manubot.it/api"
 const MANUBOT_SUPABASE_URL = "https://qqcxeksvegvmgajmyqcz.supabase.co"
+const MANUBOT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJibGdyZHVrZ3hrc3p1YXl6cWp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5Mzg3ODMsImV4cCI6MjA3NzUxNDc4M30._xD-w4B_kEy5yDLH3cvMKZJqRo4kAzJbLnNVARch3gw"
 
 export interface ManubotTask {
   id: string
@@ -104,7 +105,10 @@ export class ManubotClient {
       `${this.supabaseUrl}/auth/v1/token?grant_type=password`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": MANUBOT_ANON_KEY,
+        },
         body: JSON.stringify({ email, password }),
       }
     )
