@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
     const { data: properties } = await supabase
       .from("properties")
       .select("id, name, slug")
-      .or("slug.eq.villa-i-barronci,id.eq.dev-property-id")
+      .or("slug.eq.villa-i-barronci,id.eq.c16ad260-2c34-4544-9909-5cd444773986")
       .limit(1)
 
     log.push(`   Properties trovate: ${JSON.stringify(properties)}`)

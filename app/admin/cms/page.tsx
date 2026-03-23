@@ -107,7 +107,7 @@ function CMSPagesContent() {
     let resolvedPropertyId: string | null = null
 
     if (isDevOrPreview) {
-      resolvedPropertyId = "dev-property-id"
+      resolvedPropertyId = "c16ad260-2c34-4544-9909-5cd444773986"
     } else {
       const supabase = createClient()
       if (!supabase) return
