@@ -2,24 +2,19 @@ import type { NextRequest } from "next/server"
 import { headers as nextHeaders } from "next/headers"
 import { createClient, createClientWithToken } from "@/lib/supabase/server"
 
-function getHost(request?: NextRequest): string {
+async function getHost(request?: NextRequest): Promise<string> {
   if (request) {
     return request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
   }
   try {
-    // Next.js 16 server context — headers() is async
-    const h = nextHeaders()
-    // @ts-ignore — may be sync or async depending on version
-    const hSync = h instanceof Promise ? null : h
-    if (hSync) {
-      return hSync.get("x-forwarded-host") || hSync.get("host") || ""
-    }
+    const h = await nextHeaders()
+    return h.get("x-forwarded-host") || h.get("host") || ""
   } catch { /* outside server context */ }
   return ""
 }
 
-function getDevBypass(request?: NextRequest): boolean {
-  const host = getHost(request)
+async function getDevBypass(request?: NextRequest): Promise<boolean> {
+  const host = await getHost(request)
   return (
     host.includes("vercel.run") ||
     host.includes("localhost") ||
@@ -28,8 +23,8 @@ function getDevBypass(request?: NextRequest): boolean {
   )
 }
 
-function getTokenFromRequest(request: NextRequest): string | undefined {
-  if (getDevBypass(request)) {
+async function getTokenFromRequest(request: NextRequest): Promise<string | undefined> {
+  if (await getDevBypass(request)) {
     return "dev-dummy-token-for-preview"
   }
 
@@ -84,11 +79,11 @@ function getTokenFromRequest(request: NextRequest): string | undefined {
  * Usato nelle API routes admin per verificare l'accesso
  */
 export async function getAuthenticatedPropertyId(request?: NextRequest): Promise<string> {
-  if (getDevBypass(request)) {
+  if (await getDevBypass(request)) {
     return "dev-property-id"
   }
 
-  const token = request ? getTokenFromRequest(request) : undefined
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
@@ -121,7 +116,7 @@ export async function getAuthenticatedPropertyId(request?: NextRequest): Promise
  * Ottiene l'utente autenticato e il suo property_id
  */
 export async function getAuthenticatedUser(request?: NextRequest) {
-  if (getDevBypass(request)) {
+  if (await getDevBypass(request)) {
     return {
       id: "dev-user-id",
       property_id: "dev-property-id",
@@ -130,7 +125,7 @@ export async function getAuthenticatedUser(request?: NextRequest) {
     }
   }
 
-  const token = request ? getTokenFromRequest(request) : undefined
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
@@ -197,11 +192,11 @@ export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<
  * I super admin possono operare su qualsiasi property se specificato nel query param
  */
 export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request?: NextRequest): Promise<string> {
-  if (getDevBypass(request)) {
+  if (await getDevBypass(request)) {
     return "dev-property-id"
   }
 
-  const token = request ? getTokenFromRequest(request) : undefined
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
