@@ -30,6 +30,7 @@ import {
   ChevronLeft,
   MailOpen,
   Bug,
+  MessageCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -481,14 +482,14 @@ export default function InboxPage() {
   }
 
   const loadGmailLabels = useCallback(async () => {
-    console.log("[v0] DEBUG: loadGmailLabels CALLED")
+
     try {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
         const data = await res.json()
         setGmailSystemLabels(data.systemLabels || [])
         setGmailUserLabels(data.labels || [])
-        console.log("[v0] Gmail labels loaded:", {
+     Gmail labels loaded:", {
           systemCount: data.systemLabels?.length || 0,
           userCount: data.labels?.length || 0,
         })
@@ -500,7 +501,7 @@ export default function InboxPage() {
 
   const loadGmailThreads = useCallback(
     async (labelId: string = gmailLabelId, pageToken?: string, query?: string, isNextPage = false) => {
-      console.log("[v0] DEBUG: loadGmailThreads CALLED with labelId:", labelId)
+   DEBUG: loadGmailThreads CALLED with labelId:", labelId)
       setGmailLoading(true)
       try {
         const params = new URLSearchParams()
@@ -509,17 +510,17 @@ export default function InboxPage() {
         if (query) params.set("q", query)
 
         const fullUrl = `/api/gmail/threads?${params}`
-        console.log("[v0] DEBUG: FULL REQUEST URL:", fullUrl)
-        console.log("[v0] DEBUG: About to fetch /api/gmail/threads")
+     DEBUG: FULL REQUEST URL:", fullUrl)
+     DEBUG: About to fetch /api/gmail/threads")
 
         const res = await fetch(fullUrl)
 
-        console.log("[v0] DEBUG: Fetch completed, status:", res.status)
+     DEBUG: Fetch completed, status:", res.status)
 
         if (res.ok) {
           const data = await res.json()
 
-          console.log("[v0] FRONTEND: FULL API RESPONSE:", JSON.stringify(data, null, 2))
+       FRONTEND: FULL API RESPONSE:", JSON.stringify(data, null, 2))
 
           setGmailApiVersion(data.debugVersion || null)
           setGmailThreads(data.threads || [])
@@ -534,7 +535,7 @@ export default function InboxPage() {
             resultSizeEstimate: data.resultSizeEstimate,
           })
 
-          console.log("[v0] FRONTEND: Gmail threads loaded:", {
+       FRONTEND: Gmail threads loaded:", {
             apiVersion: data.debugVersion,
             count: data.threads?.length || 0,
             total: data.resultSizeEstimate,
@@ -559,16 +560,16 @@ export default function InboxPage() {
   )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
-    console.log("[v0] loadGmailThread CALLED with threadId:", threadId)
+ loadGmailThread CALLED with threadId:", threadId)
     setGmailThreadLoading(true)
     setGmailMessages([])
     try {
       const res = await fetch(`/api/gmail/threads/${threadId}`)
-      console.log("[v0] loadGmailThread response status:", res.status)
+   loadGmailThread response status:", res.status)
       if (res.ok) {
         const data = await res.json()
-        console.log("[v0] loadGmailThread FULL RESPONSE:", JSON.stringify(data, null, 2))
-        console.log("[v0] Messages count:", data.messages?.length || 0)
+     loadGmailThread FULL RESPONSE:", JSON.stringify(data, null, 2))
+     Messages count:", data.messages?.length || 0)
 
         // Log body info for each message
         data.messages?.forEach((msg: any, idx: number) => {
@@ -842,14 +843,14 @@ export default function InboxPage() {
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
-    console.log("[v0] DEBUG: Gmail mode useEffect triggered", { inboxMode, authLoading, hasAdminUser: !!adminUser })
+ DEBUG: Gmail mode useEffect triggered", { inboxMode, authLoading, hasAdminUser: !!adminUser })
     if (inboxMode === "gmail" && !authLoading && adminUser) {
-      console.log("[v0] DEBUG: Calling loadGmailLabels and loadGmailThreads")
+   DEBUG: Calling loadGmailLabels and loadGmailThreads")
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
 
       const gmailPollInterval = setInterval(() => {
-        console.log("[v0] Gmail auto-refresh triggered")
+     Gmail auto-refresh triggered")
         loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
       }, 30000)
 
@@ -941,7 +942,7 @@ export default function InboxPage() {
   // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
   const loadConversations = useCallback(async () => {
-    console.log("[v0] Smart mode: loadConversations from DB")
+ Smart mode: loadConversations from DB")
     try {
       const queryParams = new URLSearchParams()
       if (statusFilter) queryParams.set("status", statusFilter)
@@ -954,7 +955,7 @@ export default function InboxPage() {
 
       const data = await res.json()
       setConversations(data.conversations || [])
-      console.log("[v0] Smart mode: loaded", data.conversations?.length || 0, "conversations from DB")
+   Smart mode: loaded", data.conversations?.length || 0, "conversations from DB")
     } catch (error) {
       console.error("Error loading conversations:", error)
     } finally {
@@ -970,7 +971,7 @@ export default function InboxPage() {
       if (res.ok) {
         const data = await res.json()
         setSmartDebugInfo(data)
-        console.log("[v0] Smart debug info loaded:", data)
+     Smart debug info loaded:", data)
       }
     } catch (error) {
       console.error("[v0] Error loading smart debug info:", error)
@@ -1019,14 +1020,14 @@ export default function InboxPage() {
   const performInitialSmartSync = async () => {
     if (inboxMode !== "smart") return
 
-    console.log("[v0] FRONTEND: Performing initial Smart sync...")
+ FRONTEND: Performing initial Smart sync...")
     setLastSyncStatus("Sincronizzazione in corso...")
 
     try {
       // Get channel info for sync
       const channelRes = await fetch("/api/inbox/debug")
       if (!channelRes.ok) {
-        console.log("[v0] FRONTEND: Debug API failed, skipping sync")
+     FRONTEND: Debug API failed, skipping sync")
         setLastSyncStatus("Errore: impossibile ottenere info canale")
         return
       }
@@ -1035,7 +1036,7 @@ export default function InboxPage() {
       setDebugInfo(debugData)
 
       if (!debugData.channel?.id || !debugData.channel?.property_id) {
-        console.log("[v0] FRONTEND: No channel configured for Smart sync")
+     FRONTEND: No channel configured for Smart sync")
         setLastSyncStatus("Nessun canale configurato")
         return
       }
@@ -1052,13 +1053,13 @@ export default function InboxPage() {
 
       if (syncRes.ok) {
         const syncData = await syncRes.json()
-        console.log("[v0] FRONTEND: Smart sync result:", syncData)
+     FRONTEND: Smart sync result:", syncData)
         setLastSyncStatus(`Sincronizzato: ${syncData.imported} nuovi, ${syncData.duplicates} duplicati`)
         // Reload conversations after sync
         loadConversations()
       } else {
         const errorText = await syncRes.text()
-        console.log("[v0] FRONTEND: Smart sync failed:", errorText)
+     FRONTEND: Smart sync failed:", errorText)
         setLastSyncStatus(`Errore sync: ${syncRes.status}`)
       }
     } catch (error) {
@@ -1075,7 +1076,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     if (inboxMode === "smart" && !authLoading && adminUser) {
-      console.log("[v0] Smart mode: initializing DB-only mode with Realtime")
+   Smart mode: initializing DB-only mode with Realtime")
 
       // Load conversations from DB
       loadConversations()
@@ -1084,7 +1085,7 @@ export default function InboxPage() {
       loadSmartDebugInfo()
 
       pollIntervalRef.current = setInterval(() => {
-        console.log("[v0] Smart mode: polling DB for new conversations")
+     Smart mode: polling DB for new conversations")
         loadConversations()
       }, 30000)
 
@@ -1096,22 +1097,22 @@ export default function InboxPage() {
       const messagesChannel = supabase
         .channel("smart-inbox-messages")
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-          console.log("[v0] Realtime: new message INSERT detected:", payload.new)
+       Realtime: new message INSERT detected:", payload.new)
           // Reload conversations to show new message
           loadConversations()
         })
         .subscribe((status) => {
-          console.log("[v0] Realtime messages subscription status:", status)
+       Realtime messages subscription status:", status)
         })
 
       const conversationsChannel = supabase
         .channel("smart-inbox-conversations")
         .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
-          console.log("[v0] Realtime: conversation change detected:", payload.eventType, payload.new)
+       Realtime: conversation change detected:", payload.eventType, payload.new)
           loadConversations()
         })
         .subscribe((status) => {
-          console.log("[v0] Realtime conversations subscription status:", status)
+       Realtime conversations subscription status:", status)
         })
 
       return () => {
