@@ -127,24 +127,15 @@ function CMSPagesContent() {
 
     setPropertyId(resolvedPropertyId)
 
-    // Carica templates disponibili
-    const supabase = createClient()
-    if (!supabase) return
-
-    const { data: templatesData } = await supabase
-      .from("cms_templates")
-      .select("id, name, slug, description, category, is_system")
-      .eq("is_active", true)
-      .or(`property_id.is.null,property_id.eq.${resolvedPropertyId}`)
-      .order("is_system", { ascending: false })
-
-    if (templatesData) {
-      setTemplates(templatesData)
-      // Imposta template default (Villa I Barronci)
-      const defaultTemplate = templatesData.find((t) => t.slug === "villa-i-barronci")
-      if (defaultTemplate) {
-        setSelectedTemplateId(defaultTemplate.id)
-      }
+    // Carica templates via API (usa service client, nessun problema di auth)
+    const templatesRes = await fetch("/api/cms/templates")
+    const templatesJson = await templatesRes.json()
+    const templatesData = templatesJson.templates || []
+    setTemplates(templatesData)
+    // Imposta template default (Villa I Barronci)
+    const defaultTemplate = templatesData.find((t: any) => t.slug === "villa-i-barronci")
+    if (defaultTemplate) {
+      setSelectedTemplateId(defaultTemplate.id)
     }
 
     // Carica pagine
@@ -375,34 +366,32 @@ function CMSPagesContent() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {/* Template Selection */}
-            {templates.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <LayoutTemplate className="h-4 w-4" />
-                  Template
-                </Label>
-                <Select value={selectedTemplateId || ""} onValueChange={setSelectedTemplateId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleziona un template" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates.map((template) => (
-                      <SelectItem key={template.id} value={template.id}>
-                        <div className="flex items-center gap-2">
-                          <span>{template.name}</span>
-                          {template.is_system && (
-                            <Badge variant="secondary" className="text-xs">
-                              Sistema
-                            </Badge>
-                          )}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Il template definisce lo stile e i blocchi predefiniti</p>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <LayoutTemplate className="h-4 w-4" />
+                Template
+              </Label>
+              <Select value={selectedTemplateId || ""} onValueChange={setSelectedTemplateId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={templates.length === 0 ? "Caricamento..." : "Seleziona un template"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{template.name}</span>
+                        {template.is_system && (
+                          <Badge variant="secondary" className="text-xs">
+                            Sistema
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Il template definisce lo stile e i blocchi predefiniti</p>
+            </div>
 
             {/* Page Type */}
             <div className="space-y-2">
