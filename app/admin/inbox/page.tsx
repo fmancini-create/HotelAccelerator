@@ -1046,12 +1046,10 @@ export default function InboxPage() {
       const messagesChannel = supabase
         .channel("smart-inbox-messages")
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-       Realtime: new message INSERT detected:", payload.new)
           // Reload conversations to show new message
           loadConversations()
         })
         .subscribe((status) => {
-       Realtime messages subscription status:", status)
         })
 
       const conversationsChannel = supabase
