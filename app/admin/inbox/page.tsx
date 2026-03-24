@@ -1,7 +1,7 @@
 "use client"
 
-// v773 BUILD MARKER - This comment forces a new bundle hash
-const FRONTEND_BUILD = "v773-final"
+// v774 BUILD MARKER - This comment forces a new bundle hash
+const FRONTEND_BUILD = "v774-clean-build"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
