@@ -982,14 +982,12 @@ export default function InboxPage() {
   const performInitialSmartSync = async () => {
     if (inboxMode !== "smart") return
 
- FRONTEND: Performing initial Smart sync...")
     setLastSyncStatus("Sincronizzazione in corso...")
 
     try {
       // Get channel info for sync
       const channelRes = await fetch("/api/inbox/debug")
       if (!channelRes.ok) {
-     FRONTEND: Debug API failed, skipping sync")
         setLastSyncStatus("Errore: impossibile ottenere info canale")
         return
       }
@@ -998,7 +996,6 @@ export default function InboxPage() {
       setDebugInfo(debugData)
 
       if (!debugData.channel?.id || !debugData.channel?.property_id) {
-     FRONTEND: No channel configured for Smart sync")
         setLastSyncStatus("Nessun canale configurato")
         return
       }
