@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { PlatformFooter } from "@/components/platform-footer"
 
 export const metadata: Metadata = {
   title: {
@@ -16,9 +15,8 @@ export default function AdminLayout({
   children: React.ReactNode
 }) {
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
+    <div className="h-screen flex flex-col overflow-hidden bg-white">
       <main className="flex-1 overflow-auto">{children}</main>
-      <PlatformFooter />
     </div>
   )
 }
