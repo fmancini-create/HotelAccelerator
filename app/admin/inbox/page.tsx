@@ -1,7 +1,7 @@
 "use client"
 
-// v781 BUILD MARKER - Fixed missing Fragment closing tag in Gmail list
-const FRONTEND_BUILD = "v781-fixed-fragment"
+// v782 BUILD MARKER - Fixed JSX map structure with function statement
+const FRONTEND_BUILD = "v782-map-syntax"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1728,43 +1728,49 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <>
-                  {gmailThreads.map((thread) => (
-                  <div
-                    key={thread.id}
-                    onClick={() => handleSelectGmailThread(thread)}
-                    className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
-                      selectedGmailThread?.id === thread.id
-                        ? "bg-[#d3e3fd]"
-                        : thread.isUnread
-                          ? "bg-white hover:bg-[#f2f6fc]"
-                          : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
-                    }`}
-                  >
-                    <Checkbox
-                      checked={selectedGmailThreadIds.has(thread.id)}
-                      onCheckedChange={() => handleGmailCheckboxToggle(thread.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
-                    />
-                    <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
-                      <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
-                    </button>
-                    <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
-                      {thread.from.name || thread.from.email.split("@")[0]}
-                    </span>
-                    <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
-                      <span className={`truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
-                        {thread.subject || "(nessun oggetto)"}
+                  {gmailThreads.map((thread) => {
+                    const span = (
+                    <div
+                      key={thread.id}
+                      onClick={() => handleSelectGmailThread(thread)}
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
+                        selectedGmailThread?.id === thread.id
+                          ? "bg-[#d3e3fd]"
+                          : thread.isUnread
+                            ? "bg-white hover:bg-[#f2f6fc]"
+                            : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selectedGmailThreadIds.has(thread.id)}
+                        onCheckedChange={() => handleGmailCheckboxToggle(thread.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
+                      />
+                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
+                        <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
+                      </button>
+                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
+                        {thread.from.name || thread.from.email.split("@")[0]}
                       </span>
-                      {thread.snippet && (
-                        <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{thread.snippet}</span>
+                      <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
+                        <span className={`truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                          {thread.subject || "(nessun oggetto)"}
+                        </span>
+                        {thread.snippet && (
+                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{thread.snippet}</span>
+                        )}
+                      </div>
+                      {thread.messagesCount > 1 && (
+                        <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
                       )}
+                      <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-gray-500"}`}>
+                        {format(new Date(thread.date), "d MMM", { locale: it })}
+                      </span>
                     </div>
-                    {thread.messagesCount > 1 && (
-                      <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
-                    )}
-                  </div>
-                ))}
+                    )
+                    return span
+                  })}
                 </>
               )
             ) : (
@@ -1778,41 +1784,44 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <>
-                  {conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    onClick={() => handleSelectConversation(conv)}
-                    className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
-                      selectedConversation?.id === conv.id
-                        ? "bg-[#d3e3fd]"
-                        : conv.unread_count > 0
-                          ? "bg-white hover:bg-[#f2f6fc]"
-                          : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
-                    }`}
-                  >
-                    <Checkbox checked={false} onClick={(e) => e.stopPropagation()} className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100" />
-                    <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
-                      <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
-                    </button>
-                    <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
-                      {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
-                    </span>
-                    <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
-                      <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
-                        {conv.subject || "(nessun oggetto)"}
+                  {conversations.map((conv) => {
+                    const span = (
+                    <div
+                      key={conv.id}
+                      onClick={() => handleSelectConversation(conv)}
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
+                        selectedConversation?.id === conv.id
+                          ? "bg-[#d3e3fd]"
+                          : conv.unread_count > 0
+                            ? "bg-white hover:bg-[#f2f6fc]"
+                            : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
+                      }`}
+                    >
+                      <Checkbox checked={false} onClick={(e) => e.stopPropagation()} className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100" />
+                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
+                        <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
+                      </button>
+                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                        {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
                       </span>
-                      {conv.lastMessage?.content && (
-                        <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{conv.lastMessage.content}</span>
+                      <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
+                        <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                          {conv.subject || "(nessun oggetto)"}
+                        </span>
+                        {conv.lastMessage?.content && (
+                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{conv.lastMessage.content}</span>
+                        )}
+                      </div>
+                      {conv.unread_count > 0 && (
+                        <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
                       )}
+                      <span className="text-[11px] text-gray-500 flex-shrink-0 min-w-[42px] text-right">
+                        {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
+                      </span>
                     </div>
-                    {conv.unread_count > 0 && (
-                      <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
-                    )}
-                    <span className="text-[11px] text-gray-500 flex-shrink-0 min-w-[42px] text-right">
-                      {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
-                    </span>
-                  </div>
-                  ))}
+                    )
+                    return span
+                  })}
                 </>
               )
             )
