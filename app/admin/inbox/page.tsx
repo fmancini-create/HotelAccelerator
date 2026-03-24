@@ -1671,7 +1671,7 @@ export default function InboxPage() {
         </div>
 
         {/* ── RIGHT: Message/Thread detail ── */}
-        <div className="flex-1 flex flex-col min-h-0 bg-white">
+        <div className={`${selectedGmailThread || selectedConversation ? "flex" : "hidden lg:flex"} flex-1 flex-col min-h-0 bg-white border-l border-gray-200/60`}>
           {inboxMode === "gmail" ? (
             selectedGmailThread ? (
               <>
