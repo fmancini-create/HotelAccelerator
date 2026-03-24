@@ -1,7 +1,7 @@
 "use client"
 
-// v774 BUILD MARKER - This comment forces a new bundle hash
-const FRONTEND_BUILD = "v774-clean-build"
+// v775 BUILD MARKER - Force rebuild to clear cache
+const FRONTEND_BUILD = "v775-cache-clear"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
