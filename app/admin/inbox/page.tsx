@@ -1,7 +1,7 @@
 "use client"
 
-// v775 BUILD MARKER - Force rebuild to clear cache
-const FRONTEND_BUILD = "v775-cache-clear"
+// v776 BUILD MARKER - Force full rebuild after git pull
+const FRONTEND_BUILD = "v776-post-pull"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
