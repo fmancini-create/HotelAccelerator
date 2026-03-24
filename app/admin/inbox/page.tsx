@@ -907,7 +907,6 @@ export default function InboxPage() {
   // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
   const loadConversations = useCallback(async () => {
- Smart mode: loadConversations from DB")
     try {
       const queryParams = new URLSearchParams()
       if (statusFilter) queryParams.set("status", statusFilter)
@@ -920,7 +919,6 @@ export default function InboxPage() {
 
       const data = await res.json()
       setConversations(data.conversations || [])
-   Smart mode: loaded", data.conversations?.length || 0, "conversations from DB")
     } catch (error) {
       console.error("Error loading conversations:", error)
     } finally {
@@ -1043,7 +1041,6 @@ export default function InboxPage() {
       loadSmartDebugInfo()
 
       pollIntervalRef.current = setInterval(() => {
-     Smart mode: polling DB for new conversations")
         loadConversations()
       }, 30000)
 
