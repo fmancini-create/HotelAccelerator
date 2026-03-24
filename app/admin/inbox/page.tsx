@@ -1,7 +1,7 @@
 "use client"
 
-// v780 BUILD MARKER - Fixed JSX map syntax in ternary
-const FRONTEND_BUILD = "v780-fixed-map"
+// v781 BUILD MARKER - Fixed missing Fragment closing tag in Gmail list
+const FRONTEND_BUILD = "v781-fixed-fragment"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1763,11 +1763,9 @@ export default function InboxPage() {
                     {thread.messagesCount > 1 && (
                       <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
                     )}
-                    <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-gray-500"}`}>
-                      {format(new Date(thread.date), "d MMM", { locale: it })}
-                    </span>
                   </div>
-                ))
+                ))}
+                </>
               )
             ) : (
               // Smart mode conversation list
