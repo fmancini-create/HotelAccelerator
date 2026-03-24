@@ -540,15 +540,12 @@ export default function InboxPage() {
   )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
- loadGmailThread CALLED with threadId:", threadId)
     setGmailThreadLoading(true)
     setGmailMessages([])
     try {
       const res = await fetch(`/api/gmail/threads/${threadId}`)
       if (res.ok) {
         const data = await res.json()
-        })
-
         setGmailMessages(data.messages || [])
       } else {
         const errorBody = await res.text()
