@@ -1496,10 +1496,10 @@ export default function InboxPage() {
           </nav>
         </div>
 
-        {/* ── CENTER: Thread/Conversation list ── */}
-        <div className={`${selectedGmailThread || selectedConversation ? "hidden lg:flex" : "flex"} flex-col border-l border-r border-gray-200/60 bg-white flex-shrink-0 w-[340px] min-h-0`}>
-          {/* List toolbar */}
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
+        {/* ── MAIN: Thread/Conversation list (full-width like Gmail) ── */}
+        <div className="flex flex-col border-l border-gray-200/60 bg-white flex-1 min-h-0">
+          {/* Gmail-style toolbar */}
+          <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200 flex-shrink-0 h-12">
             <Checkbox
               checked={
                 inboxMode === "gmail"
@@ -1507,15 +1507,22 @@ export default function InboxPage() {
                   : false
               }
               onCheckedChange={inboxMode === "gmail" ? handleSelectAllGmailThreads : undefined}
-              className="h-4 w-4 ml-1"
+              className="h-[18px] w-[18px]"
             />
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 ml-2"
               onClick={() => inboxMode === "gmail" ? loadGmailThreads(gmailLabelId) : loadConversations()}
             >
-              <RefreshCw className={`h-4 w-4 text-gray-500 ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1">
+              <Mail className="h-4 w-4" />
+              Gmail Phone
+            </Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9">
+              <MoreVertical className="h-4 w-4 text-[#5f6368]" />
             </Button>
             {inboxMode === "gmail" && selectedGmailThreadIds.size > 0 && (
               <DropdownMenu>
@@ -1554,15 +1561,18 @@ export default function InboxPage() {
             )}
             <div className="flex-1" />
             {inboxMode === "gmail" && (
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading}>
-                  <ChevronLeft className="h-4 w-4 text-gray-500" />
-                </Button>
-                <span className="text-[11px] text-gray-500 tabular-nums">
-                  {gmailThreads.length > 0 ? `${(gmailCurrentPage - 1) * 100 + 1}–${(gmailCurrentPage - 1) * 100 + gmailThreads.length}` : "0"}
+              <div className="flex items-center gap-0">
+                <span className="text-[13px] text-[#5f6368] tabular-nums mr-2">
+                  {gmailThreads.length > 0 ? `${(gmailCurrentPage - 1) * 100 + 1}–${(gmailCurrentPage - 1) * 100 + gmailThreads.length} di ${gmailDebugInfo?.rawThreadsCount || gmailThreads.length}` : "0"}
                 </span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
-                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading}>
+                  <ChevronLeft className="h-5 w-5 text-[#5f6368]" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
+                  <ChevronRight className="h-5 w-5 text-[#5f6368]" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9 ml-1">
+                  <MoreVertical className="h-4 w-4 text-[#5f6368]" />
                 </Button>
               </div>
             )}
