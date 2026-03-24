@@ -1,7 +1,7 @@
 "use client"
 
-// v784 BUILD MARKER - Removed duplicate corrupted Smart conversation map code
-const FRONTEND_BUILD = "v784-cleaned-duplicates"
+// v785 BUILD MARKER - Added missing ternary operator in detail view conditional
+const FRONTEND_BUILD = "v785-fixed-ternary"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1600,6 +1600,7 @@ export default function InboxPage() {
 
           {/* Thread/Conversation rows OR Detail View */}
           <div className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
+            {(selectedGmailThread || selectedConversation) ? (
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
               <div className="flex flex-col h-full">
                 {/* Subject header */}
