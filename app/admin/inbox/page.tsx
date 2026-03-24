@@ -1,7 +1,7 @@
 "use client"
 
-// v778 BUILD MARKER - Inline detail view (Gmail-style, not modal)
-const FRONTEND_BUILD = "v778-inline-detail"
+// v779 BUILD MARKER - Fixed horizontal overflow with max-w-full and truncate
+const FRONTEND_BUILD = "v779-no-scroll"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1599,13 +1599,12 @@ export default function InboxPage() {
           </div>
 
           {/* Thread/Conversation rows OR Detail View */}
-          <div className="flex-1 overflow-y-auto">
-            {(selectedGmailThread || selectedConversation) ? (
+          <div className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
               <div className="flex flex-col h-full">
                 {/* Subject header */}
-                <div className="px-6 py-4 border-b border-gray-200">
-                  <h1 className="text-xl font-normal text-[#202124]">
+                <div className="px-6 py-4 border-b border-gray-200 overflow-hidden">
+                  <h1 className="text-xl font-normal text-[#202124] truncate">
                     {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
                   </h1>
                   <div className="flex items-center gap-2 mt-2">
@@ -1614,7 +1613,7 @@ export default function InboxPage() {
                 </div>
 
                 {/* Messages list */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 w-full">
                   {gmailThreadLoading || (inboxMode === "smart" && isLoading) ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
@@ -1626,37 +1625,37 @@ export default function InboxPage() {
                     </div>
                   ) : (
                     (inboxMode === "gmail" ? gmailMessages : messages).map((message: any, idx: number) => (
-                      <div key={message.id} className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+                      <div key={message.id} className="border border-gray-200 rounded-lg bg-white overflow-hidden max-w-full">
                         {/* Message header */}
-                        <div className="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50">
+                        <div className="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50 max-w-full overflow-hidden">
                           <div className="h-10 w-10 rounded-full bg-[#a0c3ff] flex items-center justify-center text-[#1a365d] font-semibold flex-shrink-0 text-sm">
                             {(message.from?.name || message.from?.email || "?")[0].toUpperCase()}
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-sm text-[#202124]">
+                          <div className="flex-1 min-w-0 max-w-full">
+                            <div className="flex items-start justify-between gap-2 min-w-0">
+                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                <span className="font-semibold text-sm text-[#202124] truncate">
                                   {message.sender_type === "agent" ? "Tu" : message.from?.name || message.from?.email?.split("@")[0]}
                                 </span>
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 truncate">
                                   {"<"}{message.from?.email || ""}{">"} 
                                 </span>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500">
-                                  {format(new Date(message.gmail_internal_date || message.received_at || message.created_at), "EEE d MMM, HH:mm", { locale: it })}
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-xs text-gray-500 whitespace-nowrap">
+                                  {format(new Date(message.gmail_internal_date || message.received_at || message.created_at), "EEe d MMM, HH:mm", { locale: it })}
                                 </span>
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
                                   <Star className="h-4 w-4 text-gray-400" />
                                 </Button>
                               </div>
                             </div>
-                            <div className="text-xs text-gray-500 mt-0.5">a {message.to || "me"}</div>
+                            <div className="text-xs text-gray-500 mt-0.5 truncate">a {message.to || "me"}</div>
                           </div>
                         </div>
                         {/* Message content */}
-                        <div className="px-4 pb-4 pl-[68px]">
-                          <div className="text-sm text-gray-800">
+                        <div className="px-4 pb-4 pl-4 max-w-full overflow-hidden">
+                          <div className="text-sm text-gray-800 break-words whitespace-pre-wrap">
                             {renderEmailContent(message.content, message.content_type)}
                           </div>
                         </div>
@@ -1732,7 +1731,7 @@ export default function InboxPage() {
                   <div
                     key={thread.id}
                     onClick={() => handleSelectGmailThread(thread)}
-                    className={`flex items-center gap-2 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group ${
+                    className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
                       selectedGmailThread?.id === thread.id
                         ? "bg-[#d3e3fd]"
                         : thread.isUnread
@@ -1749,10 +1748,10 @@ export default function InboxPage() {
                     <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
                       <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
                     </button>
-                    <span className={`w-[130px] flex-shrink-0 truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
+                    <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
                       {thread.from.name || thread.from.email.split("@")[0]}
                     </span>
-                    <div className="flex-1 min-w-0 flex items-baseline gap-1 overflow-hidden">
+                    <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
                       <span className={`truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
                         {thread.subject || "(nessun oggetto)"}
                       </span>
@@ -1761,7 +1760,7 @@ export default function InboxPage() {
                       )}
                     </div>
                     {thread.messagesCount > 1 && (
-                      <span className="text-[11px] text-gray-500 flex-shrink-0 ml-1">{thread.messagesCount}</span>
+                      <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
                     )}
                     <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-gray-500"}`}>
                       {format(new Date(thread.date), "d MMM", { locale: it })}
@@ -1783,7 +1782,7 @@ export default function InboxPage() {
                   <div
                     key={conv.id}
                     onClick={() => handleSelectConversation(conv)}
-                    className={`flex items-center gap-2 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group ${
+                    className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
                       selectedConversation?.id === conv.id
                         ? "bg-[#d3e3fd]"
                         : conv.unread_count > 0
@@ -1795,10 +1794,10 @@ export default function InboxPage() {
                     <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
                       <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
                     </button>
-                    <span className={`w-[130px] flex-shrink-0 truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                    <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
                       {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
                     </span>
-                    <div className="flex-1 min-w-0 flex items-baseline gap-1 overflow-hidden">
+                    <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
                       <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
                         {conv.subject || "(nessun oggetto)"}
                       </span>
