@@ -1058,7 +1058,7 @@ export default function InboxPage() {
           loadConversations()
         })
         .subscribe((status) => {
-       Realtime conversations subscription status:", status)
+          // Realtime subscription status
         })
 
       return () => {

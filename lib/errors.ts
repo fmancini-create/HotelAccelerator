@@ -48,6 +48,23 @@ export class ConflictError extends ServiceError {
   }
 }
 
+export class InvariantViolationError extends ServiceError {
+  constructor(message = "Invariant violation") {
+    super(message, 400, "INVARIANT_VIOLATION")
+    this.name = "InvariantViolationError"
+  }
+}
+
+export class RateLimitError extends ServiceError {
+  constructor(message = "Rate limit exceeded") {
+    super(message, 429, "RATE_LIMIT")
+    this.name = "RateLimitError"
+  }
+}
+
+// Alias for backward compatibility
+export const AuthorizationError = UnauthorizedError
+
 /**
  * Handles service errors and returns appropriate NextResponse
  * Always returns a Response to ensure route handlers don't fail
