@@ -522,14 +522,6 @@ export default function InboxPage() {
             labelId,
             resultSizeEstimate: data.resultSizeEstimate,
           })
-
-       FRONTEND: Gmail threads loaded:", {
-            apiVersion: data.debugVersion,
-            count: data.threads?.length || 0,
-            total: data.resultSizeEstimate,
-            hasNextPage: !!data.nextPageToken,
-            debug: data._debug,
-          })
         } else {
           const errorBody = await res.text()
           console.error("[v0] FRONTEND: Error loading threads:", res.status, errorBody)
