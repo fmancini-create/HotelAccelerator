@@ -1,7 +1,7 @@
 "use client"
 
-// v782 BUILD MARKER - Fixed JSX map structure with function statement
-const FRONTEND_BUILD = "v782-map-syntax"
+// v783 BUILD MARKER - Simplified map functions to standard arrow syntax
+const FRONTEND_BUILD = "v783-fixed-maps"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1728,8 +1728,7 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <>
-                  {gmailThreads.map((thread) => {
-                    const span = (
+                  {gmailThreads.map((thread) => (
                     <div
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
@@ -1768,14 +1767,11 @@ export default function InboxPage() {
                         {format(new Date(thread.date), "d MMM", { locale: it })}
                       </span>
                     </div>
-                    )
-                    return span
-                  })}
+                  ))}
                 </>
-              )
-            ) : (
-              // Smart mode conversation list
-              isLoading ? (
+              ) : (
+                // Smart mode conversation list
+                isLoading ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : conversations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
@@ -1784,8 +1780,7 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <>
-                  {conversations.map((conv) => {
-                    const span = (
+                  {conversations.map((conv) => (
                     <div
                       key={conv.id}
                       onClick={() => handleSelectConversation(conv)}
@@ -1812,6 +1807,18 @@ export default function InboxPage() {
                           <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{conv.lastMessage.content}</span>
                         )}
                       </div>
+                      {conv.unread_count > 0 && (
+                        <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
+                      )}
+                      <span className="text-[11px] text-gray-500 flex-shrink-0 min-w-[42px] text-right">
+                        {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
+                      </span>
+                    </div>
+                  ))}
+                </>
+              )
+            )}
+          </div>
                       {conv.unread_count > 0 && (
                         <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
                       )}
