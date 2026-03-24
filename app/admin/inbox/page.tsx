@@ -1,7 +1,7 @@
 "use client"
 
-// v783 BUILD MARKER - Simplified map functions to standard arrow syntax
-const FRONTEND_BUILD = "v783-fixed-maps"
+// v784 BUILD MARKER - Removed duplicate corrupted Smart conversation map code
+const FRONTEND_BUILD = "v784-cleaned-duplicates"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1818,20 +1818,6 @@ export default function InboxPage() {
                 </>
               )
             )}
-          </div>
-                      {conv.unread_count > 0 && (
-                        <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
-                      )}
-                      <span className="text-[11px] text-gray-500 flex-shrink-0 min-w-[42px] text-right">
-                        {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
-                      </span>
-                    </div>
-                    )
-                    return span
-                  })}
-                </>
-              )
-            )
           </div>
         </div>
       </div>
