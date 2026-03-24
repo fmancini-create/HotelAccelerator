@@ -1,7 +1,7 @@
 "use client"
 
-// v779 BUILD MARKER - Fixed horizontal overflow with max-w-full and truncate
-const FRONTEND_BUILD = "v779-no-scroll"
+// v780 BUILD MARKER - Fixed JSX map syntax in ternary
+const FRONTEND_BUILD = "v780-fixed-map"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1727,7 +1727,8 @@ export default function InboxPage() {
                   <p className="text-sm">Nessun messaggio</p>
                 </div>
               ) : (
-                gmailThreads.map((thread) => (
+                <>
+                  {gmailThreads.map((thread) => (
                   <div
                     key={thread.id}
                     onClick={() => handleSelectGmailThread(thread)}
@@ -1778,7 +1779,8 @@ export default function InboxPage() {
                   <p className="text-sm">Nessun messaggio da gestire</p>
                 </div>
               ) : (
-                conversations.map((conv) => (
+                <>
+                  {conversations.map((conv) => (
                   <div
                     key={conv.id}
                     onClick={() => handleSelectConversation(conv)}
@@ -1812,9 +1814,10 @@ export default function InboxPage() {
                       {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
                     </span>
                   </div>
-                ))
+                  ))}
+                </>
               )
-            )}
+            )
           </div>
         </div>
       </div>
