@@ -1055,7 +1055,6 @@ export default function InboxPage() {
       const conversationsChannel = supabase
         .channel("smart-inbox-conversations")
         .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
-       Realtime: conversation change detected:", payload.eventType, payload.new)
           loadConversations()
         })
         .subscribe((status) => {
