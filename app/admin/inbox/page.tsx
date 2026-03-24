@@ -1345,72 +1345,54 @@ export default function InboxPage() {
 
   return (
     <div className="h-screen flex flex-col bg-white">
-      {/* TOP BAR — Gmail-style */}
-      <header className="h-16 flex-shrink-0 flex items-center gap-4 px-4 bg-white border-b border-gray-200/60">
-        {/* Logo + back */}
-        <button
-          onClick={() => router.push("/admin")}
-          className="flex items-center gap-2 text-gray-500 hover:text-gray-700 mr-2"
-        >
-          <ChevronLeft className="h-5 w-5" />
-          <span className="text-sm">Admin</span>
+      {/* Gmail-style top bar */}
+      <header className="h-16 flex-shrink-0 flex items-center gap-3 px-4 bg-white border-b border-gray-200/50">
+        {/* Hamburger menu */}
+        <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
         </button>
-        {/* Search bar — centrato come Gmail */}
-        <div className="flex-1 max-w-2xl mx-auto">
+        
+        {/* Gmail logo */}
+        <div className="flex items-center gap-2">
+          <svg width="32" height="32" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#4caf50" d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z"/><path fill="#1e88e5" d="M3,16.2l3.614,5.547L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3,12.298V16.2l10,7.5V11.2L9,7.3C7.553,6.173,5.5,6.583,3,12.298z"/><path fill="#fbc02d" d="M45,12.298V16.2l-10,7.5V11.2l4-3.9C40.447,6.173,42.5,6.583,45,12.298z"/>
+          </svg>
+          <span className="text-2xl font-normal text-gray-600 tracking-tight">Gmail</span>
+        </div>
+
+        {/* Search bar centered */}
+        <div className="flex-1 max-w-md">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-            <input
-              type="text"
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+            <Input
               placeholder="Cerca nella posta"
+              className="w-full h-10 pl-10 pr-3 bg-[#f1f3f4] hover:bg-[#e8eaed] focus:bg-white border-0 rounded-2xl text-sm shadow-none focus-visible:ring-0 focus:shadow-sm transition-all"
               value={inboxMode === "gmail" ? gmailSearchQuery : searchQuery}
-              onChange={(e) =>
-                inboxMode === "gmail"
-                  ? setGmailSearchQuery(e.target.value)
-                  : setSearchQuery(e.target.value)
-              }
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  inboxMode === "gmail" ? handleGmailSearch() : loadConversations()
-                }
-              }}
-              className="w-full h-11 pl-12 pr-4 bg-[#eaf1fb] hover:bg-[#dce6f7] focus:bg-white border-0 rounded-2xl text-[15px] outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+              onChange={(e) => inboxMode === "gmail" ? setGmailSearchQuery(e.target.value) : setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (inboxMode === "gmail" ? handleGmailSearch() : loadConversations())}
             />
           </div>
         </div>
-        {/* Right actions */}
-        <div className="flex items-center gap-2 ml-auto">
+
+        {/* Right icons */}
+        <div className="flex items-center gap-1 ml-auto">
           <Tabs value={inboxMode} onValueChange={(v) => setInboxMode(v as InboxMode)}>
-            <TabsList className="h-9 bg-gray-200/60">
-              <TabsTrigger value="smart" className="flex items-center gap-1.5 h-7 text-xs">
-                <Zap className="h-3.5 w-3.5" />
-                Smart
-              </TabsTrigger>
-              <TabsTrigger value="gmail" className="flex items-center gap-1.5 h-7 text-xs">
-                <Mail className="h-3.5 w-3.5" />
-                Gmail
-              </TabsTrigger>
+            <TabsList className="bg-transparent border-0 h-8">
+              <TabsTrigger value="smart" className="text-xs h-6">Smart</TabsTrigger>
+              <TabsTrigger value="gmail" className="text-xs h-6">Gmail</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9 text-gray-500"
-            onClick={() => router.push("/admin/channels/email")}
-            title="Impostazioni email"
-          >
-            <Settings className="h-5 w-5" />
+          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#5f6368"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
           </Button>
-          {inboxMode === "gmail" && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className={`h-9 w-9 ${showDebugPanel ? "text-blue-600" : "text-gray-500"}`}
-              onClick={() => setShowDebugPanel(!showDebugPanel)}
-              title="Debug"
-            >
-              <Bug className="h-5 w-5" />
-            </Button>
-          )}
+          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9" onClick={() => setShowDebugPanel(!showDebugPanel)}>
+            <Settings className="h-4 w-4 text-gray-600" />
+          </Button>
+          <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold ml-2 cursor-pointer">
+            {adminUser?.name?.[0]?.toUpperCase() || "A"}
+          </div>
         </div>
       </header>
 
