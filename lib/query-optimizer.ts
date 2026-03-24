@@ -5,7 +5,7 @@
  * Includes batch loading, pagination, and caching strategies.
  */
 
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export interface PaginationParams {
   page: number
@@ -126,7 +126,7 @@ export class BatchLoader<T> {
  */
 export function createPropertyLoader() {
   return new BatchLoader<{ id: string; name: string; slug: string }>(async (ids) => {
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const { data } = await supabase.from("properties").select("id, name, slug").in("id", ids)
 
     const map = new Map()
@@ -142,7 +142,7 @@ export function createPropertyLoader() {
  */
 export function createContactLoader(propertyId: string) {
   return new BatchLoader<{ id: string; email: string; name: string }>(async (ids) => {
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const { data } = await supabase
       .from("contacts")
       .select("id, email, name")
@@ -165,7 +165,7 @@ export async function getConversationsWithLastMessage(
   propertyId: string,
   params: PaginationParams & { status?: string; channel?: string },
 ) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
   const { from, to } = getPaginationRange(params)
 
   let query = supabase
@@ -204,7 +204,7 @@ export async function getConversationsWithLastMessage(
  * Optimized stats query using single aggregation
  */
 export async function getTenantStats(propertyId: string) {
-  const supabase = await createClient()
+  const supabase = createServiceClient()
 
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()

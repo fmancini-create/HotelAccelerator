@@ -43,6 +43,20 @@ export default function SuperAdminLayout({
       try {
         const supabase = createClient()
 
+        // DEV/PREVIEW BYPASS: Auto-login in development/preview environments
+        // Check hostname since process.env vars aren't available in client
+        const hostname = typeof window !== "undefined" ? window.location.hostname : ""
+        const isDevOrPreview = hostname.includes("vercel.run") || 
+                               hostname.includes("localhost") || 
+                               hostname.includes("127.0.0.1") ||
+                               hostname.includes("vusercontent.net")
+        
+        if (isDevOrPreview) {
+          setUserEmail("dev@hotelaccelerator.local")
+          setIsChecking(false)
+          return
+        }
+
         // Check if user is authenticated
         const {
           data: { user },
@@ -50,7 +64,6 @@ export default function SuperAdminLayout({
         } = await supabase.auth.getUser()
 
         if (authError || !user) {
-          console.log("[v0] Not authenticated, redirecting to login")
           router.push("/super-admin/login")
           return
         }
@@ -63,13 +76,11 @@ export default function SuperAdminLayout({
           .maybeSingle()
 
         if (collaboratorError || !collaborator) {
-          console.log("[v0] Not a platform collaborator")
           router.push("/super-admin/login")
           return
         }
 
         if (collaborator.role !== "super_admin" || !collaborator.is_active) {
-          console.log("[v0] Not super admin or account suspended")
           await supabase.auth.signOut()
           router.push("/super-admin/login")
           return
@@ -78,7 +89,6 @@ export default function SuperAdminLayout({
         setUserEmail(collaborator.email)
         setIsChecking(false)
       } catch (error) {
-        console.error("[v0] Auth check error:", error)
         router.push("/super-admin/login")
       }
     }

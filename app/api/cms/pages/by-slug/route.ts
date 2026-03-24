@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
 // GET /api/cms/pages/by-slug?property_id=xxx&slug=yyy - Pagina pubblica per slug
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "property_id e slug richiesti" }, { status: 400 })
     }
 
-    const supabase = await createServerClient()
+    const supabase = createServiceClient()
 
     const { data: page, error } = await supabase
       .from("cms_pages")

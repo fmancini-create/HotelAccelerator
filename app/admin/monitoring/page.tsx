@@ -121,16 +121,16 @@ export default function MonitoringPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const effectiveUser = adminUser
+
   useEffect(() => {
     async function loadData() {
-      if (!adminUser?.property_id) return
+      if (!effectiveUser?.property_id) return
 
       try {
         setLoading(true)
-        const res = await fetch(`/api/admin/monitoring?propertyId=${adminUser.property_id}`)
-        if (!res.ok) {
-          throw new Error("Errore nel caricamento dei dati")
-        }
+        const res = await fetch(`/api/admin/monitoring?propertyId=${effectiveUser.property_id}`)
+        if (!res.ok) throw new Error("Errore nel caricamento dei dati")
         const data = await res.json()
         setQuotaStatus(data.quotaStatus)
         setStats(data.stats)
@@ -141,10 +141,10 @@ export default function MonitoringPage() {
       }
     }
 
-    if (!authLoading && adminUser) {
+    if (!authLoading) {
       loadData()
     }
-  }, [adminUser, authLoading])
+  }, [effectiveUser?.property_id, authLoading])
 
   if (authLoading || loading) {
     return (
@@ -161,7 +161,7 @@ export default function MonitoringPage() {
     )
   }
 
-  if (!adminUser) {
+  if (!effectiveUser) {
     return (
       <>
         <AdminHeader
