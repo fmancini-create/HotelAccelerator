@@ -1346,9 +1346,9 @@ export default function InboxPage() {
   )
 
   return (
-    <div className="h-screen flex flex-col bg-[#f6f8fc]">
+    <div className="h-screen flex flex-col bg-white">
       {/* TOP BAR — Gmail-style */}
-      <header className="h-16 flex-shrink-0 flex items-center gap-4 px-4 bg-[#f6f8fc] border-b border-gray-200/60">
+      <header className="h-16 flex-shrink-0 flex items-center gap-4 px-4 bg-white border-b border-gray-200/60">
         {/* Logo + back */}
         <button
           onClick={() => router.push("/admin")}
