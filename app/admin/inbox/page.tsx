@@ -1266,9 +1266,13 @@ export default function InboxPage() {
           <h2 className="text-xl font-semibold mb-2">Accesso richiesto</h2>
           <p className="text-muted-foreground mb-4">Devi effettuare il login per accedere all'inbox.</p>
           <Button onClick={() => router.push("/admin/login")}>Vai al login</Button>
+          </div>
         </div>
-      </div>
-    )
+      )}
+
+      {/* Compose modal - Modal Dialog wrapper end */}
+    </div>
+  )
   }
 
   const SmartDebugPanel = () => {
