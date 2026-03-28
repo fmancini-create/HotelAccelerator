@@ -386,8 +386,112 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
         />
     </div>
   )
-}
+})
 
+// ==================== MAIN PAGE COMPONENT ====================
+export default function InboxPage() {
+  const router = useRouter()
+  const { adminUser, isLoading: authLoading } = useAdminAuth()
+  const supabase = createClient()
+
+  // ── Inbox Mode ──
+  type InboxMode = "gmail" | "smart"
+  const [inboxMode, setInboxMode] = useState<InboxMode>("gmail")
+
+  // ── Gmail State ──
+  const [gmailThreads, setGmailThreads] = useState<any[]>([])
+  const [gmailLoading, setGmailLoading] = useState(false)
+  const [gmailMessages, setGmailMessages] = useState<any[]>([])
+  const [gmailThreadLoading, setGmailThreadLoading] = useState(false)
+  const [selectedGmailThread, setSelectedGmailThread] = useState<any>(null)
+  const [gmailLabelId, setGmailLabelId] = useState("INBOX")
+  const [gmailSearchQuery, setGmailSearchQuery] = useState("")
+  const [gmailNextPageToken, setGmailNextPageToken] = useState<string | null>(null)
+  const [gmailPrevPageTokens, setGmailPrevPageTokens] = useState<string[]>([])
+  const [gmailCurrentPage, setGmailCurrentPage] = useState(1)
+  const [gmailUserLabels, setGmailUserLabels] = useState<GmailLabelInfo[]>([])
+  const [gmailLabelCounts, setGmailLabelCounts] = useState<Record<string, { total: number; unread: number }>>({})
+  const [gmailDebugInfo, setGmailDebugInfo] = useState<GmailDebugInfo | null>(null)
+  const [gmailApiVersion, setGmailApiVersion] = useState<string | null>(null)
+  const [selectedGmailThreadIds, setSelectedGmailThreadIds] = useState<Set<string>>(new Set())
+  const [isThreadReady, setIsThreadReady] = useState(false)
+  const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
+  const [labelsExpanded, setLabelsExpanded] = useState(false)
+
+  // ── Smart Mode State ──
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState("open")
+  const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [lastSyncStatus, setLastSyncStatus] = useState<string | null>(null)
+
+  // ── Shared State ──
+  const [replyText, setReplyText] = useState("")
+  const [replyChannel, setReplyChannel] = useState("email")
+  const [isSending, setIsSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [showReplyBox, setShowReplyBox] = useState(false)
+  const [showComposeModal, setShowComposeModal] = useState(false)
+  const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" })
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [attachments, setAttachments] = useState<File[]>([])
+
+  // ── Refs ──
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const markedAsReadRef = useRef<Set<string>>(new Set())
+
+  // ── Load Gmail Threads ──
+  const loadGmailThreads = useCallback(async (
+    labelId?: string, 
+    pageToken?: string, 
+    query?: string,
+    isPageChange = false
+  ) => {
+    setGmailLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (labelId) params.set("labelId", labelId)
+      if (pageToken) params.set("pageToken", pageToken)
+      if (query) params.set("q", query)
+      const res = await fetch(`/api/gmail/threads?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGmailThreads(data.threads || [])
+        setGmailNextPageToken(data.nextPageToken || null)
+        setGmailDebugInfo(data.debug || null)
+        setGmailApiVersion(data.apiVersion || null)
+        if (!isPageChange) {
+          setGmailCurrentPage(1)
+          setGmailPrevPageTokens([])
+        }
+      }
+    } catch (err) {
+      console.error("Error loading Gmail threads:", err)
+    } finally {
+      setGmailLoading(false)
+    }
+  }, [])
+
+  // ── Load Gmail Labels ──
+  const loadGmailLabels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gmail/labels")
+      if (res.ok) {
+        const data = await res.json()
+        setGmailUserLabels(data.userLabels || [])
+        setGmailLabelCounts(data.labelCounts || {})
+      }
+    } catch (err) {
+      console.error("Error loading Gmail labels:", err)
+    }
+  }, [])
 
   const loadGmailThread = useCallback(async (threadId: string) => {
     setGmailThreadLoading(true)
