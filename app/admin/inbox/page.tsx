@@ -385,6 +385,14 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
           title="Email content"
         />
     </div>
+    )
+  }
+
+  // Plain text fallback
+  return (
+    <div className="p-4 text-sm whitespace-pre-wrap font-sans text-[#202124] leading-5">
+      {content}
+    </div>
   )
 })
 
