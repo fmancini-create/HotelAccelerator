@@ -1,7 +1,7 @@
 "use client"
 
-// v789 BUILD MARKER - Fixed malformed Smart mode ternary with invalid curly braces
-const FRONTEND_BUILD = "v789-fixed-smart-ternary"
+// v790 BUILD MARKER - Final JSX parsing fix - all structures corrected
+const FRONTEND_BUILD = "v790-final-parsing-fix"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
