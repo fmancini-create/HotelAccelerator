@@ -1668,7 +1668,7 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
                 </>
               )
             )
-            )}
+            }
           </div>
         </div>
 
