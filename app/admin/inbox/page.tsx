@@ -1667,7 +1667,6 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
                   ))}
                 </>
               )
-            )
             )}
 
       {/* Compose modal */}
