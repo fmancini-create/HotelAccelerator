@@ -1267,10 +1267,9 @@ export default function InboxPage() {
           <p className="text-muted-foreground mb-4">Devi effettuare il login per accedere all'inbox.</p>
           <Button onClick={() => router.push("/admin/login")}>Vai al login</Button>
         </div>
-      )}
-    </div>
-  )
-}
+      </div>
+    )
+  }
 
   const SmartDebugPanel = () => {
     if (!showDebugPanel || !smartDebugInfo) return null
