@@ -1,7 +1,7 @@
 "use client"
 
-// v787 BUILD MARKER - Removed duplicate corrupted ternary in Smart mode section
-const FRONTEND_BUILD = "v787-fixed-duplication"
+// v788 BUILD MARKER - Fixed nested ternary JSX with proper parenthesization
+const FRONTEND_BUILD = "v788-fixed-nested-ternary-jsx"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1719,15 +1719,16 @@ export default function InboxPage() {
                   </div>
                 )}
               </div>
-            ) : inboxMode === "gmail" ? (
-              gmailLoading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
-              ) : gmailThreads.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                  <Inbox className="h-10 w-10 mb-3 text-gray-300" />
-                  <p className="text-sm">Nessun messaggio</p>
-                </div>
-              ) : (
+            ) : (
+              inboxMode === "gmail" ? (
+                gmailLoading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                ) : gmailThreads.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <Inbox className="h-10 w-10 mb-3 text-gray-300" />
+                    <p className="text-sm">Nessun messaggio</p>
+                  </div>
+                ) : (
                 <>
                   {gmailThreads.map((thread) => (
                     <div
@@ -1770,7 +1771,8 @@ export default function InboxPage() {
                     </div>
                   ))}
                 </>
-              ) : (
+              )
+            ) : (
                 {inboxMode === "smart" && (isLoading ? (
                   <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
                 ) : conversations.length === 0 ? (
@@ -1816,7 +1818,7 @@ export default function InboxPage() {
                     </div>
                   ))}
                 </>
-              ))}
+              )
             )}
           </div>
         </div>
