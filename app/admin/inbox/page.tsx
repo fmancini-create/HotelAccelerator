@@ -1,7 +1,7 @@
 "use client"
 
-// v785 BUILD MARKER - Added missing ternary operator in detail view conditional
-const FRONTEND_BUILD = "v785-fixed-ternary"
+// v786 BUILD MARKER - Fixed nested ternary structure in thread/conversation list conditional
+const FRONTEND_BUILD = "v786-fixed-nested-ternary"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -1771,9 +1771,8 @@ export default function InboxPage() {
                   ))}
                 </>
               ) : (
-                // Smart mode conversation list
-                isLoading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <>
+                  {conversations.map((conv) => (
               ) : conversations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-gray-400">
                   <Inbox className="h-10 w-10 mb-3 text-gray-300" />
