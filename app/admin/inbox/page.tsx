@@ -1269,11 +1269,9 @@ export default function InboxPage() {
           </div>
         </div>
       )}
-
-      {/* Compose modal - Modal Dialog wrapper end */}
     </div>
   )
-  }
+}
 
   const SmartDebugPanel = () => {
     if (!showDebugPanel || !smartDebugInfo) return null
