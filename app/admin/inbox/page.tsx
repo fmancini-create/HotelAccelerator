@@ -384,27 +384,10 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           title="Email content"
         />
-      </div>
-    )
-  }
-
-  // Plain text fallback - Gmail style
-  return (
-    <div
-      className="gmail-message-body w-full"
-      style={{
-        whiteSpace: "pre-wrap",
-        fontFamily: "Roboto, RobotoDraft, Helvetica, Arial, sans-serif",
-        fontSize: "14px",
-        lineHeight: "20px",
-        color: "#202124",
-        wordWrap: "break-word",
-        overflowWrap: "break-word",
-      }}
-    >
-      {content}
     </div>
   )
+}
+
 })
 GmailMessageBody.displayName = "GmailMessageBody"
 
