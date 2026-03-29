@@ -418,6 +418,7 @@ export default function InboxPage() {
   const [gmailPrevPageTokens, setGmailPrevPageTokens] = useState<string[]>([])
   const [gmailCurrentPage, setGmailCurrentPage] = useState(1)
   const [gmailUserLabels, setGmailUserLabels] = useState<GmailLabelInfo[]>([])
+  const [gmailSystemLabels, setGmailSystemLabels] = useState<GmailLabelInfo[]>([])
   const [gmailLabelCounts, setGmailLabelCounts] = useState<Record<string, { total: number; unread: number }>>({})
   const [gmailDebugInfo, setGmailDebugInfo] = useState<GmailDebugInfo | null>(null)
   const [gmailApiVersion, setGmailApiVersion] = useState<string | null>(null)
@@ -493,7 +494,8 @@ export default function InboxPage() {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
         const data = await res.json()
-        setGmailUserLabels(data.userLabels || [])
+        setGmailUserLabels(data.labels || data.userLabels || [])
+        setGmailSystemLabels(data.systemLabels || [])
         setGmailLabelCounts(data.labelCounts || {})
       }
     } catch (err) {
