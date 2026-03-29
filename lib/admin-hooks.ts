@@ -103,7 +103,8 @@ export function useAdminAuth() {
     }
 
     checkAuth()
-  }, [router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const logout = async () => {
     const supabase = createClient()
