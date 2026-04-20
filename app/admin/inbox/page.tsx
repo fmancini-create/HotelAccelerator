@@ -770,6 +770,12 @@ export default function InboxPage() {
     [handleGmailAction, isThreadReady, selectedGmailThread, gmailLabelId, gmailSearchQuery],
   )
 
+  // Keep latest search query in a ref so polling doesn't reset on keystroke
+  const gmailSearchQueryRef = useRef(gmailSearchQuery)
+  useEffect(() => {
+    gmailSearchQueryRef.current = gmailSearchQuery
+  }, [gmailSearchQuery])
+
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
     if (inboxMode === "gmail" && !authLoading && adminUser) {
@@ -777,12 +783,12 @@ export default function InboxPage() {
       loadGmailThreads(gmailLabelId)
 
       const gmailPollInterval = setInterval(() => {
-        loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
+        loadGmailThreads(gmailLabelId, undefined, gmailSearchQueryRef.current)
       }, 30000)
 
       return () => clearInterval(gmailPollInterval)
     }
-  }, [inboxMode, authLoading, adminUser, loadGmailLabels, loadGmailThreads, gmailLabelId, gmailSearchQuery])
+  }, [inboxMode, authLoading, adminUser, loadGmailLabels, loadGmailThreads, gmailLabelId])
 
   // Load Gmail thread when selected
   useEffect(() => {
@@ -998,9 +1004,16 @@ export default function InboxPage() {
       // Load debug info
       loadSmartDebugInfo()
 
+      // Fast poll: reload conversations from DB every 30s (catches webhook-imported messages)
       pollIntervalRef.current = setInterval(() => {
         loadConversations()
       }, 30000)
+
+      // Slow poll: trigger a fresh Gmail->DB sync every 2 minutes
+      // This covers the case when Gmail Pub/Sub webhook is down, expired, or not configured.
+      const syncInterval = setInterval(() => {
+        performInitialSmartSync()
+      }, 120000)
 
       // Debug info refresh every 60 seconds
       const debugInterval = setInterval(loadSmartDebugInfo, 60000)
@@ -1027,6 +1040,7 @@ export default function InboxPage() {
 
       return () => {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+        clearInterval(syncInterval)
         clearInterval(debugInterval)
         supabase.removeChannel(messagesChannel)
         supabase.removeChannel(conversationsChannel)
@@ -1451,7 +1465,7 @@ export default function InboxPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowDebugPanel(!showDebugPanel)} title="Debug">
                     <Bug className="h-4 w-4 text-[#444746]" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadConversations} title="Aggiorna">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={performInitialSmartSync} title="Sincronizza nuovi messaggi">
                     <RefreshCw className={`h-4 w-4 text-[#444746] ${isLoading ? "animate-spin" : ""}`} />
                   </Button>
                   {lastSyncStatus && <span className="text-xs text-gray-400 truncate">{lastSyncStatus}</span>}
@@ -1495,7 +1509,8 @@ export default function InboxPage() {
               variant="ghost"
               size="icon"
               className="h-9 w-9 ml-2"
-              onClick={() => inboxMode === "gmail" ? loadGmailThreads(gmailLabelId) : loadConversations()}
+              onClick={() => inboxMode === "gmail" ? loadGmailThreads(gmailLabelId) : performInitialSmartSync()}
+              title={inboxMode === "gmail" ? "Ricarica Gmail" : "Sincronizza nuovi messaggi"}
             >
               <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
             </Button>
