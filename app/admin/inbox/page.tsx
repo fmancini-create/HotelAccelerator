@@ -1,7 +1,7 @@
 "use client"
 
-// v774 BUILD MARKER - This comment forces a new bundle hash
-const FRONTEND_BUILD = "v774-clean-build"
+// v790 BUILD MARKER - Final JSX parsing fix - all structures corrected
+const FRONTEND_BUILD = "v790-final-parsing-fix"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
 import { useRouter } from "next/navigation"
@@ -384,161 +384,124 @@ const GmailMessageBody = memo(({ content, contentType }: { content: string; cont
           sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           title="Email content"
         />
-      </div>
+    </div>
     )
   }
 
-  // Plain text fallback - Gmail style
+  // Plain text fallback
   return (
-    <div
-      className="gmail-message-body w-full"
-      style={{
-        whiteSpace: "pre-wrap",
-        fontFamily: "Roboto, RobotoDraft, Helvetica, Arial, sans-serif",
-        fontSize: "14px",
-        lineHeight: "20px",
-        color: "#202124",
-        wordWrap: "break-word",
-        overflowWrap: "break-word",
-      }}
-    >
+    <div className="p-4 text-sm whitespace-pre-wrap font-sans text-[#202124] leading-5">
       {content}
     </div>
   )
 })
-GmailMessageBody.displayName = "GmailMessageBody"
 
+// ==================== MAIN PAGE COMPONENT ====================
 export default function InboxPage() {
   const router = useRouter()
   const { adminUser, isLoading: authLoading } = useAdminAuth()
+  const supabase = createClient()
 
+  // ── Inbox Mode ──
+  type InboxMode = "gmail" | "smart"
   const [inboxMode, setInboxMode] = useState<InboxMode>("gmail")
 
-  // ==================== GMAIL MODE STATE (API-driven) ====================
-  const [gmailLabelId, setGmailLabelId] = useState("INBOX")
-  const [gmailThreads, setGmailThreads] = useState<GmailThread[]>([])
-  const [gmailMessages, setGmailMessages] = useState<GmailMessage[]>([])
-  const [selectedGmailThread, setSelectedGmailThread] = useState<GmailThread | null>(null)
-  const [isThreadReady, setIsThreadReady] = useState(false)
-  const [gmailSystemLabels, setGmailSystemLabels] = useState<GmailLabelInfo[]>([])
-  const [gmailUserLabels, setGmailUserLabels] = useState<GmailLabelInfo[]>([])
-  const [gmailNextPageToken, setGmailNextPageToken] = useState<string | null>(null)
-  const [gmailPrevPageTokens, setGmailPrevPageTokens] = useState<string[]>([]) // Track page history for back navigation
-  const [gmailTotalEstimate, setGmailTotalEstimate] = useState(0)
+  // ── Gmail State ──
+  const [gmailThreads, setGmailThreads] = useState<any[]>([])
   const [gmailLoading, setGmailLoading] = useState(false)
+  const [gmailMessages, setGmailMessages] = useState<any[]>([])
   const [gmailThreadLoading, setGmailThreadLoading] = useState(false)
+  const [selectedGmailThread, setSelectedGmailThread] = useState<any>(null)
+  const [gmailLabelId, setGmailLabelId] = useState("INBOX")
   const [gmailSearchQuery, setGmailSearchQuery] = useState("")
-  const [labelsExpanded, setLabelsExpanded] = useState(true)
-  const [gmailDebugInfo, setGmailDebugInfo] = useState<GmailDebugInfo | null>(null)
-  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [gmailNextPageToken, setGmailNextPageToken] = useState<string | null>(null)
+  const [gmailPrevPageTokens, setGmailPrevPageTokens] = useState<string[]>([])
   const [gmailCurrentPage, setGmailCurrentPage] = useState(1)
+  const [gmailUserLabels, setGmailUserLabels] = useState<GmailLabelInfo[]>([])
+  const [gmailSystemLabels, setGmailSystemLabels] = useState<GmailLabelInfo[]>([])
+  const [gmailLabelCounts, setGmailLabelCounts] = useState<Record<string, { total: number; unread: number }>>({})
+  const [gmailDebugInfo, setGmailDebugInfo] = useState<GmailDebugInfo | null>(null)
   const [gmailApiVersion, setGmailApiVersion] = useState<string | null>(null)
-  // Add new state for selected threads
   const [selectedGmailThreadIds, setSelectedGmailThreadIds] = useState<Set<string>>(new Set())
+  const [isThreadReady, setIsThreadReady] = useState(false)
+  const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
+  const [labelsExpanded, setLabelsExpanded] = useState(false)
 
-  // ==================== SMART MODE STATE (DB-driven) ====================
+  // ── Smart Mode State ──
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("open")
-  const [isLoading, setIsLoading] = useState(true)
+  const [statusFilter, setStatusFilter] = useState("open")
   const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
-  const [debugInfo, setDebugInfo] = useState<any>(null) // Added for debug info in smart mode
-  const [lastSyncStatus, setLastSyncStatus] = useState<string>("") // Added for last sync status
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [lastSyncStatus, setLastSyncStatus] = useState<string | null>(null)
 
-  // ==================== SHARED STATE ====================
+  // ── Shared State ──
   const [replyText, setReplyText] = useState("")
-  const [replyChannel, setReplyChannel] = useState<string>("email")
+  const [replyChannel, setReplyChannel] = useState("email")
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [attachments, setAttachments] = useState<File[]>([])
-  const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
+  const [showReplyBox, setShowReplyBox] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" })
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [attachments, setAttachments] = useState<File[]>([])
 
+  // ── Refs ──
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const realtimeChannelRef = useRef<any>(null)
-  const markedAsReadRef = useRef<Set<string>>(new Set())
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const markedAsReadRef = useRef<Set<string>>(new Set())
 
-  // ==================== GMAIL MODE FUNCTIONS (Direct API calls) ====================
+  // ── Load Gmail Threads ──
+  const loadGmailThreads = useCallback(async (
+    labelId?: string, 
+    pageToken?: string, 
+    query?: string,
+    isPageChange = false
+  ) => {
+    setGmailLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (labelId) params.set("labelId", labelId)
+      if (pageToken) params.set("pageToken", pageToken)
+      if (query) params.set("q", query)
+      const res = await fetch(`/api/gmail/threads?${params}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGmailThreads(data.threads || [])
+        setGmailNextPageToken(data.nextPageToken || null)
+        setGmailDebugInfo(data.debug || null)
+        setGmailApiVersion(data.apiVersion || null)
+        if (!isPageChange) {
+          setGmailCurrentPage(1)
+          setGmailPrevPageTokens([])
+        }
+      }
+    } catch (err) {
+      console.error("Error loading Gmail threads:", err)
+    } finally {
+      setGmailLoading(false)
+    }
+  }, [])
 
-  const canPerformGmailAction = useCallback((): boolean => {
-    if (!selectedGmailThread) return false
-    if (!isThreadReady) return false
-    // v774: REMOVED explicit label check here - it's handled within the specific action handlers if needed,
-    // but the core requirement is just thread readiness for basic actions like star, archive, etc.
-    // if (!selectedGmailThread.labels) return false
-    // if (!Array.isArray(selectedGmailThread.labels)) return false
-    // if (selectedGmailThread.labels.length === 0) return false
-    return true
-  }, [selectedGmailThread, isThreadReady])
-
-  // Helper to check if thread has valid labels
-  const isThreadDataValid = (thread: GmailThread): boolean => {
-    return thread.labels && Array.isArray(thread.labels) && thread.labels.length > 0
-  }
-
+  // ── Load Gmail Labels ──
   const loadGmailLabels = useCallback(async () => {
-
     try {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
         const data = await res.json()
+        setGmailUserLabels(data.labels || data.userLabels || [])
         setGmailSystemLabels(data.systemLabels || [])
-        setGmailUserLabels(data.labels || [])
+        setGmailLabelCounts(data.labelCounts || {})
       }
-    } catch (error) {
-      console.error("[Gmail] Error loading labels:", error)
+    } catch (err) {
+      console.error("Error loading Gmail labels:", err)
     }
   }, [])
-
-  const loadGmailThreads = useCallback(
-    async (labelId: string = gmailLabelId, pageToken?: string, query?: string, isNextPage = false) => {
-      setGmailLoading(true)
-      try {
-        const params = new URLSearchParams()
-        params.set("labelId", labelId)
-        if (pageToken) params.set("pageToken", pageToken)
-        if (query) params.set("q", query)
-
-        const fullUrl = `/api/gmail/threads?${params}`
-        const res = await fetch(fullUrl)
-
-        if (res.ok) {
-          const data = await res.json()
-
-          setGmailApiVersion(data.debugVersion || null)
-          setGmailThreads(data.threads || [])
-          setGmailNextPageToken(data.nextPageToken || null)
-          setGmailTotalEstimate(data.resultSizeEstimate || 0)
-
-          setGmailDebugInfo({
-            rawThreadsCount: data._debug?.rawThreadsCount || 0,
-            processedThreadsCount: data._debug?.processedThreadsCount || 0,
-            hasNextPage: !!data.nextPageToken,
-            labelId,
-            resultSizeEstimate: data.resultSizeEstimate,
-          })
-        } else {
-          const errorBody = await res.text()
-          console.error("[v0] FRONTEND: Error loading threads:", res.status, errorBody)
-          setGmailThreads([])
-          setGmailApiVersion(null)
-        }
-      } catch (error) {
-        console.error("[v0] DEBUG: Exception in loadGmailThreads:", error)
-        setGmailThreads([])
-        setGmailApiVersion(null)
-      } finally {
-        setGmailLoading(false)
-      }
-    },
-    [gmailLabelId, gmailSearchQuery], // Added dependencies
-  )
 
   const loadGmailThread = useCallback(async (threadId: string) => {
     setGmailThreadLoading(true)
@@ -1091,11 +1054,13 @@ export default function InboxPage() {
     }
   }, [inboxMode, messages, selectedConversationId, markMessagesAsRead])
 
-  const handleSelectConversation = useCallback((conv: Conversation) => {
+  const handleSelectConversation = useCallback(async (conv: Conversation) => {
     setSelectedConversation(conv)
     setSelectedConversationId(conv.id)
     setMessages([])
-  }, [])
+    // Load messages for this conversation
+    await loadMessages(conv.id, true)
+  }, [loadMessages])
 
   const handleToggleStar = async (conv: Conversation, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -1496,10 +1461,27 @@ export default function InboxPage() {
           </nav>
         </div>
 
-        {/* ── CENTER: Thread/Conversation list ── */}
-        <div className={`${selectedGmailThread || selectedConversation ? "hidden lg:flex" : "flex"} flex-col border-l border-r border-gray-200/60 bg-white flex-shrink-0 w-[340px] min-h-0`}>
-          {/* List toolbar */}
-          <div className="flex items-center gap-1 px-2 py-1.5 border-b border-gray-200 flex-shrink-0">
+        {/* ── MAIN: Thread/Conversation list OR Detail view (full-width like Gmail) ── */}
+        <div className="flex flex-col border-l border-gray-200/60 bg-white flex-1 min-h-0">
+          {/* Gmail-style toolbar */}
+          <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200 flex-shrink-0 h-12">
+            {/* Back button when viewing thread detail */}
+            {(selectedGmailThread || selectedConversation) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 mr-1"
+                onClick={() => {
+                  setSelectedGmailThread(null)
+                  setSelectedConversation(null)
+                  setGmailMessages([])
+                  setMessages([])
+                  setShowReplyBox(false)
+                }}
+              >
+                <ChevronLeft className="h-5 w-5 text-[#5f6368]" />
+              </Button>
+            )}
             <Checkbox
               checked={
                 inboxMode === "gmail"
@@ -1507,15 +1489,22 @@ export default function InboxPage() {
                   : false
               }
               onCheckedChange={inboxMode === "gmail" ? handleSelectAllGmailThreads : undefined}
-              className="h-4 w-4 ml-1"
+              className="h-[18px] w-[18px]"
             />
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 ml-2"
               onClick={() => inboxMode === "gmail" ? loadGmailThreads(gmailLabelId) : loadConversations()}
             >
-              <RefreshCw className={`h-4 w-4 text-gray-500 ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1">
+              <Mail className="h-4 w-4" />
+              Gmail Phone
+            </Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9">
+              <MoreVertical className="h-4 w-4 text-[#5f6368]" />
             </Button>
             {inboxMode === "gmail" && selectedGmailThreadIds.size > 0 && (
               <DropdownMenu>
@@ -1554,74 +1543,198 @@ export default function InboxPage() {
             )}
             <div className="flex-1" />
             {inboxMode === "gmail" && (
-              <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading}>
-                  <ChevronLeft className="h-4 w-4 text-gray-500" />
-                </Button>
-                <span className="text-[11px] text-gray-500 tabular-nums">
-                  {gmailThreads.length > 0 ? `${(gmailCurrentPage - 1) * 100 + 1}–${(gmailCurrentPage - 1) * 100 + gmailThreads.length}` : "0"}
+              <div className="flex items-center gap-0">
+                <span className="text-[13px] text-[#5f6368] tabular-nums mr-2">
+                  {gmailThreads.length > 0 ? `${(gmailCurrentPage - 1) * 100 + 1}–${(gmailCurrentPage - 1) * 100 + gmailThreads.length} di ${gmailDebugInfo?.rawThreadsCount || gmailThreads.length}` : "0"}
                 </span>
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
-                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading}>
+                  <ChevronLeft className="h-5 w-5 text-[#5f6368]" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
+                  <ChevronRight className="h-5 w-5 text-[#5f6368]" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-9 w-9 ml-1">
+                  <MoreVertical className="h-4 w-4 text-[#5f6368]" />
                 </Button>
               </div>
             )}
           </div>
 
-          {/* Thread/Conversation rows */}
-          <div className="flex-1 overflow-y-auto">
-            {inboxMode === "gmail" ? (
-              gmailLoading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
-              ) : gmailThreads.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                  <Inbox className="h-10 w-10 mb-3 text-gray-300" />
-                  <p className="text-sm">Nessun messaggio</p>
-                </div>
-              ) : (
-                gmailThreads.map((thread) => (
-                  <div
-                    key={thread.id}
-                    onClick={() => handleSelectGmailThread(thread)}
-                    className={`flex items-center gap-2 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group ${
-                      selectedGmailThread?.id === thread.id
-                        ? "bg-[#d3e3fd]"
-                        : thread.isUnread
-                          ? "bg-white hover:bg-[#f2f6fc]"
-                          : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
-                    }`}
-                  >
-                    <Checkbox
-                      checked={selectedGmailThreadIds.has(thread.id)}
-                      onCheckedChange={() => handleGmailCheckboxToggle(thread.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
-                    />
-                    <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
-                      <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
-                    </button>
-                    <span className={`w-[130px] flex-shrink-0 truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
-                      {thread.from.name || thread.from.email.split("@")[0]}
-                    </span>
-                    <div className="flex-1 min-w-0 flex items-baseline gap-1 overflow-hidden">
-                      <span className={`truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
-                        {thread.subject || "(nessun oggetto)"}
-                      </span>
-                      {thread.snippet && (
-                        <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{thread.snippet}</span>
-                      )}
-                    </div>
-                    {thread.messagesCount > 1 && (
-                      <span className="text-[11px] text-gray-500 flex-shrink-0 ml-1">{thread.messagesCount}</span>
-                    )}
-                    <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-gray-500"}`}>
-                      {format(new Date(thread.date), "d MMM", { locale: it })}
-                    </span>
+          {/* Thread/Conversation rows OR Detail View */}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
+            {(selectedGmailThread || selectedConversation) ? (
+              /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
+              <div className="flex flex-col h-full">
+                {/* Subject header */}
+                <div className="px-6 py-4 border-b border-gray-200 overflow-hidden">
+                  <h1 className="text-xl font-normal text-[#202124] truncate">
+                    {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
+                  </h1>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Posta in arrivo</span>
                   </div>
-                ))
+                </div>
+
+                {/* Messages list */}
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 w-full">
+                  {gmailThreadLoading || (inboxMode === "smart" && isLoading) ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                    </div>
+                  ) : (inboxMode === "gmail" ? gmailMessages : messages).length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+                      <Mail className="h-12 w-12 mb-3 text-gray-300" />
+                      <p>Nessun messaggio</p>
+                    </div>
+                  ) : (
+                    (inboxMode === "gmail" ? gmailMessages : messages).map((message: any, idx: number) => (
+                      <div key={message.id} className="border border-gray-200 rounded-lg bg-white overflow-hidden max-w-full">
+                        {/* Message header */}
+                        <div className="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50 max-w-full overflow-hidden">
+                          <div className="h-10 w-10 rounded-full bg-[#a0c3ff] flex items-center justify-center text-[#1a365d] font-semibold flex-shrink-0 text-sm">
+                            {(message.from?.name || message.from?.email || "?")[0].toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0 max-w-full">
+                            <div className="flex items-start justify-between gap-2 min-w-0">
+                              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                                <span className="font-semibold text-sm text-[#202124] truncate">
+                                  {message.sender_type === "agent" ? "Tu" : message.from?.name || message.from?.email?.split("@")[0]}
+                                </span>
+                                <span className="text-xs text-gray-500 truncate">
+                                  {"<"}{message.from?.email || ""}{">"} 
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="text-xs text-gray-500 whitespace-nowrap">
+                                  {format(new Date(message.gmail_internal_date || message.received_at || message.created_at), "EEe d MMM, HH:mm", { locale: it })}
+                                </span>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
+                                  <Star className="h-4 w-4 text-gray-400" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5 truncate">a {message.to || "me"}</div>
+                          </div>
+                        </div>
+                        {/* Message content */}
+                        <div className="px-4 pb-4 pl-4 max-w-full overflow-hidden">
+                          <div className="text-sm text-gray-800 break-words whitespace-pre-wrap">
+                            {renderEmailContent(message.content, message.content_type)}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Action buttons (Gmail-style) OR Reply box */}
+                {showReplyBox ? (
+                  <div className="flex-shrink-0 px-6 py-4 border-t bg-white">
+                    <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+                      <Textarea
+                        placeholder="Scrivi una risposta..."
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        className="min-h-[120px] border-0 focus-visible:ring-0 resize-none"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
+                        }}
+                      />
+                      <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
+                        <Button
+                          onClick={handleSendReply}
+                          disabled={!replyText.trim() || isSending}
+                          className="bg-[#0b57d0] hover:bg-[#0842a0] text-white"
+                        >
+                          {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
+                          Invia
+                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}>
+                            <Paperclip className="h-4 w-4 text-gray-500" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => setShowReplyBox(false)}>
+                            <Trash2 className="h-4 w-4 text-gray-500" />
+                          </Button>
+                        </div>
+                        <input type="file" multiple ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+                      </div>
+                    </div>
+                    {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0 px-6 py-4 border-t bg-white flex items-center gap-3">
+                    <Button
+                      variant="outline"
+                      className="rounded-full px-6"
+                      onClick={() => setShowReplyBox(true)}
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-2 rotate-180" />
+                      Rispondi
+                    </Button>
+                    <Button variant="outline" className="rounded-full px-6">
+                      <ChevronRight className="h-4 w-4 mr-2" />
+                      Inoltra
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              inboxMode === "gmail" ? (
+                gmailLoading ? (
+                  <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                ) : gmailThreads.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+                    <Inbox className="h-10 w-10 mb-3 text-gray-300" />
+                    <p className="text-sm">Nessun messaggio</p>
+                  </div>
+                ) : (
+                <>
+                  {gmailThreads.map((thread) => (
+                    <div
+                      key={thread.id}
+                      onClick={() => handleSelectGmailThread(thread)}
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
+                        selectedGmailThread?.id === thread.id
+                          ? "bg-[#d3e3fd]"
+                          : thread.isUnread
+                            ? "bg-white hover:bg-[#f2f6fc]"
+                            : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
+                      }`}
+                    >
+                      <Checkbox
+                        checked={selectedGmailThreadIds.has(thread.id)}
+                        onCheckedChange={() => handleGmailCheckboxToggle(thread.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
+                      />
+                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
+                        <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
+                      </button>
+                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
+                        {thread.from.name || thread.from.email.split("@")[0]}
+                      </span>
+                      <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
+                        <span className={`truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                          {thread.subject || "(nessun oggetto)"}
+                        </span>
+                        {thread.snippet && (
+                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{thread.snippet}</span>
+                        )}
+                      </div>
+                      {thread.messagesCount > 1 && (
+                        <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
+                      )}
+                      <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-gray-500"}`}>
+                        {format(new Date(thread.date), "d MMM", { locale: it })}
+                      </span>
+                    </div>
+                  ))}
+                </>
               )
             ) : (
-              // Smart mode conversation list
               isLoading ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
               ) : conversations.length === 0 ? (
@@ -1630,258 +1743,49 @@ export default function InboxPage() {
                   <p className="text-sm">Nessun messaggio da gestire</p>
                 </div>
               ) : (
-                conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    onClick={() => handleSelectConversation(conv)}
-                    className={`flex items-center gap-2 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group ${
-                      selectedConversation?.id === conv.id
-                        ? "bg-[#d3e3fd]"
-                        : conv.unread_count > 0
-                          ? "bg-white hover:bg-[#f2f6fc]"
-                          : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
-                    }`}
-                  >
-                    <Checkbox checked={false} onClick={(e) => e.stopPropagation()} className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100" />
-                    <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
-                      <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
-                    </button>
-                    <span className={`w-[130px] flex-shrink-0 truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
-                      {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
-                    </span>
-                    <div className="flex-1 min-w-0 flex items-baseline gap-1 overflow-hidden">
-                      <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
-                        {conv.subject || "(nessun oggetto)"}
+                <>
+                  {conversations.map((conv) => (
+                    <div
+                      key={conv.id}
+                      onClick={() => handleSelectConversation(conv)}
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
+                        selectedConversation?.id === conv.id
+                          ? "bg-[#d3e3fd]"
+                          : conv.unread_count > 0
+                            ? "bg-white hover:bg-[#f2f6fc]"
+                            : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
+                      }`}
+                    >
+                      <Checkbox checked={false} onClick={(e) => e.stopPropagation()} className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100" />
+                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
+                        <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
+                      </button>
+                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                        {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
                       </span>
-                      {conv.lastMessage?.content && (
-                        <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{conv.lastMessage.content}</span>
+                      <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
+                        <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                          {conv.subject || "(nessun oggetto)"}
+                        </span>
+                        {conv.lastMessage?.content && (
+                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{conv.lastMessage.content}</span>
+                        )}
+                      </div>
+                      {conv.unread_count > 0 && (
+                        <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
                       )}
+                      <span className="text-[11px] text-gray-500 flex-shrink-0 min-w-[42px] text-right">
+                        {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
+                      </span>
                     </div>
-                    {conv.unread_count > 0 && (
-                      <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
-                    )}
-                    <span className="text-[11px] text-gray-500 flex-shrink-0 min-w-[42px] text-right">
-                      {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
-                    </span>
-                  </div>
-                ))
+                  ))}
+                </>
               )
+            )
             )}
           </div>
         </div>
 
-        {/* ── RIGHT: Message/Thread detail ── */}
-        <div className={`${selectedGmailThread || selectedConversation ? "flex" : "hidden lg:flex"} flex-1 flex-col min-h-0 bg-white border-l border-gray-200/60`}>
-          {inboxMode === "gmail" ? (
-            selectedGmailThread ? (
-              <>
-                {/* Thread subject header */}
-                <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200 flex items-center gap-3 bg-white">
-                  <h1 className="text-xl font-normal text-[#202124] flex-1 truncate">
-                    {selectedGmailThread.subject || "(nessun oggetto)"}
-                  </h1>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={!isThreadReady || isActionLoading === selectedGmailThread.id}
-                      onClick={() => selectedGmailThread && isThreadReady && handleGmailStarToggle(selectedGmailThread)}
-                    >
-                      <Star className={`h-4 w-4 ${selectedGmailThread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-400"}`} />
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" disabled={!isThreadReady || isActionLoading === selectedGmailThread.id}>
-                          {isActionLoading === selectedGmailThread.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4 text-gray-400" />}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {selectedGmailThread.isUnread ? (
-                          <DropdownMenuItem onClick={() => selectedGmailThread && isThreadReady && handleGmailMarkAsRead(selectedGmailThread, false)}>
-                            <MailOpen className="mr-2 h-4 w-4" /> Segna come letto
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem onClick={() => selectedGmailThread && isThreadReady && handleGmailMarkAsRead(selectedGmailThread, true)}>
-                            <Mail className="mr-2 h-4 w-4" /> Segna come non letto
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => selectedGmailThread && isThreadReady && handleGmailArchive(selectedGmailThread)}>
-                          <Archive className="mr-2 h-4 w-4" /> Archivia
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => selectedGmailThread && isThreadReady && handleGmailTrash(selectedGmailThread)} className="text-red-600">
-                          <Trash2 className="mr-2 h-4 w-4" /> Elimina
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-
-                {/* Messages scroll */}
-                <div className="flex-1 overflow-y-auto min-h-0">
-                  {gmailThreadLoading ? (
-                    <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
-                  ) : gmailMessages.length === 0 ? (
-                    <div className="flex items-center justify-center py-12 text-gray-400">
-                      <div className="text-center">
-                        <AlertCircle className="h-8 w-8 mx-auto mb-2 text-amber-400" />
-                        <p className="text-sm">Nessun messaggio nel thread</p>
-                      </div>
-                    </div>
-                  ) : (
-                    gmailMessages.map((message) => (
-                      <div key={message.id} className="border-b border-gray-100 px-6 py-4">
-                        <div className="flex items-start gap-3">
-                          <div className="h-10 w-10 rounded-full bg-[#d3e3fd] flex items-center justify-center flex-shrink-0 text-[#001d35] font-medium text-sm">
-                            {(message.from.name || message.from.email)[0].toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-0.5">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-[14px] text-[#202124]">
-                                  {message.sender_type === "agent" ? "io" : message.from.name || message.from.email.split("@")[0]}
-                                </span>
-                                <span className="text-[13px] text-gray-500">{"<"}{message.from.email}{">"}</span>
-                              </div>
-                              <span className="text-[12px] text-gray-500 flex-shrink-0 ml-2">
-                                {format(new Date(message.gmail_internal_date), "d MMM yyyy, HH:mm", { locale: it })}
-                              </span>
-                            </div>
-                            <div className="text-[12px] text-gray-400 mb-3">a {message.to}</div>
-                            {renderEmailContent(message.content, message.content_type)}
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Reply box */}
-                <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-[#f6f8fc]">
-                  <div className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden">
-                    <div className="px-4 pt-3 pb-1 text-[13px] text-gray-500 border-b border-gray-100">
-                      Rispondi a <span className="font-medium text-gray-700">{selectedGmailThread.from?.email}</span>
-                    </div>
-                    <Textarea
-                      placeholder="Scrivi una risposta..."
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      className="min-h-[80px] border-0 rounded-none focus-visible:ring-0 resize-none px-4 py-3 text-[14px]"
-                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply() }}
-                    />
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
-                      <Button
-                        onClick={handleSendReply}
-                        disabled={!replyText.trim() || isSending || !canPerformGmailAction()}
-                        className="bg-[#0b57d0] hover:bg-[#0842a0] text-white rounded-full px-6 h-9"
-                      >
-                        {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Invia
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => fileInputRef.current?.click()} disabled={!canPerformGmailAction()}>
-                        <Paperclip className="h-4 w-4 text-gray-500" />
-                      </Button>
-                      <input type="file" multiple ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-                    </div>
-                  </div>
-                  {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <Mail className="h-16 w-16 mx-auto mb-4 text-gray-200" />
-                  <p className="text-sm">Seleziona un messaggio per leggerlo</p>
-                </div>
-              </div>
-            )
-          ) : (
-            // Smart mode detail
-            selectedConversation ? (
-              <>
-                <div className="flex-shrink-0 px-6 py-3 border-b border-gray-200 flex items-center gap-3 bg-white">
-                  <div className="h-9 w-9 rounded-full bg-[#d3e3fd] flex items-center justify-center text-[#001d35] font-medium text-sm flex-shrink-0">
-                    {(selectedConversation.contact?.name || selectedConversation.contact?.email || "?")[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-[14px] text-[#202124] truncate">{selectedConversation.contact?.name || "Sconosciuto"}</div>
-                    <div className="text-[12px] text-gray-500 truncate">{selectedConversation.contact?.email}</div>
-                  </div>
-                  <Badge className={`${statusConfig[selectedConversation.status]?.color} text-xs flex-shrink-0`}>
-                    {statusConfig[selectedConversation.status]?.label}
-                  </Badge>
-                </div>
-
-                {selectedConversation.subject && (
-                  <div className="flex-shrink-0 px-6 py-2 border-b border-gray-100 text-[13px] font-medium text-[#202124]">
-                    {selectedConversation.subject}
-                  </div>
-                )}
-
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                  <div className="px-6 py-4 space-y-4">
-                    {messages.map((message) => (
-                      <div key={message.id} className={`flex ${message.sender_type === "agent" ? "justify-end" : "justify-start"}`}>
-                        {message.sender_type === "agent" ? (
-                          <div className="max-w-[75%] bg-[#0b57d0] text-white px-4 py-3 rounded-2xl rounded-tr-sm text-[14px]">
-                            <div className="whitespace-pre-wrap">{message.content}</div>
-                            <div className="text-[11px] mt-1 text-white/70 text-right">
-                              {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="max-w-[85%] w-full">
-                            <div className="bg-[#f2f2f2] rounded-2xl rounded-tl-sm overflow-hidden border border-gray-100">
-                              {renderEmailContent(message.content)}
-                            </div>
-                            <div className="text-[11px] mt-1 text-gray-400">
-                              {new Date(message.received_at || message.created_at).toLocaleString("it-IT")}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </div>
-
-                <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-[#f6f8fc]">
-                  <div className="bg-white rounded-2xl border border-gray-300 shadow-sm overflow-hidden">
-                    <Textarea
-                      placeholder="Scrivi una risposta..."
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      className="min-h-[80px] border-0 rounded-none focus-visible:ring-0 resize-none px-4 py-3 text-[14px]"
-                      onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply() }}
-                    />
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
-                      <Button
-                        onClick={handleSendReply}
-                        disabled={!replyText.trim() || isSending}
-                        className="bg-[#0b57d0] hover:bg-[#0842a0] text-white rounded-full px-6 h-9"
-                      >
-                        {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Invia
-                      </Button>
-                    </div>
-                  </div>
-                  {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
-                </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400">
-                <div className="text-center">
-                  <Mail className="h-16 w-16 mx-auto mb-4 text-gray-200" />
-                  <p className="text-sm">Seleziona una conversazione per visualizzarla</p>
-                </div>
-              </div>
-            )
-          )}
-        </div>
-      </div>
-
-      {/* Compose modal */}
       {showComposeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
@@ -1937,6 +1841,7 @@ export default function InboxPage() {
           </div>
         </div>
       )}
+    </div>
     </div>
   )
 }

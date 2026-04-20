@@ -4,14 +4,6 @@ import { useEffect } from "react"
 
 export default function AdminPage() {
   useEffect(() => {
-    const hostname = window.location.hostname
-    const isDevOrPreview =
-      hostname.includes("vercel.run") ||
-      hostname.includes("localhost") ||
-      hostname.includes("127.0.0.1") ||
-      hostname.includes("vusercontent.net")
-
-    // Always redirect to dashboard - in dev skip login, in prod the dashboard will handle auth
     window.location.replace("/admin/dashboard")
   }, [])
 
