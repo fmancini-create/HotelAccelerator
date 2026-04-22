@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = await params
@@ -24,43 +25,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
     }
 
-    let channelId: string | null = null
-    let channelData: any = null
+    const { channelId } = await resolveGmailChannelId(supabase, user.id)
 
-    // First check if user is super_admin
-    const { data: adminUser } = await supabase.from("admin_users").select("id, role").eq("id", user.id).single()
-
-    if (adminUser?.role === "super_admin") {
-      const { data: channel } = await supabase
-        .from("email_channels")
-        .select("id, email_address, display_name, name")
-        .eq("provider", "gmail")
-        .eq("is_active", true)
-        .limit(1)
-        .single()
-
-      if (channel) {
-        channelId = channel.id
-        channelData = channel
-      }
-    }
-
-    // Fallback to user_channel_permissions
     if (!channelId) {
-      const { data: permission } = await supabase
-        .from("user_channel_permissions")
-        .select("channel_id, email_channels(id, email_address, display_name, name)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single()
-
-      if (permission) {
-        channelId = permission.channel_id
-        channelData = permission.email_channels
-      }
+      return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
     }
 
-    if (!channelId || !channelData) {
+    const { data: channelData } = await supabase
+      .from("email_channels")
+      .select("id, email_address, display_name, name")
+      .eq("id", channelId)
+      .maybeSingle()
+
+    if (!channelData) {
       return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
     }
 

@@ -12,6 +12,7 @@ import {
   modifyGmailMessage,
   getValidGmailToken,
 } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 const API_VERSION = "v779-rate-limit-fix"
 
@@ -24,38 +25,14 @@ function isInTrash(labels: string[]): boolean {
 }
 
 async function getEmailChannelForUser(supabase: any, userId: string) {
-  const { data: adminUser } = await supabase.from("admin_users").select("id, role").eq("id", userId).single()
-
-  if (adminUser?.role === "super_admin") {
-    const { data: channel } = await supabase
-      .from("email_channels")
-      .select("id, oauth_access_token, oauth_refresh_token, email_address")
-      .eq("provider", "gmail")
-      .eq("is_active", true)
-      .limit(1)
-      .single()
-    return channel
-  }
-
-  const { data: permission } = await supabase
-    .from("user_channel_permissions")
-    .select("channel_id, email_channels(id, oauth_access_token, oauth_refresh_token, email_address)")
-    .eq("user_id", userId)
-    .limit(1)
-    .single()
-
-  if (permission?.email_channels) {
-    return permission.email_channels
-  }
-
-  const { data: assignment } = await supabase
-    .from("email_channel_assignments")
-    .select("channel_id, email_channels(id, oauth_access_token, oauth_refresh_token, email_address)")
-    .eq("user_id", userId)
-    .limit(1)
-    .single()
-
-  return assignment?.email_channels || null
+  const { channelId } = await resolveGmailChannelId(supabase, userId)
+  if (!channelId) return null
+  const { data: channel } = await supabase
+    .from("email_channels")
+    .select("id, oauth_access_token, oauth_refresh_token, email_address")
+    .eq("id", channelId)
+    .maybeSingle()
+  return channel
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))

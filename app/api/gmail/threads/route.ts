@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 const API_VERSION = "v813-rate-limit-content-check"
 
@@ -103,49 +104,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
   }
 
-  let channelId: string | null = null
-
-  const { data: adminUser } = await supabase.from("admin_users").select("role").eq("id", user.id).single()
-
-  if (adminUser?.role === "super_admin") {
-    console.log(`[GMAIL-THREAD-VERIFY] User is super_admin, getting first active Gmail channel`)
-    const { data: channel } = await supabase
-      .from("email_channels")
-      .select("id")
-      .eq("provider", "gmail")
-      .eq("is_active", true)
-      .limit(1)
-      .single()
-
-    channelId = channel?.id || null
-  } else {
-    const { data: channelPermission } = await supabase
-      .from("user_channel_permissions")
-      .select("channel_id")
-      .eq("user_id", user.id)
-      .limit(1)
-      .single()
-
-    if (channelPermission) {
-      channelId = channelPermission.channel_id
-    } else {
-      const { data: channelAssignment } = await supabase
-        .from("email_channel_assignments")
-        .select("channel_id")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single()
-
-      channelId = channelAssignment?.channel_id || null
-    }
-  }
+  const { channelId, reason } = await resolveGmailChannelId(supabase, user.id)
+  console.log(`[GMAIL-THREAD-VERIFY] channel resolution: ${reason}, channelId=${channelId ?? "null"}`)
 
   if (!channelId) {
-    console.log(`[GMAIL-THREAD-VERIFY] No Gmail channel found for user`)
     return NextResponse.json({ error: "Canale Gmail non configurato", debugVersion: API_VERSION }, { status: 404 })
   }
-
-  console.log(`[GMAIL-THREAD-VERIFY] Found channel: ${channelId}`)
 
   const { token, error: tokenError } = await getValidGmailToken(channelId)
   if (!token) {
