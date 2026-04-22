@@ -193,10 +193,30 @@ export default function EmailChannelsClient() {
         return
       }
 
-      const { data: adminUser } = await supabase.from("admin_users").select("property_id").eq("id", user.id).single()
+      // 1. Primary source: tenant_admin row in admin_users.
+      const { data: adminUser } = await supabase
+        .from("admin_users")
+        .select("property_id")
+        .eq("id", user.id)
+        .maybeSingle()
 
-      if (adminUser?.property_id) {
-        setPropertyId(adminUser.property_id)
+      // 2. Fallback for platform super_admin: /api/platform/me returns the
+      //    active tenant (cookie-persisted) for cross-tenant identities.
+      let activePropertyId: string | null = adminUser?.property_id ?? null
+      if (!activePropertyId) {
+        try {
+          const meRes = await fetch("/api/platform/me", { credentials: "include" })
+          if (meRes.ok) {
+            const me = await meRes.json()
+            activePropertyId = me?.activePropertyId ?? null
+          }
+        } catch (e) {
+          console.error("[v0] platform/me failed", e)
+        }
+      }
+
+      if (activePropertyId) {
+        setPropertyId(activePropertyId)
 
         const headers = await getAuthHeaders()
         const channelsRes = await fetch("/api/channels/email", {
@@ -214,7 +234,7 @@ export default function EmailChannelsClient() {
         const { data: adminUsers } = await supabase
           .from("admin_users")
           .select("id, name, email")
-          .eq("property_id", adminUser.property_id)
+          .eq("property_id", activePropertyId)
 
         if (adminUsers) {
           setUsers(adminUsers)
