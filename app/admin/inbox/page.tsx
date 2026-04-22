@@ -456,6 +456,9 @@ export default function InboxPage() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const markedAsReadRef = useRef<Set<string>>(new Set())
 
+  // ── Gmail connection error state (e.g. OAuth token revoked / channel not configured) ──
+  const [gmailAuthError, setGmailAuthError] = useState<string | null>(null)
+
   // ── Load Gmail Threads ──
   const loadGmailThreads = useCallback(async (
     labelId?: string, 
@@ -476,13 +479,23 @@ export default function InboxPage() {
         setGmailNextPageToken(data.nextPageToken || null)
         setGmailDebugInfo(data.debug || null)
         setGmailApiVersion(data.apiVersion || null)
+        setGmailAuthError(null)
         if (!isPageChange) {
           setGmailCurrentPage(1)
           setGmailPrevPageTokens([])
         }
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        const msg = errorData?.error || `HTTP ${res.status}`
+        // 401/404 typically mean: token expired/revoked OR no Gmail channel configured
+        if (res.status === 401 || res.status === 404) {
+          setGmailAuthError(msg)
+        }
+        setGmailThreads([])
+        console.error("[v0] loadGmailThreads error:", res.status, msg)
       }
     } catch (err) {
-      console.error("Error loading Gmail threads:", err)
+      console.error("[v0] Error loading Gmail threads:", err)
     } finally {
       setGmailLoading(false)
     }
@@ -494,12 +507,22 @@ export default function InboxPage() {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
         const data = await res.json()
-        setGmailUserLabels(data.labels || data.userLabels || [])
-        setGmailSystemLabels(data.systemLabels || [])
+        const userLabels = data.labels || data.userLabels || []
+        const systemLabels = data.systemLabels || []
+        setGmailUserLabels(userLabels)
+        setGmailSystemLabels(systemLabels)
         setGmailLabelCounts(data.labelCounts || {})
+        // If labels endpoint returns empty arrays, channel is likely broken
+        if (userLabels.length === 0 && systemLabels.length === 0) {
+          setGmailAuthError("Nessuna etichetta ricevuta da Gmail. Il canale potrebbe essere disconnesso.")
+        } else {
+          setGmailAuthError(null)
+        }
+      } else {
+        setGmailAuthError(`Errore caricamento etichette Gmail (HTTP ${res.status})`)
       }
     } catch (err) {
-      console.error("Error loading Gmail labels:", err)
+      console.error("[v0] Error loading Gmail labels:", err)
     }
   }, [])
 
@@ -1374,6 +1397,31 @@ export default function InboxPage() {
           </div>
         </div>
       </header>
+
+      {/* Gmail connection error banner */}
+      {gmailAuthError && (
+        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#b45309" aria-hidden="true">
+            <path d="M12 2L1 21h22L12 2zm0 6l7.5 12h-15L12 8zm-1 3v4h2v-4h-2zm0 5v2h2v-2h-2z"/>
+          </svg>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-amber-900">
+              Gmail non sincronizzato
+            </div>
+            <div className="text-xs text-amber-800 truncate">
+              {gmailAuthError} — Le email non verranno aggiornate finche il canale non viene riconnesso.
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-white hover:bg-amber-100 border-amber-300 text-amber-900"
+            onClick={() => router.push("/admin/channels/email")}
+          >
+            Riconnetti Gmail
+          </Button>
+        </div>
+      )}
 
       {/* Debug bar */}
       {inboxMode === "gmail" && showDebugPanel && gmailDebugInfo && (
