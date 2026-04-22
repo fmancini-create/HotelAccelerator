@@ -445,6 +445,12 @@ export default function InboxPage() {
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showReplyBox, setShowReplyBox] = useState(false)
+  // Reply recipients (Gmail-style): To is pre-filled from thread, Cc/Bcc toggleable
+  const [replyTo, setReplyTo] = useState("")
+  const [replyCc, setReplyCc] = useState("")
+  const [replyBcc, setReplyBcc] = useState("")
+  const [showCcField, setShowCcField] = useState(false)
+  const [showBccField, setShowBccField] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" })
   const [showDebugPanel, setShowDebugPanel] = useState(false)
@@ -1167,6 +1173,29 @@ export default function InboxPage() {
     }
   }
 
+  // Open the reply composer: pre-fill To with the last customer's email
+  const openReplyBox = () => {
+    try {
+      if (inboxMode === "gmail" && messages.length > 0) {
+        const lastIncoming = [...messages].reverse().find((m: any) => m?.sender_type !== "agent") || messages[messages.length - 1]
+        const prefill = (lastIncoming as any)?.from?.email || ""
+        setReplyTo(prefill)
+      } else if (inboxMode === "smart" && selectedConversation) {
+        // For Smart mode, the conversation holds contact info; pre-fill best-effort
+        const anyConv: any = selectedConversation
+        const prefill = anyConv?.contact?.email || anyConv?.contact_email || ""
+        setReplyTo(prefill)
+      }
+    } catch {
+      setReplyTo("")
+    }
+    setReplyCc("")
+    setReplyBcc("")
+    setShowCcField(false)
+    setShowBccField(false)
+    setShowReplyBox(true)
+  }
+
   const handleSendReply = async () => {
     if (!replyText.trim()) return
 
@@ -1178,10 +1207,19 @@ export default function InboxPage() {
         const res = await fetch(`/api/gmail/threads/${selectedGmailThread.id}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: replyText }),
+          body: JSON.stringify({
+            content: replyText,
+            to: replyTo.trim() || undefined,
+            cc: replyCc.trim() || undefined,
+            bcc: replyBcc.trim() || undefined,
+          }),
         })
         if (res.ok) {
           setReplyText("")
+          setReplyCc("")
+          setReplyBcc("")
+          setShowCcField(false)
+          setShowBccField(false)
           await loadGmailThread(selectedGmailThread.id)
           // Refresh thread list to update unread status if needed
           await loadGmailThreads(gmailLabelId)
@@ -1708,6 +1746,95 @@ export default function InboxPage() {
                 {showReplyBox ? (
                   <div className="flex-shrink-0 px-6 py-4 border-t bg-white">
                     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+                      {/* Recipients header (Gmail-style) */}
+                      <div className="border-b border-gray-100">
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <label htmlFor="reply-to" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                            A
+                          </label>
+                          <input
+                            id="reply-to"
+                            type="text"
+                            value={replyTo}
+                            onChange={(e) => setReplyTo(e.target.value)}
+                            placeholder="Destinatari (separati da virgola)"
+                            className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                          />
+                          <div className="flex items-center gap-1 text-xs">
+                            {!showCcField && (
+                              <button
+                                type="button"
+                                onClick={() => setShowCcField(true)}
+                                className="text-gray-500 hover:text-gray-700 px-1"
+                              >
+                                Cc
+                              </button>
+                            )}
+                            {!showBccField && (
+                              <button
+                                type="button"
+                                onClick={() => setShowBccField(true)}
+                                className="text-gray-500 hover:text-gray-700 px-1"
+                              >
+                                Ccn
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {showCcField && (
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                            <label htmlFor="reply-cc" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                              Cc
+                            </label>
+                            <input
+                              id="reply-cc"
+                              type="text"
+                              value={replyCc}
+                              onChange={(e) => setReplyCc(e.target.value)}
+                              placeholder="Cc (separati da virgola)"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCcField(false)
+                                setReplyCc("")
+                              }}
+                              className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                              aria-label="Rimuovi Cc"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
+                        {showBccField && (
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                            <label htmlFor="reply-bcc" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                              Ccn
+                            </label>
+                            <input
+                              id="reply-bcc"
+                              type="text"
+                              value={replyBcc}
+                              onChange={(e) => setReplyBcc(e.target.value)}
+                              placeholder="Ccn (separati da virgola)"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowBccField(false)
+                                setReplyBcc("")
+                              }}
+                              className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                              aria-label="Rimuovi Ccn"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <Textarea
                         placeholder="Scrivi una risposta..."
                         value={replyText}
@@ -1745,7 +1872,7 @@ export default function InboxPage() {
                     <Button
                       variant="outline"
                       className="rounded-full px-6"
-                      onClick={() => setShowReplyBox(true)}
+                      onClick={openReplyBox}
                     >
                       <ChevronLeft className="h-4 w-4 mr-2 rotate-180" />
                       Rispondi

@@ -18,8 +18,8 @@ function decodeBase64Url(base64url: string): string {
   return Buffer.from(base64, "base64").toString("utf-8")
 }
 
-export async function GET(request: NextRequest, { params }: { params: { threadId: string } }) {
-  const { threadId } = params
+export async function GET(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
+  const { threadId } = await params
   console.log(`[v0] GMAIL THREAD DETAIL API ${API_VERSION} - threadId:`, threadId)
 
   const supabase = await createClient()
