@@ -973,20 +973,28 @@ export default function InboxPage() {
     if (inboxMode !== "smart") return
 
     setLastSyncStatus("Sincronizzazione in corso...")
+    console.log("[v0] Smart sync: start")
 
     try {
       // Get channel info for sync
       const channelRes = await fetch("/api/inbox/debug")
       if (!channelRes.ok) {
-        setLastSyncStatus("Errore: impossibile ottenere info canale")
+        const errText = await channelRes.text().catch(() => "")
+        console.error("[v0] Smart sync: debug endpoint failed", channelRes.status, errText)
+        setLastSyncStatus(`Errore info canale (HTTP ${channelRes.status})`)
         return
       }
 
       const debugData = await channelRes.json()
       setDebugInfo(debugData)
+      console.log("[v0] Smart sync: debug data", {
+        channelId: debugData?.channel?.id,
+        propertyId: debugData?.channel?.property_id,
+        lastSyncAt: debugData?.channel?.lastSyncAt,
+      })
 
       if (!debugData.channel?.id || !debugData.channel?.property_id) {
-        setLastSyncStatus("Nessun canale configurato")
+        setLastSyncStatus("Nessun canale Gmail attivo configurato")
         return
       }
 
@@ -1002,14 +1010,19 @@ export default function InboxPage() {
 
       if (syncRes.ok) {
         const syncData = await syncRes.json()
-        setLastSyncStatus(`Sincronizzato: ${syncData.imported} nuovi, ${syncData.duplicates} duplicati`)
+        console.log("[v0] Smart sync: success", syncData)
+        setLastSyncStatus(
+          `Sincronizzato: ${syncData.imported ?? 0} nuovi, ${syncData.duplicates ?? 0} duplicati`,
+        )
         loadConversations()
       } else {
-        setLastSyncStatus(`Errore sync: ${syncRes.status}`)
+        const errData = await syncRes.json().catch(() => ({}))
+        console.error("[v0] Smart sync: sync endpoint failed", syncRes.status, errData)
+        setLastSyncStatus(`Errore sync (HTTP ${syncRes.status}): ${errData?.error || "vedi log"}`)
       }
     } catch (error) {
-      console.error("[v0] FRONTEND: Smart sync error:", error)
-      setLastSyncStatus(`Errore: ${error}`)
+      console.error("[v0] Smart sync: fatal", error)
+      setLastSyncStatus(`Errore: ${String(error)}`)
     }
   }
 
