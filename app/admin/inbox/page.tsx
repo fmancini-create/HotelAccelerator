@@ -2109,7 +2109,7 @@ export default function InboxPage() {
                     <div
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
                         selectedGmailThread?.id === thread.id
                           ? "bg-[#d3e3fd]"
                           : thread.isUnread
@@ -2126,17 +2126,18 @@ export default function InboxPage() {
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
                         <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
                       </button>
-                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
+                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[160px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
                         {thread.from.name || thread.from.email.split("@")[0]}
                       </span>
-                      <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
-                        <span className={`truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                      {/* Subject + snippet as a single truncated line (Gmail-style) */}
+                      <span className="flex-1 min-w-0 truncate text-[13px]">
+                        <span className={thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}>
                           {thread.subject || "(nessun oggetto)"}
                         </span>
                         {thread.snippet && (
-                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{thread.snippet}</span>
+                          <span className="text-gray-400">{" \u2014 "}{thread.snippet}</span>
                         )}
-                      </div>
+                      </span>
                       {thread.messagesCount > 1 && (
                         <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
                       )}
