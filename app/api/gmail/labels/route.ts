@@ -54,14 +54,21 @@ export async function GET(request: NextRequest) {
     }
 
     if (!channelId) {
-      return NextResponse.json({ labels: [], systemLabels: [] })
+      return NextResponse.json(
+        { labels: [], systemLabels: [], error: "Canale Gmail non configurato" },
+        { status: 404 },
+      )
     }
 
     const { labels, error } = await getGmailLabelsWithCounts(channelId)
 
     if (error) {
       console.error("[Gmail] Error fetching labels:", error)
-      return NextResponse.json({ labels: [], systemLabels: [] })
+      const isAuthError = /token|oauth|riconnett|unauthorized/i.test(error)
+      return NextResponse.json(
+        { labels: [], systemLabels: [], error },
+        { status: isAuthError ? 401 : 500 },
+      )
     }
 
     const systemLabels = labels

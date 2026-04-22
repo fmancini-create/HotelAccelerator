@@ -456,6 +456,9 @@ export default function InboxPage() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const markedAsReadRef = useRef<Set<string>>(new Set())
 
+  // ── Gmail connection error state (e.g. OAuth token revoked / channel not configured) ──
+  const [gmailAuthError, setGmailAuthError] = useState<string | null>(null)
+
   // ── Load Gmail Threads ──
   const loadGmailThreads = useCallback(async (
     labelId?: string, 
@@ -476,13 +479,23 @@ export default function InboxPage() {
         setGmailNextPageToken(data.nextPageToken || null)
         setGmailDebugInfo(data.debug || null)
         setGmailApiVersion(data.apiVersion || null)
+        setGmailAuthError(null)
         if (!isPageChange) {
           setGmailCurrentPage(1)
           setGmailPrevPageTokens([])
         }
+      } else {
+        const errorData = await res.json().catch(() => ({}))
+        const msg = errorData?.error || `HTTP ${res.status}`
+        // 401/404 typically mean: token expired/revoked OR no Gmail channel configured
+        if (res.status === 401 || res.status === 404) {
+          setGmailAuthError(msg)
+        }
+        setGmailThreads([])
+        console.error("[v0] loadGmailThreads error:", res.status, msg)
       }
     } catch (err) {
-      console.error("Error loading Gmail threads:", err)
+      console.error("[v0] Error loading Gmail threads:", err)
     } finally {
       setGmailLoading(false)
     }
@@ -494,12 +507,22 @@ export default function InboxPage() {
       const res = await fetch("/api/gmail/labels")
       if (res.ok) {
         const data = await res.json()
-        setGmailUserLabels(data.labels || data.userLabels || [])
-        setGmailSystemLabels(data.systemLabels || [])
+        const userLabels = data.labels || data.userLabels || []
+        const systemLabels = data.systemLabels || []
+        setGmailUserLabels(userLabels)
+        setGmailSystemLabels(systemLabels)
         setGmailLabelCounts(data.labelCounts || {})
+        // If labels endpoint returns empty arrays, channel is likely broken
+        if (userLabels.length === 0 && systemLabels.length === 0) {
+          setGmailAuthError("Nessuna etichetta ricevuta da Gmail. Il canale potrebbe essere disconnesso.")
+        } else {
+          setGmailAuthError(null)
+        }
+      } else {
+        setGmailAuthError(`Errore caricamento etichette Gmail (HTTP ${res.status})`)
       }
     } catch (err) {
-      console.error("Error loading Gmail labels:", err)
+      console.error("[v0] Error loading Gmail labels:", err)
     }
   }, [])
 
@@ -770,6 +793,12 @@ export default function InboxPage() {
     [handleGmailAction, isThreadReady, selectedGmailThread, gmailLabelId, gmailSearchQuery],
   )
 
+  // Keep latest search query in a ref so polling doesn't reset on keystroke
+  const gmailSearchQueryRef = useRef(gmailSearchQuery)
+  useEffect(() => {
+    gmailSearchQueryRef.current = gmailSearchQuery
+  }, [gmailSearchQuery])
+
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
     if (inboxMode === "gmail" && !authLoading && adminUser) {
@@ -777,12 +806,12 @@ export default function InboxPage() {
       loadGmailThreads(gmailLabelId)
 
       const gmailPollInterval = setInterval(() => {
-        loadGmailThreads(gmailLabelId, undefined, gmailSearchQuery)
+        loadGmailThreads(gmailLabelId, undefined, gmailSearchQueryRef.current)
       }, 30000)
 
       return () => clearInterval(gmailPollInterval)
     }
-  }, [inboxMode, authLoading, adminUser, loadGmailLabels, loadGmailThreads, gmailLabelId, gmailSearchQuery])
+  }, [inboxMode, authLoading, adminUser, loadGmailLabels, loadGmailThreads, gmailLabelId])
 
   // Load Gmail thread when selected
   useEffect(() => {
@@ -998,9 +1027,16 @@ export default function InboxPage() {
       // Load debug info
       loadSmartDebugInfo()
 
+      // Fast poll: reload conversations from DB every 30s (catches webhook-imported messages)
       pollIntervalRef.current = setInterval(() => {
         loadConversations()
       }, 30000)
+
+      // Slow poll: trigger a fresh Gmail->DB sync every 2 minutes
+      // This covers the case when Gmail Pub/Sub webhook is down, expired, or not configured.
+      const syncInterval = setInterval(() => {
+        performInitialSmartSync()
+      }, 120000)
 
       // Debug info refresh every 60 seconds
       const debugInterval = setInterval(loadSmartDebugInfo, 60000)
@@ -1027,6 +1063,7 @@ export default function InboxPage() {
 
       return () => {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+        clearInterval(syncInterval)
         clearInterval(debugInterval)
         supabase.removeChannel(messagesChannel)
         supabase.removeChannel(conversationsChannel)
@@ -1361,6 +1398,31 @@ export default function InboxPage() {
         </div>
       </header>
 
+      {/* Gmail connection error banner */}
+      {gmailAuthError && (
+        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#b45309" aria-hidden="true">
+            <path d="M12 2L1 21h22L12 2zm0 6l7.5 12h-15L12 8zm-1 3v4h2v-4h-2zm0 5v2h2v-2h-2z"/>
+          </svg>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-amber-900">
+              Gmail non sincronizzato
+            </div>
+            <div className="text-xs text-amber-800 truncate">
+              {gmailAuthError} — Le email non verranno aggiornate finche il canale non viene riconnesso.
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-white hover:bg-amber-100 border-amber-300 text-amber-900"
+            onClick={() => router.push("/admin/channels/email")}
+          >
+            Riconnetti Gmail
+          </Button>
+        </div>
+      )}
+
       {/* Debug bar */}
       {inboxMode === "gmail" && showDebugPanel && gmailDebugInfo && (
         <div className="flex-shrink-0 bg-gray-900 text-green-400 font-mono text-xs px-4 py-2 flex items-center gap-4 flex-wrap">
@@ -1451,7 +1513,7 @@ export default function InboxPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowDebugPanel(!showDebugPanel)} title="Debug">
                     <Bug className="h-4 w-4 text-[#444746]" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={loadConversations} title="Aggiorna">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={performInitialSmartSync} title="Sincronizza nuovi messaggi">
                     <RefreshCw className={`h-4 w-4 text-[#444746] ${isLoading ? "animate-spin" : ""}`} />
                   </Button>
                   {lastSyncStatus && <span className="text-xs text-gray-400 truncate">{lastSyncStatus}</span>}
@@ -1495,7 +1557,8 @@ export default function InboxPage() {
               variant="ghost"
               size="icon"
               className="h-9 w-9 ml-2"
-              onClick={() => inboxMode === "gmail" ? loadGmailThreads(gmailLabelId) : loadConversations()}
+              onClick={() => inboxMode === "gmail" ? loadGmailThreads(gmailLabelId) : performInitialSmartSync()}
+              title={inboxMode === "gmail" ? "Ricarica Gmail" : "Sincronizza nuovi messaggi"}
             >
               <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
             </Button>

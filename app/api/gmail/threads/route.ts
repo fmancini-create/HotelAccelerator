@@ -93,22 +93,6 @@ export async function GET(request: NextRequest) {
   console.log(`[GMAIL-THREADS] ========== BUILD ${API_VERSION} ==========`)
   console.log(`[GMAIL-THREAD-VERIFY] ========== GMAIL THREADS API ${API_VERSION} ==========`)
 
-  // DEV/PREVIEW BYPASS: Return empty threads in dev/preview mode
-  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-  const isDevOrPreview = host.includes("vercel.run") || 
-                         host.includes("localhost") || 
-                         host.includes("127.0.0.1") ||
-                         host.includes("vusercontent.net")
-
-  if (isDevOrPreview) {
-    return NextResponse.json({ 
-      threads: [], 
-      debugVersion: API_VERSION,
-      devMode: true,
-      message: "Dev/preview mode - no Gmail integration available"
-    })
-  }
-
   const supabase = await createClient()
   const {
     data: { user },
