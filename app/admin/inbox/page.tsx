@@ -32,6 +32,8 @@ import {
   Bug,
   MessageCircle,
   Phone,
+  ArrowUpDown,
+  History,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -439,6 +441,22 @@ export default function InboxPage() {
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [lastSyncStatus, setLastSyncStatus] = useState<string | null>(null)
 
+  // ── Inbox Sort (Gmail + Smart) ──
+  // "smart" = legacy priority sort (default for Smart mode).
+  // Gmail mode defaults to "date_desc".
+  type InboxSortOption = "smart" | "date_desc" | "date_asc" | "sender_asc" | "sender_desc"
+  const [inboxSort, setInboxSort] = useState<InboxSortOption>("date_desc")
+
+  // ── Full historical sync state (Smart mode only) ──
+  const [fullSyncRunning, setFullSyncRunning] = useState(false)
+  const [fullSyncProgress, setFullSyncProgress] = useState<{
+    processed: number
+    imported: number
+    duplicates: number
+    errors: number
+  } | null>(null)
+  const fullSyncAbortRef = useRef<boolean>(false)
+
   // ── Shared State ──
   const [replyText, setReplyText] = useState("")
   const [replyChannel, setReplyChannel] = useState("email")
@@ -464,6 +482,35 @@ export default function InboxPage() {
 
   // ── Gmail connection error state (e.g. OAuth token revoked / channel not configured) ──
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null)
+
+  // ── Client-side sort for Gmail mode (Gmail API returns date-desc by default) ──
+  const sortedGmailThreads = React.useMemo(() => {
+    if (!gmailThreads || gmailThreads.length === 0) return gmailThreads
+    const senderKey = (t: any) =>
+      (t?.from?.name || t?.from?.email || "").toString().toLowerCase()
+    const dateKey = (t: any) => {
+      const v = t?.date ? new Date(t.date).getTime() : 0
+      return Number.isFinite(v) ? v : 0
+    }
+    const copy = [...gmailThreads]
+    switch (inboxSort) {
+      case "date_asc":
+        copy.sort((a, b) => dateKey(a) - dateKey(b))
+        break
+      case "sender_asc":
+        copy.sort((a, b) => senderKey(a).localeCompare(senderKey(b)))
+        break
+      case "sender_desc":
+        copy.sort((a, b) => senderKey(b).localeCompare(senderKey(a)))
+        break
+      case "smart":
+      case "date_desc":
+      default:
+        copy.sort((a, b) => dateKey(b) - dateKey(a))
+        break
+    }
+    return copy
+  }, [gmailThreads, inboxSort])
 
   // ── Load Gmail Threads ──
   const loadGmailThreads = useCallback(async (
@@ -909,6 +956,8 @@ export default function InboxPage() {
       queryParams.set("channel", "email") // Assuming email channels for smart mode
       queryParams.set("mode", "smart")
       if (searchQuery) queryParams.set("search", searchQuery)
+      // Smart mode: "smart" is the legacy priority sort, others map 1:1 to DB ORDER BY
+      queryParams.set("sort", inboxSort)
 
       const res = await fetch(`/api/inbox/conversations?${queryParams}`)
       if (!res.ok) return
@@ -920,7 +969,7 @@ export default function InboxPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter, searchQuery])
+  }, [statusFilter, searchQuery, inboxSort])
 
   // Database is the single source of truth, updated only by webhook
 
@@ -1030,6 +1079,85 @@ export default function InboxPage() {
       console.error("[v0] Smart sync: fatal", error)
       setLastSyncStatus(`Errore: ${String(error)}`)
     }
+  }
+
+  // ── Full historical sync (Smart mode only) ──
+  // Loops over /api/channels/email/sync/full until done === true.
+  // Resumable across refreshes (server persists page_token).
+  const startFullHistoricalSync = async (opts?: { reset?: boolean }) => {
+    if (fullSyncRunning) return
+    setFullSyncRunning(true)
+    fullSyncAbortRef.current = false
+    setFullSyncProgress({ processed: 0, imported: 0, duplicates: 0, errors: 0 })
+
+    try {
+      // Need channel id + property id. Use the debug endpoint which already returns them.
+      const debugRes = await fetch("/api/inbox/debug")
+      if (!debugRes.ok) {
+        setLastSyncStatus("Errore: impossibile leggere info canale")
+        return
+      }
+      const debug = await debugRes.json()
+      const channelId = debug?.channel?.id
+      if (!channelId) {
+        setLastSyncStatus("Nessun canale Gmail attivo")
+        return
+      }
+
+      let done = false
+      let attempt = 0
+      let firstCall = true
+      while (!done && !fullSyncAbortRef.current && attempt < 2000) {
+        attempt++
+        const res = await fetch("/api/channels/email/sync/full", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel_id: channelId,
+            reset: firstCall && !!opts?.reset,
+          }),
+        })
+        firstCall = false
+
+        if (res.status === 429) {
+          // rate limited: wait a bit and retry
+          await new Promise((r) => setTimeout(r, 3000))
+          continue
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          setLastSyncStatus(`Errore sync storico: ${err?.error || res.status}`)
+          break
+        }
+        const data = await res.json()
+        setFullSyncProgress({
+          processed: data.processed || 0,
+          imported: data.imported || 0,
+          duplicates: data.duplicates || 0,
+          errors: data.errors || 0,
+        })
+        done = Boolean(data.done)
+        // Refresh conversation list roughly every 5 pages to keep UI warm
+        if (attempt % 5 === 0) {
+          await loadConversations()
+        }
+      }
+      await loadConversations()
+      if (done) {
+        setLastSyncStatus("Sync storico completato")
+      } else if (fullSyncAbortRef.current) {
+        setLastSyncStatus("Sync storico interrotto (potrai riprendere)")
+      }
+    } catch (error) {
+      console.error("[v0] Full sync: fatal", error)
+      setLastSyncStatus(`Errore sync storico: ${String(error)}`)
+    } finally {
+      setFullSyncRunning(false)
+    }
+  }
+
+  const stopFullHistoricalSync = () => {
+    fullSyncAbortRef.current = true
   }
 
   useEffect(() => {
@@ -1617,6 +1745,88 @@ export default function InboxPage() {
               <Mail className="h-4 w-4" />
               Gmail Phone
             </Button>
+
+            {/* Sort dropdown (Gmail + Smart) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1"
+                  title="Ordina"
+                  aria-label="Ordina messaggi"
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {inboxSort === "date_desc" && "Data (recente)"}
+                    {inboxSort === "date_asc" && "Data (vecchio)"}
+                    {inboxSort === "sender_asc" && "Mittente A-Z"}
+                    {inboxSort === "sender_desc" && "Mittente Z-A"}
+                    {inboxSort === "smart" && "Priorita"}
+                  </span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={() => setInboxSort("date_desc")}>
+                  Data - piu recente
+                  {inboxSort === "date_desc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setInboxSort("date_asc")}>
+                  Data - meno recente
+                  {inboxSort === "date_asc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setInboxSort("sender_asc")}>
+                  Mittente A-Z
+                  {inboxSort === "sender_asc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setInboxSort("sender_desc")}>
+                  Mittente Z-A
+                  {inboxSort === "sender_desc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                {inboxMode === "smart" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setInboxSort("smart")}>
+                      Priorita (non letti prima)
+                      {inboxSort === "smart" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Full historical sync (Smart mode only) */}
+            {inboxMode === "smart" && (
+              fullSyncRunning ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-[13px] font-normal gap-2 ml-1"
+                  onClick={stopFullHistoricalSync}
+                  title="Interrompi sync storico"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="tabular-nums">
+                    {fullSyncProgress?.processed ?? 0} importati
+                  </span>
+                  <span className="text-gray-400">Stop</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1"
+                  onClick={() => startFullHistoricalSync()}
+                  title="Importa tutto lo storico Gmail nel database"
+                >
+                  <History className="h-4 w-4" />
+                  <span className="hidden md:inline">Importa storico</span>
+                </Button>
+              )
+            )}
+
             <Button variant="ghost" size="icon" className="h-9 w-9">
               <MoreVertical className="h-4 w-4 text-[#5f6368]" />
             </Button>
@@ -1895,7 +2105,7 @@ export default function InboxPage() {
                   </div>
                 ) : (
                 <>
-                  {gmailThreads.map((thread) => (
+                  {sortedGmailThreads.map((thread) => (
                     <div
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
