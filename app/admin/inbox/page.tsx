@@ -1703,9 +1703,9 @@ export default function InboxPage() {
         </div>
 
         {/* ── MAIN: Thread/Conversation list OR Detail view (full-width like Gmail) ── */}
-        <div className="flex flex-col border-l border-gray-200/60 bg-white flex-1 min-h-0">
+        <div className="flex flex-col border-l border-gray-200/60 bg-white flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Gmail-style toolbar */}
-          <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200 flex-shrink-0 h-12">
+          <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200 flex-shrink-0 h-12 min-w-0 overflow-x-auto">
             {/* Back button when viewing thread detail */}
             {(selectedGmailThread || selectedConversation) && (
               <Button
