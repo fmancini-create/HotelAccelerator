@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ contactId: string }> }) {
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { data, error } = await supabase
       .from("contacts")
@@ -36,7 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const { data, error } = await supabase

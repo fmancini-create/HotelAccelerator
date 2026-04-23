@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxReadService } from "@/lib/platform-services"
-import type { ConversationListOptions, GmailLabel } from "@/lib/types/inbox-read.types"
+import type { ConversationListOptions, GmailLabel, InboxSort } from "@/lib/types/inbox-read.types"
+
+const ALLOWED_SORTS: InboxSort[] = ["smart", "date_desc", "date_asc", "sender_asc", "sender_desc"]
 import { handleServiceError } from "@/lib/errors"
 
 export async function GET(request: NextRequest) {
@@ -19,6 +21,9 @@ export async function GET(request: NextRequest) {
 
     const mode = (searchParams.get("mode") as "smart" | "gmail") || "smart"
     const gmailLabel = searchParams.get("gmail_label") as GmailLabel | null
+    const rawSort = searchParams.get("sort") as InboxSort | null
+    const sort: InboxSort | undefined =
+      rawSort && ALLOWED_SORTS.includes(rawSort) ? rawSort : undefined
 
     const options: ConversationListOptions = {
       status: (searchParams.get("status") as any) || "open",
@@ -29,6 +34,7 @@ export async function GET(request: NextRequest) {
       filter: (searchParams.get("filter") as any) || undefined,
       mode,
       gmail_label: gmailLabel || undefined,
+      sort,
     }
 
     console.log("[v0] Inbox options:", options)

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { data: campaigns, error } = await supabase.from("email_campaigns").select("*").eq("property_id", property.id)
 

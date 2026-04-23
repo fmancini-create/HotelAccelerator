@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
     const { userId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const { signature } = body

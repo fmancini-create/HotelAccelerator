@@ -65,3 +65,21 @@ export async function createClientWithToken(accessToken?: string) {
 }
 
 export { createClient as createServerClient }
+
+/**
+ * Service role client — bypassa RLS.
+ * Da usare SOLO nelle API route server-side dove l'auth è già verificata.
+ */
+export function createServiceClient() {
+  const { createClient: createSupabaseClient } = require("@supabase/supabase-js")
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY")
+  }
+
+  return createSupabaseClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  })
+}

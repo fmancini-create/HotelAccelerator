@@ -10,15 +10,22 @@ export default function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
-  console.log("[v0] Proxy - hostname:", hostname, "pathname:", pathname)
-
   // Skip per risorse statiche e API interne
   if (pathname.startsWith("/_next") || pathname.startsWith("/api") || pathname.includes(".")) {
     return NextResponse.next()
   }
 
   const isPlatformDomain = isBaseDomain(hostname)
-  console.log("[v0] Proxy - isPlatformDomain:", isPlatformDomain)
+  
+  // DEV/PREVIEW MODE: Allow /admin and /super-admin paths on vercel.run domains
+  const isDevOrPreview = hostname.includes("vercel.run") || hostname.includes("localhost")
+  
+  // In dev/preview, allow admin routes to pass through without blocking
+  if (isDevOrPreview && (pathname.startsWith("/admin") || pathname.startsWith("/super-admin"))) {
+    const response = NextResponse.next()
+    response.headers.set("x-is-dev-mode", "true")
+    return response
+  }
 
   // Se è dominio piattaforma, aggiungi header e lascia passare
   if (isPlatformDomain) {
@@ -78,7 +85,7 @@ function extractSubdomain(hostname: string): string | null {
 function isBaseDomain(hostname: string): boolean {
   const host = hostname.split(":")[0]
 
-  if (host.includes("vusercontent.net")) {
+  if (host.includes("vusercontent.net") || host.includes("vercel.run")) {
     return true
   }
 

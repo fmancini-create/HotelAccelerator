@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getGmailLabelsWithCounts } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,55 +14,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ labels: [], systemLabels: [] }, { status: 401 })
     }
 
-    let channelId: string | null = null
-
-    // 1. Check if user is super_admin in admin_users
-    const { data: adminUser } = await supabase.from("admin_users").select("role").eq("id", user.id).single()
-
-    if (adminUser?.role === "super_admin") {
-      // Super admin: access to first active Gmail channel
-      const { data: channel } = await supabase
-        .from("email_channels")
-        .select("id")
-        .eq("provider", "gmail")
-        .eq("is_active", true)
-        .limit(1)
-        .single()
-
-      channelId = channel?.id || null
-    } else {
-      // 2. Try user_channel_permissions
-      const { data: channelPermission } = await supabase
-        .from("user_channel_permissions")
-        .select("channel_id")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single()
-
-      if (channelPermission) {
-        channelId = channelPermission.channel_id
-      } else {
-        // 3. Try email_channel_assignments
-        const { data: channelAssignment } = await supabase
-          .from("email_channel_assignments")
-          .select("channel_id")
-          .eq("user_id", user.id)
-          .limit(1)
-          .single()
-
-        channelId = channelAssignment?.channel_id || null
-      }
-    }
+    const { channelId, reason } = await resolveGmailChannelId(supabase, user.id)
+    console.log(`[Gmail][labels] channel resolution: ${reason}, channelId=${channelId ?? "null"}`)
 
     if (!channelId) {
-      return NextResponse.json({ labels: [], systemLabels: [] })
+      return NextResponse.json(
+        { labels: [], systemLabels: [], error: "Canale Gmail non configurato" },
+        { status: 404 },
+      )
     }
 
     const { labels, error } = await getGmailLabelsWithCounts(channelId)
 
     if (error) {
       console.error("[Gmail] Error fetching labels:", error)
-      return NextResponse.json({ labels: [], systemLabels: [] })
+      const isAuthError = /token|oauth|riconnett|unauthorized/i.test(error)
+      return NextResponse.json(
+        { labels: [], systemLabels: [], error },
+        { status: isAuthError ? 401 : 500 },
+      )
     }
 
     const systemLabels = labels

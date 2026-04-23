@@ -5,6 +5,7 @@ import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ChevronRight, Home } from "lucide-react"
+import { TenantSwitcher } from "@/components/admin/tenant-switcher"
 
 interface BreadcrumbItem {
   label: string
@@ -37,6 +38,7 @@ const pathMap: Record<string, { label: string; parent?: string }> = {
   "/admin/settings": { label: "Impostazioni", parent: "/admin/dashboard" },
   "/admin/settings/domains": { label: "Domini", parent: "/admin/settings" },
   "/admin/tracking/demand": { label: "Calendario Domanda", parent: "/admin/dashboard" },
+  "/admin/todos": { label: "Task & To-Do", parent: "/admin/dashboard" },
 }
 
 function buildBreadcrumbs(pathname: string): BreadcrumbItem[] {
@@ -89,7 +91,10 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
             )}
           </div>
 
-          {actions && <div className="flex items-center gap-2">{actions}</div>}
+          <div className="flex items-center gap-2">
+            <TenantSwitcher />
+            {actions}
+          </div>
         </div>
       </div>
     </header>

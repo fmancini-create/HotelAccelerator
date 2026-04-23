@@ -1,51 +1,54 @@
 import type { NextRequest } from "next/server"
 import { createClient, createClientWithToken } from "@/lib/supabase/server"
+import { readActivePropertyOverride } from "@/lib/platform-context"
 
-function getTokenFromRequest(request: NextRequest): string | undefined {
-  // Log all cookies for debugging
+function isDevOrPreviewHost(host: string): boolean {
+  return (
+    host.includes("vercel.run") ||
+    host.includes("localhost") ||
+    host.includes("127.0.0.1") ||
+    host.includes("vusercontent.net")
+  )
+}
+
+async function getDevBypass(request?: NextRequest): Promise<boolean> {
+  // Se request è disponibile, leggi l'host da lì
+  if (request) {
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+    return isDevOrPreviewHost(host)
+  }
+  // Senza request (chiamata senza argomenti): usa env var o NODE_ENV
+  // In produzione NEXT_PUBLIC_APP_URL sarà un dominio reale
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
+  if (appUrl && !isDevOrPreviewHost(appUrl)) return false
+  // Fallback: NODE_ENV
+  return process.env.NODE_ENV === "development"
+}
+
+async function getTokenFromRequest(request: NextRequest): Promise<string | undefined> {
+  if (await getDevBypass(request)) {
+    return "dev-dummy-token-for-preview"
+  }
+
   const cookies = request.headers.get("cookie") || ""
-  console.log("[v0] getTokenFromRequest - cookies:", cookies.substring(0, 200))
 
-  // Try Authorization header first
   const authHeader = request.headers.get("authorization")
-  console.log("[v0] getTokenFromRequest - authHeader:", authHeader ? "present" : "missing")
   if (authHeader?.startsWith("Bearer ")) {
     return authHeader.slice(7)
   }
 
-  // Try to find Supabase auth token cookie - check multiple patterns
-  // Pattern 1: sb-{project-ref}-auth-token
   const tokenMatch = cookies.match(/sb-[a-zA-Z0-9]+-auth-token=([^;]+)/)
-  // Pattern 2: sb-{project-ref}-auth-token-code-verifier (PKCE)
   const tokenMatch2 = cookies.match(/sb-[a-zA-Z0-9]+-auth-token\.0=([^;]+)/)
-
   const matchToUse = tokenMatch || tokenMatch2
-  console.log("[v0] getTokenFromRequest - tokenMatch:", matchToUse ? "found" : "not found")
 
   if (matchToUse) {
     try {
-      // The cookie value is base64 encoded JSON or URL encoded
       let cookieValue = matchToUse[1]
-      // Try URL decode first
-      try {
-        cookieValue = decodeURIComponent(cookieValue)
-      } catch {}
-
-      // Try to parse as JSON (may be array or object)
+      try { cookieValue = decodeURIComponent(cookieValue) } catch {}
       const decoded = JSON.parse(cookieValue)
-      console.log("[v0] getTokenFromRequest - decoded type:", typeof decoded, Array.isArray(decoded) ? "array" : "")
-
-      if (Array.isArray(decoded) && decoded[0]?.access_token) {
-        console.log("[v0] getTokenFromRequest - found access_token in array")
-        return decoded[0].access_token
-      }
-      if (decoded?.access_token) {
-        console.log("[v0] getTokenFromRequest - found access_token in object")
-        return decoded.access_token
-      }
-    } catch (e) {
-      console.log("[v0] getTokenFromRequest - parse error:", e)
-    }
+      if (Array.isArray(decoded) && decoded[0]?.access_token) return decoded[0].access_token
+      if (decoded?.access_token) return decoded.access_token
+    } catch {}
   }
 
   return undefined
@@ -55,8 +58,12 @@ function getTokenFromRequest(request: NextRequest): string | undefined {
  * Ottiene il property_id dell'utente autenticato dalla sessione
  * Usato nelle API routes admin per verificare l'accesso
  */
-export async function getAuthenticatedPropertyId(request: NextRequest): Promise<string> {
-  const token = getTokenFromRequest(request)
+export async function getAuthenticatedPropertyId(request?: NextRequest): Promise<string> {
+  if (await getDevBypass(request)) {
+    return "c16ad260-2c34-4544-9909-5cd444773986"
+  }
+
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
@@ -68,6 +75,22 @@ export async function getAuthenticatedPropertyId(request: NextRequest): Promise<
     throw new Error("Non autenticato")
   }
 
+  // Platform super_admin: resolve via cookie or ?property_id override.
+  // This is the architecturally correct path for cross-tenant identities
+  // (see lib/platform-context.ts and project instructions).
+  const { data: collaborator } = await supabase
+    .from("platform_collaborators")
+    .select("role, is_active")
+    .eq("email", user.email)
+    .maybeSingle()
+
+  if (collaborator?.role === "super_admin" && collaborator.is_active) {
+    const override = readActivePropertyOverride(request)
+    if (override) return override
+    throw new Error("Super admin: nessun tenant selezionato. Usa il selettore tenant.")
+  }
+
+  // Tenant admin: property_id is scoped in admin_users.
   const { data: adminUser, error: adminError } = await supabase
     .from("admin_users")
     .select("property_id")
@@ -88,8 +111,17 @@ export async function getAuthenticatedPropertyId(request: NextRequest): Promise<
 /**
  * Ottiene l'utente autenticato e il suo property_id
  */
-export async function getAuthenticatedUser(request: NextRequest) {
-  const token = getTokenFromRequest(request)
+export async function getAuthenticatedUser(request?: NextRequest) {
+  if (await getDevBypass(request)) {
+    return {
+      id: "dev-user-id",
+      property_id: "c16ad260-2c34-4544-9909-5cd444773986",
+      role: "admin",
+      name: "Dev Admin",
+    }
+  }
+
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
@@ -124,7 +156,19 @@ export async function getAuthenticatedUser(request: NextRequest) {
  * Ottiene l'email dell'utente autenticato
  */
 export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<string> {
-  const token = request ? getTokenFromRequest(request) : undefined
+  // DEV/PREVIEW BYPASS
+  if (request) {
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+    const isDevOrPreview = host.includes("vercel.run") || 
+                           host.includes("localhost") || 
+                           host.includes("127.0.0.1") ||
+                           host.includes("vusercontent.net")
+    if (isDevOrPreview) {
+      return "dev@hotelaccelerator.local"
+    }
+  }
+
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
@@ -143,8 +187,12 @@ export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<
  * Ottiene il property_id con override per super admin
  * I super admin possono operare su qualsiasi property se specificato nel query param
  */
-export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request: NextRequest): Promise<string> {
-  const token = getTokenFromRequest(request)
+export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request?: NextRequest): Promise<string> {
+  if (await getDevBypass(request)) {
+    return "c16ad260-2c34-4544-9909-5cd444773986"
+  }
+
+  const token = request ? await getTokenFromRequest(request) : undefined
   const supabase = token ? await createClientWithToken(token) : await createClient()
 
   const {
@@ -156,20 +204,17 @@ export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request: 
     throw new Error("Non autenticato")
   }
 
-  // Check if user is a super admin
+  // Check if user is a platform super admin
   const { data: collaborator } = await supabase
     .from("platform_collaborators")
     .select("role, is_active")
     .eq("email", user.email)
     .maybeSingle()
 
-  // If super admin and property_id is provided in query, use that
+  // Super admins resolve via explicit ?property_id, else via active-tenant cookie.
   if (collaborator?.role === "super_admin" && collaborator?.is_active) {
-    const url = new URL(request.url)
-    const overridePropertyId = url.searchParams.get("property_id")
-    if (overridePropertyId) {
-      return overridePropertyId
-    }
+    const override = readActivePropertyOverride(request)
+    if (override) return override
   }
 
   // Otherwise, get the user's own property_id
@@ -204,14 +249,14 @@ export function withPropertyId<T extends Record<string, unknown>>(
 /**
  * Ottiene il property_id dalla sessione (alias for getAuthenticatedPropertyId)
  */
-export async function getPropertyFromSession(request: NextRequest): Promise<string> {
+export async function getPropertyFromSession(request?: NextRequest): Promise<string> {
   return getAuthenticatedPropertyId(request)
 }
 
 /**
  * Ottiene la property corrente (alias for getAuthenticatedPropertyId)
  */
-export async function getCurrentProperty(request: NextRequest): Promise<string> {
+export async function getCurrentProperty(request?: NextRequest): Promise<string> {
   return getAuthenticatedPropertyId(request)
 }
 

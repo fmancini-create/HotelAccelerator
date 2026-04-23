@@ -12,8 +12,9 @@ import {
   modifyGmailMessage,
   getValidGmailToken,
 } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
-const API_VERSION = "v774-backend-label-authority"
+const API_VERSION = "v779-rate-limit-fix"
 
 function isInSpam(labels: string[]): boolean {
   return labels.includes("SPAM") || labels.includes("CATEGORY_SPAM")
@@ -24,38 +25,64 @@ function isInTrash(labels: string[]): boolean {
 }
 
 async function getEmailChannelForUser(supabase: any, userId: string) {
-  const { data: adminUser } = await supabase.from("admin_users").select("id, role").eq("id", userId).single()
+  const { channelId } = await resolveGmailChannelId(supabase, userId)
+  if (!channelId) return null
+  const { data: channel } = await supabase
+    .from("email_channels")
+    .select("id, oauth_access_token, oauth_refresh_token, email_address")
+    .eq("id", channelId)
+    .maybeSingle()
+  return channel
+}
 
-  if (adminUser?.role === "super_admin") {
-    const { data: channel } = await supabase
-      .from("email_channels")
-      .select("id, oauth_access_token, oauth_refresh_token, email_address")
-      .eq("provider", "gmail")
-      .eq("is_active", true)
-      .limit(1)
-      .single()
-    return channel
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function fetchWithRetryJson(
+  url: string,
+  options: RequestInit,
+  maxRetries = 5,
+): Promise<{ ok: boolean; status: number; data?: any; error?: string }> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, options)
+
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After")
+        const waitTime = retryAfter ? Number.parseInt(retryAfter) * 1000 : Math.pow(2, attempt + 1) * 1000
+        console.log(`[GMAIL-RATE-LIMIT] 429 Too Many Requests, waiting ${waitTime}ms before retry ${attempt + 1}`)
+        await delay(waitTime)
+        continue
+      }
+
+      const contentType = res.headers.get("content-type") || ""
+
+      if (!res.ok) {
+        const errorText = await res.text()
+        return { ok: false, status: res.status, error: errorText }
+      }
+
+      if (contentType.includes("application/json")) {
+        const data = await res.json()
+        return { ok: true, status: res.status, data }
+      } else {
+        const text = await res.text()
+        try {
+          const data = JSON.parse(text)
+          return { ok: true, status: res.status, data }
+        } catch {
+          return { ok: false, status: res.status, error: text }
+        }
+      }
+    } catch (fetchError) {
+      console.error(`[GMAIL-FETCH] Network error:`, fetchError)
+      if (attempt < maxRetries - 1) {
+        await delay(Math.pow(2, attempt + 1) * 1000)
+        continue
+      }
+      return { ok: false, status: 0, error: "Network error" }
+    }
   }
-
-  const { data: permission } = await supabase
-    .from("user_channel_permissions")
-    .select("channel_id, email_channels(id, oauth_access_token, oauth_refresh_token, email_address)")
-    .eq("user_id", userId)
-    .limit(1)
-    .single()
-
-  if (permission?.email_channels) {
-    return permission.email_channels
-  }
-
-  const { data: assignment } = await supabase
-    .from("email_channel_assignments")
-    .select("channel_id, email_channels(id, oauth_access_token, oauth_refresh_token, email_address)")
-    .eq("user_id", userId)
-    .limit(1)
-    .single()
-
-  return assignment?.email_channels || null
+  return { ok: false, status: 429, error: "Rate limit exceeded" }
 }
 
 async function getThreadLabelsFromGmail(
@@ -71,25 +98,24 @@ async function getThreadLabelsFromGmail(
   try {
     console.log(`[GMAIL-BACKEND-LABELS] Fetching labels for thread ${threadId} from Gmail API...`)
 
-    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const result = await fetchWithRetryJson(
+      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
 
-    if (response.status === 404) {
+    if (result.status === 404) {
       console.error(`[GMAIL-BACKEND-LABELS] Thread ${threadId} NOT FOUND in Gmail`)
       return { success: false, messageIds: [], labels: [], error: `Thread ${threadId} non trovato` }
     }
 
-    if (!response.ok) {
-      const errorBody = await response.text()
-      console.error(`[GMAIL-BACKEND-LABELS] Gmail API error: ${response.status} ${errorBody}`)
-      return { success: false, messageIds: [], labels: [], error: `Gmail API error: ${response.status}` }
+    if (!result.ok) {
+      console.error(`[GMAIL-BACKEND-LABELS] Gmail API error: ${result.status} ${result.error}`)
+      return { success: false, messageIds: [], labels: [], error: `Gmail API error: ${result.status}` }
     }
 
-    const data = await response.json()
+    const data = result.data
     const messageIds = data.messages?.map((m: any) => m.id) || []
 
-    // Collect ALL labels from ALL messages in thread
     const labelsSet = new Set<string>()
     data.messages?.forEach((msg: any) => {
       msg.labelIds?.forEach((label: string) => labelsSet.add(label))

@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = await params
@@ -9,11 +10,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const body = await request.json()
-    const { content, to, subject } = body
+    const { content, to, cc, bcc, subject } = body
 
     if (!content) {
       return NextResponse.json({ error: "Contenuto mancante" }, { status: 400 })
     }
+
+    // Normalize to/cc/bcc: accept string or array
+    const normalizeRecipients = (input: unknown): string[] => {
+      if (!input) return []
+      if (Array.isArray(input)) return input.map((s) => String(s).trim()).filter(Boolean)
+      return String(input)
+        .split(/[,;\n]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    }
+    const toList = normalizeRecipients(to)
+    const ccList = normalizeRecipients(cc)
+    const bccList = normalizeRecipients(bcc)
 
     const supabase = await createClient()
     const {
@@ -24,43 +38,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
     }
 
-    let channelId: string | null = null
-    let channelData: any = null
+    const { channelId } = await resolveGmailChannelId(supabase, user.id)
 
-    // First check if user is super_admin
-    const { data: adminUser } = await supabase.from("admin_users").select("id, role").eq("id", user.id).single()
-
-    if (adminUser?.role === "super_admin") {
-      const { data: channel } = await supabase
-        .from("email_channels")
-        .select("id, email_address, display_name, name")
-        .eq("provider", "gmail")
-        .eq("is_active", true)
-        .limit(1)
-        .single()
-
-      if (channel) {
-        channelId = channel.id
-        channelData = channel
-      }
-    }
-
-    // Fallback to user_channel_permissions
     if (!channelId) {
-      const { data: permission } = await supabase
-        .from("user_channel_permissions")
-        .select("channel_id, email_channels(id, email_address, display_name, name)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single()
-
-      if (permission) {
-        channelId = permission.channel_id
-        channelData = permission.email_channels
-      }
+      return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
     }
 
-    if (!channelId || !channelData) {
+    const { data: channelData } = await supabase
+      .from("email_channels")
+      .select("id, email_address, display_name, name")
+      .eq("id", channelId)
+      .maybeSingle()
+
+    if (!channelData) {
       return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
     }
 
@@ -99,9 +89,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const originalSubject = getHeader("Subject")
     const originalMessageId = getHeader("Message-ID")
 
-    // Parse original sender email
+    // Parse original sender email for default To when none provided by client
     const fromMatch = originalFrom.match(/<([^>]+)>/)
-    const replyTo = to || (fromMatch ? fromMatch[1] : originalFrom)
+    const defaultReplyTo = fromMatch ? fromMatch[1] : originalFrom
+    const finalToList = toList.length > 0 ? toList : [defaultReplyTo]
 
     // Build reply subject
     const replySubject = subject || (originalSubject.startsWith("Re:") ? originalSubject : `Re: ${originalSubject}`)
@@ -110,9 +101,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const fromAddress = channelData.email_address
     const fromName = channelData.display_name || channelData.name || fromAddress.split("@")[0]
 
-    const messageParts = [
+    const messageParts: string[] = [
       `From: "${fromName}" <${fromAddress}>`,
-      `To: ${replyTo}`,
+      `To: ${finalToList.join(", ")}`,
+    ]
+    if (ccList.length > 0) messageParts.push(`Cc: ${ccList.join(", ")}`)
+    if (bccList.length > 0) messageParts.push(`Bcc: ${bccList.join(", ")}`)
+    messageParts.push(
       `Subject: ${replySubject}`,
       `In-Reply-To: ${originalMessageId}`,
       `References: ${originalMessageId}`,
@@ -120,12 +115,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       "Content-Type: text/html; charset=utf-8",
       "",
       `<div style="font-family: Arial, sans-serif; font-size: 14px;">${content.replace(/\n/g, "<br>")}</div>`,
-    ]
+    )
 
     const message = messageParts.join("\r\n")
-    const encodedMessage = Buffer.from(message).toString("base64url")
+    const base64Message = Buffer.from(message).toString("base64")
+    // Convert base64 to base64url: replace + with -, / with _, remove padding =
+    const encodedMessage = base64Message.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 
-    console.log("[v0] Sending reply to:", replyTo, "subject:", replySubject)
+    console.log(
+      "[v0] Sending reply to:",
+      finalToList.join(", "),
+      "cc:",
+      ccList.join(", ") || "-",
+      "bcc:",
+      bccList.join(", ") || "-",
+      "subject:",
+      replySubject,
+    )
 
     const sendRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
       method: "POST",

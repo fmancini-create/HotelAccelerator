@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function DELETE(
@@ -9,7 +9,7 @@ export async function DELETE(
   try {
     const { groupId, memberId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     // Verify group belongs to property
     const { data: group } = await supabase

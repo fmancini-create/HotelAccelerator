@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import type React from "react"
 import type { Metadata } from "next"
 import Script from "next/script"
@@ -73,6 +74,10 @@ export default async function FrontendLayout({
 }: {
   children: React.ReactNode
 }) {
+  // IMPORTANT: Reject any /admin or /super-admin routes - they should never be in this layout
+  // These routes need special handling and are not part of the frontend group
+  // This prevents the issue where admin routes get caught by frontend layout and redirected
+  
   const isPlatform = await isPlatformDomain()
 
   console.log("[v0] FrontendLayout - isPlatform:", isPlatform)

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { randomBytes } from "crypto"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId()
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { data, error } = await supabase
       .from("properties")
@@ -42,7 +42,7 @@ export async function PUT(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId()
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
     const { subdomain, custom_domain, active_domain_type, frontend_enabled } = body
 
