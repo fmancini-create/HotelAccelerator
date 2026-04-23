@@ -2,6 +2,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 const API_VERSION = "v812-kill-switch"
 
@@ -17,8 +18,8 @@ function decodeBase64Url(base64url: string): string {
   return Buffer.from(base64, "base64").toString("utf-8")
 }
 
-export async function GET(request: NextRequest, { params }: { params: { threadId: string } }) {
-  const { threadId } = params
+export async function GET(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
+  const { threadId } = await params
   console.log(`[v0] GMAIL THREAD DETAIL API ${API_VERSION} - threadId:`, threadId)
 
   const supabase = await createClient()
@@ -30,56 +31,10 @@ export async function GET(request: NextRequest, { params }: { params: { threadId
     return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
   }
 
-  let channelId: string | null = null
-
-  // First check if user is super_admin
-  const { data: adminUser } = await supabase.from("admin_users").select("id, role").eq("id", user.id).single()
-
-  if (adminUser?.role === "super_admin") {
-    // Super admin gets access to first active Gmail channel
-    const { data: channel } = await supabase
-      .from("email_channels")
-      .select("id")
-      .eq("provider", "gmail")
-      .eq("is_active", true)
-      .limit(1)
-      .single()
-
-    if (channel) {
-      channelId = channel.id
-    }
-  }
-
-  // Fallback to user_channel_permissions
-  if (!channelId) {
-    const { data: permission } = await supabase
-      .from("user_channel_permissions")
-      .select("channel_id")
-      .eq("user_id", user.id)
-      .limit(1)
-      .single()
-
-    if (permission) {
-      channelId = permission.channel_id
-    }
-  }
-
-  // Fallback to email_channel_assignments
-  if (!channelId) {
-    const { data: assignment } = await supabase
-      .from("email_channel_assignments")
-      .select("channel_id")
-      .eq("user_id", user.id)
-      .limit(1)
-      .single()
-
-    if (assignment) {
-      channelId = assignment.channel_id
-    }
-  }
+  const { channelId, reason } = await resolveGmailChannelId(supabase, user.id)
+  console.log(`[v0] Thread detail channel resolution: ${reason}, channelId=${channelId ?? "null"}`)
 
   if (!channelId) {
-    console.log("[v0] No channel found for user:", user.id)
     return NextResponse.json({ error: "Canale Gmail non configurato", debugVersion: API_VERSION }, { status: 404 })
   }
 

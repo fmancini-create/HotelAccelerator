@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server"
 import { createClient, createClientWithToken } from "@/lib/supabase/server"
+import { readActivePropertyOverride } from "@/lib/platform-context"
 
 function isDevOrPreviewHost(host: string): boolean {
   return (
@@ -74,6 +75,22 @@ export async function getAuthenticatedPropertyId(request?: NextRequest): Promise
     throw new Error("Non autenticato")
   }
 
+  // Platform super_admin: resolve via cookie or ?property_id override.
+  // This is the architecturally correct path for cross-tenant identities
+  // (see lib/platform-context.ts and project instructions).
+  const { data: collaborator } = await supabase
+    .from("platform_collaborators")
+    .select("role, is_active")
+    .eq("email", user.email)
+    .maybeSingle()
+
+  if (collaborator?.role === "super_admin" && collaborator.is_active) {
+    const override = readActivePropertyOverride(request)
+    if (override) return override
+    throw new Error("Super admin: nessun tenant selezionato. Usa il selettore tenant.")
+  }
+
+  // Tenant admin: property_id is scoped in admin_users.
   const { data: adminUser, error: adminError } = await supabase
     .from("admin_users")
     .select("property_id")
@@ -187,20 +204,17 @@ export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request?:
     throw new Error("Non autenticato")
   }
 
-  // Check if user is a super admin
+  // Check if user is a platform super admin
   const { data: collaborator } = await supabase
     .from("platform_collaborators")
     .select("role, is_active")
     .eq("email", user.email)
     .maybeSingle()
 
-  // If super admin and property_id is provided in query, use that
+  // Super admins resolve via explicit ?property_id, else via active-tenant cookie.
   if (collaborator?.role === "super_admin" && collaborator?.is_active) {
-    const url = new URL(request.url)
-    const overridePropertyId = url.searchParams.get("property_id")
-    if (overridePropertyId) {
-      return overridePropertyId
-    }
+    const override = readActivePropertyOverride(request)
+    if (override) return override
   }
 
   // Otherwise, get the user's own property_id

@@ -32,6 +32,8 @@ import {
   Bug,
   MessageCircle,
   Phone,
+  ArrowUpDown,
+  History,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -439,12 +441,34 @@ export default function InboxPage() {
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [lastSyncStatus, setLastSyncStatus] = useState<string | null>(null)
 
+  // ── Inbox Sort (Gmail + Smart) ──
+  // "smart" = legacy priority sort (default for Smart mode).
+  // Gmail mode defaults to "date_desc".
+  type InboxSortOption = "smart" | "date_desc" | "date_asc" | "sender_asc" | "sender_desc"
+  const [inboxSort, setInboxSort] = useState<InboxSortOption>("date_desc")
+
+  // ── Full historical sync state (Smart mode only) ──
+  const [fullSyncRunning, setFullSyncRunning] = useState(false)
+  const [fullSyncProgress, setFullSyncProgress] = useState<{
+    processed: number
+    imported: number
+    duplicates: number
+    errors: number
+  } | null>(null)
+  const fullSyncAbortRef = useRef<boolean>(false)
+
   // ── Shared State ──
   const [replyText, setReplyText] = useState("")
   const [replyChannel, setReplyChannel] = useState("email")
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showReplyBox, setShowReplyBox] = useState(false)
+  // Reply recipients (Gmail-style): To is pre-filled from thread, Cc/Bcc toggleable
+  const [replyTo, setReplyTo] = useState("")
+  const [replyCc, setReplyCc] = useState("")
+  const [replyBcc, setReplyBcc] = useState("")
+  const [showCcField, setShowCcField] = useState(false)
+  const [showBccField, setShowBccField] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" })
   const [showDebugPanel, setShowDebugPanel] = useState(false)
@@ -458,6 +482,35 @@ export default function InboxPage() {
 
   // ── Gmail connection error state (e.g. OAuth token revoked / channel not configured) ──
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null)
+
+  // ── Client-side sort for Gmail mode (Gmail API returns date-desc by default) ──
+  const sortedGmailThreads = React.useMemo(() => {
+    if (!gmailThreads || gmailThreads.length === 0) return gmailThreads
+    const senderKey = (t: any) =>
+      (t?.from?.name || t?.from?.email || "").toString().toLowerCase()
+    const dateKey = (t: any) => {
+      const v = t?.date ? new Date(t.date).getTime() : 0
+      return Number.isFinite(v) ? v : 0
+    }
+    const copy = [...gmailThreads]
+    switch (inboxSort) {
+      case "date_asc":
+        copy.sort((a, b) => dateKey(a) - dateKey(b))
+        break
+      case "sender_asc":
+        copy.sort((a, b) => senderKey(a).localeCompare(senderKey(b)))
+        break
+      case "sender_desc":
+        copy.sort((a, b) => senderKey(b).localeCompare(senderKey(a)))
+        break
+      case "smart":
+      case "date_desc":
+      default:
+        copy.sort((a, b) => dateKey(b) - dateKey(a))
+        break
+    }
+    return copy
+  }, [gmailThreads, inboxSort])
 
   // ── Load Gmail Threads ──
   const loadGmailThreads = useCallback(async (
@@ -903,6 +956,8 @@ export default function InboxPage() {
       queryParams.set("channel", "email") // Assuming email channels for smart mode
       queryParams.set("mode", "smart")
       if (searchQuery) queryParams.set("search", searchQuery)
+      // Smart mode: "smart" is the legacy priority sort, others map 1:1 to DB ORDER BY
+      queryParams.set("sort", inboxSort)
 
       const res = await fetch(`/api/inbox/conversations?${queryParams}`)
       if (!res.ok) return
@@ -914,7 +969,7 @@ export default function InboxPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter, searchQuery])
+  }, [statusFilter, searchQuery, inboxSort])
 
   // Database is the single source of truth, updated only by webhook
 
@@ -973,20 +1028,28 @@ export default function InboxPage() {
     if (inboxMode !== "smart") return
 
     setLastSyncStatus("Sincronizzazione in corso...")
+    console.log("[v0] Smart sync: start")
 
     try {
       // Get channel info for sync
       const channelRes = await fetch("/api/inbox/debug")
       if (!channelRes.ok) {
-        setLastSyncStatus("Errore: impossibile ottenere info canale")
+        const errText = await channelRes.text().catch(() => "")
+        console.error("[v0] Smart sync: debug endpoint failed", channelRes.status, errText)
+        setLastSyncStatus(`Errore info canale (HTTP ${channelRes.status})`)
         return
       }
 
       const debugData = await channelRes.json()
       setDebugInfo(debugData)
+      console.log("[v0] Smart sync: debug data", {
+        channelId: debugData?.channel?.id,
+        propertyId: debugData?.channel?.property_id,
+        lastSyncAt: debugData?.channel?.lastSyncAt,
+      })
 
       if (!debugData.channel?.id || !debugData.channel?.property_id) {
-        setLastSyncStatus("Nessun canale configurato")
+        setLastSyncStatus("Nessun canale Gmail attivo configurato")
         return
       }
 
@@ -1002,15 +1065,99 @@ export default function InboxPage() {
 
       if (syncRes.ok) {
         const syncData = await syncRes.json()
-        setLastSyncStatus(`Sincronizzato: ${syncData.imported} nuovi, ${syncData.duplicates} duplicati`)
+        console.log("[v0] Smart sync: success", syncData)
+        setLastSyncStatus(
+          `Sincronizzato: ${syncData.imported ?? 0} nuovi, ${syncData.duplicates ?? 0} duplicati`,
+        )
         loadConversations()
       } else {
-        setLastSyncStatus(`Errore sync: ${syncRes.status}`)
+        const errData = await syncRes.json().catch(() => ({}))
+        console.error("[v0] Smart sync: sync endpoint failed", syncRes.status, errData)
+        setLastSyncStatus(`Errore sync (HTTP ${syncRes.status}): ${errData?.error || "vedi log"}`)
       }
     } catch (error) {
-      console.error("[v0] FRONTEND: Smart sync error:", error)
-      setLastSyncStatus(`Errore: ${error}`)
+      console.error("[v0] Smart sync: fatal", error)
+      setLastSyncStatus(`Errore: ${String(error)}`)
     }
+  }
+
+  // ── Full historical sync (Smart mode only) ──
+  // Loops over /api/channels/email/sync/full until done === true.
+  // Resumable across refreshes (server persists page_token).
+  const startFullHistoricalSync = async (opts?: { reset?: boolean }) => {
+    if (fullSyncRunning) return
+    setFullSyncRunning(true)
+    fullSyncAbortRef.current = false
+    setFullSyncProgress({ processed: 0, imported: 0, duplicates: 0, errors: 0 })
+
+    try {
+      // Need channel id + property id. Use the debug endpoint which already returns them.
+      const debugRes = await fetch("/api/inbox/debug")
+      if (!debugRes.ok) {
+        setLastSyncStatus("Errore: impossibile leggere info canale")
+        return
+      }
+      const debug = await debugRes.json()
+      const channelId = debug?.channel?.id
+      if (!channelId) {
+        setLastSyncStatus("Nessun canale Gmail attivo")
+        return
+      }
+
+      let done = false
+      let attempt = 0
+      let firstCall = true
+      while (!done && !fullSyncAbortRef.current && attempt < 2000) {
+        attempt++
+        const res = await fetch("/api/channels/email/sync/full", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channel_id: channelId,
+            reset: firstCall && !!opts?.reset,
+          }),
+        })
+        firstCall = false
+
+        if (res.status === 429) {
+          // rate limited: wait a bit and retry
+          await new Promise((r) => setTimeout(r, 3000))
+          continue
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          setLastSyncStatus(`Errore sync storico: ${err?.error || res.status}`)
+          break
+        }
+        const data = await res.json()
+        setFullSyncProgress({
+          processed: data.processed || 0,
+          imported: data.imported || 0,
+          duplicates: data.duplicates || 0,
+          errors: data.errors || 0,
+        })
+        done = Boolean(data.done)
+        // Refresh conversation list roughly every 5 pages to keep UI warm
+        if (attempt % 5 === 0) {
+          await loadConversations()
+        }
+      }
+      await loadConversations()
+      if (done) {
+        setLastSyncStatus("Sync storico completato")
+      } else if (fullSyncAbortRef.current) {
+        setLastSyncStatus("Sync storico interrotto (potrai riprendere)")
+      }
+    } catch (error) {
+      console.error("[v0] Full sync: fatal", error)
+      setLastSyncStatus(`Errore sync storico: ${String(error)}`)
+    } finally {
+      setFullSyncRunning(false)
+    }
+  }
+
+  const stopFullHistoricalSync = () => {
+    fullSyncAbortRef.current = true
   }
 
   useEffect(() => {
@@ -1154,6 +1301,29 @@ export default function InboxPage() {
     }
   }
 
+  // Open the reply composer: pre-fill To with the last customer's email
+  const openReplyBox = () => {
+    try {
+      if (inboxMode === "gmail" && messages.length > 0) {
+        const lastIncoming = [...messages].reverse().find((m: any) => m?.sender_type !== "agent") || messages[messages.length - 1]
+        const prefill = (lastIncoming as any)?.from?.email || ""
+        setReplyTo(prefill)
+      } else if (inboxMode === "smart" && selectedConversation) {
+        // For Smart mode, the conversation holds contact info; pre-fill best-effort
+        const anyConv: any = selectedConversation
+        const prefill = anyConv?.contact?.email || anyConv?.contact_email || ""
+        setReplyTo(prefill)
+      }
+    } catch {
+      setReplyTo("")
+    }
+    setReplyCc("")
+    setReplyBcc("")
+    setShowCcField(false)
+    setShowBccField(false)
+    setShowReplyBox(true)
+  }
+
   const handleSendReply = async () => {
     if (!replyText.trim()) return
 
@@ -1165,10 +1335,19 @@ export default function InboxPage() {
         const res = await fetch(`/api/gmail/threads/${selectedGmailThread.id}/reply`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: replyText }),
+          body: JSON.stringify({
+            content: replyText,
+            to: replyTo.trim() || undefined,
+            cc: replyCc.trim() || undefined,
+            bcc: replyBcc.trim() || undefined,
+          }),
         })
         if (res.ok) {
           setReplyText("")
+          setReplyCc("")
+          setReplyBcc("")
+          setShowCcField(false)
+          setShowBccField(false)
           await loadGmailThread(selectedGmailThread.id)
           // Refresh thread list to update unread status if needed
           await loadGmailThreads(gmailLabelId)
@@ -1566,6 +1745,88 @@ export default function InboxPage() {
               <Mail className="h-4 w-4" />
               Gmail Phone
             </Button>
+
+            {/* Sort dropdown (Gmail + Smart) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1"
+                  title="Ordina"
+                  aria-label="Ordina messaggi"
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                  <span className="hidden sm:inline">
+                    {inboxSort === "date_desc" && "Data (recente)"}
+                    {inboxSort === "date_asc" && "Data (vecchio)"}
+                    {inboxSort === "sender_asc" && "Mittente A-Z"}
+                    {inboxSort === "sender_desc" && "Mittente Z-A"}
+                    {inboxSort === "smart" && "Priorita"}
+                  </span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={() => setInboxSort("date_desc")}>
+                  Data - piu recente
+                  {inboxSort === "date_desc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setInboxSort("date_asc")}>
+                  Data - meno recente
+                  {inboxSort === "date_asc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setInboxSort("sender_asc")}>
+                  Mittente A-Z
+                  {inboxSort === "sender_asc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setInboxSort("sender_desc")}>
+                  Mittente Z-A
+                  {inboxSort === "sender_desc" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                </DropdownMenuItem>
+                {inboxMode === "smart" && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setInboxSort("smart")}>
+                      Priorita (non letti prima)
+                      {inboxSort === "smart" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Full historical sync (Smart mode only) */}
+            {inboxMode === "smart" && (
+              fullSyncRunning ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-[13px] font-normal gap-2 ml-1"
+                  onClick={stopFullHistoricalSync}
+                  title="Interrompi sync storico"
+                >
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span className="tabular-nums">
+                    {fullSyncProgress?.processed ?? 0} importati
+                  </span>
+                  <span className="text-gray-400">Stop</span>
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1"
+                  onClick={() => startFullHistoricalSync()}
+                  title="Importa tutto lo storico Gmail nel database"
+                >
+                  <History className="h-4 w-4" />
+                  <span className="hidden md:inline">Importa storico</span>
+                </Button>
+              )
+            )}
+
             <Button variant="ghost" size="icon" className="h-9 w-9">
               <MoreVertical className="h-4 w-4 text-[#5f6368]" />
             </Button>
@@ -1695,6 +1956,95 @@ export default function InboxPage() {
                 {showReplyBox ? (
                   <div className="flex-shrink-0 px-6 py-4 border-t bg-white">
                     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+                      {/* Recipients header (Gmail-style) */}
+                      <div className="border-b border-gray-100">
+                        <div className="flex items-center gap-2 px-3 py-2">
+                          <label htmlFor="reply-to" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                            A
+                          </label>
+                          <input
+                            id="reply-to"
+                            type="text"
+                            value={replyTo}
+                            onChange={(e) => setReplyTo(e.target.value)}
+                            placeholder="Destinatari (separati da virgola)"
+                            className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                          />
+                          <div className="flex items-center gap-1 text-xs">
+                            {!showCcField && (
+                              <button
+                                type="button"
+                                onClick={() => setShowCcField(true)}
+                                className="text-gray-500 hover:text-gray-700 px-1"
+                              >
+                                Cc
+                              </button>
+                            )}
+                            {!showBccField && (
+                              <button
+                                type="button"
+                                onClick={() => setShowBccField(true)}
+                                className="text-gray-500 hover:text-gray-700 px-1"
+                              >
+                                Ccn
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {showCcField && (
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                            <label htmlFor="reply-cc" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                              Cc
+                            </label>
+                            <input
+                              id="reply-cc"
+                              type="text"
+                              value={replyCc}
+                              onChange={(e) => setReplyCc(e.target.value)}
+                              placeholder="Cc (separati da virgola)"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCcField(false)
+                                setReplyCc("")
+                              }}
+                              className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                              aria-label="Rimuovi Cc"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
+                        {showBccField && (
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                            <label htmlFor="reply-bcc" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                              Ccn
+                            </label>
+                            <input
+                              id="reply-bcc"
+                              type="text"
+                              value={replyBcc}
+                              onChange={(e) => setReplyBcc(e.target.value)}
+                              placeholder="Ccn (separati da virgola)"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowBccField(false)
+                                setReplyBcc("")
+                              }}
+                              className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                              aria-label="Rimuovi Ccn"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <Textarea
                         placeholder="Scrivi una risposta..."
                         value={replyText}
@@ -1732,7 +2082,7 @@ export default function InboxPage() {
                     <Button
                       variant="outline"
                       className="rounded-full px-6"
-                      onClick={() => setShowReplyBox(true)}
+                      onClick={openReplyBox}
                     >
                       <ChevronLeft className="h-4 w-4 mr-2 rotate-180" />
                       Rispondi
@@ -1755,11 +2105,11 @@ export default function InboxPage() {
                   </div>
                 ) : (
                 <>
-                  {gmailThreads.map((thread) => (
+                  {sortedGmailThreads.map((thread) => (
                     <div
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
                         selectedGmailThread?.id === thread.id
                           ? "bg-[#d3e3fd]"
                           : thread.isUnread
@@ -1776,17 +2126,18 @@ export default function InboxPage() {
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
                         <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
                       </button>
-                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
+                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[160px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
                         {thread.from.name || thread.from.email.split("@")[0]}
                       </span>
-                      <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
-                        <span className={`truncate text-[13px] ${thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                      {/* Subject + snippet as a single truncated line (Gmail-style) */}
+                      <span className="flex-1 min-w-0 truncate text-[13px]">
+                        <span className={thread.isUnread ? "font-bold text-[#202124]" : "text-[#444746]"}>
                           {thread.subject || "(nessun oggetto)"}
                         </span>
                         {thread.snippet && (
-                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{thread.snippet}</span>
+                          <span className="text-gray-400">{" \u2014 "}{thread.snippet}</span>
                         )}
-                      </div>
+                      </span>
                       {thread.messagesCount > 1 && (
                         <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
                       )}

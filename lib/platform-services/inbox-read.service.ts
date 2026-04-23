@@ -17,7 +17,13 @@ export class InboxReadService {
       if (options.filter) {
         conversations = this.applyComplexFilter(conversations, options.filter)
       }
-      conversations = this.sortByPriority(conversations)
+      // Legacy priority post-sort only applies to the default "smart" sort.
+      // Any explicit user-selected sort (date_*, sender_*) must be preserved as
+      // returned by the repository (already ordered in SQL).
+      const effectiveSort = options.sort ?? "smart"
+      if (effectiveSort === "smart") {
+        conversations = this.sortByPriority(conversations)
+      }
     }
 
     return conversations
