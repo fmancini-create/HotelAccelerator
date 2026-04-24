@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import * as nodemailer from "nodemailer"
+import { getUserSignature, appendSignatureHtml, appendSignatureText } from "@/lib/email/signature"
 
 export async function POST(request: Request) {
   try {
@@ -99,13 +100,26 @@ export async function POST(request: Request) {
     const fromName = emailChannel.display_name || emailChannel.name || "Hotel"
     const fromEmail = emailChannel.email_address
 
+    // Load the sending user's signature (rich-text HTML + plain-text fallback).
+    // This endpoint may be called without an authenticated session (e.g. automations),
+    // in which case we skip signature injection gracefully.
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser()
+    const { html: signatureHtml, text: signatureText } = authUser
+      ? await getUserSignature(supabase, authUser.id)
+      : { html: null, text: null }
+
+    const htmlBody = appendSignatureHtml(content.replace(/\n/g, "<br>"), signatureHtml)
+    const textBody = appendSignatureText(content, signatureText)
+
     const mailOptions = {
       from: `"${fromName}" <${fromEmail}>`,
       replyTo: fromEmail,
       to: recipientEmail,
       subject: subject,
-      text: content,
-      html: `<div style="font-family: Arial, sans-serif; line-height: 1.6;">${content.replace(/\n/g, "<br>")}</div>`,
+      text: textBody,
+      html: `<div style="font-family: Arial, sans-serif; line-height: 1.6;">${htmlBody}</div>`,
     }
 
     // Invia email

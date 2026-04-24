@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import type { OAuthProvider } from "@/lib/oauth-config"
+import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 
 // Send email via OAuth (Gmail or Outlook API)
 export async function POST(request: NextRequest) {
@@ -54,6 +55,21 @@ export async function POST(request: NextRequest) {
       channel.oauth_access_token = refreshedChannel?.oauth_access_token
     }
 
+    // Load the sending user's signature (rich-text HTML). Optional: if the
+    // endpoint is invoked without an auth session (automations), skip cleanly.
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser()
+    const { html: signatureHtml } = authUser
+      ? await getUserSignature(supabase, authUser.id)
+      : { html: null }
+
+    // Normalise body to HTML so the signature renders with its styling.
+    const htmlBody = appendSignatureHtml(
+      `<div style="font-family: Arial, sans-serif; font-size: 14px;">${String(body).replace(/\n/g, "<br>")}</div>`,
+      signatureHtml,
+    )
+
     const provider = channel.provider as OAuthProvider
     let sendResult: any
 
@@ -64,11 +80,11 @@ export async function POST(request: NextRequest) {
         channel.display_name || channel.name,
         to,
         subject,
-        body,
+        htmlBody,
         reply_to_message_id,
       )
     } else if (provider === "outlook") {
-      sendResult = await sendOutlookMessage(channel.oauth_access_token, to, subject, body)
+      sendResult = await sendOutlookMessage(channel.oauth_access_token, to, subject, htmlBody)
     }
 
     if (!sendResult.success) {
@@ -95,13 +111,14 @@ async function sendGmailMessage(
   replyToMessageId?: string,
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    // Build RFC 2822 message
+    // Build RFC 2822 message. We send HTML so the admin user's rich-text
+    // signature (logo, colors, buttons, tables) renders correctly in the recipient's client.
     const messageParts = [
       `From: "${fromName}" <${from}>`,
       `To: ${to}`,
       `Subject: ${subject}`,
       "MIME-Version: 1.0",
-      "Content-Type: text/plain; charset=utf-8",
+      "Content-Type: text/html; charset=utf-8",
       "",
       body,
     ]
@@ -150,7 +167,7 @@ async function sendOutlookMessage(
         message: {
           subject,
           body: {
-            contentType: "Text",
+            contentType: "HTML",
             content: body,
           },
           toRecipients: [

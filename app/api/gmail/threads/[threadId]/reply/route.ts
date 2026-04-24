@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
+import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = await params
@@ -107,6 +108,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     ]
     if (ccList.length > 0) messageParts.push(`Cc: ${ccList.join(", ")}`)
     if (bccList.length > 0) messageParts.push(`Bcc: ${bccList.join(", ")}`)
+    // Append the admin user's signature (rich-text HTML stored on admin_users)
+    const { html: signatureHtml } = await getUserSignature(supabase, user.id)
+    const bodyWithBreaks = content.replace(/\n/g, "<br>")
+    const finalBody = appendSignatureHtml(bodyWithBreaks, signatureHtml)
+
     messageParts.push(
       `Subject: ${replySubject}`,
       `In-Reply-To: ${originalMessageId}`,
@@ -114,7 +120,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       "MIME-Version: 1.0",
       "Content-Type: text/html; charset=utf-8",
       "",
-      `<div style="font-family: Arial, sans-serif; font-size: 14px;">${content.replace(/\n/g, "<br>")}</div>`,
+      `<div style="font-family: Arial, sans-serif; font-size: 14px;">${finalBody}</div>`,
     )
 
     const message = messageParts.join("\r\n")
