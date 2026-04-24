@@ -12,7 +12,7 @@ import DOMPurify from "isomorphic-dompurify"
  * We keep the allowlist permissive for formatting tags but strip <script>,
  * <iframe>, <object>, event handlers, javascript: URIs, etc.
  */
-const SIGNATURE_CONFIG: DOMPurify.Config = {
+const SIGNATURE_CONFIG = {
   ALLOWED_TAGS: [
     // block
     "div", "p", "br", "hr",
@@ -48,7 +48,7 @@ const SIGNATURE_CONFIG: DOMPurify.Config = {
   FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onmouseout", "onfocus", "onblur", "srcset"],
   KEEP_CONTENT: true,
   ALLOW_DATA_ATTR: false,
-}
+} as const
 
 /** Sanitize rich HTML intended for an email signature. Safe for storage. */
 export function sanitizeSignatureHtml(input: string): string {
