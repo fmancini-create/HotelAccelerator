@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import type { OAuthProvider } from "@/lib/oauth-config"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
+import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
 
 // Send email via OAuth (Gmail or Outlook API)
 export async function POST(request: NextRequest) {
@@ -90,6 +91,11 @@ export async function POST(request: NextRequest) {
     if (!sendResult.success) {
       return NextResponse.json({ error: sendResult.error || "Errore invio email" }, { status: 500 })
     }
+
+    // Auto-capture TO recipients into CRM (fire-and-forget, honours tenant policy).
+    captureOutboundRecipients(supabase, property_id, parseRecipientList(to)).catch((e) =>
+      console.error("[v0] auto-capture send-oauth failed", e),
+    )
 
     return NextResponse.json({
       success: true,

@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
+import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
 
 export async function POST(request: NextRequest) {
   console.log("[v0] GMAIL COMPOSE API")
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const { data: channelData } = await supabase
       .from("email_channels")
-      .select("id, email_address, display_name, name")
+      .select("id, email_address, display_name, name, property_id")
       .eq("id", channelId)
       .maybeSingle()
 
@@ -89,6 +90,15 @@ export async function POST(request: NextRequest) {
 
     const sendData = await sendRes.json()
     console.log("[v0] New email sent successfully, messageId:", sendData.id)
+
+    // Auto-capture TO recipients into CRM (fire-and-forget, never blocks send).
+    if (channelData.property_id) {
+      captureOutboundRecipients(
+        supabase,
+        channelData.property_id,
+        parseRecipientList(to),
+      ).catch((e) => console.error("[v0] auto-capture compose failed", e))
+    }
 
     return NextResponse.json({
       success: true,
