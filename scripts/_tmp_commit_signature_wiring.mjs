@@ -29,46 +29,36 @@ const COMMIT_MESSAGE = `Signature: iniezione firma rich-text in tutti gli endpoi
 
 Co-authored-by: v0[bot] <v0[bot]@users.noreply.github.com>`
 
-function gh(cmd) {
-  try {
-    return execSync(`gh api ${cmd}`, { encoding: "utf-8", maxBuffer: 50 * 1024 * 1024 })
-  } catch (e) {
-    console.error("gh api failed:", cmd)
-    console.error(e.stderr?.toString() || e.message)
-    process.exit(1)
-  }
+// Pull a fresh token at script start; gh handles expiry/refresh.
+const TOKEN = execSync("gh auth token", { encoding: "utf-8" }).trim()
+if (!TOKEN) {
+  console.error("No gh auth token available")
+  process.exit(1)
 }
 
-function ghPost(endpoint, bodyJson) {
-  // Use --input - to pass JSON via stdin, avoids argv-size/escaping issues.
-  const cmd = `gh api -X POST repos/${OWNER}/${REPO}/${endpoint} --input -`
-  try {
-    return execSync(cmd, {
-      input: JSON.stringify(bodyJson),
-      encoding: "utf-8",
-      maxBuffer: 50 * 1024 * 1024,
-    })
-  } catch (e) {
-    console.error("gh api POST failed:", endpoint)
-    console.error(e.stderr?.toString() || e.message)
+async function ghFetch(method, endpoint, body) {
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/${endpoint}`
+  const res = await fetch(url, {
+    method,
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
+      "Content-Type": "application/json",
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    console.error(`${method} ${endpoint} -> ${res.status}`)
+    console.error(text.slice(0, 500))
     process.exit(1)
   }
+  return JSON.parse(text)
 }
 
-function ghPatch(endpoint, bodyJson) {
-  const cmd = `gh api -X PATCH repos/${OWNER}/${REPO}/${endpoint} --input -`
-  try {
-    return execSync(cmd, {
-      input: JSON.stringify(bodyJson),
-      encoding: "utf-8",
-      maxBuffer: 50 * 1024 * 1024,
-    })
-  } catch (e) {
-    console.error("gh api PATCH failed:", endpoint)
-    console.error(e.stderr?.toString() || e.message)
-    process.exit(1)
-  }
-}
+const ghPost = (endpoint, body) => ghFetch("POST", endpoint, body)
+const ghPatch = (endpoint, body) => ghFetch("PATCH", endpoint, body)
 
 const projectRoot = "/vercel/share/v0-project"
 
@@ -77,12 +67,7 @@ const tree = []
 for (const relPath of FILES) {
   const abs = path.join(projectRoot, relPath)
   const content = readFileSync(abs, "utf-8")
-  const res = JSON.parse(
-    ghPost("git/blobs", {
-      content,
-      encoding: "utf-8",
-    }),
-  )
+  const res = await ghPost("git/blobs", { content, encoding: "utf-8" })
   console.log(`  blob ${res.sha.slice(0, 10)}  ${relPath}`)
   tree.push({
     path: relPath,
@@ -93,31 +78,22 @@ for (const relPath of FILES) {
 }
 
 console.log("[2/4] Creating tree...")
-const treeRes = JSON.parse(
-  ghPost("git/trees", {
-    base_tree: BASE_SHA,
-    tree,
-  }),
-)
+const treeRes = await ghPost("git/trees", { base_tree: BASE_SHA, tree })
 console.log(`  tree ${treeRes.sha.slice(0, 10)}`)
 
 console.log("[3/4] Creating commit...")
-const commitRes = JSON.parse(
-  ghPost("git/commits", {
-    message: COMMIT_MESSAGE,
-    tree: treeRes.sha,
-    parents: [BASE_SHA],
-  }),
-)
+const commitRes = await ghPost("git/commits", {
+  message: COMMIT_MESSAGE,
+  tree: treeRes.sha,
+  parents: [BASE_SHA],
+})
 console.log(`  commit ${commitRes.sha.slice(0, 10)}`)
 
 console.log("[4/4] Updating ref...")
-const refRes = JSON.parse(
-  ghPatch(`git/refs/heads/${BRANCH}`, {
-    sha: commitRes.sha,
-    force: true,
-  }),
-)
+const refRes = await ghPatch(`git/refs/heads/${BRANCH}`, {
+  sha: commitRes.sha,
+  force: true,
+})
 console.log(`  ref ${refRes.ref} -> ${refRes.object.sha.slice(0, 10)}`)
 
 console.log("\nDone. New commit on branch:", BRANCH)
