@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAdminAuth, getRoleLabel, type AdminUser } from "@/lib/admin-hooks"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { SignatureEditor } from "@/components/admin/signature-editor"
 
 type UserRole = "super_admin" | "admin" | "editor"
 
@@ -56,7 +57,7 @@ export default function AdminUsersPage() {
   const [showAddUser, setShowAddUser] = useState(false)
   const [showAddGroup, setShowAddGroup] = useState(false)
   const [editingSignature, setEditingSignature] = useState<string | null>(null)
-  const [signatureText, setSignatureText] = useState("")
+  const [signatureHtml, setSignatureHtml] = useState("")
   const [newUser, setNewUser] = useState({
     email: "",
     password: "",
@@ -206,13 +207,15 @@ export default function AdminUsersPage() {
       const res = await fetch(`/api/admin/users/${userId}/signature`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signature: signatureText }),
+        body: JSON.stringify({ signature_html: signatureHtml }),
       })
 
       if (res.ok) {
         setSuccess("Firma salvata con successo")
         setEditingSignature(null)
         loadUsersAndGroups()
+      } else {
+        setError("Errore nel salvataggio firma")
       }
     } catch (e) {
       setError("Errore nel salvataggio firma")
@@ -568,11 +571,11 @@ export default function AdminUsersPage() {
                             size="sm"
                             onClick={() => {
                               setEditingSignature(user.id!)
-                              setSignatureText(user.signature || "")
+                              setSignatureHtml(user.signature_html || user.signature || "")
                             }}
                           >
                             <Edit3 className="w-4 h-4 mr-1" />
-                            {user.signature ? "Modifica" : "Aggiungi"} Firma
+                            {user.signature_html || user.signature ? "Modifica" : "Aggiungi"} Firma
                           </Button>
                         ) : (
                           <div className="flex gap-2">
@@ -592,11 +595,15 @@ export default function AdminUsersPage() {
                       </div>
 
                       {editingSignature === user.id ? (
-                        <textarea
-                          value={signatureText}
-                          onChange={(e) => setSignatureText(e.target.value)}
-                          placeholder={`Cordiali saluti,\n${user.name}\nVilla I Barronci\nTel: +39 055 123 4567`}
-                          className="w-full h-32 p-3 border rounded-lg text-sm font-mono bg-background"
+                        <SignatureEditor
+                          value={signatureHtml}
+                          onChange={setSignatureHtml}
+                          placeholder={`Incolla qui la tua firma da Gmail o scrivila a mano.\nEsempio: Cordiali saluti, ${user.name} – Villa I Barronci`}
+                        />
+                      ) : user.signature_html ? (
+                        <div
+                          className="signature-preview bg-muted/50 rounded-lg p-3 text-sm"
+                          dangerouslySetInnerHTML={{ __html: user.signature_html }}
                         />
                       ) : user.signature ? (
                         <div className="bg-muted/50 rounded-lg p-3 text-sm whitespace-pre-wrap">{user.signature}</div>
