@@ -33,9 +33,16 @@ Co-authored-by: v0[bot] <v0[bot]@users.noreply.github.com>`
 const projectRoot = "/vercel/share/v0-project"
 const tmpDir = mkdtempSync(path.join(tmpdir(), "ghapi-"))
 
+// Strip any stale auth tokens inherited from the parent process; let gh use its internal keyring.
+const cleanEnv = { ...process.env }
+delete cleanEnv.GH_TOKEN
+delete cleanEnv.GITHUB_TOKEN
+delete cleanEnv.GH_ENTERPRISE_TOKEN
+delete cleanEnv.GITHUB_ENTERPRISE_TOKEN
+
 function ghApi(method, endpoint, jsonBodyFile) {
   const args = ["api", "-X", method, `repos/${OWNER}/${REPO}/${endpoint}`, "--input", jsonBodyFile]
-  const res = spawnSync("gh", args, { encoding: "utf-8", maxBuffer: 50 * 1024 * 1024 })
+  const res = spawnSync("gh", args, { encoding: "utf-8", maxBuffer: 50 * 1024 * 1024, env: cleanEnv })
   if (res.status !== 0) {
     console.error(`gh api ${method} ${endpoint} failed`)
     console.error(res.stderr || res.stdout)
