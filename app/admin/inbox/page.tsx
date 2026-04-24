@@ -1431,7 +1431,7 @@ export default function InboxPage() {
 
   if (authLoading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#f6f8fc]">
+      <div className="flex items-center justify-center h-full bg-[#f6f8fc]">
         <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
       </div>
     )
@@ -1439,7 +1439,7 @@ export default function InboxPage() {
 
   if (!adminUser) {
     return (
-      <div className="flex items-center justify-center h-screen bg-[#f6f8fc]">
+      <div className="flex items-center justify-center h-full bg-[#f6f8fc]">
         <div className="text-center">
           <h2 className="text-xl font-semibold mb-2">Accesso richiesto</h2>
           <p className="text-muted-foreground mb-4">Devi effettuare il login per accedere all'inbox.</p>
@@ -1525,7 +1525,7 @@ export default function InboxPage() {
   )
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-full flex flex-col bg-white">
       {/* Gmail-style top bar */}
       <header className="h-16 flex-shrink-0 flex items-center gap-3 px-4 bg-white border-b border-gray-200/50">
         {/* Hamburger menu */}
