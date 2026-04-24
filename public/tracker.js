@@ -16,12 +16,17 @@
   if (window.ha && window.ha.__loaded) return;
 
   var s = document.currentScript;
-  var KEY = s && s.getAttribute("data-key");
+  // Config sources (priority): data-* attrs > window.HAB_CONFIG > none.
+  // HAB_CONFIG is the server-injected form used by the CMS layout.
+  var CFG = (window.HAB_CONFIG && typeof window.HAB_CONFIG === "object") ? window.HAB_CONFIG : {};
+  var KEY = (s && s.getAttribute("data-key")) || CFG.key || null;
+  var SITE_ID = (s && s.getAttribute("data-site")) || CFG.site || null;
   var ENDPOINT =
     (s && s.getAttribute("data-endpoint")) ||
+    CFG.endpoint ||
     (new URL(s ? s.src : location.href)).origin;
   if (!KEY) {
-    console.warn("[ha] missing data-key on <script>");
+    console.warn("[ha] missing write_key (data-key or window.HAB_CONFIG.key)");
     return;
   }
 

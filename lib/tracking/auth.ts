@@ -20,6 +20,12 @@ export interface TrackingSiteAuth {
   siteId: string
   propertyId: string
   allowedOrigins: string[]
+  /**
+   * Tenant-owned hosts auto-allowed without being explicitly listed in
+   * allowed_origins. Populated from properties.subdomain + custom_domain so
+   * CMS pages served from our own infrastructure are tracked out-of-the-box.
+   */
+  tenantHosts: string[]
   isActive: boolean
   name: string
 }
@@ -53,7 +59,10 @@ export async function getTrackingSiteByKey(writeKey: string): Promise<TrackingSi
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from("tracking_sites")
-    .select("id, property_id, allowed_origins, is_active, name")
+    .select(
+      `id, property_id, allowed_origins, is_active, name,
+       property:properties!tracking_sites_property_id_fkey ( subdomain, custom_domain )`,
+    )
     .eq("write_key", writeKey)
     .maybeSingle()
 
@@ -62,15 +71,29 @@ export async function getTrackingSiteByKey(writeKey: string): Promise<TrackingSi
     return null
   }
 
-  const value: TrackingSiteAuth | null = data
-    ? {
-        siteId: data.id,
-        propertyId: data.property_id,
-        allowedOrigins: (data.allowed_origins ?? []).map((o: string) => o.toLowerCase()),
-        isActive: data.is_active,
-        name: data.name,
-      }
-    : null
+  let value: TrackingSiteAuth | null = null
+  if (data) {
+    // Supabase's FK join returns an object for to-one relations, but the
+    // typing can surface as array | object depending on inference. Normalise.
+    const prop: { subdomain?: string | null; custom_domain?: string | null } =
+      Array.isArray((data as any).property) ? (data as any).property[0] ?? {} : (data as any).property ?? {}
+    const tenantHosts: string[] = []
+    if (prop.custom_domain) tenantHosts.push(prop.custom_domain.toLowerCase())
+    if (prop.subdomain) {
+      // Subdomains are hosted under the platform apex; include both apex and www.
+      const apex = process.env.NEXT_PUBLIC_PLATFORM_APEX ?? "hotelaccelerator.com"
+      tenantHosts.push(`${prop.subdomain.toLowerCase()}.${apex.toLowerCase()}`)
+    }
+
+    value = {
+      siteId: data.id,
+      propertyId: data.property_id,
+      allowedOrigins: (data.allowed_origins ?? []).map((o: string) => o.toLowerCase()),
+      tenantHosts,
+      isActive: data.is_active,
+      name: data.name,
+    }
+  }
 
   cache.set(writeKey, { value, expiresAt: now + CACHE_TTL_MS })
   return value
@@ -86,9 +109,23 @@ export async function getTrackingSiteByKey(writeKey: string): Promise<TrackingSi
  *  - A leading "*." acts as a subdomain wildcard (e.g. "*.example.com" matches
  *    "https://a.example.com" and "https://a.b.example.com").
  */
-export function isOriginAllowed(origin: string | null, allowList: string[]): boolean {
+export function isOriginAllowed(origin: string | null, allowList: string[], tenantHosts: string[] = []): boolean {
   const o = normaliseOrigin(origin)
   if (!o) return false
+
+  // Auto-allow the tenant's own hosts (custom_domain, subdomain.platform).
+  // This is what makes the CMS "just work": pages served from ibarronci.com
+  // can post to /api/track without the admin pre-populating allowed_origins.
+  try {
+    const { host } = new URL(o)
+    for (const h of tenantHosts) {
+      const hh = h.toLowerCase()
+      if (host === hh || host === `www.${hh}`) return true
+    }
+  } catch {
+    /* ignore */
+  }
+
   for (const raw of allowList) {
     const entry = raw.trim().toLowerCase()
     if (!entry) continue
@@ -139,7 +176,7 @@ export async function authenticateTrackingRequest(
   const site = await getTrackingSiteByKey(key)
   if (!site) return { ok: false, status: 401, error: "invalid write_key" }
   if (!site.isActive) return { ok: false, status: 403, error: "site disabled" }
-  if (!isOriginAllowed(origin, site.allowedOrigins)) {
+  if (!isOriginAllowed(origin, site.allowedOrigins, site.tenantHosts)) {
     return { ok: false, status: 403, error: "origin not allowed" }
   }
 
