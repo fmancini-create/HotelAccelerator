@@ -263,11 +263,7 @@ export default function AdminUsersPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
-        <AdminHeader
-          title="Team & Permessi"
-          subtitle="Gestisci utenti, gruppi e permessi sui canali"
-          breadcrumbs={[{ label: "Team", href: "/admin/users" }]}
-        />
+        <AdminHeader title="Team & Permessi" subtitle="Gestisci utenti, gruppi e permessi sui canali" />
 
         {error && (
           <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
