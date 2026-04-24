@@ -181,6 +181,9 @@ export default function CRMPage() {
           <p className="text-muted-foreground">Database intelligente per marketing targettizzato</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/admin/crm/settings">Impostazioni</Link>
+          </Button>
           <Button variant="outline" onClick={() => setShowImportDialog(true)}>
             <Upload className="h-4 w-4 mr-2" />
             Importa

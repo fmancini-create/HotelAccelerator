@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
+import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = await params
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const { data: channelData } = await supabase
       .from("email_channels")
-      .select("id, email_address, display_name, name")
+      .select("id, email_address, display_name, name, property_id")
       .eq("id", channelId)
       .maybeSingle()
 
@@ -159,6 +160,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const sendData = await sendRes.json()
     console.log("[v0] Email sent successfully, messageId:", sendData.id)
+
+    // Auto-capture TO recipients into CRM (fire-and-forget, never blocks reply).
+    // Only TO addresses are captured — CC/BCC intentionally skipped to avoid
+    // ingesting mailing lists, no-reply addresses, or internal copies.
+    if (channelData.property_id && finalToList.length > 0) {
+      const recipients = parseRecipientList(finalToList)
+      captureOutboundRecipients(supabase, channelData.property_id, recipients).catch((e) =>
+        console.error("[v0] auto-capture reply failed", e),
+      )
+    }
 
     return NextResponse.json({
       success: true,

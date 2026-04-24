@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import * as nodemailer from "nodemailer"
 import { getUserSignature, appendSignatureHtml, appendSignatureText } from "@/lib/email/signature"
+import { captureOutboundRecipients } from "@/lib/crm/auto-capture"
 
 export async function POST(request: Request) {
   try {
@@ -158,6 +159,14 @@ export async function POST(request: Request) {
         status: "open",
       })
       .eq("id", conversation_id)
+
+    // 10. Auto-capture recipient into CRM (fire-and-forget, honours tenant policy).
+    // The recipient almost always already exists (it came from a conversation
+    // whose contact_id was set on inbound), but captureOutboundRecipients is
+    // idempotent and cheap so this is a safe insurance path.
+    captureOutboundRecipients(supabase, property_id, [
+      { email: recipientEmail, name: conversation.contact?.name ?? null },
+    ]).catch((e) => console.error("[v0] auto-capture inbox send failed", e))
 
     return NextResponse.json({
       success: true,
