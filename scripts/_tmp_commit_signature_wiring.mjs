@@ -1,15 +1,16 @@
-// One-shot script: commit the 5 signature-wiring files onto the
-// `signature-send-wiring` branch via the GitHub Git Data API.
-// Atomic: blobs -> tree -> commit -> update ref.
+// One-shot: commit the 5 signature-wiring files onto signature-send-wiring
+// via the GitHub Git Data API. Atomic: blobs -> tree -> commit -> update ref.
+// Uses `gh api --input <file>` so the gh CLI handles auth (no token in env needed).
 
-import { execSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { spawnSync } from "node:child_process"
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
 import path from "node:path"
 
 const OWNER = "fmancini-create"
 const REPO = "HotelAccelerator"
 const BRANCH = "signature-send-wiring"
-const BASE_SHA = "6cdfca247e8cc454c259afe6bc5adb735191572c" // stable-gmail HEAD at time of branch
+const BASE_SHA = "6cdfca247e8cc454c259afe6bc5adb735191572c"
 
 const FILES = [
   "lib/email/signature.ts",
@@ -29,72 +30,60 @@ const COMMIT_MESSAGE = `Signature: iniezione firma rich-text in tutti gli endpoi
 
 Co-authored-by: v0[bot] <v0[bot]@users.noreply.github.com>`
 
-// Pull a fresh token at script start; gh handles expiry/refresh.
-const TOKEN = execSync("gh auth token", { encoding: "utf-8" }).trim()
-if (!TOKEN) {
-  console.error("No gh auth token available")
-  process.exit(1)
-}
+const projectRoot = "/vercel/share/v0-project"
+const tmpDir = mkdtempSync(path.join(tmpdir(), "ghapi-"))
 
-async function ghFetch(method, endpoint, body) {
-  const url = `https://api.github.com/repos/${OWNER}/${REPO}/${endpoint}`
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "Content-Type": "application/json",
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  })
-  const text = await res.text()
-  if (!res.ok) {
-    console.error(`${method} ${endpoint} -> ${res.status}`)
-    console.error(text.slice(0, 500))
+function ghApi(method, endpoint, jsonBodyFile) {
+  const args = ["api", "-X", method, `repos/${OWNER}/${REPO}/${endpoint}`, "--input", jsonBodyFile]
+  const res = spawnSync("gh", args, { encoding: "utf-8", maxBuffer: 50 * 1024 * 1024 })
+  if (res.status !== 0) {
+    console.error(`gh api ${method} ${endpoint} failed`)
+    console.error(res.stderr || res.stdout)
     process.exit(1)
   }
-  return JSON.parse(text)
+  return JSON.parse(res.stdout)
 }
 
-const ghPost = (endpoint, body) => ghFetch("POST", endpoint, body)
-const ghPatch = (endpoint, body) => ghFetch("PATCH", endpoint, body)
-
-const projectRoot = "/vercel/share/v0-project"
+function writeBody(name, obj) {
+  const p = path.join(tmpDir, name)
+  writeFileSync(p, JSON.stringify(obj))
+  return p
+}
 
 console.log("[1/4] Creating blobs...")
 const tree = []
+let i = 0
 for (const relPath of FILES) {
   const abs = path.join(projectRoot, relPath)
   const content = readFileSync(abs, "utf-8")
-  const res = await ghPost("git/blobs", { content, encoding: "utf-8" })
+  const body = writeBody(`blob-${i++}.json`, { content, encoding: "utf-8" })
+  const res = ghApi("POST", "git/blobs", body)
   console.log(`  blob ${res.sha.slice(0, 10)}  ${relPath}`)
-  tree.push({
-    path: relPath,
-    mode: "100644",
-    type: "blob",
-    sha: res.sha,
-  })
+  tree.push({ path: relPath, mode: "100644", type: "blob", sha: res.sha })
 }
 
 console.log("[2/4] Creating tree...")
-const treeRes = await ghPost("git/trees", { base_tree: BASE_SHA, tree })
+const treeRes = ghApi("POST", "git/trees", writeBody("tree.json", { base_tree: BASE_SHA, tree }))
 console.log(`  tree ${treeRes.sha.slice(0, 10)}`)
 
 console.log("[3/4] Creating commit...")
-const commitRes = await ghPost("git/commits", {
-  message: COMMIT_MESSAGE,
-  tree: treeRes.sha,
-  parents: [BASE_SHA],
-})
+const commitRes = ghApi(
+  "POST",
+  "git/commits",
+  writeBody("commit.json", { message: COMMIT_MESSAGE, tree: treeRes.sha, parents: [BASE_SHA] }),
+)
 console.log(`  commit ${commitRes.sha.slice(0, 10)}`)
 
 console.log("[4/4] Updating ref...")
-const refRes = await ghPatch(`git/refs/heads/${BRANCH}`, {
-  sha: commitRes.sha,
-  force: true,
-})
+const refRes = ghApi(
+  "PATCH",
+  `git/refs/heads/${BRANCH}`,
+  writeBody("ref.json", { sha: commitRes.sha, force: true }),
+)
 console.log(`  ref ${refRes.ref} -> ${refRes.object.sha.slice(0, 10)}`)
 
-console.log("\nDone. New commit on branch:", BRANCH)
+rmSync(tmpDir, { recursive: true, force: true })
+
+console.log("\nDone.")
+console.log("Branch:", BRANCH)
 console.log("Commit SHA:", commitRes.sha)
