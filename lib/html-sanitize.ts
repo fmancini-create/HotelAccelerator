@@ -53,7 +53,7 @@ const SIGNATURE_CONFIG = {
 /** Sanitize rich HTML intended for an email signature. Safe for storage. */
 export function sanitizeSignatureHtml(input: string): string {
   if (!input) return ""
-  return DOMPurify.sanitize(input, SIGNATURE_CONFIG) as unknown as string
+  return DOMPurify.sanitize(input, SIGNATURE_CONFIG as any) as unknown as string
 }
 
 /** Extract plain text from HTML for the `signature` column fallback. */
