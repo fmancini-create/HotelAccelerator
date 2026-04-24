@@ -4,6 +4,9 @@
 # GitHub Git Data API. Bypasses local git auth and squash-merge divergence.
 set -euo pipefail
 
+# Strip stale auth tokens inherited from env; let gh use its own keyring.
+unset GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN GITHUB_ENTERPRISE_TOKEN || true
+
 OWNER="fmancini-create"
 REPO="HotelAccelerator"
 BASE_BRANCH="stable-gmail"
