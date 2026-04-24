@@ -2,8 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getTenantMetrics, checkTenantHealth, getAllTenantMetrics } from "@/lib/monitoring"
 import { getTenantStats } from "@/lib/query-optimizer"
+import { getQuotaStatus } from "@/lib/tenant-quotas"
 import { checkRateLimit, RATE_LIMITS, rateLimitExceeded, rateLimitHeaders } from "@/lib/rate-limiter"
-import { createServiceClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,31 +13,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Super admin check — in dev always false, fine
     const isSuperAdmin = false
 
-    // Rate limiting
     const rateLimitResult = checkRateLimit(`${propertyId}:monitoring`, RATE_LIMITS.read)
     if (!rateLimitResult.success) {
       return rateLimitExceeded(rateLimitResult)
     }
 
-    // Get metrics and stats
-    const [metrics, health, stats] = await Promise.all([
+    // Pull everything the dashboard expects in one go.
+    // quotaStatus is what /admin/monitoring renders directly; metrics+health
+    // are kept available for power users / super-admin views.
+    const [metrics, health, stats, quotaStatus] = await Promise.all([
       Promise.resolve(getTenantMetrics(propertyId)),
       Promise.resolve(checkTenantHealth(propertyId)),
       getTenantStats(propertyId),
+      getQuotaStatus(propertyId),
     ])
 
     const response: Record<string, unknown> = {
       propertyId,
+      quotaStatus,
+      stats,
       metrics,
       health,
-      stats,
       timestamp: new Date().toISOString(),
     }
 
-    // Super admins can see all tenant metrics
     if (isSuperAdmin) {
       response.allTenants = getAllTenantMetrics()
     }
@@ -46,7 +47,7 @@ export async function GET(request: NextRequest) {
       headers: rateLimitHeaders(rateLimitResult),
     })
   } catch (error) {
-    console.error("Error fetching monitoring data:", error)
+    console.error("[v0] Error fetching monitoring data:", error)
     return NextResponse.json({ error: "Failed to fetch monitoring data" }, { status: 500 })
   }
 }
