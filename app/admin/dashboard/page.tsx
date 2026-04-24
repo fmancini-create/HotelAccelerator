@@ -89,6 +89,22 @@ const dashboardModules: DashboardModule[] = [
     color: "bg-amber-500",
   },
   {
+    id: "tracking-visitors",
+    title: "Visitatori Live",
+    description: "Sessioni in tempo reale, timeline eventi e stitching al CRM",
+    icon: <Radio className="w-8 h-8" />,
+    href: "/admin/tracking/visitors",
+    color: "bg-blue-600",
+  },
+  {
+    id: "tracking-sites",
+    title: "Siti Tracking",
+    description: "Gestisci chiavi script-first e domini autorizzati per tenant",
+    icon: <Globe className="w-8 h-8" />,
+    href: "/admin/tracking/sites",
+    color: "bg-sky-600",
+  },
+  {
     id: "todos",
     title: "Task & To-Do",
     description: "Gestisci attività, assegna task al team e sincronizza con Manubot",
