@@ -135,6 +135,10 @@ export interface ConversationDetail {
 
 export type GmailLabel = "INBOX" | "SENT" | "DRAFT" | "SPAM" | "TRASH" | "STARRED" | "ALL"
 
+// Sort options exposed in the UI for both Smart and Gmail modes.
+// "smart" = legacy priority sort (unread first, then recent). Only Smart supports it.
+export type InboxSort = "smart" | "date_desc" | "date_asc" | "sender_asc" | "sender_desc"
+
 // Query options
 export interface ConversationListOptions {
   status?: "open" | "closed" | "archived" | "all"
@@ -145,4 +149,5 @@ export interface ConversationListOptions {
   filter?: "all" | "action_needed" | "high_priority"
   mode?: "smart" | "gmail"
   gmail_label?: GmailLabel
+  sort?: InboxSort
 }

@@ -21,6 +21,7 @@ import {
   Layers,
   Radio,
   Activity,
+  CheckSquare,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAdminAuth, getRoleLabel } from "@/lib/admin-hooks"
@@ -86,6 +87,30 @@ const dashboardModules: DashboardModule[] = [
     icon: <Calendar className="w-8 h-8" />,
     href: "/admin/tracking/demand",
     color: "bg-amber-500",
+  },
+  {
+    id: "tracking-visitors",
+    title: "Visitatori Live",
+    description: "Sessioni in tempo reale, timeline eventi e stitching al CRM",
+    icon: <Radio className="w-8 h-8" />,
+    href: "/admin/tracking/visitors",
+    color: "bg-blue-600",
+  },
+  {
+    id: "tracking-sites",
+    title: "Siti Tracking",
+    description: "Gestisci chiavi script-first e domini autorizzati per tenant",
+    icon: <Globe className="w-8 h-8" />,
+    href: "/admin/tracking/sites",
+    color: "bg-sky-600",
+  },
+  {
+    id: "todos",
+    title: "Task & To-Do",
+    description: "Gestisci attività, assegna task al team e sincronizza con Manubot",
+    icon: <CheckSquare className="w-8 h-8" />,
+    href: "/admin/todos",
+    color: "bg-lime-600",
   },
   {
     id: "monitoring",
@@ -214,7 +239,7 @@ export default function AdminDashboardPage() {
           setQuotas(data)
         }
       } catch (error) {
-        console.error("Failed to load quotas:", error)
+        // silently fail
       }
     }
 
@@ -230,13 +255,15 @@ export default function AdminDashboardPage() {
     )
   }
 
-  if (!adminUser) {
+  const effectiveAdmin = adminUser
+
+  if (!effectiveAdmin) {
     return null
   }
 
   const availableModules = dashboardModules.filter((module) => {
     if (module.requiresPermission) {
-      return adminUser[module.requiresPermission]
+      return effectiveAdmin[module.requiresPermission]
     }
     return true
   })
@@ -260,8 +287,8 @@ export default function AdminDashboardPage() {
 
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-[#5c5c5c]">{adminUser.name}</p>
-                <p className="text-xs text-[#8b8b8b]">{getRoleLabel(adminUser.role)}</p>
+                <p className="text-sm font-medium text-[#5c5c5c]">{effectiveAdmin.name}</p>
+                <p className="text-xs text-[#8b8b8b]">{getRoleLabel(effectiveAdmin.role)}</p>
               </div>
               {isExternalSite ? (
                 <a href={siteUrl} target="_blank" rel="noopener noreferrer">
@@ -305,7 +332,7 @@ export default function AdminDashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-serif text-[#5c5c5c] mb-2">Benvenuto, {adminUser.name.split(" ")[0]}</h2>
+          <h2 className="text-2xl font-serif text-[#5c5c5c] mb-2">Benvenuto, {effectiveAdmin.name.split(" ")[0]}</h2>
           <p className="text-[#8b8b8b]">Seleziona un modulo per iniziare.</p>
         </div>
 

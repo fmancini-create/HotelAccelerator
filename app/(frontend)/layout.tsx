@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation"
 import type React from "react"
 import type { Metadata } from "next"
 import Script from "next/script"
@@ -5,6 +6,7 @@ import { getCurrentTenant, isPlatformDomain } from "@/lib/get-tenant"
 import { getCurrentDomain } from "@/lib/seo-utils"
 import { ChatWidget } from "@/components/chat-widget"
 import { HotelSchema, LocalBusinessSchema } from "@/components/schema-org"
+import { getDefaultTrackingSite } from "@/lib/tracking/cms-injection"
 
 export async function generateMetadata(): Promise<Metadata> {
   const isPlatform = await isPlatformDomain()
@@ -73,6 +75,10 @@ export default async function FrontendLayout({
 }: {
   children: React.ReactNode
 }) {
+  // IMPORTANT: Reject any /admin or /super-admin routes - they should never be in this layout
+  // These routes need special handling and are not part of the frontend group
+  // This prevents the issue where admin routes get caught by frontend layout and redirected
+  
   const isPlatform = await isPlatformDomain()
 
   console.log("[v0] FrontendLayout - isPlatform:", isPlatform)
@@ -111,10 +117,23 @@ export default async function FrontendLayout({
     )
   }
 
+  // Script-first tracking: auto-inject the HotelAccelerator tracker for this
+  // tenant's default active site. If no active site exists for this property,
+  // injection is silently skipped (nothing leaks and nothing breaks).
+  const trackingSite = await getDefaultTrackingSite(tenant.id)
+
   return (
     <div data-tenant-id={tenant.id} data-tenant-slug={tenant.slug}>
       <HotelSchema />
       <LocalBusinessSchema />
+
+      {trackingSite && (
+        <Script id="hab-tracker-config" strategy="beforeInteractive">
+          {`window.HAB_CONFIG=${JSON.stringify({ site: trackingSite.siteId, key: trackingSite.writeKey })};`}
+        </Script>
+      )}
+      {trackingSite && <Script src="/tracker.js" strategy="afterInteractive" />}
+
 
       <Script id="google-tag-manager" strategy="afterInteractive">
         {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':

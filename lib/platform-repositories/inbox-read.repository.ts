@@ -29,7 +29,7 @@ export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label } = options
+    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort } = options
 
     let query = this.supabase
       .from("conversations")
@@ -62,7 +62,6 @@ export class InboxReadRepository {
         if (gmail_label === "STARRED") {
           query = query.eq("is_starred", true)
         } else if (gmail_label === "INBOX") {
-          // INBOX = has INBOX label or no specific sent/draft/spam/trash status
           query = query.contains("gmail_labels", ["INBOX"])
         } else if (gmail_label === "SENT") {
           query = query.contains("gmail_labels", ["SENT"])
@@ -74,19 +73,33 @@ export class InboxReadRepository {
           query = query.contains("gmail_labels", ["TRASH"])
         }
       }
-
-      // Gmail mode: order by last_message_at (mirroring Gmail's threading)
-      query = query.order("last_message_at", { ascending: false })
     } else {
-      // Smart mode: filter by status and prioritize actionable items
+      // Smart mode: filter by status
       if (status === "starred") {
         query = query.eq("is_starred", true)
       } else if (status !== "all") {
         query = query.eq("status", status)
       }
+    }
 
-      // Smart mode: order by priority (unread first, then by date)
+    // Apply ordering. Default:
+    //   smart -> legacy priority sort (unread first, then recent)
+    //   gmail -> date_desc (Gmail-like)
+    const effectiveSort = sort ?? (mode === "gmail" ? "date_desc" : "smart")
+
+    if (effectiveSort === "smart") {
       query = query.order("unread_count", { ascending: false })
+      query = query.order("last_message_at", { ascending: false })
+    } else if (effectiveSort === "date_desc") {
+      query = query.order("last_message_at", { ascending: false, nullsFirst: false })
+    } else if (effectiveSort === "date_asc") {
+      query = query.order("last_message_at", { ascending: true, nullsFirst: false })
+    } else if (effectiveSort === "sender_asc") {
+      // Sort by contact email asc, then date desc as tiebreaker
+      query = query.order("email", { referencedTable: "contacts", ascending: true, nullsFirst: false })
+      query = query.order("last_message_at", { ascending: false })
+    } else if (effectiveSort === "sender_desc") {
+      query = query.order("email", { referencedTable: "contacts", ascending: false, nullsFirst: false })
       query = query.order("last_message_at", { ascending: false })
     }
 

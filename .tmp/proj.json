@@ -1,0 +1,913 @@
+{
+  "accountId": "team_zutObejPRaSuP1fKxOyKHz5M",
+  "speedInsights": {
+    "id": "z57pxtqkIbxiJY76JUbxMn6E8Tl",
+    "hasData": false
+  },
+  "autoExposeSystemEnvs": true,
+  "autoAssignCustomDomains": true,
+  "autoAssignCustomDomainsUpdatedBy": "system",
+  "buildCommand": "bun run build",
+  "commandForIgnoringBuildStep": null,
+  "createdAt": 1765823875236,
+  "crons": {
+    "enabledAt": 1765824010035,
+    "disabledAt": null,
+    "updatedAt": 1776960240794,
+    "deploymentId": "dpl_4bZo2FuSo6TmV7rVozBqP5oUrvAP",
+    "definitions": [
+      {
+        "host": "hotelaccelerator-hx2j7qo1f-4bid.vercel.app",
+        "path": "/api/cron/renew-gmail-watch",
+        "schedule": "0 3 * * *"
+      }
+    ]
+  },
+  "deploymentExpiration": {
+    "expirationDays": 180,
+    "expirationDaysProduction": 365,
+    "expirationDaysCanceled": 30,
+    "expirationDaysErrored": 90,
+    "deploymentsToKeep": 10
+  },
+  "devCommand": null,
+  "directoryListing": false,
+  "env": [
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoicjVEd0EyamQwRFRsOXdpaHZucGpxSzI3Z040TEROS1RkT0l5T0xqK2psVlZQNkUyMzBxaVdWd1FlbGlJNmJHY0Z3TFRoYWc3WGtRQWE3M2EvRUZLMFFYRlRFbzVjQmlnZW9yMEFxckRMR2lCUDZVUXZTZHZ5a0M4eHJDcFVkQlROb204WDg2bmpXcVl1QlRKWVQ5Z20zMzRFd1dCczdVbklhcy9HV0xIQnVDMTBYSC9KamhCeldsLzJoWXVpNXgzTDUwWTBXWWREMUYrODdPZGtPOXpBV09vNVFhY2NjdHZ6S1J4RVVGZWxOdz0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE3MCwyMTEsNzAsMTY2LDEwNiwzLDc4LDg1LDcsMjQxLDI2LDg1LDIwNyw3OSwxMjcsMjEzLDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDk1LDI0MywxMDgsMTQyLDE0MSwyLDE0MiwyMywxMzAsMTc5LDE4LDE2OSwyLDEsMTYsMTI4LDU5LDE0MSw5NCwzNCwwLDEwMCw2NiwxODQsMTkzLDIxMiwyNDUsMywzNSwxNTIsMjAzLDEyNSw3NiwyMTMsMjA2LDE5NCw3MywxNzQsNDcsMjI2LDcyLDIxMywyMzUsMTYzLDU3LDUzLDExNCwyMDksMjQ4LDI0NiwxOCwyMzIsMjA3LDEyOSw2MywxOTYsNzEsMjYsMzgsMjYsOTEsMTAzLDEzMiwyMSwxMzIsMTMxLDIyOCwxMzEsMTM0LDM1LDI0MSwxOTMsMTcxLDEwMyw2MiwxOTFdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "blob-read-write-token",
+        "storeId": "store_f4upjHPbKAApy9E1"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "xbsIzhdBYM93YFjS",
+      "key": "BLOB_READ_WRITE_TOKEN",
+      "configurationId": null,
+      "createdAt": 1766263091649,
+      "updatedAt": 1766263091649,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiL24wMWlRKzhmcW40RFJXdHE3RG5CMlUyM0tKOWZibEx6WllZYWdjSlZqVWdwZllFZ1ZxYzRHYXRoWENyVnJVekNjWUIyVVZSN2VGWW9wWjg4QXhmblJSaW92QmU5VkY1MWZ4QUh6V3ZSNVZYMXl4QkJ5NWNNQmZUSHVobW1xcmJaZU1qK3BYcHl5aXhRZXhLLytLMk91THZBbVExbHhYc0M0MFJ3Vk5hN0tYNytzK2pHa1N6dGlTMjdlZzNSVjByeFM5Tm5IazluYk1Qbm1hU05lUXh3dXJZVTNHcmNnTkVqYjB3RlJ6NllzN2V2UUNjQmVjcFNkWXlybXlpZ3NyNTFOQllDTHNSQmNzOUgxbXlIaU9hWDh5SmhZT21mRWpNTEdSWmZGMWZDYTRvOVM5UlJxQjhUMjFlN29NM3hOQUxmRmJYZWdVV0N5RGdNazZ4UmxWQXBwOGhaSkxNS2w0Y0tpSXlxeE5ZQTdOV3djUHAya0JjMFRFV1ozcWF3MmlQSGExUUxWMlhjRFMrM0RaaE83enkzYzJNb083Z1lXcmw3T3p6STk4WkFEMD0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDIxOSwxNTcsMTA3LDIwNiw3MywxNzYsMTEsOSwxOCwxNjUsMTU1LDE3NSw5OSwxNjgsNjcsMjE2LDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDMxLDE1MSwyNTUsMjIwLDIzOSwzOCw3OCwwLDk4LDI1MCwxODMsMTYxLDIsMSwxNiwxMjgsNTksMjI1LDI0NCwxMzMsMjUsMjMsMTI0LDE4NCw3Miw3NCwxNDcsOTEsMjMxLDIwOSw0MSwyMTYsMjUxLDIzLDExOSw0LDE5NSwxNTAsMTcyLDE2Nyw1MiwyMTIsMTcsMTgyLDIxNSw1OSwxMSwyMDksNjMsODYsMTkxLDE1LDc5LDk2LDIxNSw5NSwxNTUsMTE3LDgsNjAsMTk5LDQyLDE5MCwzNiwyMDUsMjQwLDE5LDEzNCw3LDIxOCwxMDUsMTk0LDI1MCwxMywxOTksNV19",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "hONvV3SBvpPVDTsq",
+      "key": "POSTGRES_URL",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoidGVhTjBSZ0RENmhIalFLTitpRXRvT053RlJLb2UrczByMDlmaGJwYmxxVU83Ni9xQWx3eXZ3ZFpFbUE4ditqaHpqYUswN0wwcE9DYTVmcVVOR2Z4Nkl6RUFDZnRJSXRsZTZDZi9OY05aKzlwNkN0YzlRVXRJZEhiQ25wSWtvWVp0dEN3RDRINXpOd1djWmlVekFsRWl6OGpld05DaldNRkV6N1c1Q3B2eTdIeEp1ZjZoVzRMazV4MjYwVHNDeGNjdE1JOHMwZnZOWXdqNGl6eEJQUU9WSkR0dXBhT3d0WVk0N1IvcHBwQkRhZ1ZsalZneDM0em9XelV6b0JwdlBYdCt0c1B5RGloTWpmVVNudlJIUlFqbkMySFM5ZkJqR1AzbjFSRENpVWwwVjhmVk5Zb2Iwd2xhQTRQdU9nZ1hnT2lweWdxbmJZQ3BXOWJ0Z1cvUTNKdStFdTREdHliaFVnOWplYmo2L2o3MExZTjZSV0U2RndDUGplUllzOWsvTGZpT3ZhNng3S3BMOXJoTG5Ka1ptK1Q5bndlaktJPSIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMTk4LDQwLDEyNyw1NCwxMjUsODYsNDEsMjQzLDk1LDEyOSwxOSwyNDksNTksMTY0LDI1MCwyMzksMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsNzQsNjksMTczLDY3LDE1OSw2OSwxMjYsMjMxLDE4LDE5OSwyMzcsMjEsMiwxLDE2LDEyOCw1OSwyMTAsMjM3LDE1NCwzMywxNTEsNTYsMTY0LDM4LDgyLDI0MCwyNTAsMTM3LDk1LDQ5LDE2LDcyLDI0MywyMzUsNjcsMTUwLDEzNCwxNzAsNTAsMTg0LDE3NSwyMjgsNjQsMjI4LDI1NSwxMjcsNSw0OCw4MiwxMzgsNSwxOTQsMTE1LDE3OSwxMzgsMjE5LDc3LDUzLDE5OSwyMTEsOTAsMjYsNDIsMjQ1LDEyOCw2LDIyMSwyMjgsMzMsNSw4MywxMzgsOTcsMjA3LDE1NV19",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "jNMnLzGWR0lKV8JT",
+      "key": "POSTGRES_PRISMA_URL",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiVmsza05URHlCUmE1QUIwakFJLy84SjJtKzVKQXNEdmw5QTdlOVFpdUVpZ2FaRUk5bEI1S0lRWUFoTmF2N2l6WUdLdDl5UHVwQ1pZd3djZmdBUC9zenE5YXJxR0ZxOFZ2NFIra1Y3SEVGbXNNVE1nSzZ1THBvUU00R29kYlU0TGwwNHI0UkFvZzlzcTJBdm9EV0ZiQmlWZVNWQ29wZFd2ZEtOYjhtbG1idTRGQVN4VFR1T1h6MUhSMndCMD0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE5OCw0MCwxMjcsNTQsMTI1LDg2LDQxLDI0Myw5NSwxMjksMTksMjQ5LDU5LDE2NCwyNTAsMjM5LDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDc0LDY5LDE3Myw2NywxNTksNjksMTI2LDIzMSwxOCwxOTksMjM3LDIxLDIsMSwxNiwxMjgsNTksMjEwLDIzNywxNTQsMzMsMTUxLDU2LDE2NCwzOCw4MiwyNDAsMjUwLDEzNyw5NSw0OSwxNiw3MiwyNDMsMjM1LDY3LDE1MCwxMzQsMTcwLDUwLDE4NCwxNzUsMjI4LDY0LDIyOCwyNTUsMTI3LDUsNDgsODIsMTM4LDUsMTk0LDExNSwxNzksMTM4LDIxOSw3Nyw1MywxOTksMjExLDkwLDI2LDQyLDI0NSwxMjgsNiwyMjEsMjI4LDMzLDUsODMsMTM4LDk3LDIwNywxNTVdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "rCAgUSv0RuAJEY7X",
+      "key": "SUPABASE_URL",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiNFZZcWNRUnZ3eU9DanNtNDdyTG9xV2k1WXpUZGdrV3NuSGgrZkM4b2tnRDVBRWxaWGVMVkJaajJ3a1daNG1uakVITFZnVVp4V0piRmJLMURaQ25mZDFSaWFQRkdMVFlzeVNyZW84M25kcVdiVVNpbW9rTW85VGI2UWY4bkV3U3dWRXNWR2xYL3F1L2ZkSTYzSXNvcVcxREZGMG9FNjJCbzIvZGU0R0sxYU1PT2d2S1R5WFF0V3hEQUR4SlZNSmI2ZmFRbmhnPT0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE5OCw0MCwxMjcsNTQsMTI1LDg2LDQxLDI0Myw5NSwxMjksMTksMjQ5LDU5LDE2NCwyNTAsMjM5LDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDc0LDY5LDE3Myw2NywxNTksNjksMTI2LDIzMSwxOCwxOTksMjM3LDIxLDIsMSwxNiwxMjgsNTksMjEwLDIzNywxNTQsMzMsMTUxLDU2LDE2NCwzOCw4MiwyNDAsMjUwLDEzNyw5NSw0OSwxNiw3MiwyNDMsMjM1LDY3LDE1MCwxMzQsMTcwLDUwLDE4NCwxNzUsMjI4LDY0LDIyOCwyNTUsMTI3LDUsNDgsODIsMTM4LDUsMTk0LDExNSwxNzksMTM4LDIxOSw3Nyw1MywxOTksMjExLDkwLDI2LDQyLDI0NSwxMjgsNiwyMjEsMjI4LDMzLDUsODMsMTM4LDk3LDIwNywxNTVdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "bSsk6B0N0rwTLWKo",
+      "key": "SUPABASE_PUBLISHABLE_KEY",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiblhYWVhvUjV4NmhJOXJWWDFZK1dTYk41OEJOVG5TSERTbW05c0VpeHdRL3E5MzQxSXlyeDhiWGxIWkZvZmxSTEpYbExhVktBclpRdDIxdGx4cEJqc2M1Yzk5K3pMVTN5QmxvTGVmSE9SS1FQbTNRYVdEM2ZjeDRwanovTTRhaFZSbTU4VkhSSThLZmNmUmZ3bm5LUWRlbFJaMUkwQ2ljNkk3WkxKZ0wyRWdUdnY1MEx0c1NNSHpTMDArRT0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE3MCwyMTEsNzAsMTY2LDEwNiwzLDc4LDg1LDcsMjQxLDI2LDg1LDIwNyw3OSwxMjcsMjEzLDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDk1LDI0MywxMDgsMTQyLDE0MSwyLDE0MiwyMywxMzAsMTc5LDE4LDE2OSwyLDEsMTYsMTI4LDU5LDE0MSw5NCwzNCwwLDEwMCw2NiwxODQsMTkzLDIxMiwyNDUsMywzNSwxNTIsMjAzLDEyNSw3NiwyMTMsMjA2LDE5NCw3MywxNzQsNDcsMjI2LDcyLDIxMywyMzUsMTYzLDU3LDUzLDExNCwyMDksMjQ4LDI0NiwxOCwyMzIsMjA3LDEyOSw2MywxOTYsNzEsMjYsMzgsMjYsOTEsMTAzLDEzMiwyMSwxMzIsMTMxLDIyOCwxMzEsMTM0LDM1LDI0MSwxOTMsMTcxLDEwMyw2MiwxOTFdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "wb2V7AP3IhtZ7mUa",
+      "key": "NEXT_PUBLIC_SUPABASE_URL",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiT09wQlM1S0g4R2lMeEEzaGcrdTVlQ2NycklhWnVxTitzY0FobDl3Z21ZZzZaQjM5M2haaE1DbXBLYzZucXg0MTFNcldlZXhqQ2lYMnhiVFAvb1lxUWYwZ2hwNzJjUWNuY0h5OHlQTDlSMmJORmNMYlhZNzhCZHJZcUQvUzYrNnlZdmtCMktSYmpFTlc2aHBLMDgwZ0FFcHAyeXd0MXVZcVlVQUVIWU45SHlLRHZkZkRkWTUwdURyekY1UURpRFMxWHVzdXdsVGVaaklvNUEwc1N6eWlOZ085eTkvNlk5UW1QbG1EbGRuaXppaU1ObGNkWENKTThZSXUzZHEzKzlDU0VFV0xqcFQ5KzIwN0JCRlE0aWxDc0JyZDBIdXZvSmMrMWVZY05MS2d2RlhBVU84SGtxbVBQQzRlZWc1ZzJvbll4WCtkUHFlZDZ1SnhvR0V1UUJqL25SWlVoS29XSU9yVkRTZk9ReUVZSlVwOC96UmMyTytqdUZsQVl2TT0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDIxOSwxNTcsMTA3LDIwNiw3MywxNzYsMTEsOSwxOCwxNjUsMTU1LDE3NSw5OSwxNjgsNjcsMjE2LDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDMxLDE1MSwyNTUsMjIwLDIzOSwzOCw3OCwwLDk4LDI1MCwxODMsMTYxLDIsMSwxNiwxMjgsNTksMjI1LDI0NCwxMzMsMjUsMjMsMTI0LDE4NCw3Miw3NCwxNDcsOTEsMjMxLDIwOSw0MSwyMTYsMjUxLDIzLDExOSw0LDE5NSwxNTAsMTcyLDE2Nyw1MiwyMTIsMTcsMTgyLDIxNSw1OSwxMSwyMDksNjMsODYsMTkxLDE1LDc5LDk2LDIxNSw5NSwxNTUsMTE3LDgsNjAsMTk5LDQyLDE5MCwzNiwyMDUsMjQwLDE5LDEzNCw3LDIxOCwxMDUsMTk0LDI1MCwxMywxOTksNV19",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "TTxAXFp37ohXdpaj",
+      "key": "POSTGRES_URL_NON_POOLING",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiWmFON21OenAzYU1wcSsybEViYU9pQ1lPQ3hzSnVvM21HRVpCVDBreEZkUnNjNWQ1eHVuSlgwWDlodGl2dmFheUhJL0ZHcTRKcmZlVjIxazJhK2g2dUpSaGJvRzU1YU83akc1ZnRVS2lWZWpnTnVvZ3BOSFRMUFk1cERzNUhaU0xjSVprQkxUWkIrbnZ3UldTYW9teXhWN3ZFSFJLZW1na0NoeW83QjhEMk5ZSGw2TXFuenBXaFFRc1dGMk9QZDk0RGFkTSt4c3QycDc5M2o3MGtlbFlPUm1mMVJIYUw2bUZXMEdMQ1FXSEtpaThXa2xndGZ1TTZFSUMrQm9ZT0FMNTJXZnN2MGVIZ1JvdDdLdHc4ZURwZEtyVGppc2p2NFY4bFpPOXU5QlZ5OGc9IiwiayI6WzE4NCwxLDIsMywwLDEyMCwzNywyMTAsNDgsMTI5LDIxMSwxMDQsMTg1LDYsMjM4LDI3LDI1NSw1OCwyMDksMTQ2LDEyMywxMjYsMTkxLDE1OSwxNzIsMTYwLDkwLDE1NSwxMzUsMTIzLDIzNiwxMTUsMTk2LDMxLDkyLDEyOCwxMzEsMzMsMSwxNzAsMjExLDcwLDE2NiwxMDYsMyw3OCw4NSw3LDI0MSwyNiw4NSwyMDcsNzksMTI3LDIxMywwLDAsMCwxMjYsNDgsMTI0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsNiwxNjAsMTExLDQ4LDEwOSwyLDEsMCw0OCwxMDQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNywxLDQ4LDMwLDYsOSw5NiwxMzQsNzIsMSwxMDEsMyw0LDEsNDYsNDgsMTcsNCwxMiw5NSwyNDMsMTA4LDE0MiwxNDEsMiwxNDIsMjMsMTMwLDE3OSwxOCwxNjksMiwxLDE2LDEyOCw1OSwxNDEsOTQsMzQsMCwxMDAsNjYsMTg0LDE5MywyMTIsMjQ1LDMsMzUsMTUyLDIwMywxMjUsNzYsMjEzLDIwNiwxOTQsNzMsMTc0LDQ3LDIyNiw3MiwyMTMsMjM1LDE2Myw1Nyw1MywxMTQsMjA5LDI0OCwyNDYsMTgsMjMyLDIwNywxMjksNjMsMTk2LDcxLDI2LDM4LDI2LDkxLDEwMywxMzIsMjEsMTMyLDEzMSwyMjgsMTMxLDEzNCwzNSwyNDEsMTkzLDE3MSwxMDMsNjIsMTkxXX0=",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "YXKAuHe8zoSzW4iS",
+      "key": "SUPABASE_JWT_SECRET",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiQ1JRdHpkU04yRDJkVVpmZmRHOGN6WWFoMXlOV0JhNHNUT1ZheFJDR2lBYW9oV05pS0M2b3ZQQTdFQ3RUQjFiN2libXpFMUpRWVRTTDNNL2hpcUhHL1VvWEVlUVI2THBvOW5TQUk2L2lSbG89IiwiayI6WzE4NCwxLDIsMywwLDEyMCwzNywyMTAsNDgsMTI5LDIxMSwxMDQsMTg1LDYsMjM4LDI3LDI1NSw1OCwyMDksMTQ2LDEyMywxMjYsMTkxLDE1OSwxNzIsMTYwLDkwLDE1NSwxMzUsMTIzLDIzNiwxMTUsMTk2LDMxLDkyLDEyOCwxMzEsMzMsMSwxNzAsMjExLDcwLDE2NiwxMDYsMyw3OCw4NSw3LDI0MSwyNiw4NSwyMDcsNzksMTI3LDIxMywwLDAsMCwxMjYsNDgsMTI0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsNiwxNjAsMTExLDQ4LDEwOSwyLDEsMCw0OCwxMDQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNywxLDQ4LDMwLDYsOSw5NiwxMzQsNzIsMSwxMDEsMyw0LDEsNDYsNDgsMTcsNCwxMiw5NSwyNDMsMTA4LDE0MiwxNDEsMiwxNDIsMjMsMTMwLDE3OSwxOCwxNjksMiwxLDE2LDEyOCw1OSwxNDEsOTQsMzQsMCwxMDAsNjYsMTg0LDE5MywyMTIsMjQ1LDMsMzUsMTUyLDIwMywxMjUsNzYsMjEzLDIwNiwxOTQsNzMsMTc0LDQ3LDIyNiw3MiwyMTMsMjM1LDE2Myw1Nyw1MywxMTQsMjA5LDI0OCwyNDYsMTgsMjMyLDIwNywxMjksNjMsMTk2LDcxLDI2LDM4LDI2LDkxLDEwMywxMzIsMjEsMTMyLDEzMSwyMjgsMTMxLDEzNCwzNSwyNDEsMTkzLDE3MSwxMDMsNjIsMTkxXX0=",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "w2Nbng2yfpRRbyXw",
+      "key": "POSTGRES_USER",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiS2FyZEFnNFlicS9Lb3htTlVwYlpPSjVYWTF3ZWtBN2E0L3E3UVRRRnJSd2lTcXBPYUpwcWRhVWJIZ29nL1NaSm85ZnJlN0NPMDRQS0NHVGZWdVd0ZEwvbE1nNS9KU3kzekR4a2pTNkJJdG5hM3VLOE41ZDEvUDhUYkpkelJGUEZEWm9vSGNWZnRYSmhkN21mWDJLUDQwSXBMZzZXNnc4SE9PNk1iRWVyaG0zbWIyL21weEFkRFZMU0tlUlhNTlNGbWh3WFhuZURVemtLc2NUenJXcXFkcC9Id1h4WU9uN2xPN3JIS3ZuZkgyZmlrK29aTktIdUxTWEptVjJCaURCcExGejJaeHpIT29LZ25oWEN1QWFzTmFrUGFUNDJmSmhqUVJDNXJvN3hxMjBIUFE0emZXd05tTkU1ZW1uTThiNTd6U2xZRFkvVkh3UFNNYjVkSEdnZ2tPQjZPbnhONW9LQ3JmbjVKcnJoNVJmbDFyVTl2NGJURlI5NmtxNVdFbFh4TUgxakt4V0tKS0RqZFlkMFk0R3Uxa1cwdmpJQ1lpZm9KVzBtcWpoYUd5NmRKVDdIdnF5djJ6WVlaeDYzdGFTWGp5bmJEOGFmRlJISXlKdXB2enhqMlczSW9CKzdyeWs4R3QybUtrRGZQSjhIS2xNL0pFRW16U1JVc3FBcEsvS2tyWWovcFhUaXpZY29tWitaWTJXTURtTnprV0g1dk9MRmp4RFZTZ1IxM3VLUFllSEM5bzh3Q1EvWDBXVnY3Q29udDB0OS93PT0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE5OCw0MCwxMjcsNTQsMTI1LDg2LDQxLDI0Myw5NSwxMjksMTksMjQ5LDU5LDE2NCwyNTAsMjM5LDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDc0LDY5LDE3Myw2NywxNTksNjksMTI2LDIzMSwxOCwxOTksMjM3LDIxLDIsMSwxNiwxMjgsNTksMjEwLDIzNywxNTQsMzMsMTUxLDU2LDE2NCwzOCw4MiwyNDAsMjUwLDEzNyw5NSw0OSwxNiw3MiwyNDMsMjM1LDY3LDE1MCwxMzQsMTcwLDUwLDE4NCwxNzUsMjI4LDY0LDIyOCwyNTUsMTI3LDUsNDgsODIsMTM4LDUsMTk0LDExNSwxNzksMTM4LDIxOSw3Nyw1MywxOTksMjExLDkwLDI2LDQyLDI0NSwxMjgsNiwyMjEsMjI4LDMzLDUsODMsMTM4LDk3LDIwNywxNTVdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "PbNRmvaoCyvXB2k1",
+      "key": "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoidVYxQ2FhckhvWmtQSk10dnV5bVhuOGtibWgwTlpUWkdFRzZjZU41a3M5RXpjdU1Ga1JvNXMzbmFwcUhUejB2aUxZY1h2L2cxUzBoSmZTNHdTYVpETllCeVk2Y2U2Q1VoeWlZTi95aEVrNkdEZ0I0b3RhZ2UyRmo1UkZxQkc4VHciLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDIxOSwxNTcsMTA3LDIwNiw3MywxNzYsMTEsOSwxOCwxNjUsMTU1LDE3NSw5OSwxNjgsNjcsMjE2LDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDMxLDE1MSwyNTUsMjIwLDIzOSwzOCw3OCwwLDk4LDI1MCwxODMsMTYxLDIsMSwxNiwxMjgsNTksMjI1LDI0NCwxMzMsMjUsMjMsMTI0LDE4NCw3Miw3NCwxNDcsOTEsMjMxLDIwOSw0MSwyMTYsMjUxLDIzLDExOSw0LDE5NSwxNTAsMTcyLDE2Nyw1MiwyMTIsMTcsMTgyLDIxNSw1OSwxMSwyMDksNjMsODYsMTkxLDE1LDc5LDk2LDIxNSw5NSwxNTUsMTE3LDgsNjAsMTk5LDQyLDE5MCwzNiwyMDUsMjQwLDE5LDEzNCw3LDIxOCwxMDUsMTk0LDI1MCwxMywxOTksNV19",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "Bh4qZT0gKQlvnX4O",
+      "key": "POSTGRES_PASSWORD",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoibTFiUmlna1dKYmp0U29UTUpPVEVsN1Mxdk5qTjdCK3FVT256bUdoUkUwNDVsZWZuRGN6TTFBc3RPaDBrcnpyb1pnVTJaMjdabzdRRFRuNENQM1ljZzRUT29uck0xNis1KzQrSC96c1RmaEU9IiwiayI6WzE4NCwxLDIsMywwLDEyMCwzNywyMTAsNDgsMTI5LDIxMSwxMDQsMTg1LDYsMjM4LDI3LDI1NSw1OCwyMDksMTQ2LDEyMywxMjYsMTkxLDE1OSwxNzIsMTYwLDkwLDE1NSwxMzUsMTIzLDIzNiwxMTUsMTk2LDMxLDkyLDEyOCwxMzEsMzMsMSwxNzAsMjExLDcwLDE2NiwxMDYsMyw3OCw4NSw3LDI0MSwyNiw4NSwyMDcsNzksMTI3LDIxMywwLDAsMCwxMjYsNDgsMTI0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsNiwxNjAsMTExLDQ4LDEwOSwyLDEsMCw0OCwxMDQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNywxLDQ4LDMwLDYsOSw5NiwxMzQsNzIsMSwxMDEsMyw0LDEsNDYsNDgsMTcsNCwxMiw5NSwyNDMsMTA4LDE0MiwxNDEsMiwxNDIsMjMsMTMwLDE3OSwxOCwxNjksMiwxLDE2LDEyOCw1OSwxNDEsOTQsMzQsMCwxMDAsNjYsMTg0LDE5MywyMTIsMjQ1LDMsMzUsMTUyLDIwMywxMjUsNzYsMjEzLDIwNiwxOTQsNzMsMTc0LDQ3LDIyNiw3MiwyMTMsMjM1LDE2Myw1Nyw1MywxMTQsMjA5LDI0OCwyNDYsMTgsMjMyLDIwNywxMjksNjMsMTk2LDcxLDI2LDM4LDI2LDkxLDEwMywxMzIsMjEsMTMyLDEzMSwyMjgsMTMxLDEzNCwzNSwyNDEsMTkzLDE3MSwxMDMsNjIsMTkxXX0=",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "ciJqaBu4imRK1r7f",
+      "key": "POSTGRES_DATABASE",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoidTZjRndiVXIvR3pZbUNXMUlyRytGa0cvamNsd0lBb3FtaU41VG9xWkZMeUd3WU1WNjRwcWpsTEhDek5hcmFmQ21NTkt3MFczU2lQWmZSOVMwLzduT2xrWWJMaHpaTFRQTGVWSm5YNHJGbFJMNkQ3TDR0a3ZGdVZWQ1JyVi9SOUhOTitub0R4Wjh6ZmZ3K3J4Q2FGdk5NZ3VUU2UvVUpNUDFPTHdXa0xodDBuRk9wc3hmOTNhYXBuRHpWZ0VoQ2o0dWZWRzdnPT0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE3MCwyMTEsNzAsMTY2LDEwNiwzLDc4LDg1LDcsMjQxLDI2LDg1LDIwNyw3OSwxMjcsMjEzLDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDk1LDI0MywxMDgsMTQyLDE0MSwyLDE0MiwyMywxMzAsMTc5LDE4LDE2OSwyLDEsMTYsMTI4LDU5LDE0MSw5NCwzNCwwLDEwMCw2NiwxODQsMTkzLDIxMiwyNDUsMywzNSwxNTIsMjAzLDEyNSw3NiwyMTMsMjA2LDE5NCw3MywxNzQsNDcsMjI2LDcyLDIxMywyMzUsMTYzLDU3LDUzLDExNCwyMDksMjQ4LDI0NiwxOCwyMzIsMjA3LDEyOSw2MywxOTYsNzEsMjYsMzgsMjYsOTEsMTAzLDEzMiwyMSwxMzIsMTMxLDIyOCwxMzEsMTM0LDM1LDI0MSwxOTMsMTcxLDEwMyw2MiwxOTFdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "fcgsViIyBZLP4J4u",
+      "key": "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      "configurationId": null,
+      "createdAt": 1766264366615,
+      "updatedAt": 1766264366615,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiTkJEdFhXNjVxb0tGWFR3Mm5WOVcxOTRISWJRU0EyRk02L2pnOGdPUGpLbWp0NlEwaVZ6YTR2ZFVXRktYV0ttWThOc1NqL2ZaM0pLcWRTZ0d4Rng4bzU5cnVLSHYvNEVSclVWR2ZpcTg3aHdkUnBnMm5lMW1iZ0lGbjhiQ09qcnBZeUFMdXBtazluMVMvWU1zMlNzYjB1ZzVTUFF0eFE5OEI2eDhtZTB6d0loWjRTZU5UZ0ttS3o1VVdqNVJYTkNRUytZZmpHRW1WekNqdDRCVTdFZ2ZvbUVLMVh1dEpnWGRDSWxhQXQ3S1dmVE14NXVJSkZMK2RmSk1XRGdXM2laekJWZzBOc0lnQXF3WktNOUNJS1JBOG9YWHRIaEREbXBBUlM5RHdLR2RMT2QvZmgrQVRQVHpGdTE0N214S3hScVNKbmg2V1RkNkMzNU1nWXcwd25oRkNmbnpzeEc5Zm5GVS9EejNGU2h3MzJtRTVxZktuZkdtSGxJeEZTNXAxZGtuNVc1czFqRHNPdWJlSkFGcXVxZ1hHbGpvang3cUdkOXN5RFVHaXRnRmlLWnArVUpiYzdQaW1iR1VmSlJOLytpMldHYjVtb3RDeWtYWkpYRVNwYmtiZTRueVREOGd5T3ZLeXFzQjliQVNrTXlZUUxCdS90TVY3QXN5bCtmS3RjdGR4QTdlalF3Z3M4UmwzTXJ0R3pBLytpQ3NOTmFtM3czV3F6OGk3ZHRCbmI1TUJ5Rll4U2oxTEFBWWNQeldXQ3ZhODZCUGt4L1IrbU92a2dNaGVEWGVveC9Vc1VvPSIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMTk4LDQwLDEyNyw1NCwxMjUsODYsNDEsMjQzLDk1LDEyOSwxOSwyNDksNTksMTY0LDI1MCwyMzksMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsNzQsNjksMTczLDY3LDE1OSw2OSwxMjYsMjMxLDE4LDE5OSwyMzcsMjEsMiwxLDE2LDEyOCw1OSwyMTAsMjM3LDE1NCwzMywxNTEsNTYsMTY0LDM4LDgyLDI0MCwyNTAsMTM3LDk1LDQ5LDE2LDcyLDI0MywyMzUsNjcsMTUwLDEzNCwxNzAsNTAsMTg0LDE3NSwyMjgsNjQsMjI4LDI1NSwxMjcsNSw0OCw4MiwxMzgsNSwxOTQsMTE1LDE3OSwxMzgsMjE5LDc3LDUzLDE5OSwyMTEsOTAsMjYsNDIsMjQ1LDEyOCw2LDIyMSwyMjgsMzMsNSw4MywxMzgsOTcsMjA3LDE1NV19",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "oCFyw87EH4idD5BL",
+      "key": "SUPABASE_SERVICE_ROLE_KEY",
+      "configurationId": null,
+      "createdAt": 1766264366616,
+      "updatedAt": 1766264366616,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiQkJwT0pDcFN6bzZweTM2NldNOU5FZmVoc0p4NG9tR0c4R2RHUnhQL01SdElzQ1pKZVN2YkN0OVdYQXM1aDBpVXh1akhTdDhVMys3cHRxOUE5RVNibE1sYUxhWFJWcWtPT1cxSFRHdmx5a3BJUjljZzRvRkpGTk5ETmd5aFQ1Zmx6TCtNNWNXak5HYkV5NEJHSW1IS2l3NUxWUWVIRFlRM1JINUJ3S284aFhwUG96RXlNdUxJNm9Ka0RJaz0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE5OCw0MCwxMjcsNTQsMTI1LDg2LDQxLDI0Myw5NSwxMjksMTksMjQ5LDU5LDE2NCwyNTAsMjM5LDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDc0LDY5LDE3Myw2NywxNTksNjksMTI2LDIzMSwxOCwxOTksMjM3LDIxLDIsMSwxNiwxMjgsNTksMjEwLDIzNywxNTQsMzMsMTUxLDU2LDE2NCwzOCw4MiwyNDAsMjUwLDEzNyw5NSw0OSwxNiw3MiwyNDMsMjM1LDY3LDE1MCwxMzQsMTcwLDUwLDE4NCwxNzUsMjI4LDY0LDIyOCwyNTUsMTI3LDUsNDgsODIsMTM4LDUsMTk0LDExNSwxNzksMTM4LDIxOSw3Nyw1MywxOTksMjExLDkwLDI2LDQyLDI0NSwxMjgsNiwyMjEsMjI4LDMzLDUsODMsMTM4LDk3LDIwNywxNTVdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "xNlAd6xLdTQzsUwN",
+      "key": "SUPABASE_SECRET_KEY",
+      "configurationId": null,
+      "createdAt": 1766264366616,
+      "updatedAt": 1766264366616,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiYVpvc0M4dkhNUmVLMm56dDRSd3JJUjhwbzRrN3pvWmpESCsvSVZpSnF2SnZxMHZYUHFpWkJYM3NhaGtiMWdBSFBEWGJwYUpHNHM0TlFjSE0wanlOQWVlTUpWaEJ0T3ZIVmR4YjZNT2J1YThjdFBOdjE2V0VyN2hkZHhzRDd0a0hOdDdqaVR0QTBRd2Rkc2JzU0Zna2FFRytjNkhabHNLRUhtTkY3RnA0RnVJPSIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMTk4LDQwLDEyNyw1NCwxMjUsODYsNDEsMjQzLDk1LDEyOSwxOSwyNDksNTksMTY0LDI1MCwyMzksMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsNzQsNjksMTczLDY3LDE1OSw2OSwxMjYsMjMxLDE4LDE5OSwyMzcsMjEsMiwxLDE2LDEyOCw1OSwyMTAsMjM3LDE1NCwzMywxNTEsNTYsMTY0LDM4LDgyLDI0MCwyNTAsMTM3LDk1LDQ5LDE2LDcyLDI0MywyMzUsNjcsMTUwLDEzNCwxNzAsNTAsMTg0LDE3NSwyMjgsNjQsMjI4LDI1NSwxMjcsNSw0OCw4MiwxMzgsNSwxOTQsMTE1LDE3OSwxMzgsMjE5LDc3LDUzLDE5OSwyMTEsOTAsMjYsNDIsMjQ1LDEyOCw2LDIyMSwyMjgsMzMsNSw4MywxMzgsOTcsMjA3LDE1NV19",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "NlcQdvWyL5Zzx4gi",
+      "key": "POSTGRES_HOST",
+      "configurationId": null,
+      "createdAt": 1766264366616,
+      "updatedAt": 1766264366616,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "value": "eyJ2IjoidjIiLCJjIjoiOGJYVVBZRW9oWmJxMElkbDR2V0pqL3JlWUo3RTNCZEVPaU1TWERtVFcvSksxZEhFWGtDZGpLN2FRU0tROVRvM3pRaHZ6OGNBOUZRRS9yRlExaU9uTkVwRjMyM3hOZHc0L2hJaGtnQk5XOTBLdGhrZW9CZlVwSU52bmFXSCtibFRkb012amZuRzJlQnNEbGJONHBUV1lXekdtcW1TNW12ekVrUnZtdE0vc0hRUVlsRmFnaFg4RVZVOWxCeFgvUExxMDBVeDhnWjdtTFNUSGtWa1cwQUNITSt1Zmp4ZEd3a3Y5QnZIdmVoMGhHRC9MNlBNaXEzRXZST2E1eHo3N2QvaW90S2ZSdXVzdkNkekhSTjNFRS9iWjFxaWJ2cDZhM29OL1djMGhKcXN3cVVxZ3lGQVNZb2E4WjNWaGkrUGhRdkx5OWJpb3ZacUlia1F2R3pzSmNVYkIzdGlkcGh4YTVKM0NNb2RnVU1md2tLUi9iYTZKSUZjd3N6Q2dacW1kZ05LQWFNdzk3eGtCNWdGYU5VMEZCeWllb2E3bm12c3ArYVZmWW9tMmk5cmtuK0dWRHJTcDNFK1crR3N4bEE5WXdwUjM4ck9tVXF5OTQ0SHZuZzNIR2FkY3BDQVY2QU1NZ0pxTWliUjJOS2N5S25xcFRaN2lZTThsRkYyZHpWTFphNS9KZUxHRmRlaTUrVjRSVStHZHZpMGVhZ3Z5dGdCVHJLZGlKRm51TmNnbW9xd0c4d0FlSzVneWozTXNrbXB2RnVxRTVua2F3PT0iLCJrIjpbMTg0LDEsMiwzLDAsMTIwLDM3LDIxMCw0OCwxMjksMjExLDEwNCwxODUsNiwyMzgsMjcsMjU1LDU4LDIwOSwxNDYsMTIzLDEyNiwxOTEsMTU5LDE3MiwxNjAsOTAsMTU1LDEzNSwxMjMsMjM2LDExNSwxOTYsMzEsOTIsMTI4LDEzMSwzMywxLDE3MCwyMTEsNzAsMTY2LDEwNiwzLDc4LDg1LDcsMjQxLDI2LDg1LDIwNyw3OSwxMjcsMjEzLDAsMCwwLDEyNiw0OCwxMjQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNyw2LDE2MCwxMTEsNDgsMTA5LDIsMSwwLDQ4LDEwNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDEsNDgsMzAsNiw5LDk2LDEzNCw3MiwxLDEwMSwzLDQsMSw0Niw0OCwxNyw0LDEyLDk1LDI0MywxMDgsMTQyLDE0MSwyLDE0MiwyMywxMzAsMTc5LDE4LDE2OSwyLDEsMTYsMTI4LDU5LDE0MSw5NCwzNCwwLDEwMCw2NiwxODQsMTkzLDIxMiwyNDUsMywzNSwxNTIsMjAzLDEyNSw3NiwyMTMsMjA2LDE5NCw3MywxNzQsNDcsMjI2LDcyLDIxMywyMzUsMTYzLDU3LDUzLDExNCwyMDksMjQ4LDI0NiwxOCwyMzIsMjA3LDEyOSw2MywxOTYsNzEsMjYsMzgsMjYsOTEsMTAzLDEzMiwyMSwxMzIsMTMxLDIyOCwxMzEsMTM0LDM1LDI0MSwxOTMsMTcxLDEwMyw2MiwxOTFdfQ==",
+      "type": "encrypted",
+      "contentHint": {
+        "type": "integration-store-secret",
+        "storeId": "store_homB3kDqmUREGUnh",
+        "integrationId": "oac_VqOgBHqhEoFTPzGkPd7L0iH6",
+        "integrationProductId": "iap_zhE90cEUeefrTQf8",
+        "integrationConfigurationId": "icfg_heXJF5KFrRo2d4LtCzyrxEWk"
+      },
+      "target": [
+        "production",
+        "preview",
+        "development"
+      ],
+      "id": "SuG7Qp8ZTU0DJ79h",
+      "key": "SUPABASE_ANON_KEY",
+      "configurationId": null,
+      "createdAt": 1766264366616,
+      "updatedAt": 1766264366616,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "type": "encrypted",
+      "value": "eyJ2IjoidjIiLCJjIjoiTjkrOHJYYVJYU2s3RDQ1blZUWXBha2lqWmJsd0tJOEQzOFNXRHcrZVVsM1JXaUdWZGRLRjVPVDVQRFpzbFRqaTRBdFhWcHo4d09EMk1tRlpXaVhzVzZGWVl0VkgrOFpGNHJDS0xMOW41ajFyM2p1YjhOSm4wRWw3RDJsZitXNE9zYnR3eWEzZHAvVEs2Z2FVdElqbkZ4eWhiUHlVZm92bDUrNkNOOTZxU1pvTjQ1VjdKWncxTm94REdLeG5OUVZZSWdkU0tXdDB5a01weFUyeWZ5VEMxQT09IiwiayI6WzE4NCwxLDIsMywwLDEyMCwzNywyMTAsNDgsMTI5LDIxMSwxMDQsMTg1LDYsMjM4LDI3LDI1NSw1OCwyMDksMTQ2LDEyMywxMjYsMTkxLDE1OSwxNzIsMTYwLDkwLDE1NSwxMzUsMTIzLDIzNiwxMTUsMTk2LDMxLDkyLDEyOCwxMzEsMzMsMSwyMTksMTU3LDEwNywyMDYsNzMsMTc2LDExLDksMTgsMTY1LDE1NSwxNzUsOTksMTY4LDY3LDIxNiwwLDAsMCwxMjYsNDgsMTI0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsNiwxNjAsMTExLDQ4LDEwOSwyLDEsMCw0OCwxMDQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNywxLDQ4LDMwLDYsOSw5NiwxMzQsNzIsMSwxMDEsMyw0LDEsNDYsNDgsMTcsNCwxMiwzMSwxNTEsMjU1LDIyMCwyMzksMzgsNzgsMCw5OCwyNTAsMTgzLDE2MSwyLDEsMTYsMTI4LDU5LDIyNSwyNDQsMTMzLDI1LDIzLDEyNCwxODQsNzIsNzQsMTQ3LDkxLDIzMSwyMDksNDEsMjE2LDI1MSwyMywxMTksNCwxOTUsMTUwLDE3MiwxNjcsNTIsMjEyLDE3LDE4MiwyMTUsNTksMTEsMjA5LDYzLDg2LDE5MSwxNSw3OSw5NiwyMTUsOTUsMTU1LDExNyw4LDYwLDE5OSw0MiwxOTAsMzYsMjA1LDI0MCwxOSwxMzQsNywyMTgsMTA1LDE5NCwyNTAsMTMsMTk5LDVdfQ==",
+      "target": [
+        "development"
+      ],
+      "configurationId": null,
+      "comment": "Added in v0",
+      "id": "VEIP33PjJZNfdBXo",
+      "key": "NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL",
+      "createdAt": 1766265107130,
+      "updatedAt": 1766265107130,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "type": "encrypted",
+      "value": "eyJ2IjoidjIiLCJjIjoiTVBlMGJ2T0QrY2hNdEVoMTB1R0tZM0JDMm9FZm9GRlRWZkl5NTZkYXlZTG51WEQySXFQdFRqTGpneTQrUXVlRStKTlhYWjRwN2tiMzh3YUZ1enJuZUFOZEhXaGpUZnR2Qm9GejhwdEFPRXVBeis3U0xDbUpzdktuTWNzTTF6VVNZa3pETHFKVHJnSDVOVHBibDFXWnBQT3NyNzYwZk80MGxjcGlJeVFUai9xRWJkVVpCQ3hBaWNSN2lweUR5L09FN0ZNRTluZW5ZcDM0OVJtdGxzVGtENVVzbHErU1h6TC90dUJyb3lIQytRbUkzZEdiVTIwSkVEL1FFcVE2ZjFkRyIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMjE5LDE1NywxMDcsMjA2LDczLDE3NiwxMSw5LDE4LDE2NSwxNTUsMTc1LDk5LDE2OCw2NywyMTYsMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsMzEsMTUxLDI1NSwyMjAsMjM5LDM4LDc4LDAsOTgsMjUwLDE4MywxNjEsMiwxLDE2LDEyOCw1OSwyMjUsMjQ0LDEzMywyNSwyMywxMjQsMTg0LDcyLDc0LDE0Nyw5MSwyMzEsMjA5LDQxLDIxNiwyNTEsMjMsMTE5LDQsMTk1LDE1MCwxNzIsMTY3LDUyLDIxMiwxNywxODIsMjE1LDU5LDExLDIwOSw2Myw4NiwxOTEsMTUsNzksOTYsMjE1LDk1LDE1NSwxMTcsOCw2MCwxOTksNDIsMTkwLDM2LDIwNSwyNDAsMTksMTM0LDcsMjE4LDEwNSwxOTQsMjUwLDEzLDE5OSw1XX0=",
+      "target": [
+        "development",
+        "preview",
+        "production"
+      ],
+      "configurationId": null,
+      "comment": "",
+      "customEnvironmentIds": [],
+      "id": "23W6UCcuuHBn3JYi",
+      "key": "GOOGLE_CLIENT_ID",
+      "createdAt": 1766850402118,
+      "updatedAt": 1766850402118,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "type": "encrypted",
+      "value": "eyJ2IjoidjIiLCJjIjoiaEsxQkUwVSsvUlA4SWdWR3d1eEU3QzRLckpmOXJJYy9SL0NwMldGcXlSVWVHS1dCL1E0MXJVVU8weGowZHNWM0V0Y1VQblkvcXl3MWQ4WUt1VTBKY21aNkorbnFTanRkMTM1N2tKOC9NL3k4RFI5OW1XVEJQZkVyYmR6WE1xTVFaaEw5aFUxK0R0a2lBK0VFaFVocUt2VjViM05Ua2NnV2s3czV2dUtUbU5vPSIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMjE5LDE1NywxMDcsMjA2LDczLDE3NiwxMSw5LDE4LDE2NSwxNTUsMTc1LDk5LDE2OCw2NywyMTYsMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsMzEsMTUxLDI1NSwyMjAsMjM5LDM4LDc4LDAsOTgsMjUwLDE4MywxNjEsMiwxLDE2LDEyOCw1OSwyMjUsMjQ0LDEzMywyNSwyMywxMjQsMTg0LDcyLDc0LDE0Nyw5MSwyMzEsMjA5LDQxLDIxNiwyNTEsMjMsMTE5LDQsMTk1LDE1MCwxNzIsMTY3LDUyLDIxMiwxNywxODIsMjE1LDU5LDExLDIwOSw2Myw4NiwxOTEsMTUsNzksOTYsMjE1LDk1LDE1NSwxMTcsOCw2MCwxOTksNDIsMTkwLDM2LDIwNSwyNDAsMTksMTM0LDcsMjE4LDEwNSwxOTQsMjUwLDEzLDE5OSw1XX0=",
+      "target": [
+        "development",
+        "preview",
+        "production"
+      ],
+      "configurationId": null,
+      "comment": "",
+      "customEnvironmentIds": [],
+      "id": "ZQiQs4oiOjAYOa0U",
+      "key": "GOOGLE_CLIENT_SECRET",
+      "createdAt": 1766850418781,
+      "updatedAt": 1766850418781,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "type": "encrypted",
+      "value": "eyJ2IjoidjIiLCJjIjoiYm1KWkxYcFN5OXYzc1AvSU1WdjNraUh3SjBBNFhqck1aa3pxZUhSYmUrbkJUYmVNTG5hYlA4blRLV2hGams5eENlc1dIUVhRcEdyL2tYbG05Q1dHUlB0K1ZpL1F0TXRBdVAwRlMwSGdTc2dJMHJmYTNEa1hMNW1raWd6L0Y0Mit6VHN3cUZBRkxJNDNtWDR5MkRoSDZWakNsZUE9IiwiayI6WzE4NCwxLDIsMywwLDEyMCwzNywyMTAsNDgsMTI5LDIxMSwxMDQsMTg1LDYsMjM4LDI3LDI1NSw1OCwyMDksMTQ2LDEyMywxMjYsMTkxLDE1OSwxNzIsMTYwLDkwLDE1NSwxMzUsMTIzLDIzNiwxMTUsMTk2LDMxLDkyLDEyOCwxMzEsMzMsMSwxNzAsMjExLDcwLDE2NiwxMDYsMyw3OCw4NSw3LDI0MSwyNiw4NSwyMDcsNzksMTI3LDIxMywwLDAsMCwxMjYsNDgsMTI0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsNiwxNjAsMTExLDQ4LDEwOSwyLDEsMCw0OCwxMDQsNiw5LDQyLDEzNCw3MiwxMzQsMjQ3LDEzLDEsNywxLDQ4LDMwLDYsOSw5NiwxMzQsNzIsMSwxMDEsMyw0LDEsNDYsNDgsMTcsNCwxMiw5NSwyNDMsMTA4LDE0MiwxNDEsMiwxNDIsMjMsMTMwLDE3OSwxOCwxNjksMiwxLDE2LDEyOCw1OSwxNDEsOTQsMzQsMCwxMDAsNjYsMTg0LDE5MywyMTIsMjQ1LDMsMzUsMTUyLDIwMywxMjUsNzYsMjEzLDIwNiwxOTQsNzMsMTc0LDQ3LDIyNiw3MiwyMTMsMjM1LDE2Myw1Nyw1MywxMTQsMjA5LDI0OCwyNDYsMTgsMjMyLDIwNywxMjksNjMsMTk2LDcxLDI2LDM4LDI2LDkxLDEwMywxMzIsMjEsMTMyLDEzMSwyMjgsMTMxLDEzNCwzNSwyNDEsMTkzLDE3MSwxMDMsNjIsMTkxXX0=",
+      "target": [
+        "production"
+      ],
+      "configurationId": null,
+      "comment": "",
+      "customEnvironmentIds": [],
+      "id": "0zoJT1RrAliXnWtX",
+      "key": "NEXT_PUBLIC_APP_URL",
+      "createdAt": 1766850439141,
+      "updatedAt": 1766856249295,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": "rXjXviY6qUc41H9Cq5MeRn2q"
+    },
+    {
+      "type": "encrypted",
+      "value": "eyJ2IjoidjIiLCJjIjoiWlNPVlB2bUswSDlteEtXRndMNEh6WENHeExMZFZDMkFSZWNheEo5bVVlV0hwUndoZm51WEFKMGtUaVcwYWFtM2VBMHRZbHlFWEl4UWI0T3lCUHFkVnpYY2QzVEswSFROeWc5VkRHR0VsNTJIOWtmbUY3aWl0RWFlNWIxLzhjS2o3Tk9RVmc9PSIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMTk4LDQwLDEyNyw1NCwxMjUsODYsNDEsMjQzLDk1LDEyOSwxOSwyNDksNTksMTY0LDI1MCwyMzksMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsNzQsNjksMTczLDY3LDE1OSw2OSwxMjYsMjMxLDE4LDE5OSwyMzcsMjEsMiwxLDE2LDEyOCw1OSwyMTAsMjM3LDE1NCwzMywxNTEsNTYsMTY0LDM4LDgyLDI0MCwyNTAsMTM3LDk1LDQ5LDE2LDcyLDI0MywyMzUsNjcsMTUwLDEzNCwxNzAsNTAsMTg0LDE3NSwyMjgsNjQsMjI4LDI1NSwxMjcsNSw0OCw4MiwxMzgsNSwxOTQsMTE1LDE3OSwxMzgsMjE5LDc3LDUzLDE5OSwyMTEsOTAsMjYsNDIsMjQ1LDEyOCw2LDIyMSwyMjgsMzMsNSw4MywxMzgsOTcsMjA3LDE1NV19",
+      "target": [
+        "development",
+        "preview"
+      ],
+      "configurationId": null,
+      "comment": "",
+      "customEnvironmentIds": [],
+      "id": "jBAtfcLhWyaIbYG2",
+      "key": "NEXT_PUBLIC_APP_URL",
+      "createdAt": 1766853682869,
+      "updatedAt": 1766853682869,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "type": "encrypted",
+      "value": "eyJ2IjoidjIiLCJjIjoiUFhzd1NwQ3AzS1g1WDI1Rk53ZjlUT0dGOTdwcmJsYkJwbEVTSHQ4aXA2V3hyc3VZalFnNnZGeFRSRVZwRUNBNmlIcko5YldZb2VjUFN3b0xCVmd0M0FqdkFLRS9NNHhLZ0N5UUNLKzlhNDNXNXBIUGlzdWpFMGhFWkFkVzVtakRFam5NbVl3NFp2NXR4N0JsZXJLV3M1MDllQTJQelEyU2FCdEJCajNoQ1N1YUd4VElmYkVySjRGUTBhSTJFckw4TmExWXo2MldOZStxbitqdzk5eUlzbmUvWThZPSIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMjE5LDE1NywxMDcsMjA2LDczLDE3NiwxMSw5LDE4LDE2NSwxNTUsMTc1LDk5LDE2OCw2NywyMTYsMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsMzEsMTUxLDI1NSwyMjAsMjM5LDM4LDc4LDAsOTgsMjUwLDE4MywxNjEsMiwxLDE2LDEyOCw1OSwyMjUsMjQ0LDEzMywyNSwyMywxMjQsMTg0LDcyLDc0LDE0Nyw5MSwyMzEsMjA5LDQxLDIxNiwyNTEsMjMsMTE5LDQsMTk1LDE1MCwxNzIsMTY3LDUyLDIxMiwxNywxODIsMjE1LDU5LDExLDIwOSw2Myw4NiwxOTEsMTUsNzksOTYsMjE1LDk1LDE1NSwxMTcsOCw2MCwxOTksNDIsMTkwLDM2LDIwNSwyNDAsMTksMTM0LDcsMjE4LDEwNSwxOTQsMjUwLDEzLDE5OSw1XX0=",
+      "target": [
+        "development",
+        "preview",
+        "production"
+      ],
+      "configurationId": null,
+      "comment": "",
+      "customEnvironmentIds": [],
+      "id": "aZ5izUdbVQEEYvm1",
+      "key": "OOGLE_PUBSUB_TOPIC",
+      "createdAt": 1766858132966,
+      "updatedAt": 1766858132966,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    },
+    {
+      "type": "encrypted",
+      "value": "eyJ2IjoidjIiLCJjIjoiSnh3SjROeHg3NFFxTk40VktyVlcvSFJtY3JNdzhiMm9ic2M3MUJ0Qi9QYjVpYVo4aG9Ya0U4ZDNzc2t2eGF4ekMxbm5LL0s2Qlc5WnNZNEJxN0E2VjB3VXhXR1FzcWd5cGpDRDNuU25NT1RZTjNzdlk5RXZpTjJpZUExY0pabUl3VExDNmtROTg0QlhQKzJzUlFNWTJ4MHNHdVBxVm5OVEZTZnptUGxXVmJRL2VFZDZtVmRWTjR0ZUdIQktMMzJjcDFKT09ReHhva3IvM2c0Z2ZNMlZLNlVXR0N3PSIsImsiOlsxODQsMSwyLDMsMCwxMjAsMzcsMjEwLDQ4LDEyOSwyMTEsMTA0LDE4NSw2LDIzOCwyNywyNTUsNTgsMjA5LDE0NiwxMjMsMTI2LDE5MSwxNTksMTcyLDE2MCw5MCwxNTUsMTM1LDEyMywyMzYsMTE1LDE5NiwzMSw5MiwxMjgsMTMxLDMzLDEsMjE5LDE1NywxMDcsMjA2LDczLDE3NiwxMSw5LDE4LDE2NSwxNTUsMTc1LDk5LDE2OCw2NywyMTYsMCwwLDAsMTI2LDQ4LDEyNCw2LDksNDIsMTM0LDcyLDEzNCwyNDcsMTMsMSw3LDYsMTYwLDExMSw0OCwxMDksMiwxLDAsNDgsMTA0LDYsOSw0MiwxMzQsNzIsMTM0LDI0NywxMywxLDcsMSw0OCwzMCw2LDksOTYsMTM0LDcyLDEsMTAxLDMsNCwxLDQ2LDQ4LDE3LDQsMTIsMzEsMTUxLDI1NSwyMjAsMjM5LDM4LDc4LDAsOTgsMjUwLDE4MywxNjEsMiwxLDE2LDEyOCw1OSwyMjUsMjQ0LDEzMywyNSwyMywxMjQsMTg0LDcyLDc0LDE0Nyw5MSwyMzEsMjA5LDQxLDIxNiwyNTEsMjMsMTE5LDQsMTk1LDE1MCwxNzIsMTY3LDUyLDIxMiwxNywxODIsMjE1LDU5LDExLDIwOSw2Myw4NiwxOTEsMTUsNzksOTYsMjE1LDk1LDE1NSwxMTcsOCw2MCwxOTksNDIsMTkwLDM2LDIwNSwyNDAsMTksMTM0LDcsMjE4LDEwNSwxOTQsMjUwLDEzLDE5OSw1XX0=",
+      "target": [
+        "development",
+        "preview",
+        "production"
+      ],
+      "configurationId": null,
+      "comment": "Added in v0",
+      "id": "SmiUqXktRXwNGQsQ",
+      "key": "GOOGLE_PUBSUB_TOPIC",
+      "createdAt": 1766858617823,
+      "updatedAt": 1766858617823,
+      "createdBy": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "updatedBy": null
+    }
+  ],
+  "framework": "nextjs",
+  "gitForkProtection": true,
+  "gitLFS": false,
+  "id": "prj_VGmjyoS53bjK43v96E3A7P3wq8U3",
+  "installCommand": "bun install",
+  "lastRollbackTarget": null,
+  "lastAliasRequest": null,
+  "name": "hotelaccelerator",
+  "nodeVersion": "24.x",
+  "outputDirectory": null,
+  "productionDeploymentsFastLane": true,
+  "publicSource": false,
+  "defaultResourceConfig": {
+    "fluid": true,
+    "functionDefaultRegions": [
+      "iad1"
+    ],
+    "functionDefaultTimeout": 300,
+    "functionDefaultMemoryType": "standard",
+    "functionZeroConfigFailover": false,
+    "elasticConcurrencyEnabled": true
+  },
+  "resourceConfig": {
+    "fluid": true,
+    "functionDefaultRegions": [
+      "iad1"
+    ],
+    "elasticConcurrencyEnabled": true
+  },
+  "rootDirectory": null,
+  "serverlessFunctionRegion": "iad1",
+  "skewProtectionMaxAge": 43200,
+  "enableAffectedProjectsDeployments": true,
+  "ssoProtection": {
+    "deploymentType": "all_except_custom_domains"
+  },
+  "updatedAt": 1776960240794,
+  "live": false,
+  "enablePreviewFeedback": null,
+  "enableProductionFeedback": null,
+  "gitComments": {
+    "onCommit": false,
+    "onPullRequest": true
+  },
+  "gitProviderOptions": {
+    "createDeployments": "enabled"
+  },
+  "webAnalytics": {
+    "id": "7u5wIhHeJ93JZjhiWGctoAksp",
+    "enabledAt": 1765823875182,
+    "hasData": true
+  },
+  "oidcTokenConfig": {
+    "enabled": true,
+    "issuerMode": "team"
+  },
+  "v0": true,
+  "hasDeployments": true,
+  "link": {
+    "type": "github",
+    "repo": "HotelAccelerator",
+    "repoId": 1121906646,
+    "org": "fmancini-create",
+    "repoOwnerId": 245582481,
+    "gitCredentialId": "cred_d89d7d5e6f18b59648391b8b76963976900ba444",
+    "productionBranch": "stable-gmail",
+    "createdAt": 1767098424811,
+    "updatedAt": 1767098424811,
+    "deployHooks": []
+  },
+  "latestDeployments": [
+    {
+      "alias": [
+        "hotelaccelerator-git-v0-4bidsrl-43613d2c-4bid.vercel.app"
+      ],
+      "aliasAssigned": 1776960504408,
+      "aliasError": null,
+      "automaticAliases": [
+        "hotelaccelerator-git-v0-4bidsrl-43613d2c-4bid.vercel.app"
+      ],
+      "builds": [],
+      "createdAt": 1776960464691,
+      "createdIn": "sfo1",
+      "creator": {
+        "uid": "rXjXviY6qUc41H9Cq5MeRn2q",
+        "email": "f.mancini@ibarronci.com",
+        "username": "4bidsrl",
+        "githubLogin": "v0[bot]"
+      },
+      "deploymentHostname": "hotelaccelerator-qxoe5iyic-4bid",
+      "forced": false,
+      "id": "dpl_82CdoUsGUpQQNb12s6CA8JKk2FhJ",
+      "meta": {
+        "githubCommitAuthorName": "v0",
+        "githubCommitAuthorEmail": "v0[bot]@users.noreply.github.com",
+        "githubCommitMessage": "feat: add new log file for API call tracking\n\nCo-authored-by: 4BID srl <245582481+fmancini-create@users.noreply.github.com>",
+        "githubCommitOrg": "fmancini-create",
+        "githubCommitRef": "v0/4bidsrl-43613d2c",
+        "githubCommitRepo": "HotelAccelerator",
+        "githubCommitSha": "37299db6663c0e5673630daf38c66cd66b851598",
+        "githubDeployment": "1",
+        "githubOrg": "fmancini-create",
+        "githubRepo": "HotelAccelerator",
+        "githubRepoOwnerType": "User",
+        "githubCommitRepoId": "1121906646",
+        "githubRepoId": "1121906646",
+        "githubRepoVisibility": "public",
+        "githubHost": "github.com",
+        "githubCommitAuthorLogin": "v0[bot]",
+        "repoPushedAt": "1776960461000",
+        "branchAlias": "hotelaccelerator-git-v0-4bidsrl-43613d2c-4bid.vercel.app",
+        "lambdaRuntimeStats": "{\"nodejs\":5}",
+        "bundler": "turbopack"
+      },
+      "name": "hotelaccelerator",
+      "plan": "pro",
+      "private": true,
+      "readyState": "READY",
+      "readySubstate": "STAGED",
+      "target": null,
+      "teamId": "team_zutObejPRaSuP1fKxOyKHz5M",
+      "type": "LAMBDAS",
+      "url": "hotelaccelerator-qxoe5iyic-4bid.vercel.app",
+      "userId": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "withCache": false,
+      "buildingAt": 1776960466097,
+      "readyAt": 1776960504270,
+      "previewCommentsEnabled": true,
+      "oidcTokenClaims": {
+        "sub": "owner:4bid:project:hotelaccelerator:environment:preview",
+        "iss": "https://oidc.vercel.com/4bid",
+        "scope": "owner:4bid:project:hotelaccelerator:environment:preview",
+        "aud": "https://vercel.com/4bid",
+        "owner": "4bid",
+        "owner_id": "team_zutObejPRaSuP1fKxOyKHz5M",
+        "project": "hotelaccelerator",
+        "project_id": "prj_VGmjyoS53bjK43v96E3A7P3wq8U3",
+        "environment": "preview",
+        "plan": "pro"
+      }
+    },
+    {
+      "alias": [
+        "www.hotelaccelerator.com",
+        "hotelaccelerator-4bid.vercel.app",
+        "hotelaccelerator-git-dev-clean-4bid.vercel.app",
+        "hotelaccelerator.com"
+      ],
+      "aliasAssigned": 1776960240709,
+      "aliasError": null,
+      "automaticAliases": [
+        "hotelaccelerator-4bid.vercel.app",
+        "hotelaccelerator-git-dev-clean-4bid.vercel.app"
+      ],
+      "builds": [],
+      "createdAt": 1776960202285,
+      "createdIn": "sfo1",
+      "creator": {
+        "uid": "rXjXviY6qUc41H9Cq5MeRn2q",
+        "email": "f.mancini@ibarronci.com",
+        "username": "4bidsrl",
+        "githubLogin": "vercel[bot]"
+      },
+      "deploymentHostname": "hotelaccelerator-hx2j7qo1f-4bid",
+      "forced": false,
+      "id": "dpl_4bZo2FuSo6TmV7rVozBqP5oUrvAP",
+      "meta": {
+        "githubCommitAuthorName": "vercel[bot]",
+        "githubCommitAuthorEmail": "35613825+vercel[bot]@users.noreply.github.com",
+        "githubCommitMessage": "Merge pull request #6 from fmancini-create/v0/4bidsrl-a50c3f05\n\nRedesign inbox to Gmail-style and implement tenant management",
+        "githubCommitOrg": "fmancini-create",
+        "githubCommitRef": "dev-clean",
+        "githubCommitRepo": "HotelAccelerator",
+        "githubCommitSha": "a44aae1ec41936c34371c40ccf7b4a8230b6fb35",
+        "githubDeployment": "1",
+        "githubOrg": "fmancini-create",
+        "githubRepo": "HotelAccelerator",
+        "githubRepoOwnerType": "User",
+        "githubCommitRepoId": "1121906646",
+        "githubRepoId": "1121906646",
+        "githubRepoVisibility": "public",
+        "githubHost": "github.com",
+        "githubCommitAuthorLogin": "vercel[bot]",
+        "repoPushedAt": "1776959656000",
+        "branchAlias": "hotelaccelerator-git-dev-clean-4bid.vercel.app",
+        "lambdaRuntimeStats": "{\"nodejs\":5}",
+        "bundler": "turbopack",
+        "action": "promote",
+        "originalDeploymentId": "dpl_5Mqu9pA21SKAQqwbsQGT31GMBWGa"
+      },
+      "name": "hotelaccelerator",
+      "plan": "pro",
+      "private": true,
+      "readyState": "READY",
+      "readySubstate": "PROMOTED",
+      "target": "production",
+      "teamId": "team_zutObejPRaSuP1fKxOyKHz5M",
+      "type": "LAMBDAS",
+      "url": "hotelaccelerator-hx2j7qo1f-4bid.vercel.app",
+      "userId": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "withCache": false,
+      "buildingAt": 1776960203959,
+      "readyAt": 1776960240349,
+      "previewCommentsEnabled": true,
+      "oidcTokenClaims": {
+        "sub": "owner:4bid:project:hotelaccelerator:environment:production",
+        "iss": "https://oidc.vercel.com/4bid",
+        "scope": "owner:4bid:project:hotelaccelerator:environment:production",
+        "aud": "https://vercel.com/4bid",
+        "owner": "4bid",
+        "owner_id": "team_zutObejPRaSuP1fKxOyKHz5M",
+        "project": "hotelaccelerator",
+        "project_id": "prj_VGmjyoS53bjK43v96E3A7P3wq8U3",
+        "environment": "production",
+        "plan": "pro"
+      }
+    }
+  ],
+  "targets": {
+    "production": {
+      "alias": [
+        "www.hotelaccelerator.com",
+        "hotelaccelerator-4bid.vercel.app",
+        "hotelaccelerator-git-dev-clean-4bid.vercel.app",
+        "hotelaccelerator.com"
+      ],
+      "aliasAssigned": 1776960240709,
+      "aliasError": null,
+      "automaticAliases": [
+        "hotelaccelerator-4bid.vercel.app",
+        "hotelaccelerator-git-dev-clean-4bid.vercel.app"
+      ],
+      "builds": [],
+      "createdAt": 1776960202285,
+      "createdIn": "sfo1",
+      "creator": {
+        "uid": "rXjXviY6qUc41H9Cq5MeRn2q",
+        "email": "f.mancini@ibarronci.com",
+        "username": "4bidsrl",
+        "githubLogin": "vercel[bot]"
+      },
+      "deploymentHostname": "hotelaccelerator-hx2j7qo1f-4bid",
+      "forced": false,
+      "id": "dpl_4bZo2FuSo6TmV7rVozBqP5oUrvAP",
+      "meta": {
+        "githubCommitAuthorName": "vercel[bot]",
+        "githubCommitAuthorEmail": "35613825+vercel[bot]@users.noreply.github.com",
+        "githubCommitMessage": "Merge pull request #6 from fmancini-create/v0/4bidsrl-a50c3f05\n\nRedesign inbox to Gmail-style and implement tenant management",
+        "githubCommitOrg": "fmancini-create",
+        "githubCommitRef": "dev-clean",
+        "githubCommitRepo": "HotelAccelerator",
+        "githubCommitSha": "a44aae1ec41936c34371c40ccf7b4a8230b6fb35",
+        "githubDeployment": "1",
+        "githubOrg": "fmancini-create",
+        "githubRepo": "HotelAccelerator",
+        "githubRepoOwnerType": "User",
+        "githubCommitRepoId": "1121906646",
+        "githubRepoId": "1121906646",
+        "githubRepoVisibility": "public",
+        "githubHost": "github.com",
+        "githubCommitAuthorLogin": "vercel[bot]",
+        "repoPushedAt": "1776959656000",
+        "branchAlias": "hotelaccelerator-git-dev-clean-4bid.vercel.app",
+        "lambdaRuntimeStats": "{\"nodejs\":5}",
+        "bundler": "turbopack",
+        "action": "promote",
+        "originalDeploymentId": "dpl_5Mqu9pA21SKAQqwbsQGT31GMBWGa"
+      },
+      "name": "hotelaccelerator",
+      "plan": "pro",
+      "private": true,
+      "readyState": "READY",
+      "readySubstate": "PROMOTED",
+      "target": "production",
+      "teamId": "team_zutObejPRaSuP1fKxOyKHz5M",
+      "type": "LAMBDAS",
+      "url": "hotelaccelerator-hx2j7qo1f-4bid.vercel.app",
+      "userId": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "withCache": false,
+      "buildingAt": 1776960203959,
+      "readyAt": 1776960240349,
+      "previewCommentsEnabled": true,
+      "oidcTokenClaims": {
+        "sub": "owner:4bid:project:hotelaccelerator:environment:production",
+        "iss": "https://oidc.vercel.com/4bid",
+        "scope": "owner:4bid:project:hotelaccelerator:environment:production",
+        "aud": "https://vercel.com/4bid",
+        "owner": "4bid",
+        "owner_id": "team_zutObejPRaSuP1fKxOyKHz5M",
+        "project": "hotelaccelerator",
+        "project_id": "prj_VGmjyoS53bjK43v96E3A7P3wq8U3",
+        "environment": "production",
+        "plan": "pro"
+      }
+    },
+    "preview": {
+      "alias": [
+        "hotelaccelerator-git-v0-4bidsrl-43613d2c-4bid.vercel.app"
+      ],
+      "aliasAssigned": 1776960504408,
+      "aliasError": null,
+      "automaticAliases": [
+        "hotelaccelerator-git-v0-4bidsrl-43613d2c-4bid.vercel.app"
+      ],
+      "builds": [],
+      "createdAt": 1776960464691,
+      "createdIn": "sfo1",
+      "creator": {
+        "uid": "rXjXviY6qUc41H9Cq5MeRn2q",
+        "email": "f.mancini@ibarronci.com",
+        "username": "4bidsrl",
+        "githubLogin": "v0[bot]"
+      },
+      "deploymentHostname": "hotelaccelerator-qxoe5iyic-4bid",
+      "forced": false,
+      "id": "dpl_82CdoUsGUpQQNb12s6CA8JKk2FhJ",
+      "meta": {
+        "githubCommitAuthorName": "v0",
+        "githubCommitAuthorEmail": "v0[bot]@users.noreply.github.com",
+        "githubCommitMessage": "feat: add new log file for API call tracking\n\nCo-authored-by: 4BID srl <245582481+fmancini-create@users.noreply.github.com>",
+        "githubCommitOrg": "fmancini-create",
+        "githubCommitRef": "v0/4bidsrl-43613d2c",
+        "githubCommitRepo": "HotelAccelerator",
+        "githubCommitSha": "37299db6663c0e5673630daf38c66cd66b851598",
+        "githubDeployment": "1",
+        "githubOrg": "fmancini-create",
+        "githubRepo": "HotelAccelerator",
+        "githubRepoOwnerType": "User",
+        "githubCommitRepoId": "1121906646",
+        "githubRepoId": "1121906646",
+        "githubRepoVisibility": "public",
+        "githubHost": "github.com",
+        "githubCommitAuthorLogin": "v0[bot]",
+        "repoPushedAt": "1776960461000",
+        "branchAlias": "hotelaccelerator-git-v0-4bidsrl-43613d2c-4bid.vercel.app",
+        "lambdaRuntimeStats": "{\"nodejs\":5}",
+        "bundler": "turbopack"
+      },
+      "name": "hotelaccelerator",
+      "plan": "pro",
+      "private": true,
+      "readyState": "READY",
+      "readySubstate": "STAGED",
+      "target": null,
+      "teamId": "team_zutObejPRaSuP1fKxOyKHz5M",
+      "type": "LAMBDAS",
+      "url": "hotelaccelerator-qxoe5iyic-4bid.vercel.app",
+      "userId": "rXjXviY6qUc41H9Cq5MeRn2q",
+      "withCache": false,
+      "buildingAt": 1776960466097,
+      "readyAt": 1776960504270,
+      "previewCommentsEnabled": true,
+      "oidcTokenClaims": {
+        "sub": "owner:4bid:project:hotelaccelerator:environment:preview",
+        "iss": "https://oidc.vercel.com/4bid",
+        "scope": "owner:4bid:project:hotelaccelerator:environment:preview",
+        "aud": "https://vercel.com/4bid",
+        "owner": "4bid",
+        "owner_id": "team_zutObejPRaSuP1fKxOyKHz5M",
+        "project": "hotelaccelerator",
+        "project_id": "prj_VGmjyoS53bjK43v96E3A7P3wq8U3",
+        "environment": "preview",
+        "plan": "pro"
+      }
+    }
+  },
+  "features": {
+    "webAnalytics": true
+  }
+}

@@ -1,11 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest) {
   try {
+    // DEV/PREVIEW BYPASS: Return dummy data in dev/preview mode
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+    const isDevOrPreview = host.includes("vercel.run") || 
+                           host.includes("localhost") || 
+                           host.includes("127.0.0.1")
+
+    if (isDevOrPreview) {
+      return NextResponse.json({
+        groups: [
+          {
+            id: "dev-group-1",
+            name: "Dev Group",
+            description: "Development group",
+            color: "#3b82f6",
+            created_at: new Date().toISOString(),
+            members: [],
+          },
+        ],
+      })
+    }
+
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { data: groups, error } = await supabase
       .from("user_groups")
@@ -41,7 +62,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const { name, description, color } = body

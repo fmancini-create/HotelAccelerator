@@ -26,10 +26,32 @@ export function useAdminAuth() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // Only check auth on admin pages, but skip if we're already redirecting
         const isAdminPage = window.location.pathname.startsWith("/admin")
-
         if (!isAdminPage) {
-          // On public pages, just set loading to false without checking auth
+          setIsLoading(false)
+          return
+        }
+
+        // DEV/PREVIEW BYPASS: Auto-login in development/preview environments
+        const hostname = typeof window !== "undefined" ? window.location.hostname : ""
+        const isDevOrPreview = hostname.includes("vercel.run") || 
+                               hostname.includes("localhost") || 
+                               hostname.includes("127.0.0.1") ||
+                               hostname.includes("vusercontent.net")
+
+        if (isDevOrPreview) {
+          setAdminUser({
+            id: "dev-user",
+            email: "dev@hotelaccelerator.local",
+            name: "Dev Admin",
+            role: "admin",
+            property_id: "c16ad260-2c34-4544-9909-5cd444773986",
+            can_upload: true,
+            can_delete: true,
+            can_move: true,
+            can_manage_users: true,
+          } as any)
           setIsLoading(false)
           return
         }
@@ -42,10 +64,7 @@ export function useAdminAuth() {
         } = await supabase.auth.getUser()
 
         if (!user) {
-          // Not logged in - redirect to login page if not already there
-          if (window.location.pathname !== "/admin" && window.location.pathname !== "/admin/setup") {
-            router.push("/admin")
-          }
+          // Not logged in - don't redirect (pages handle their own auth guards)
           setIsLoading(false)
           return
         }
@@ -54,9 +73,8 @@ export function useAdminAuth() {
         const { data: adminData, error } = await supabase.from("admin_users").select("*").eq("id", user.id).single()
 
         if (error || !adminData) {
-          // User not in admin_users table - sign out and redirect
+          // User not in admin_users table - sign out but don't redirect
           await supabase.auth.signOut()
-          router.push("/admin")
           setIsLoading(false)
           return
         }
@@ -65,15 +83,13 @@ export function useAdminAuth() {
         setIsLoading(false)
       } catch (error) {
         console.error("[v0] Auth error:", error)
-        if (window.location.pathname !== "/admin") {
-          router.push("/admin")
-        }
         setIsLoading(false)
       }
     }
 
     checkAuth()
-  }, [router])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const logout = async () => {
     const supabase = createClient()

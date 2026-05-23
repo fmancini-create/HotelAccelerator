@@ -1,79 +1,51 @@
-import { createServerClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { validatePage, ZodError } from "@/lib/cms/section-schemas"
+import { validatePage } from "@/lib/cms/section-schemas"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
-// GET /api/cms/pages/[id] - Singola pagina
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+// GET /api/cms/pages/[id]
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
-    const supabase = await createServerClient()
-
+    const { id } = await params
+    const supabase = createServiceClient()
     const { data: page, error } = await supabase.from("cms_pages").select("*").eq("id", id).single()
-
     if (error) {
-      if (error.code === "PGRST116") {
-        return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
-      }
-      console.error("[CMS] Error fetching page:", error)
+      if (error.code === "PGRST116") return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
-
     return NextResponse.json({ page })
-  } catch (error) {
-    console.error("[CMS] Error:", error)
+  } catch (error: any) {
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
 
-// PUT /api/cms/pages/[id] - Aggiorna pagina
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+// PUT /api/cms/pages/[id]
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
+    const { id } = await params
+    const propertyId = await getAuthenticatedPropertyId()
     const body = await request.json()
 
-    let pageData
-    try {
-      pageData = validatePage(body)
-    } catch (err) {
-      if (err instanceof ZodError) {
-        return NextResponse.json({ error: err.flatten() }, { status: 400 })
-      }
-      throw err
+    const validation = validatePage(body)
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error.flatten() }, { status: 400 })
     }
 
-    const supabase = await createServerClient()
+    const pageData = validation.data
+    const supabase = createServiceClient()
 
-    // Verifica auth
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    }
-
-    // Verifica permessi
-    const { data: adminUser } = await supabase
-      .from("admin_users")
-      .select("role, property_id")
-      .eq("id", user.id)
+    // Verifica che la pagina appartenga alla property autenticata
+    const { data: existingPage } = await supabase
+      .from("cms_pages")
+      .select("property_id")
+      .eq("id", id)
       .single()
 
-    if (!adminUser) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    }
-
-    // Verifica che la pagina appartenga alla property dell'admin
-    const { data: existingPage } = await supabase.from("cms_pages").select("property_id").eq("id", id).single()
-
-    if (!existingPage) {
-      return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
-    }
-
-    if (adminUser.role !== "super_admin" && adminUser.property_id !== existingPage.property_id) {
+    if (!existingPage) return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
+    if (existingPage.property_id !== propertyId) {
       return NextResponse.json({ error: "Non hai accesso a questa pagina" }, { status: 403 })
     }
 
-    // Aggiorna la pagina
     const updateData: Record<string, unknown> = {
       slug: pageData.slug,
       title: pageData.title,
@@ -83,75 +55,51 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       seo_noindex: pageData.seo_noindex,
       sections: pageData.sections,
     }
-
-    // Se diventa published, aggiorna published_at
     if (pageData.status === "published") {
       updateData.published_at = new Date().toISOString()
     }
 
-    const { data: page, error } = await supabase.from("cms_pages").update(updateData).eq("id", id).select().single()
+    const { data: page, error } = await supabase
+      .from("cms_pages")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single()
 
     if (error) {
-      if (error.code === "23505") {
-        return NextResponse.json({ error: "Slug già esistente per questa property" }, { status: 409 })
-      }
-      console.error("[CMS] Error updating page:", error)
+      if (error.code === "23505") return NextResponse.json({ error: "Slug già esistente" }, { status: 409 })
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ page })
-  } catch (error) {
-    console.error("[CMS] Error:", error)
+  } catch (error: any) {
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
 
-// DELETE /api/cms/pages/[id] - Elimina pagina
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+// DELETE /api/cms/pages/[id]
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = params
-    const supabase = await createServerClient()
+    const { id } = await params
+    const propertyId = await getAuthenticatedPropertyId()
+    const supabase = createServiceClient()
 
-    // Verifica auth
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    }
-
-    // Verifica permessi
-    const { data: adminUser } = await supabase
-      .from("admin_users")
-      .select("role, property_id")
-      .eq("id", user.id)
+    const { data: existingPage } = await supabase
+      .from("cms_pages")
+      .select("property_id")
+      .eq("id", id)
       .single()
 
-    if (!adminUser) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    }
-
-    // Verifica che la pagina appartenga alla property dell'admin
-    const { data: existingPage } = await supabase.from("cms_pages").select("property_id").eq("id", id).single()
-
-    if (!existingPage) {
-      return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
-    }
-
-    if (adminUser.role !== "super_admin" && adminUser.property_id !== existingPage.property_id) {
+    if (!existingPage) return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
+    if (existingPage.property_id !== propertyId) {
       return NextResponse.json({ error: "Non hai accesso a questa pagina" }, { status: 403 })
     }
 
     const { error } = await supabase.from("cms_pages").delete().eq("id", id)
-
-    if (error) {
-      console.error("[CMS] Error deleting page:", error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("[CMS] Error:", error)
+  } catch (error: any) {
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }

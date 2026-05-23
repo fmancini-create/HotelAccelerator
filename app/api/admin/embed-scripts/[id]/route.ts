@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { EmbedScriptRepository } from "@/lib/platform-repositories"
 import { EmbedScriptService } from "@/lib/platform-services"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     await getAuthenticatedPropertyId()
     const { id } = params
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const repository = new EmbedScriptRepository(supabase)
     const service = new EmbedScriptService(repository)
@@ -30,7 +30,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   try {
     await getAuthenticatedPropertyId()
     const { id } = params
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const repository = new EmbedScriptRepository(supabase)
@@ -49,7 +49,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     await getAuthenticatedPropertyId()
     const { id } = params
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const repository = new EmbedScriptRepository(supabase)
     const service = new EmbedScriptService(repository)

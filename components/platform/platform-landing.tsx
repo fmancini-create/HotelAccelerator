@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import type { Metadata } from "next"
 import { PlatformFooter } from "@/components/platform-footer"
+import DevButtons from "@/components/dev-buttons"
 
 export const platformMetadata: Metadata = {
   title: "HotelAccelerator - Software Gestionale per Hotel e Strutture Ricettive | CRM, CMS, Email Marketing",
@@ -465,6 +466,9 @@ function PlatformLanding() {
           </div>
         </div>
       </section>
+
+      {/* Dev/Preview Buttons - Only visible in dev/preview */}
+      <DevButtons />
 
       {/* Footer with semantic HTML */}
       <PlatformFooter />

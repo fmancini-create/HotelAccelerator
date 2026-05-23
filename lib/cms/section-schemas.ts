@@ -415,20 +415,19 @@ export const SectionSchema = z.object({
   data: z.record(z.unknown()),
 })
 
-export const PageSchema = z
-  .object({
-    slug: z
-      .string()
-      .min(1)
-      .regex(/^[a-z0-9\-/]+$/, "Slug può contenere solo lettere minuscole, numeri, trattini e slash"),
-    title: z.string().min(1, "Titolo richiesto"),
-    status: z.enum(["draft", "published", "hidden"]).default("draft"),
-    seo_title: z.string().nullable().optional(),
-    seo_description: z.string().nullable().optional(),
-    seo_noindex: z.boolean().default(false),
-    sections: z.array(SectionSchema).default([]),
-  })
-  .strict()
+export const PageSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .transform((s) => s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9\-/]/g, ""))
+    .pipe(z.string().regex(/^[a-z0-9\-/]+$/, "Slug non valido dopo la normalizzazione")),
+  title: z.string().min(1, "Titolo richiesto"),
+  status: z.enum(["draft", "published", "hidden"]).default("draft"),
+  seo_title: z.string().nullable().optional(),
+  seo_description: z.string().nullable().optional(),
+  seo_noindex: z.boolean().default(false),
+  sections: z.array(SectionSchema).default([]),
+})
 
 export type Section = z.infer<typeof SectionSchema>
 export type Page = z.infer<typeof PageSchema>
@@ -442,5 +441,15 @@ export function validateSection(type: SectionType, data: unknown) {
 }
 
 export function validatePage(input: unknown) {
-  return PageSchema.parse(input)
+  // Strip unknown keys before parsing (property_id, page_type, language, template_id, ecc.)
+  const known = input && typeof input === "object" ? {
+    slug:            (input as any).slug,
+    title:           (input as any).title,
+    status:          (input as any).status,
+    seo_title:       (input as any).seo_title,
+    seo_description: (input as any).seo_description,
+    seo_noindex:     (input as any).seo_noindex,
+    sections:        (input as any).sections,
+  } : input
+  return PageSchema.safeParse(known)
 }

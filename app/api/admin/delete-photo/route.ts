@@ -1,10 +1,10 @@
 import { del } from "@vercel/blob"
 import { NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerClient()
+    const supabase = createServiceClient()
 
     // Verifica autenticazione
     const {

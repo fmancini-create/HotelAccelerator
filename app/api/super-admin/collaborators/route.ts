@@ -5,7 +5,7 @@ import { getAuthenticatedUserEmail } from "@/lib/auth-property"
 
 export async function GET(request: Request) {
   try {
-    const actorEmail = await getAuthenticatedUserEmail()
+    const actorEmail = await getAuthenticatedUserEmail(request as any)
     const service = new SuperAdminService()
     const collaborators = await service.listCollaborators(actorEmail)
 
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const actorEmail = await getAuthenticatedUserEmail()
+    const actorEmail = await getAuthenticatedUserEmail(request as any)
     const data = await request.json()
     const service = new SuperAdminService()
     const collaborator = await service.createCollaborator(data, actorEmail)

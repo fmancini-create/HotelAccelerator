@@ -1,10 +1,24 @@
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
 import { Shield } from "lucide-react"
 import SuperAdminLoginForm from "@/components/super-admin-login-form"
 
 export default function SuperAdminLoginClient() {
+  // DEV/PREVIEW BYPASS: Auto-redirect in development/preview environments
+  useEffect(() => {
+    const hostname = window.location.hostname
+    const isDevOrPreview = hostname.includes("vercel.run") || 
+                           hostname.includes("localhost") || 
+                           hostname.includes("127.0.0.1")
+    
+    if (isDevOrPreview) {
+      console.log("[v0] DEV/PREVIEW MODE: Auto-redirecting to super-admin dashboard")
+      window.location.href = "/super-admin"
+    }
+  }, [])
+
   return (
     <div className="min-h-screen bg-neutral-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">

@@ -11,46 +11,19 @@ import {
   spamGmailMessage,
   modifyGmailMessage,
 } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 const API_VERSION = "v744"
 
 async function getEmailChannelForUser(supabase: any, userId: string) {
-  // Check if user is super_admin
-  const { data: adminUser } = await supabase.from("admin_users").select("id, role").eq("id", userId).single()
-
-  if (adminUser?.role === "super_admin") {
-    // Super admin: get first active Gmail channel
-    const { data: channel } = await supabase
-      .from("email_channels")
-      .select("id, oauth_access_token, oauth_refresh_token, email_address")
-      .eq("provider", "gmail")
-      .eq("is_active", true)
-      .limit(1)
-      .single()
-    return channel
-  }
-
-  // Check user_channel_permissions
-  const { data: permission } = await supabase
-    .from("user_channel_permissions")
-    .select("channel_id, email_channels(id, oauth_access_token, oauth_refresh_token, email_address)")
-    .eq("user_id", userId)
-    .limit(1)
-    .single()
-
-  if (permission?.email_channels) {
-    return permission.email_channels
-  }
-
-  // Check email_channel_assignments
-  const { data: assignment } = await supabase
-    .from("email_channel_assignments")
-    .select("channel_id, email_channels(id, oauth_access_token, oauth_refresh_token, email_address)")
-    .eq("user_id", userId)
-    .limit(1)
-    .single()
-
-  return assignment?.email_channels || null
+  const { channelId } = await resolveGmailChannelId(supabase, userId)
+  if (!channelId) return null
+  const { data: channel } = await supabase
+    .from("email_channels")
+    .select("id, oauth_access_token, oauth_refresh_token, email_address")
+    .eq("id", channelId)
+    .maybeSingle()
+  return channel
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ messageId: string }> }) {

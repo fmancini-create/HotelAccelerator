@@ -3,76 +3,61 @@ import { createClient } from "@/lib/supabase/server"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 
 // Gmail Pub/Sub webhook endpoint
-// VERSION: v745 - With rate limiting and deduplication
+// VERSION: v779-base64url-fix - Fixed base64url decoding
 
-// In-memory deduplication cache (per instance)
-const recentNotifications = new Map<string, number>()
-const DEDUP_WINDOW_MS = 60000 // 60 seconds
-const MAX_CACHE_SIZE = 1000
-
-// Clean old entries periodically
-function cleanDeduplicationCache() {
-  const now = Date.now()
-  for (const [key, timestamp] of recentNotifications.entries()) {
-    if (now - timestamp > DEDUP_WINDOW_MS) {
-      recentNotifications.delete(key)
-    }
-  }
-  // If still too large, remove oldest half
-  if (recentNotifications.size > MAX_CACHE_SIZE) {
-    const entries = Array.from(recentNotifications.entries())
-    entries.sort((a, b) => a[1] - b[1])
-    const toRemove = entries.slice(0, Math.floor(entries.length / 2))
-    toRemove.forEach(([key]) => recentNotifications.delete(key))
-  }
+function decodeBase64UrlToString(input: string): string {
+  if (!input) return ""
+  // Gmail uses base64url (RFC 4648 URL-safe): replace - with +, _ with /
+  let b64 = input.replace(/-/g, "+").replace(/_/g, "/")
+  // Pad to multiple of 4
+  const pad = b64.length % 4
+  if (pad) b64 += "=".repeat(4 - pad)
+  return Buffer.from(b64, "base64").toString("utf-8")
 }
 
 export async function GET(request: NextRequest) {
   return NextResponse.json({
     status: "ok",
     message: "Gmail webhook endpoint is active",
-    version: "v745",
+    version: "v779-base64url-fix",
     timestamp: new Date().toISOString(),
-    cacheSize: recentNotifications.size,
   })
 }
 
 export async function POST(request: NextRequest) {
   const receivedAt = new Date()
 
-  // Clean cache periodically
-  if (Math.random() < 0.1) cleanDeduplicationCache()
+  console.log("==================================================")
+  console.log("[GMAIL WEBHOOK v779-base64url-fix] HIT at", receivedAt.toISOString())
+  console.log("==================================================")
 
   try {
     const rawBody = await request.text()
+    console.log("[GMAIL WEBHOOK] Raw body length:", rawBody.length)
+
     const body = JSON.parse(rawBody)
+    console.log("[GMAIL WEBHOOK] Parsed body subscription:", body.subscription)
 
     const message = body.message
     if (!message?.data) {
+      console.log("[GMAIL WEBHOOK] No message.data - returning ok")
       return NextResponse.json({ status: "ok" })
     }
 
-    const decodedData = Buffer.from(message.data, "base64").toString()
+    const decodedData = decodeBase64UrlToString(message.data)
     const notification = JSON.parse(decodedData)
     const { emailAddress, historyId } = notification
 
+    console.log("[GMAIL WEBHOOK] Notification:", {
+      emailAddress,
+      historyId,
+      messageId: message.messageId,
+    })
+
     if (!emailAddress || !historyId) {
+      console.log("[GMAIL WEBHOOK] Missing emailAddress or historyId")
       return NextResponse.json({ status: "ok" })
     }
-
-    // Deduplication: Check if we've seen this exact notification recently
-    const dedupKey = `${emailAddress}:${historyId}:${message.messageId || ""}`
-    const now = Date.now()
-    
-    if (recentNotifications.has(dedupKey)) {
-      console.log("[GMAIL WEBHOOK] DEDUP: Skipping duplicate notification", dedupKey)
-      return NextResponse.json({ status: "ok", deduplicated: true })
-    }
-    
-    // Mark as seen BEFORE processing
-    recentNotifications.set(dedupKey, now)
-    
-    console.log("[GMAIL WEBHOOK v745] Processing:", { emailAddress, historyId, dedupKey })
 
     const supabase = await createClient()
 
@@ -91,16 +76,26 @@ export async function POST(request: NextRequest) {
     }
 
     const lastHistoryId = channel.gmail_history_id || 0
+    console.log("[GMAIL WEBHOOK] Channel found:", {
+      channelId: channel.id,
+      email: channel.email_address,
+      lastHistoryIdInDB: lastHistoryId,
+      newHistoryId: historyId,
+      willProcess: Number(historyId) > Number(lastHistoryId),
+    })
 
-    // Idempotency check - skip if already processed
+    // Idempotency check
     if (Number(historyId) <= Number(lastHistoryId)) {
-      return NextResponse.json({ status: "ok", skipped: "already_processed" })
+      console.log("[GMAIL WEBHOOK] SKIP - Already processed (historyId <= lastHistoryId)")
+      return NextResponse.json({ status: "ok" })
     }
 
+    console.log("[GMAIL WEBHOOK] PROCESSING - New historyId detected")
     const syncResult = await syncNewEmails(supabase, channel, lastHistoryId, historyId)
+    console.log("[GMAIL WEBHOOK] Sync result:", syncResult)
 
-    // Update history ID atomically with optimistic locking
-    await supabase
+    // Update history ID atomically
+    const { error: updateError } = await supabase
       .from("email_channels")
       .update({
         gmail_history_id: historyId,
@@ -108,13 +103,19 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", channel.id)
-      .eq("gmail_history_id", lastHistoryId)
+      .eq("gmail_history_id", lastHistoryId) // Optimistic locking
 
-    return NextResponse.json({ 
-      status: "ok", 
-      processed: syncResult.messagesInserted,
-      found: syncResult.messagesFound 
-    })
+    if (updateError) {
+      console.log("[GMAIL WEBHOOK] WARNING: Failed to update historyId:", updateError.message)
+    } else {
+      console.log("[GMAIL WEBHOOK] SUCCESS: Updated historyId from", lastHistoryId, "to", historyId)
+    }
+
+    console.log("==================================================")
+    console.log("[GMAIL WEBHOOK v779-base64url-fix] COMPLETE")
+    console.log("==================================================")
+
+    return NextResponse.json({ status: "ok" })
   } catch (error) {
     console.error("[GMAIL WEBHOOK] ERROR:", error)
     // Always return 200 to prevent Pub/Sub retries
@@ -169,10 +170,14 @@ async function syncNewEmails(
     })
 
     if (!historyResponse.ok) {
-      // Don't trigger full sync from webhook to prevent loops
-      // Just log and return - admin can trigger manual sync if needed
-      console.error("[GMAIL WEBHOOK] History API error:", historyResponse.status)
-      result.errors.push(`History API error: ${historyResponse.status}`)
+      const errorText = await historyResponse.text()
+      console.log("[GMAIL WEBHOOK] History API error:", historyResponse.status, errorText)
+
+      if (historyResponse.status === 404) {
+        console.log("[GMAIL WEBHOOK] History expired - triggering full sync")
+        await triggerFullSync(channel)
+        result.errors.push("History expired, full sync triggered")
+      }
       return result
     }
 
@@ -301,11 +306,7 @@ function parseGmailMessage(msg: any): InboundEmail {
   let contentType: "text" | "html" = "text"
 
   const decodeContent = (data: string) => {
-    try {
-      return Buffer.from(data, "base64url").toString("utf-8")
-    } catch {
-      return Buffer.from(data, "base64").toString("utf-8")
-    }
+    return decodeBase64UrlToString(data)
   }
 
   const findPart = (parts: any[], mimeType: string): any => {
@@ -353,5 +354,18 @@ function parseGmailMessage(msg: any): InboundEmail {
   }
 }
 
-// triggerFullSync removed to prevent webhook loops
-// Full sync should be triggered manually from admin panel if needed
+async function triggerFullSync(channel: any) {
+  try {
+    console.log("[GMAIL WEBHOOK] Triggering full sync for channel:", channel.id)
+    await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/channels/email/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel_id: channel.id,
+        property_id: channel.property_id,
+      }),
+    })
+  } catch (error) {
+    console.error("[GMAIL WEBHOOK] Full sync trigger failed:", error)
+  }
+}

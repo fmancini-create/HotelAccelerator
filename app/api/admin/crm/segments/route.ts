@@ -1,20 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty(request)
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { data, error } = await supabase
       .from("contact_segments")
       .select("*")
-      .eq("property_id", property.id)
+      .eq("property_id", propertyId)
       .order("name")
 
     if (error) throw error
@@ -28,19 +28,19 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty(request)
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
     const body = await request.json()
 
     const { data, error } = await supabase
       .from("contact_segments")
       .insert({
         ...body,
-        property_id: property.id,
+        property_id: propertyId,
       })
       .select()
       .single()

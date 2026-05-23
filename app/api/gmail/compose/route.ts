@@ -2,6 +2,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
+import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
+import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
+import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
 
 export async function POST(request: NextRequest) {
   console.log("[v0] GMAIL COMPOSE API")
@@ -23,43 +26,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
     }
 
-    let channelId: string | null = null
-    let channelData: any = null
+    const { channelId } = await resolveGmailChannelId(supabase, user.id)
 
-    // First check if user is super_admin
-    const { data: adminUser } = await supabase.from("admin_users").select("id, role").eq("id", user.id).single()
-
-    if (adminUser?.role === "super_admin") {
-      const { data: channel } = await supabase
-        .from("email_channels")
-        .select("id, email_address, display_name, name")
-        .eq("provider", "gmail")
-        .eq("is_active", true)
-        .limit(1)
-        .single()
-
-      if (channel) {
-        channelId = channel.id
-        channelData = channel
-      }
-    }
-
-    // Fallback to user_channel_permissions
     if (!channelId) {
-      const { data: permission } = await supabase
-        .from("user_channel_permissions")
-        .select("channel_id, email_channels(id, email_address, display_name, name)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single()
-
-      if (permission) {
-        channelId = permission.channel_id
-        channelData = permission.email_channels
-      }
+      return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
     }
 
-    if (!channelId || !channelData) {
+    const { data: channelData } = await supabase
+      .from("email_channels")
+      .select("id, email_address, display_name, name, property_id")
+      .eq("id", channelId)
+      .maybeSingle()
+
+    if (!channelData) {
       return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
     }
 
@@ -72,6 +51,11 @@ export async function POST(request: NextRequest) {
     const fromAddress = channelData.email_address
     const fromName = channelData.display_name || channelData.name || fromAddress.split("@")[0]
 
+    // Append the admin user's signature
+    const { html: signatureHtml } = await getUserSignature(supabase, user.id)
+    const bodyWithBreaks = emailBody.replace(/\n/g, "<br>")
+    const finalBody = appendSignatureHtml(bodyWithBreaks, signatureHtml)
+
     const messageParts = [
       `From: "${fromName}" <${fromAddress}>`,
       `To: ${to}`,
@@ -79,7 +63,7 @@ export async function POST(request: NextRequest) {
       "MIME-Version: 1.0",
       "Content-Type: text/html; charset=utf-8",
       "",
-      `<div style="font-family: Arial, sans-serif; font-size: 14px;">${emailBody.replace(/\n/g, "<br>")}</div>`,
+      `<div style="font-family: Arial, sans-serif; font-size: 14px;">${finalBody}</div>`,
     ]
 
     const message = messageParts.join("\r\n")
@@ -106,6 +90,15 @@ export async function POST(request: NextRequest) {
 
     const sendData = await sendRes.json()
     console.log("[v0] New email sent successfully, messageId:", sendData.id)
+
+    // Auto-capture TO recipients into CRM (fire-and-forget, never blocks send).
+    if (channelData.property_id) {
+      captureOutboundRecipients(
+        supabase,
+        channelData.property_id,
+        parseRecipientList(to),
+      ).catch((e) => console.error("[v0] auto-capture compose failed", e))
+    }
 
     return NextResponse.json({
       success: true,

@@ -1,22 +1,22 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ contactId: string }> }) {
   try {
     const { contactId } = await params
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty(request)
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    const supabase = await createClient()
+    const supabase = createServiceClient()
 
     const { data, error } = await supabase
       .from("contact_stays")
       .select("*")
       .eq("contact_id", contactId)
-      .eq("property_id", property.id)
+      .eq("property_id", propertyId)
       .order("check_in", { ascending: false })
 
     if (error) throw error
