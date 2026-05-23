@@ -5,8 +5,8 @@ import { getCurrentProperty } from "@/lib/auth-property"
 export async function GET(request: NextRequest, { params }: { params: Promise<{ contactId: string }> }) {
   try {
     const { contactId } = await params
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty()
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .from("contacts")
       .select("*")
       .eq("id", contactId)
-      .eq("property_id", property.id)
+      .eq("property_id", propertyId)
       .single()
 
     if (error) throw error
@@ -31,8 +31,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ contactId: string }> }) {
   try {
     const { contactId } = await params
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty()
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
@@ -46,7 +46,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         updated_at: new Date().toISOString(),
       })
       .eq("id", contactId)
-      .eq("property_id", property.id)
+      .eq("property_id", propertyId)
       .select()
       .single()
 

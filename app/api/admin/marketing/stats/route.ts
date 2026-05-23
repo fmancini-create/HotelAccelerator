@@ -4,14 +4,14 @@ import { getCurrentProperty } from "@/lib/auth-property"
 
 export async function GET() {
   try {
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty()
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
     const supabase = createServiceClient()
 
-    const { data: campaigns, error } = await supabase.from("email_campaigns").select("*").eq("property_id", property.id)
+    const { data: campaigns, error } = await supabase.from("email_campaigns").select("*").eq("property_id", propertyId)
 
     if (error) throw error
 

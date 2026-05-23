@@ -4,8 +4,8 @@ import { getCurrentProperty } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest) {
   try {
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty()
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         *,
         contact_segments(name)
       `)
-      .eq("property_id", property.id)
+      .eq("property_id", propertyId)
       .order("created_at", { ascending: false })
 
     if (status && status !== "all") {
@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty()
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       .from("email_campaigns")
       .insert({
         ...body,
-        property_id: property.id,
+        property_id: propertyId,
       })
       .select()
       .single()
