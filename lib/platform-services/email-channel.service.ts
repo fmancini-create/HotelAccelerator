@@ -190,6 +190,7 @@ export class EmailChannelService {
     } else {
       await this.repository.create({
         property_id: propertyId,
+        name: email,
         email_address: email,
         display_name: email,
         is_active: true,
