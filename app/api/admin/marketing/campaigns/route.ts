@@ -4,7 +4,7 @@ import { getCurrentProperty } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest) {
   try {
-    const propertyId = await getCurrentProperty()
+    const propertyId = await getCurrentProperty(request)
     if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const propertyId = await getCurrentProperty()
+    const propertyId = await getCurrentProperty(request)
     if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
