@@ -3,6 +3,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getValidGmailToken } from "@/lib/gmail-client"
 import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
+import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
+import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
 
 export async function POST(request: NextRequest) {
   console.log("[v0] GMAIL COMPOSE API")
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const { data: channelData } = await supabase
       .from("email_channels")
-      .select("id, email_address, display_name, name")
+      .select("id, email_address, display_name, name, property_id")
       .eq("id", channelId)
       .maybeSingle()
 
@@ -49,6 +51,11 @@ export async function POST(request: NextRequest) {
     const fromAddress = channelData.email_address
     const fromName = channelData.display_name || channelData.name || fromAddress.split("@")[0]
 
+    // Append the admin user's signature
+    const { html: signatureHtml } = await getUserSignature(supabase, user.id)
+    const bodyWithBreaks = emailBody.replace(/\n/g, "<br>")
+    const finalBody = appendSignatureHtml(bodyWithBreaks, signatureHtml)
+
     const messageParts = [
       `From: "${fromName}" <${fromAddress}>`,
       `To: ${to}`,
@@ -56,7 +63,7 @@ export async function POST(request: NextRequest) {
       "MIME-Version: 1.0",
       "Content-Type: text/html; charset=utf-8",
       "",
-      `<div style="font-family: Arial, sans-serif; font-size: 14px;">${emailBody.replace(/\n/g, "<br>")}</div>`,
+      `<div style="font-family: Arial, sans-serif; font-size: 14px;">${finalBody}</div>`,
     ]
 
     const message = messageParts.join("\r\n")
@@ -83,6 +90,15 @@ export async function POST(request: NextRequest) {
 
     const sendData = await sendRes.json()
     console.log("[v0] New email sent successfully, messageId:", sendData.id)
+
+    // Auto-capture TO recipients into CRM (fire-and-forget, never blocks send).
+    if (channelData.property_id) {
+      captureOutboundRecipients(
+        supabase,
+        channelData.property_id,
+        parseRecipientList(to),
+      ).catch((e) => console.error("[v0] auto-capture compose failed", e))
+    }
 
     return NextResponse.json({
       success: true,

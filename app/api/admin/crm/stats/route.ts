@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const property = await getCurrentProperty()
-    if (!property) {
+    const propertyId = await getCurrentProperty(request)
+    if (!propertyId) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
@@ -18,20 +18,20 @@ export async function GET() {
       { data: scoreData },
       { data: bookingData },
     ] = await Promise.all([
-      supabase.from("contacts").select("*", { count: "exact", head: true }).eq("property_id", property.id),
+      supabase.from("contacts").select("*", { count: "exact", head: true }).eq("property_id", propertyId),
       supabase
         .from("contacts")
         .select("*", { count: "exact", head: true })
-        .eq("property_id", property.id)
+        .eq("property_id", propertyId)
         .eq("marketing_consent", true)
         .eq("unsubscribed", false),
       supabase
         .from("contacts")
         .select("*", { count: "exact", head: true })
-        .eq("property_id", property.id)
+        .eq("property_id", propertyId)
         .in("vip_level", ["gold", "platinum"]),
-      supabase.from("contacts").select("lead_score").eq("property_id", property.id),
-      supabase.from("contacts").select("total_bookings, total_revenue_cents").eq("property_id", property.id),
+      supabase.from("contacts").select("lead_score").eq("property_id", propertyId),
+      supabase.from("contacts").select("total_bookings, total_revenue_cents").eq("property_id", propertyId),
     ])
 
     const avgScore = scoreData?.length

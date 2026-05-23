@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { autoCaptureContact } from "@/lib/crm/auto-capture"
 
 export interface InboundEmail {
   externalId: string // Gmail messageId or other provider ID
@@ -240,27 +241,32 @@ export class EmailProcessor {
   }
 
   private async findOrCreateContact(propertyId: string, email: string, name: string) {
-    const { data: existing } = await this.supabase
-      .from("contacts")
-      .select("id")
-      .eq("property_id", propertyId)
-      .eq("email", email)
-      .maybeSingle()
+    // Delegate to the central CRM auto-capture policy so tenant toggles,
+    // blacklists, and tagging are applied consistently across inbound channels.
+    // Inbound always guarantees a contact (even a minimal one) because the
+    // conversation record requires a valid contact_id for thread-linking.
+    const result = await autoCaptureContact({
+      supabase: this.supabase,
+      propertyId,
+      email,
+      name,
+      direction: "inbound",
+    })
 
-    if (existing) return existing
+    if (result.contactId) {
+      return { id: result.contactId }
+    }
 
-    const { data: newContact, error } = await this.supabase
+    // Fallback: the policy layer failed unexpectedly. Insert a minimal
+    // contact so the inbound pipeline never drops a conversation.
+    const { data: fallback, error } = await this.supabase
       .from("contacts")
-      .insert({
-        property_id: propertyId,
-        email,
-        name,
-      })
+      .insert({ property_id: propertyId, email, name, source: "system" })
       .select("id")
       .single()
 
     if (error) throw error
-    return newContact
+    return fallback
   }
 
   private normalizeSubject(subject: string): string | null {
