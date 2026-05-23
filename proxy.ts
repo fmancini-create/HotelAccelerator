@@ -27,11 +27,16 @@ export default function proxy(request: NextRequest) {
     return response
   }
 
+  const requestHeaders = new Headers(request.headers)
+
   // Se è dominio piattaforma, aggiungi header e lascia passare
   if (isPlatformDomain) {
-    const response = NextResponse.next()
-    response.headers.set("x-is-platform-domain", "true")
-    return response
+    requestHeaders.set("x-is-platform-domain", "true")
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
   }
 
   // Estrai subdomain per tenant
@@ -39,19 +44,25 @@ export default function proxy(request: NextRequest) {
 
   // Se c'è un subdomain valido, aggiungi header per il tenant
   if (subdomain) {
-    const response = NextResponse.next()
-    response.headers.set("x-tenant-identifier", subdomain)
-    response.headers.set("x-tenant-type", "subdomain")
-    return response
+    requestHeaders.set("x-tenant-identifier", subdomain)
+    requestHeaders.set("x-tenant-type", "subdomain")
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
   }
 
   // Verifica custom domain (non localhost, non piattaforma base)
   const customDomain = hostname.split(":")[0]
   if (customDomain) {
-    const response = NextResponse.next()
-    response.headers.set("x-tenant-identifier", customDomain)
-    response.headers.set("x-tenant-type", "custom_domain")
-    return response
+    requestHeaders.set("x-tenant-identifier", customDomain)
+    requestHeaders.set("x-tenant-type", "custom_domain")
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
   }
 
   return NextResponse.next()
