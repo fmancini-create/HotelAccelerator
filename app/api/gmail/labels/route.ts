@@ -24,6 +24,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Which mailbox are we actually showing? Surface it so the UI can label the inbox.
+    const { data: channelRow } = await supabase
+      .from("email_channels")
+      .select("email_address, display_name, name")
+      .eq("id", channelId)
+      .maybeSingle()
+    const account = channelRow
+      ? {
+          email: channelRow.email_address || null,
+          name: channelRow.display_name || channelRow.name || null,
+        }
+      : null
+
     const { labels, error } = await getGmailLabelsWithCounts(channelId)
 
     if (error) {
@@ -64,6 +77,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       labels: userLabels,
       systemLabels,
+      account,
     })
   } catch (error) {
     console.error("[Gmail] Labels error:", error)
