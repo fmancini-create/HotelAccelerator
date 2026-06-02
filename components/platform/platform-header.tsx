@@ -23,6 +23,7 @@ import { useMemo, useState } from "react"
 import useSWR from "swr"
 import {
   BarChart3,
+  Boxes,
   Building2,
   ChevronDown,
   FileText,
@@ -57,29 +58,38 @@ type NavItem = {
   label: string
   icon: React.ComponentType<{ className?: string }>
   match?: (pathname: string) => boolean
+  /**
+   * Chiave del modulo che governa questa voce. Se presente e il modulo NON
+   * e' attivo per la struttura corrente, la voce viene nascosta dal menu.
+   * Voci senza `module` sono sempre visibili.
+   */
+  module?: string
 }
 
 // Primary navigation shown inline on the header (desktop).
 const PRIMARY_NAV: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/inbox", label: "Inbox", icon: Inbox },
+  { href: "/admin/inbox", label: "Inbox", icon: Inbox, module: "inbox" },
   {
     href: "/admin/crm",
     label: "CRM",
     icon: Users,
     match: (p) => p.startsWith("/admin/crm"),
+    module: "crm",
   },
   {
     href: "/admin/cms",
     label: "CMS",
     icon: FileText,
     match: (p) => p.startsWith("/admin/cms"),
+    module: "cms",
   },
   {
     href: "/admin/channels/email",
     label: "Canali",
     icon: Radio,
     match: (p) => p.startsWith("/admin/channels"),
+    module: "inbox",
   },
   {
     href: "/admin/users",
@@ -94,12 +104,13 @@ const MORE_NAV: NavItem[] = [
   { href: "/admin/photos", label: "Foto", icon: ImageIcon },
   { href: "/admin/gallery", label: "Gallery", icon: ImageIcon },
   { href: "/admin/categories", label: "Categorie", icon: Tag },
-  { href: "/admin/message-rules", label: "Smart Messages", icon: MessageSquare },
+  { href: "/admin/message-rules", label: "Smart Messages", icon: MessageSquare, module: "inbox" },
   {
     href: "/admin/tracking",
     label: "Tracking",
     icon: BarChart3,
     match: (p) => p.startsWith("/admin/tracking"),
+    module: "tracking",
   },
   { href: "/admin/todos", label: "Todos", icon: ListTodo },
   { href: "/admin/monitoring", label: "Monitoring", icon: BarChart3 },
@@ -109,6 +120,12 @@ const MORE_NAV: NavItem[] = [
     label: "Marketing",
     icon: Megaphone,
     match: (p) => p.startsWith("/admin/marketing"),
+  },
+  {
+    href: "/admin/modules",
+    label: "Moduli",
+    icon: Boxes,
+    match: (p) => p.startsWith("/admin/modules"),
   },
   {
     href: "/admin/settings",
@@ -130,6 +147,25 @@ const meFetcher = async (url: string): Promise<PlatformMe> => {
   return res.json()
 }
 
+type ActiveModules = { activeModules: string[] | null }
+
+const modulesFetcher = async (url: string): Promise<ActiveModules> => {
+  const res = await fetch(url, { credentials: "include" })
+  if (!res.ok) return { activeModules: null }
+  return res.json()
+}
+
+/**
+ * Filtra le voci di menu in base ai moduli attivi.
+ * Fail-open: se `activeModules` e' null/undefined (dato non pronto o errore),
+ * mostriamo tutto per non far sparire il menu per sbaglio.
+ */
+function filterByModules(items: NavItem[], activeModules: string[] | null | undefined): NavItem[] {
+  if (!activeModules) return items
+  const active = new Set(activeModules)
+  return items.filter((item) => !item.module || active.has(item.module))
+}
+
 function isActive(item: NavItem, pathname: string): boolean {
   if (item.match) return item.match(pathname)
   return pathname === item.href || pathname.startsWith(item.href + "/")
@@ -142,10 +178,23 @@ export function PlatformHeader() {
   const { data: me } = useSWR<PlatformMe>("/api/platform/me", meFetcher, {
     revalidateOnFocus: false,
   })
+  const { data: modulesData } = useSWR<ActiveModules>("/api/platform/modules", modulesFetcher, {
+    revalidateOnFocus: false,
+  })
+
+  const activeModules = modulesData?.activeModules
+  const primaryNav = useMemo(
+    () => filterByModules(PRIMARY_NAV, activeModules),
+    [activeModules],
+  )
+  const moreNav = useMemo(
+    () => filterByModules(MORE_NAV, activeModules),
+    [activeModules],
+  )
 
   const moreHasActive = useMemo(
-    () => MORE_NAV.some((item) => isActive(item, pathname)),
-    [pathname],
+    () => moreNav.some((item) => isActive(item, pathname)),
+    [moreNav, pathname],
   )
 
   const handleSignOut = async () => {
@@ -187,7 +236,7 @@ export function PlatformHeader() {
 
         {/* Primary nav (desktop inline, mobile hidden: collapses into Altro) */}
         <nav className="hidden lg:flex items-center gap-0.5 h-full" aria-label="Navigazione principale">
-          {PRIMARY_NAV.map((item) => {
+          {primaryNav.map((item) => {
             const active = isActive(item, pathname)
             const Icon = item.icon
             return (
@@ -231,7 +280,7 @@ export function PlatformHeader() {
               <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-[#6b7280] font-medium">
                 Principali
               </DropdownMenuLabel>
-              {PRIMARY_NAV.map((item) => {
+              {primaryNav.map((item) => {
                 const Icon = item.icon
                 const active = isActive(item, pathname)
                 return (
@@ -256,7 +305,7 @@ export function PlatformHeader() {
             <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-[#6b7280] font-medium">
               Strumenti
             </DropdownMenuLabel>
-            {MORE_NAV.map((item) => {
+            {moreNav.map((item) => {
               const Icon = item.icon
               const active = isActive(item, pathname)
               return (

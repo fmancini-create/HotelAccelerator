@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
+import { getValidGmailToken } from "@/lib/gmail-client"
 
 // Gmail Pub/Sub webhook endpoint
 // VERSION: v779-base64url-fix - Fixed base64url decoding
@@ -137,29 +138,14 @@ async function syncNewEmails(
   }
 
   try {
-    // Refresh token if needed
-    if (channel.oauth_expiry && new Date(channel.oauth_expiry) < new Date()) {
-      console.log("[GMAIL WEBHOOK] Token expired, refreshing...")
-      const refreshResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/channels/email/oauth/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_id: channel.id }),
-      })
-
-      if (!refreshResponse.ok) {
-        result.errors.push("Token refresh failed")
-        return result
-      }
-
-      const { data: refreshedChannel } = await supabase
-        .from("email_channels")
-        .select("oauth_access_token")
-        .eq("id", channel.id)
-        .single()
-
-      channel.oauth_access_token = refreshedChannel?.oauth_access_token
-      console.log("[GMAIL WEBHOOK] Token refreshed successfully")
+    // Get a guaranteed-valid token directly (in-process refresh, no self-fetch
+    // via NEXT_PUBLIC_APP_URL which breaks in production / localhost configs).
+    const { token, error: tokenError } = await getValidGmailToken(channel.id)
+    if (!token) {
+      result.errors.push(tokenError || "Token non disponibile")
+      return result
     }
+    channel.oauth_access_token = token
 
     // Get history changes
     const historyUrl = `https://gmail.googleapis.com/gmail/v1/users/me/history?startHistoryId=${startHistoryId}&historyTypes=messageAdded`
@@ -290,7 +276,6 @@ async function fetchAndProcessMessage(
 
     return {
       success: result.success && !result.isDuplicate,
-      newConversation: result.newConversation,
     }
   } catch (error) {
     console.error("[GMAIL WEBHOOK] Error processing message:", messageId, error)
