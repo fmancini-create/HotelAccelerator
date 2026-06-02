@@ -18,7 +18,6 @@ import {
   Inbox,
   Check,
   Loader2,
-  MoreVertical,
   Paperclip,
   FileText,
   AlertCircle,
@@ -429,6 +428,8 @@ export default function InboxPage() {
   const [isThreadReady, setIsThreadReady] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
   const [labelsExpanded, setLabelsExpanded] = useState(false)
+  // Collapse the Gmail-style left sidebar (toggled by the hamburger button)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   // Which Gmail mailbox is currently being shown (resolved server-side)
   const [gmailAccount, setGmailAccount] = useState<{ email: string | null; name: string | null } | null>(null)
   // Mailbox switcher: list of mailboxes the user can operate on + the selected one
@@ -1585,8 +1586,13 @@ export default function InboxPage() {
     <div className="h-full flex flex-col bg-white">
       {/* Gmail-style top bar */}
       <header className="h-16 flex-shrink-0 flex items-center gap-3 px-4 bg-white border-b border-gray-200/50">
-        {/* Hamburger menu */}
-        <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        {/* Hamburger menu — collapses/expands the left sidebar */}
+        <button
+          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          onClick={() => setSidebarCollapsed((v) => !v)}
+          title={sidebarCollapsed ? "Mostra menu laterale" : "Nascondi menu laterale"}
+          aria-label={sidebarCollapsed ? "Mostra menu laterale" : "Nascondi menu laterale"}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
@@ -1691,15 +1697,49 @@ export default function InboxPage() {
               <TabsTrigger value="gmail" className="text-xs h-6">Gmail</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#5f6368"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-          </Button>
-          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9" onClick={() => setShowDebugPanel(!showDebugPanel)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full h-9 w-9"
+            onClick={() => router.push("/admin/channels/email")}
+            title="Impostazioni canali email"
+            aria-label="Impostazioni canali email"
+          >
             <Settings className="h-4 w-4 text-gray-600" />
           </Button>
-          <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold ml-2 cursor-pointer">
-            {adminUser?.name?.[0]?.toUpperCase() || "A"}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold ml-2 cursor-pointer hover:bg-blue-700 transition-colors"
+                title="Account"
+                aria-label="Menu account"
+              >
+                {adminUser?.name?.[0]?.toUpperCase() || "A"}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <div className="px-2 py-2">
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {adminUser?.name || "Operatore"}
+                </div>
+                {adminUser?.email && (
+                  <div className="text-xs text-gray-500 truncate">{adminUser.email}</div>
+                )}
+                {gmailAccount?.email && (
+                  <div className="text-xs text-gray-400 truncate mt-1">
+                    Casella attiva: {gmailAccount.email}
+                  </div>
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => router.push("/admin/channels/email")} className="cursor-pointer">
+                <Mail className="mr-2 h-4 w-4" /> Gestisci caselle email
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowDebugPanel((v) => !v)} className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" /> {showDebugPanel ? "Nascondi" : "Mostra"} pannello diagnostica
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -1746,7 +1786,11 @@ export default function InboxPage() {
       {/* MAIN BODY */}
       <div className="flex flex-1 min-h-0">
         {/* ── LEFT SIDEBAR ── */}
-        <div className="w-[256px] flex-shrink-0 flex flex-col py-2 overflow-y-auto">
+        <div
+          className={`flex-shrink-0 flex flex-col py-2 overflow-y-auto overflow-x-hidden transition-all duration-200 ${
+            sidebarCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-[256px] opacity-100"
+          }`}
+        >
           {/* Scrivi / Nuova Email */}
           <div className="px-2 pb-3">
             <button
@@ -1867,11 +1911,6 @@ export default function InboxPage() {
             >
               <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
             </Button>
-            <Button variant="ghost" size="sm" className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1">
-              <Mail className="h-4 w-4" />
-              Gmail Phone
-            </Button>
-
             {/* Sort dropdown (Gmail + Smart) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1953,9 +1992,6 @@ export default function InboxPage() {
               )
             )}
 
-            <Button variant="ghost" size="icon" className="h-9 w-9">
-              <MoreVertical className="h-4 w-4 text-[#5f6368]" />
-            </Button>
             {inboxMode === "gmail" && selectedGmailThreadIds.size > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2002,9 +2038,6 @@ export default function InboxPage() {
                 </Button>
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
                   <ChevronRight className="h-5 w-5 text-[#5f6368]" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9 ml-1">
-                  <MoreVertical className="h-4 w-4 text-[#5f6368]" />
                 </Button>
               </div>
             )}
