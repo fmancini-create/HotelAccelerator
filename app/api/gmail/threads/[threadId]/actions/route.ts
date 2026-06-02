@@ -24,8 +24,8 @@ function isInTrash(labels: string[]): boolean {
   return labels.includes("TRASH")
 }
 
-async function getEmailChannelForUser(supabase: any, userId: string) {
-  const { channelId } = await resolveGmailChannelId(supabase, userId)
+async function getEmailChannelForUser(supabase: any, userId: string, requestedChannelId?: string | null) {
+  const { channelId } = await resolveGmailChannelId(supabase, userId, requestedChannelId)
   if (!channelId) return null
   const { data: channel } = await supabase
     .from("email_channels")
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { threadId } = await params
     const body = await request.json()
 
-    const { action } = body
+    const { action, channelId: requestedChannelId } = body
 
     console.log(`[GMAIL-ACTIONS] INPUT: threadId=${threadId}, action=${action}`)
     console.log(`[GMAIL-ACTIONS] NOTE: Labels will be fetched from Gmail (backend authority)`)
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
     }
 
-    const channel = await getEmailChannelForUser(supabase, user.id)
+    const channel = await getEmailChannelForUser(supabase, user.id, requestedChannelId)
 
     if (!channel) {
       console.log("[GMAIL-ACTIONS] No email channel found for user")

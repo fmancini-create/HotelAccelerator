@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ labels: [], systemLabels: [] }, { status: 401 })
     }
 
-    const { channelId, reason } = await resolveGmailChannelId(supabase, user.id)
+    const requestedChannelId = request.nextUrl.searchParams.get("channelId")
+    const { channelId, reason } = await resolveGmailChannelId(supabase, user.id, requestedChannelId)
     console.log(`[Gmail][labels] channel resolution: ${reason}, channelId=${channelId ?? "null"}`)
 
     if (!channelId) {

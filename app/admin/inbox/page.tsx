@@ -16,6 +16,7 @@ import {
   Trash2,
   RefreshCw,
   Inbox,
+  Check,
   Loader2,
   MoreVertical,
   Paperclip,
@@ -430,6 +431,16 @@ export default function InboxPage() {
   const [labelsExpanded, setLabelsExpanded] = useState(false)
   // Which Gmail mailbox is currently being shown (resolved server-side)
   const [gmailAccount, setGmailAccount] = useState<{ email: string | null; name: string | null } | null>(null)
+  // Mailbox switcher: list of mailboxes the user can operate on + the selected one
+  const [availableChannels, setAvailableChannels] = useState<
+    { id: string; email: string | null; name: string | null }[]
+  >([])
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
+  // Ref mirror so fetch callbacks (with [] deps) always read the current mailbox
+  const selectedChannelIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    selectedChannelIdRef.current = selectedChannelId
+  }, [selectedChannelId])
 
   // ── Smart Mode State ──
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -527,6 +538,7 @@ export default function InboxPage() {
       if (labelId) params.set("labelId", labelId)
       if (pageToken) params.set("pageToken", pageToken)
       if (query) params.set("q", query)
+      if (selectedChannelIdRef.current) params.set("channelId", selectedChannelIdRef.current)
       const res = await fetch(`/api/gmail/threads?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -559,7 +571,10 @@ export default function InboxPage() {
   // ── Load Gmail Labels ──
   const loadGmailLabels = useCallback(async () => {
     try {
-      const res = await fetch("/api/gmail/labels")
+      const labelsUrl = selectedChannelIdRef.current
+        ? `/api/gmail/labels?channelId=${selectedChannelIdRef.current}`
+        : "/api/gmail/labels"
+      const res = await fetch(labelsUrl)
       if (res.ok) {
         const data = await res.json()
         const userLabels = data.labels || data.userLabels || []
@@ -582,11 +597,47 @@ export default function InboxPage() {
     }
   }, [])
 
+  // ── Load the list of mailboxes the user can operate on ──
+  const loadGmailChannels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gmail/channels")
+      if (res.ok) {
+        const data = await res.json()
+        const channels = data.channels || []
+        setAvailableChannels(channels)
+        // Default to the first mailbox if none selected yet
+        setSelectedChannelId((prev) => {
+          if (prev && channels.some((c: { id: string }) => c.id === prev)) return prev
+          const first = channels[0]?.id ?? null
+          selectedChannelIdRef.current = first
+          return first
+        })
+      }
+    } catch (err) {
+      console.error("[v0] Error loading Gmail channels:", err)
+    }
+  }, [])
+
+  // ── Switch the active mailbox and reload its data ──
+  const handleSelectChannel = useCallback(
+    (channelId: string) => {
+      if (channelId === selectedChannelIdRef.current) return
+      selectedChannelIdRef.current = channelId // sync immediately for the reloads below
+      setSelectedChannelId(channelId)
+      setSelectedGmailThread(null)
+      setGmailMessages([])
+      loadGmailLabels()
+      loadGmailThreads(gmailLabelId)
+    },
+    [loadGmailLabels, loadGmailThreads, gmailLabelId],
+  )
+
   const loadGmailThread = useCallback(async (threadId: string) => {
     setGmailThreadLoading(true)
     setGmailMessages([])
     try {
-      const res = await fetch(`/api/gmail/threads/${threadId}`)
+      const cid = selectedChannelIdRef.current ? `?channelId=${selectedChannelIdRef.current}` : ""
+      const res = await fetch(`/api/gmail/threads/${threadId}${cid}`)
       if (res.ok) {
         const data = await res.json()
         setGmailMessages(data.messages || [])
@@ -615,7 +666,8 @@ export default function InboxPage() {
 
     try {
       // Fetch full thread detail from API
-      const res = await fetch(`/api/gmail/threads/${thread.id}`)
+      const cid = selectedChannelIdRef.current ? `?channelId=${selectedChannelIdRef.current}` : ""
+      const res = await fetch(`/api/gmail/threads/${thread.id}${cid}`)
 
       if (!res.ok) {
         const errorBody = await res.text()
@@ -688,7 +740,7 @@ export default function InboxPage() {
         const res = await fetch(`/api/gmail/threads/${threadId}/actions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, channelId: selectedChannelIdRef.current }),
         })
 
         const responseText = await res.text()
@@ -858,6 +910,7 @@ export default function InboxPage() {
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
     if (inboxMode === "gmail" && !authLoading && adminUser) {
+      loadGmailChannels()
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
 
@@ -1343,6 +1396,7 @@ export default function InboxPage() {
             to: replyTo.trim() || undefined,
             cc: replyCc.trim() || undefined,
             bcc: replyBcc.trim() || undefined,
+            channelId: selectedChannelIdRef.current,
           }),
         })
         if (res.ok) {
@@ -1408,7 +1462,7 @@ export default function InboxPage() {
       const res = await fetch("/api/gmail/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(composeData),
+        body: JSON.stringify({ ...composeData, channelId: selectedChannelIdRef.current }),
       })
 
       if (res.ok) {
@@ -1546,29 +1600,73 @@ export default function InboxPage() {
           <span className="text-2xl font-normal text-gray-600 tracking-tight flex-shrink-0">
             {inboxMode === "gmail" ? "Gmail" : "Inbox"}
           </span>
-          {/* Which mailbox/channel am I looking at? */}
-          <span
-            className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
-            title={
-              inboxMode === "gmail"
-                ? gmailAccount?.email || "Casella Gmail non configurata"
-                : "Inbox unificata — tutti i canali (Email, WhatsApp, Telegram, Chat)"
-            }
-          >
-            {inboxMode === "gmail" ? (
-              <>
-                <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
-                <span className="truncate">
-                  {gmailAccount?.email || "Casella non configurata"}
-                </span>
-              </>
-            ) : (
-              <>
-                <Inbox className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
-                <span className="truncate">Tutti i canali</span>
-              </>
-            )}
-          </span>
+          {/* Which mailbox/channel am I looking at? — switchable in Gmail mode */}
+          {inboxMode === "gmail" ? (
+            (() => {
+              const current =
+                availableChannels.find((c) => c.id === selectedChannelId) || null
+              const currentLabel =
+                current?.email || gmailAccount?.email || "Casella non configurata"
+              // With 0/1 mailbox there's nothing to switch -> show a simple pill
+              if (availableChannels.length <= 1) {
+                return (
+                  <span
+                    className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
+                    title={currentLabel}
+                  >
+                    <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                    <span className="truncate">{currentLabel}</span>
+                  </span>
+                )
+              }
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium max-w-[300px] transition-colors"
+                      title={`Casella attiva: ${currentLabel}. Clicca per cambiare.`}
+                    >
+                      <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                      <span className="truncate">{currentLabel}</span>
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <div className="px-2 py-1.5 text-xs font-medium text-gray-500">
+                      Caselle disponibili
+                    </div>
+                    <DropdownMenuSeparator />
+                    {availableChannels.map((c) => (
+                      <DropdownMenuItem
+                        key={c.id}
+                        onClick={() => handleSelectChannel(c.id)}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="truncate text-sm">{c.email || c.name || c.id}</span>
+                          {c.name && c.name !== c.email && (
+                            <span className="truncate text-xs text-gray-400">{c.name}</span>
+                          )}
+                        </div>
+                        {c.id === selectedChannelId && (
+                          <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )
+            })()
+          ) : (
+            <span
+              className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
+              title="Inbox unificata — tutti i canali (Email, WhatsApp, Telegram, Chat)"
+            >
+              <Inbox className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+              <span className="truncate">Tutti i canali</span>
+            </span>
+          )}
         </div>
 
         {/* Search bar centered */}

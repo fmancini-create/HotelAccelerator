@@ -15,8 +15,8 @@ import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
 const API_VERSION = "v744"
 
-async function getEmailChannelForUser(supabase: any, userId: string) {
-  const { channelId } = await resolveGmailChannelId(supabase, userId)
+async function getEmailChannelForUser(supabase: any, userId: string, requestedChannelId?: string | null) {
+  const { channelId } = await resolveGmailChannelId(supabase, userId, requestedChannelId)
   if (!channelId) return null
   const { data: channel } = await supabase
     .from("email_channels")
@@ -32,7 +32,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   try {
     const { messageId } = await params
     const body = await request.json()
-    const { action, addLabels, removeLabels } = body
+    const { action, addLabels, removeLabels, channelId: requestedChannelId } = body
 
     console.log(`[v0] Action: ${action}, messageId: ${messageId}`)
 
@@ -47,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
     }
 
-    const channel = await getEmailChannelForUser(supabase, user.id)
+    const channel = await getEmailChannelForUser(supabase, user.id, requestedChannelId)
 
     if (!channel) {
       console.log("[v0] No email channel found for user")
