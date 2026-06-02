@@ -31,7 +31,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
   }
 
-  const { channelId, reason } = await resolveGmailChannelId(supabase, user.id)
+  const requestedChannelId = request.nextUrl.searchParams.get("channelId")
+  const { channelId, reason } = await resolveGmailChannelId(supabase, user.id, requestedChannelId)
   console.log(`[v0] Thread detail channel resolution: ${reason}, channelId=${channelId ?? "null"}`)
 
   if (!channelId) {

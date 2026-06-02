@@ -12,7 +12,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const body = await request.json()
-    const { content, to, cc, bcc, subject } = body
+    const { content, to, cc, bcc, subject, channelId: requestedChannelId } = body
 
     if (!content) {
       return NextResponse.json({ error: "Contenuto mancante" }, { status: 400 })
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
     }
 
-    const { channelId } = await resolveGmailChannelId(supabase, user.id)
+    const { channelId } = await resolveGmailChannelId(supabase, user.id, requestedChannelId)
 
     if (!channelId) {
       return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
