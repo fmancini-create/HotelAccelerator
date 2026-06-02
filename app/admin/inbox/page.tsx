@@ -428,6 +428,8 @@ export default function InboxPage() {
   const [isThreadReady, setIsThreadReady] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
   const [labelsExpanded, setLabelsExpanded] = useState(false)
+  // Which Gmail mailbox is currently being shown (resolved server-side)
+  const [gmailAccount, setGmailAccount] = useState<{ email: string | null; name: string | null } | null>(null)
 
   // ── Smart Mode State ──
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -565,6 +567,7 @@ export default function InboxPage() {
         setGmailUserLabels(userLabels)
         setGmailSystemLabels(systemLabels)
         setGmailLabelCounts(data.labelCounts || {})
+        if (data.account) setGmailAccount(data.account)
         // If labels endpoint returns empty arrays, channel is likely broken
         if (userLabels.length === 0 && systemLabels.length === 0) {
           setGmailAuthError("Nessuna etichetta ricevuta da Gmail. Il canale potrebbe essere disconnesso.")
@@ -1535,12 +1538,37 @@ export default function InboxPage() {
           </svg>
         </button>
         
-        {/* Gmail logo */}
-        <div className="flex items-center gap-2">
-          <svg width="32" height="32" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        {/* Gmail logo + active mailbox/channel indicator */}
+        <div className="flex items-center gap-2 min-w-0">
+          <svg width="32" height="32" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
             <path fill="#4caf50" d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z"/><path fill="#1e88e5" d="M3,16.2l3.614,5.547L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3,12.298V16.2l10,7.5V11.2L9,7.3C7.553,6.173,5.5,6.583,3,12.298z"/><path fill="#fbc02d" d="M45,12.298V16.2l-10,7.5V11.2l4-3.9C40.447,6.173,42.5,6.583,45,12.298z"/>
           </svg>
-          <span className="text-2xl font-normal text-gray-600 tracking-tight">Gmail</span>
+          <span className="text-2xl font-normal text-gray-600 tracking-tight flex-shrink-0">
+            {inboxMode === "gmail" ? "Gmail" : "Inbox"}
+          </span>
+          {/* Which mailbox/channel am I looking at? */}
+          <span
+            className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
+            title={
+              inboxMode === "gmail"
+                ? gmailAccount?.email || "Casella Gmail non configurata"
+                : "Inbox unificata — tutti i canali (Email, WhatsApp, Telegram, Chat)"
+            }
+          >
+            {inboxMode === "gmail" ? (
+              <>
+                <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                <span className="truncate">
+                  {gmailAccount?.email || "Casella non configurata"}
+                </span>
+              </>
+            ) : (
+              <>
+                <Inbox className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                <span className="truncate">Tutti i canali</span>
+              </>
+            )}
+          </span>
         </div>
 
         {/* Search bar centered */}

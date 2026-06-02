@@ -143,37 +143,6 @@ const colorClasses = {
 function PlatformLanding() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col">
-      {/* Schema.org structured data */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            name: "HotelAccelerator",
-            applicationCategory: "BusinessApplication",
-            operatingSystem: "Web",
-            description: "Piattaforma SaaS all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI",
-            offers: {
-              "@type": "Offer",
-              price: "99",
-              priceCurrency: "EUR",
-              priceValidUntil: "2025-12-31",
-            },
-            aggregateRating: {
-              "@type": "AggregateRating",
-              ratingValue: "4.9",
-              ratingCount: "127",
-            },
-            provider: {
-              "@type": "Organization",
-              name: "HotelAccelerator",
-              url: "https://hotelaccelerator.com",
-            },
-          }),
-        }}
-      />
-
       {/* Navigation */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-md">
         <nav
@@ -472,6 +441,38 @@ function PlatformLanding() {
 
       {/* Footer with semantic HTML */}
       <PlatformFooter />
+
+      {/* Schema.org structured data (rendered last to avoid first-child
+          hydration mismatch caused by React 19 hoisting <script> tags) */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "HotelAccelerator",
+            applicationCategory: "BusinessApplication",
+            operatingSystem: "Web",
+            description: "Piattaforma SaaS all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI",
+            offers: {
+              "@type": "Offer",
+              price: "99",
+              priceCurrency: "EUR",
+              priceValidUntil: "2025-12-31",
+            },
+            aggregateRating: {
+              "@type": "AggregateRating",
+              ratingValue: "4.9",
+              ratingCount: "127",
+            },
+            provider: {
+              "@type": "Organization",
+              name: "HotelAccelerator",
+              url: "https://hotelaccelerator.com",
+            },
+          }),
+        }}
+      />
     </div>
   )
 }
