@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ labels: [], systemLabels: [] }, { status: 401 })
     }
 
-    const { channelId, reason } = await resolveGmailChannelId(supabase, user.id)
+    const requestedChannelId = request.nextUrl.searchParams.get("channelId")
+    const { channelId, reason } = await resolveGmailChannelId(supabase, user.id, requestedChannelId)
     console.log(`[Gmail][labels] channel resolution: ${reason}, channelId=${channelId ?? "null"}`)
 
     if (!channelId) {
@@ -23,6 +24,19 @@ export async function GET(request: NextRequest) {
         { status: 404 },
       )
     }
+
+    // Which mailbox are we actually showing? Surface it so the UI can label the inbox.
+    const { data: channelRow } = await supabase
+      .from("email_channels")
+      .select("email_address, display_name, name")
+      .eq("id", channelId)
+      .maybeSingle()
+    const account = channelRow
+      ? {
+          email: channelRow.email_address || null,
+          name: channelRow.display_name || channelRow.name || null,
+        }
+      : null
 
     const { labels, error } = await getGmailLabelsWithCounts(channelId)
 
@@ -64,6 +78,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       labels: userLabels,
       systemLabels,
+      account,
     })
   } catch (error) {
     console.error("[Gmail] Labels error:", error)

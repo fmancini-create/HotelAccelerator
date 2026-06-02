@@ -104,7 +104,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
   }
 
-  const { channelId, reason } = await resolveGmailChannelId(supabase, user.id)
+  const requestedChannelId = request.nextUrl.searchParams.get("channelId")
+  const { channelId, reason } = await resolveGmailChannelId(supabase, user.id, requestedChannelId)
   console.log(`[GMAIL-THREAD-VERIFY] channel resolution: ${reason}, channelId=${channelId ?? "null"}`)
 
   if (!channelId) {

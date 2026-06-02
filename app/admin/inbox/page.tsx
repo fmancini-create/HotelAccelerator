@@ -16,8 +16,8 @@ import {
   Trash2,
   RefreshCw,
   Inbox,
+  Check,
   Loader2,
-  MoreVertical,
   Paperclip,
   FileText,
   AlertCircle,
@@ -428,6 +428,20 @@ export default function InboxPage() {
   const [isThreadReady, setIsThreadReady] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
   const [labelsExpanded, setLabelsExpanded] = useState(false)
+  // Collapse the Gmail-style left sidebar (toggled by the hamburger button)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  // Which Gmail mailbox is currently being shown (resolved server-side)
+  const [gmailAccount, setGmailAccount] = useState<{ email: string | null; name: string | null } | null>(null)
+  // Mailbox switcher: list of mailboxes the user can operate on + the selected one
+  const [availableChannels, setAvailableChannels] = useState<
+    { id: string; email: string | null; name: string | null }[]
+  >([])
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
+  // Ref mirror so fetch callbacks (with [] deps) always read the current mailbox
+  const selectedChannelIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    selectedChannelIdRef.current = selectedChannelId
+  }, [selectedChannelId])
 
   // ── Smart Mode State ──
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -525,6 +539,7 @@ export default function InboxPage() {
       if (labelId) params.set("labelId", labelId)
       if (pageToken) params.set("pageToken", pageToken)
       if (query) params.set("q", query)
+      if (selectedChannelIdRef.current) params.set("channelId", selectedChannelIdRef.current)
       const res = await fetch(`/api/gmail/threads?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -557,7 +572,10 @@ export default function InboxPage() {
   // ── Load Gmail Labels ──
   const loadGmailLabels = useCallback(async () => {
     try {
-      const res = await fetch("/api/gmail/labels")
+      const labelsUrl = selectedChannelIdRef.current
+        ? `/api/gmail/labels?channelId=${selectedChannelIdRef.current}`
+        : "/api/gmail/labels"
+      const res = await fetch(labelsUrl)
       if (res.ok) {
         const data = await res.json()
         const userLabels = data.labels || data.userLabels || []
@@ -565,6 +583,7 @@ export default function InboxPage() {
         setGmailUserLabels(userLabels)
         setGmailSystemLabels(systemLabels)
         setGmailLabelCounts(data.labelCounts || {})
+        if (data.account) setGmailAccount(data.account)
         // If labels endpoint returns empty arrays, channel is likely broken
         if (userLabels.length === 0 && systemLabels.length === 0) {
           setGmailAuthError("Nessuna etichetta ricevuta da Gmail. Il canale potrebbe essere disconnesso.")
@@ -579,11 +598,47 @@ export default function InboxPage() {
     }
   }, [])
 
+  // ── Load the list of mailboxes the user can operate on ──
+  const loadGmailChannels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/gmail/channels")
+      if (res.ok) {
+        const data = await res.json()
+        const channels = data.channels || []
+        setAvailableChannels(channels)
+        // Default to the first mailbox if none selected yet
+        setSelectedChannelId((prev) => {
+          if (prev && channels.some((c: { id: string }) => c.id === prev)) return prev
+          const first = channels[0]?.id ?? null
+          selectedChannelIdRef.current = first
+          return first
+        })
+      }
+    } catch (err) {
+      console.error("[v0] Error loading Gmail channels:", err)
+    }
+  }, [])
+
+  // ── Switch the active mailbox and reload its data ──
+  const handleSelectChannel = useCallback(
+    (channelId: string) => {
+      if (channelId === selectedChannelIdRef.current) return
+      selectedChannelIdRef.current = channelId // sync immediately for the reloads below
+      setSelectedChannelId(channelId)
+      setSelectedGmailThread(null)
+      setGmailMessages([])
+      loadGmailLabels()
+      loadGmailThreads(gmailLabelId)
+    },
+    [loadGmailLabels, loadGmailThreads, gmailLabelId],
+  )
+
   const loadGmailThread = useCallback(async (threadId: string) => {
     setGmailThreadLoading(true)
     setGmailMessages([])
     try {
-      const res = await fetch(`/api/gmail/threads/${threadId}`)
+      const cid = selectedChannelIdRef.current ? `?channelId=${selectedChannelIdRef.current}` : ""
+      const res = await fetch(`/api/gmail/threads/${threadId}${cid}`)
       if (res.ok) {
         const data = await res.json()
         setGmailMessages(data.messages || [])
@@ -612,7 +667,8 @@ export default function InboxPage() {
 
     try {
       // Fetch full thread detail from API
-      const res = await fetch(`/api/gmail/threads/${thread.id}`)
+      const cid = selectedChannelIdRef.current ? `?channelId=${selectedChannelIdRef.current}` : ""
+      const res = await fetch(`/api/gmail/threads/${thread.id}${cid}`)
 
       if (!res.ok) {
         const errorBody = await res.text()
@@ -685,7 +741,7 @@ export default function InboxPage() {
         const res = await fetch(`/api/gmail/threads/${threadId}/actions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify({ action, channelId: selectedChannelIdRef.current }),
         })
 
         const responseText = await res.text()
@@ -883,6 +939,7 @@ export default function InboxPage() {
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
     if (inboxMode === "gmail" && !authLoading && adminUser) {
+      loadGmailChannels()
       loadGmailLabels()
       loadGmailThreads(gmailLabelId)
 
@@ -1368,6 +1425,7 @@ export default function InboxPage() {
             to: replyTo.trim() || undefined,
             cc: replyCc.trim() || undefined,
             bcc: replyBcc.trim() || undefined,
+            channelId: selectedChannelIdRef.current,
           }),
         })
         if (res.ok) {
@@ -1433,7 +1491,7 @@ export default function InboxPage() {
       const res = await fetch("/api/gmail/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(composeData),
+        body: JSON.stringify({ ...composeData, channelId: selectedChannelIdRef.current }),
       })
 
       if (res.ok) {
@@ -1556,19 +1614,93 @@ export default function InboxPage() {
     <div className="h-full flex flex-col bg-white">
       {/* Gmail-style top bar */}
       <header className="h-16 flex-shrink-0 flex items-center gap-3 px-4 bg-white border-b border-gray-200/50">
-        {/* Hamburger menu */}
-        <button className="p-2 rounded-full hover:bg-gray-100 transition-colors">
+        {/* Hamburger menu — collapses/expands the left sidebar */}
+        <button
+          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          onClick={() => setSidebarCollapsed((v) => !v)}
+          title={sidebarCollapsed ? "Mostra menu laterale" : "Nascondi menu laterale"}
+          aria-label={sidebarCollapsed ? "Mostra menu laterale" : "Nascondi menu laterale"}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
         
-        {/* Gmail logo */}
-        <div className="flex items-center gap-2">
-          <svg width="32" height="32" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        {/* Gmail logo + active mailbox/channel indicator */}
+        <div className="flex items-center gap-2 min-w-0">
+          <svg width="32" height="32" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
             <path fill="#4caf50" d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z"/><path fill="#1e88e5" d="M3,16.2l3.614,5.547L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3,12.298V16.2l10,7.5V11.2L9,7.3C7.553,6.173,5.5,6.583,3,12.298z"/><path fill="#fbc02d" d="M45,12.298V16.2l-10,7.5V11.2l4-3.9C40.447,6.173,42.5,6.583,45,12.298z"/>
           </svg>
-          <span className="text-2xl font-normal text-gray-600 tracking-tight">Gmail</span>
+          <span className="text-2xl font-normal text-gray-600 tracking-tight flex-shrink-0">
+            {inboxMode === "gmail" ? "Gmail" : "Inbox"}
+          </span>
+          {/* Which mailbox/channel am I looking at? — switchable in Gmail mode */}
+          {inboxMode === "gmail" ? (
+            (() => {
+              const current =
+                availableChannels.find((c) => c.id === selectedChannelId) || null
+              const currentLabel =
+                current?.email || gmailAccount?.email || "Casella non configurata"
+              // With 0/1 mailbox there's nothing to switch -> show a simple pill
+              if (availableChannels.length <= 1) {
+                return (
+                  <span
+                    className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
+                    title={currentLabel}
+                  >
+                    <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                    <span className="truncate">{currentLabel}</span>
+                  </span>
+                )
+              }
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium max-w-[300px] transition-colors"
+                      title={`Casella attiva: ${currentLabel}. Clicca per cambiare.`}
+                    >
+                      <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                      <span className="truncate">{currentLabel}</span>
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <div className="px-2 py-1.5 text-xs font-medium text-gray-500">
+                      Caselle disponibili
+                    </div>
+                    <DropdownMenuSeparator />
+                    {availableChannels.map((c) => (
+                      <DropdownMenuItem
+                        key={c.id}
+                        onClick={() => handleSelectChannel(c.id)}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="truncate text-sm">{c.email || c.name || c.id}</span>
+                          {c.name && c.name !== c.email && (
+                            <span className="truncate text-xs text-gray-400">{c.name}</span>
+                          )}
+                        </div>
+                        {c.id === selectedChannelId && (
+                          <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )
+            })()
+          ) : (
+            <span
+              className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
+              title="Inbox unificata — tutti i canali (Email, WhatsApp, Telegram, Chat)"
+            >
+              <Inbox className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+              <span className="truncate">Tutti i canali</span>
+            </span>
+          )}
         </div>
 
         {/* Search bar centered */}
@@ -1593,15 +1725,49 @@ export default function InboxPage() {
               <TabsTrigger value="gmail" className="text-xs h-6">Gmail</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="#5f6368"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-          </Button>
-          <Button variant="ghost" size="icon" className="rounded-full h-9 w-9" onClick={() => setShowDebugPanel(!showDebugPanel)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full h-9 w-9"
+            onClick={() => router.push("/admin/channels/email")}
+            title="Impostazioni canali email"
+            aria-label="Impostazioni canali email"
+          >
             <Settings className="h-4 w-4 text-gray-600" />
           </Button>
-          <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold ml-2 cursor-pointer">
-            {adminUser?.name?.[0]?.toUpperCase() || "A"}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold ml-2 cursor-pointer hover:bg-blue-700 transition-colors"
+                title="Account"
+                aria-label="Menu account"
+              >
+                {adminUser?.name?.[0]?.toUpperCase() || "A"}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <div className="px-2 py-2">
+                <div className="text-sm font-medium text-gray-900 truncate">
+                  {adminUser?.name || "Operatore"}
+                </div>
+                {adminUser?.email && (
+                  <div className="text-xs text-gray-500 truncate">{adminUser.email}</div>
+                )}
+                {gmailAccount?.email && (
+                  <div className="text-xs text-gray-400 truncate mt-1">
+                    Casella attiva: {gmailAccount.email}
+                  </div>
+                )}
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => router.push("/admin/channels/email")} className="cursor-pointer">
+                <Mail className="mr-2 h-4 w-4" /> Gestisci caselle email
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setShowDebugPanel((v) => !v)} className="cursor-pointer">
+                <Settings className="mr-2 h-4 w-4" /> {showDebugPanel ? "Nascondi" : "Mostra"} pannello diagnostica
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -1648,7 +1814,11 @@ export default function InboxPage() {
       {/* MAIN BODY */}
       <div className="flex flex-1 min-h-0">
         {/* ── LEFT SIDEBAR ── */}
-        <div className="w-[256px] flex-shrink-0 flex flex-col py-2 overflow-y-auto">
+        <div
+          className={`flex-shrink-0 flex flex-col py-2 overflow-y-auto overflow-x-hidden transition-all duration-200 ${
+            sidebarCollapsed ? "w-0 opacity-0 pointer-events-none" : "w-[256px] opacity-100"
+          }`}
+        >
           {/* Scrivi / Nuova Email */}
           <div className="px-2 pb-3">
             <button
@@ -1769,11 +1939,6 @@ export default function InboxPage() {
             >
               <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
             </Button>
-            <Button variant="ghost" size="sm" className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1">
-              <Mail className="h-4 w-4" />
-              Gmail Phone
-            </Button>
-
             {/* Sort dropdown (Gmail + Smart) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1855,9 +2020,6 @@ export default function InboxPage() {
               )
             )}
 
-            <Button variant="ghost" size="icon" className="h-9 w-9">
-              <MoreVertical className="h-4 w-4 text-[#5f6368]" />
-            </Button>
             {inboxMode === "gmail" && selectedGmailThreadIds.size > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1904,9 +2066,6 @@ export default function InboxPage() {
                 </Button>
                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
                   <ChevronRight className="h-5 w-5 text-[#5f6368]" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9 ml-1">
-                  <MoreVertical className="h-4 w-4 text-[#5f6368]" />
                 </Button>
               </div>
             )}
