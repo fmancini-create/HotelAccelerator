@@ -783,22 +783,26 @@ export default function InboxPage() {
       if (action === "archive" || action === "trash") {
         setGmailThreads((prev) => prev.filter((t) => !threadIds.includes(t.id)))
       }
-      const results = await Promise.allSettled(
-        threadIds.map((id) =>
-          fetch(`/api/gmail/threads/${id}/actions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action, channelId: selectedChannelIdRef.current }),
-          }).then((res) => {
-            if (!res.ok) throw new Error(`HTTP ${res.status} on thread ${id}`)
-            return res
-          }),
-        ),
-      )
-      const failed = results.filter((r) => r.status === "rejected").length
-      if (failed > 0) {
-        console.error(`[v0] Bulk ${action}: ${failed}/${threadIds.length} falliti`, results)
-        setError(`${failed} su ${threadIds.length} email non elaborate. Riprovo a sincronizzare.`)
+      // Single bulk request: the server resolves the channel once and processes
+      // threads sequentially to avoid Gmail rate-limit failures that previously
+      // made "select all + archive" silently do nothing.
+      try {
+        const res = await fetch("/api/gmail/threads/bulk-actions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, threadIds, channelId: selectedChannelIdRef.current }),
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data) {
+          console.error(`[v0] Bulk ${action} failed:`, data)
+          setError(data?.error || `Errore durante l'azione su ${threadIds.length} email.`)
+        } else if (Array.isArray(data.failed) && data.failed.length > 0) {
+          console.error(`[v0] Bulk ${action}: ${data.failed.length}/${data.total} falliti`, data.failed)
+          setError(`${data.failed.length} su ${data.total} email non elaborate. Riprovo a sincronizzare.`)
+        }
+      } catch (err) {
+        console.error(`[v0] Bulk ${action} network error:`, err)
+        setError("Errore di rete durante l'azione di massa.")
       }
       setSelectedGmailThreadIds(new Set())
       // Re-sync with the server so the list reflects the real state
