@@ -1,12 +1,23 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { MessageCircle, CheckCircle2, Copy, ExternalLink, Loader2, Send, AlertCircle } from "lucide-react"
+import {
+  MessageCircle,
+  CheckCircle2,
+  Copy,
+  Loader2,
+  Send,
+  AlertCircle,
+  ShieldCheck,
+  Zap,
+  ChevronDown,
+  Trash2,
+} from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 
 interface WhatsAppChannel {
@@ -26,14 +37,40 @@ interface WhatsAppChannel {
   last_error: string | null
 }
 
+interface PublicConfig {
+  appId: string
+  configId: string
+  graphVersion: string
+  configured: boolean
+}
+
+// Minimal shape of the Embedded Signup session-info message Meta posts back.
+interface SessionInfo {
+  phone_number_id?: string
+  waba_id?: string
+}
+
+declare global {
+  interface Window {
+    FB?: any
+    fbAsyncInit?: () => void
+  }
+}
+
 export default function WhatsAppChannelPage() {
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [channel, setChannel] = useState<WhatsAppChannel | null>(null)
-  const [webhookUrl, setWebhookUrl] = useState("")
+  const [publicConfig, setPublicConfig] = useState<PublicConfig | null>(null)
+  const [sdkReady, setSdkReady] = useState(false)
+  const [connecting, setConnecting] = useState(false)
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
-  // Form state
+  // Captured from the Embedded Signup popup (phone_number_id + waba_id).
+  const sessionInfoRef = useRef<SessionInfo>({})
+
+  // Advanced/manual form state
+  const [saving, setSaving] = useState(false)
   const [displayName, setDisplayName] = useState("WhatsApp")
   const [phoneNumberId, setPhoneNumberId] = useState("")
   const [wabaId, setWabaId] = useState("")
@@ -41,6 +78,7 @@ export default function WhatsAppChannelPage() {
   const [accessToken, setAccessToken] = useState("")
   const [appSecret, setAppSecret] = useState("")
   const [verifyToken, setVerifyToken] = useState("")
+  const [webhookUrl, setWebhookUrl] = useState("")
 
   // Test send
   const [testNumber, setTestNumber] = useState("")
@@ -48,11 +86,17 @@ export default function WhatsAppChannelPage() {
 
   const isConnected = Boolean(channel?.config?.phone_number_id)
 
-  const loadChannel = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch("/api/channels/whatsapp")
-      const data = await res.json()
+      const [cfgRes, chRes] = await Promise.all([
+        fetch("/api/channels/whatsapp/embedded-signup"),
+        fetch("/api/channels/whatsapp"),
+      ])
+      const cfg = await cfgRes.json()
+      if (cfgRes.ok) setPublicConfig(cfg)
+
+      const data = await chRes.json()
       const ch: WhatsAppChannel | undefined = data.channels?.[0]
       if (ch) {
         setChannel(ch)
@@ -70,10 +114,107 @@ export default function WhatsAppChannelPage() {
 
   useEffect(() => {
     setWebhookUrl(`${window.location.origin}/api/channels/whatsapp/webhook`)
-    loadChannel()
-  }, [loadChannel])
+    loadAll()
+  }, [loadAll])
 
-  const handleSave = async () => {
+  // Load + init the Facebook JS SDK once we know the platform App ID.
+  useEffect(() => {
+    if (!publicConfig?.configured || !publicConfig.appId) return
+    if (window.FB) {
+      setSdkReady(true)
+      return
+    }
+
+    window.fbAsyncInit = () => {
+      window.FB.init({
+        appId: publicConfig.appId,
+        autoLogAppEvents: true,
+        xfbml: true,
+        version: publicConfig.graphVersion || "v21.0",
+      })
+      setSdkReady(true)
+    }
+
+    const id = "facebook-jssdk"
+    if (!document.getElementById(id)) {
+      const js = document.createElement("script")
+      js.id = id
+      js.src = "https://connect.facebook.net/en_US/sdk.js"
+      js.async = true
+      js.defer = true
+      js.crossOrigin = "anonymous"
+      document.body.appendChild(js)
+    }
+  }, [publicConfig])
+
+  // Capture the session info (phone_number_id + waba_id) Meta posts during signup.
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (!event.origin.endsWith("facebook.com")) return
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data
+        if (data?.type === "WA_EMBEDDED_SIGNUP" && data?.event === "FINISH") {
+          sessionInfoRef.current = {
+            phone_number_id: data.data?.phone_number_id,
+            waba_id: data.data?.waba_id,
+          }
+        }
+      } catch {
+        // non-JSON messages are unrelated
+      }
+    }
+    window.addEventListener("message", handler)
+    return () => window.removeEventListener("message", handler)
+  }, [])
+
+  const launchSignup = () => {
+    if (!window.FB || !publicConfig?.configId) return
+    setFeedback(null)
+    sessionInfoRef.current = {}
+
+    window.FB.login(
+      (response: any) => {
+        const code = response?.authResponse?.code
+        if (!code) {
+          setFeedback({ type: "error", text: "Collegamento annullato." })
+          return
+        }
+        finishSignup(code)
+      },
+      {
+        config_id: publicConfig.configId,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+      },
+    )
+  }
+
+  const finishSignup = async (code: string) => {
+    setConnecting(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/channels/whatsapp/embedded-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          phone_number_id: sessionInfoRef.current.phone_number_id,
+          waba_id: sessionInfoRef.current.waba_id,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Errore durante il collegamento")
+      setFeedback({ type: "success", text: "WhatsApp collegato con successo!" })
+      await loadAll()
+    } catch (e) {
+      setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const handleSaveManual = async () => {
     setSaving(true)
     setFeedback(null)
     try {
@@ -86,7 +227,6 @@ export default function WhatsAppChannelPage() {
           phone_number_id: phoneNumberId,
           waba_id: wabaId,
           display_phone_number: displayPhone,
-          // Only send secrets when the user typed a new value; blank keeps existing.
           access_token: accessToken,
           app_secret: appSecret,
           verify_token: verifyToken,
@@ -94,15 +234,35 @@ export default function WhatsAppChannelPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Errore salvataggio")
-      setChannel(data.channel)
       setAccessToken("")
       setAppSecret("")
       setVerifyToken("")
       setFeedback({ type: "success", text: "Configurazione salvata correttamente" })
+      await loadAll()
     } catch (e) {
       setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDisconnect = async () => {
+    if (!channel?.id) return
+    if (!window.confirm("Scollegare WhatsApp da questa struttura?")) return
+    setFeedback(null)
+    try {
+      const res = await fetch(`/api/channels/whatsapp?id=${channel.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Errore disconnessione")
+      }
+      setChannel(null)
+      setPhoneNumberId("")
+      setWabaId("")
+      setDisplayPhone("")
+      setFeedback({ type: "success", text: "WhatsApp scollegato." })
+    } catch (e) {
+      setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
     }
   }
 
@@ -128,14 +288,16 @@ export default function WhatsAppChannelPage() {
 
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text)
 
+  const platformReady = Boolean(publicConfig?.configured)
+
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader
         title="WhatsApp Business"
-        subtitle="Collega WhatsApp tramite le API Meta Cloud"
+        subtitle="Collega il tuo numero WhatsApp in un clic"
         actions={
           <Badge variant={isConnected ? "default" : "secondary"} className={isConnected ? "bg-emerald-600" : ""}>
-            {isConnected ? "Configurato" : "Non configurato"}
+            {isConnected ? "Collegato" : "Non collegato"}
           </Badge>
         }
       />
@@ -144,7 +306,7 @@ export default function WhatsAppChannelPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            Caricamento configurazione...
+            Caricamento...
           </div>
         ) : (
           <div className="flex flex-col gap-6">
@@ -166,154 +328,87 @@ export default function WhatsAppChannelPage() {
               </div>
             )}
 
-            {channel?.last_error && (
-              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                Ultimo errore: {channel.last_error}
-              </div>
-            )}
-
-            {/* Setup guide */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageCircle className="h-5 w-5" />
-                  Come collegare WhatsApp
-                </CardTitle>
-                <CardDescription>
-                  Crea un&apos;app su Meta for Developers, aggiungi il prodotto WhatsApp e recupera le credenziali dalla
-                  dashboard.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button variant="link" className="h-auto px-0" asChild>
-                  <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer">
-                    Apri Meta for Developers <ExternalLink className="ml-1 h-3 w-3" />
-                  </a>
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Webhook config */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Webhook</CardTitle>
-                <CardDescription>
-                  Inserisci questi valori nella configurazione Webhooks dell&apos;app Meta (campo{" "}
-                  <span className="font-mono">messages</span>).
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label>Callback URL</Label>
+            {/* Connected state */}
+            {isConnected ? (
+              <Card className="border-emerald-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-emerald-700">
+                    <CheckCircle2 className="h-5 w-5" />
+                    WhatsApp collegato
+                  </CardTitle>
+                  <CardDescription>
+                    Il tuo numero è attivo. I messaggi arrivano direttamente nell&apos;Inbox unificata.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+                    <div>
+                      <div className="text-muted-foreground">Numero</div>
+                      <div className="font-medium">{channel?.config.display_phone_number || "—"}</div>
+                    </div>
+                    <div>
+                      <div className="text-muted-foreground">Nome attività</div>
+                      <div className="font-medium">{channel?.display_name || "—"}</div>
+                    </div>
+                  </div>
                   <div className="flex gap-2">
-                    <Input value={webhookUrl} readOnly className="font-mono text-sm" />
-                    <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl)}>
-                      <Copy className="h-4 w-4" />
+                    <Button variant="outline" size="sm" onClick={handleDisconnect}>
+                      <Trash2 className="mr-2 h-4 w-4" /> Scollega
                     </Button>
                   </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="verify-token">Verify Token</Label>
-                  <Input
-                    id="verify-token"
-                    value={verifyToken}
-                    onChange={(e) => setVerifyToken(e.target.value)}
-                    placeholder={
-                      channel?.has_credentials.verify_token
-                        ? channel.credentials_preview.verify_token
-                        : "Scegli una stringa segreta da usare anche su Meta"
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Usa la stessa stringa qui e nel campo &quot;Verify token&quot; di Meta. Lascia vuoto per mantenere
-                    quello attuale.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            ) : (
+              /* Primary 1-click connect */
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageCircle className="h-5 w-5 text-emerald-600" />
+                    Collega WhatsApp in un clic
+                  </CardTitle>
+                  <CardDescription>
+                    Accedi con il tuo account Facebook, scegli il numero WhatsApp della tua struttura e il gioco è fatto.
+                    Nessun codice da copiare.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
+                    <li className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-emerald-600" /> Configurazione guidata da Meta
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> Le credenziali restano sulla piattaforma, al
+                      sicuro
+                    </li>
+                  </ul>
 
-            {/* Credentials */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Credenziali API</CardTitle>
-                <CardDescription>I valori segreti vengono mostrati mascherati e non sono mai esposti.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="display-name">Nome canale</Label>
-                  <Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="phone-id">Phone Number ID *</Label>
-                    <Input
-                      id="phone-id"
-                      value={phoneNumberId}
-                      onChange={(e) => setPhoneNumberId(e.target.value)}
-                      placeholder="Es: 123456789012345"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Label htmlFor="waba-id">WhatsApp Business Account ID</Label>
-                    <Input
-                      id="waba-id"
-                      value={wabaId}
-                      onChange={(e) => setWabaId(e.target.value)}
-                      placeholder="Opzionale"
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="display-phone">Numero visualizzato</Label>
-                  <Input
-                    id="display-phone"
-                    value={displayPhone}
-                    onChange={(e) => setDisplayPhone(e.target.value)}
-                    placeholder="+39 055 1234567"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="access-token">Access Token *</Label>
-                  <Input
-                    id="access-token"
-                    type="password"
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    placeholder={
-                      channel?.has_credentials.access_token
-                        ? channel.credentials_preview.access_token
-                        : "Token permanente / system user"
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="app-secret">App Secret</Label>
-                  <Input
-                    id="app-secret"
-                    type="password"
-                    value={appSecret}
-                    onChange={(e) => setAppSecret(e.target.value)}
-                    placeholder={
-                      channel?.has_credentials.app_secret
-                        ? channel.credentials_preview.app_secret
-                        : "Per verificare la firma dei webhook"
-                    }
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Consigliato: senza App Secret le firme dei webhook non vengono verificate.
-                  </p>
-                </div>
-                <div>
-                  <Button onClick={handleSave} disabled={saving || !phoneNumberId.trim()}>
-                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Salva configurazione
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                  {!platformReady ? (
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        Il collegamento rapido non è ancora abilitato dall&apos;amministratore della piattaforma. Puoi
+                        usare la configurazione manuale qui sotto, oppure contattare il supporto.
+                      </span>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={launchSignup}
+                      disabled={!sdkReady || connecting}
+                      className="w-fit bg-[#1877F2] text-white hover:bg-[#1877F2]/90"
+                    >
+                      {connecting ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <MessageCircle className="mr-2 h-4 w-4" />
+                      )}
+                      {sdkReady ? "Collega con Facebook" : "Caricamento..."}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Test */}
+            {/* Test send (connected only) */}
             {isConnected && (
               <Card>
                 <CardHeader>
@@ -339,6 +434,133 @@ export default function WhatsAppChannelPage() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Advanced / manual configuration (power users / fallback) */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                aria-expanded={showAdvanced}
+              >
+                <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+                Configurazione manuale (avanzata)
+              </button>
+
+              {showAdvanced && (
+                <div className="mt-4 flex flex-col gap-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Webhook</CardTitle>
+                      <CardDescription>
+                        Solo per la configurazione manuale. Inserisci questi valori nell&apos;app Meta (campo{" "}
+                        <span className="font-mono">messages</span>).
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label>Callback URL</Label>
+                        <div className="flex gap-2">
+                          <Input value={webhookUrl} readOnly className="font-mono text-sm" />
+                          <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl)}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="verify-token">Verify Token</Label>
+                        <Input
+                          id="verify-token"
+                          value={verifyToken}
+                          onChange={(e) => setVerifyToken(e.target.value)}
+                          placeholder={
+                            channel?.has_credentials.verify_token
+                              ? channel.credentials_preview.verify_token
+                              : "Stringa segreta da usare anche su Meta"
+                          }
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Credenziali API</CardTitle>
+                      <CardDescription>I valori segreti vengono mostrati mascherati.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-4">
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-name">Nome canale</Label>
+                        <Input id="display-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="phone-id">Phone Number ID *</Label>
+                          <Input
+                            id="phone-id"
+                            value={phoneNumberId}
+                            onChange={(e) => setPhoneNumberId(e.target.value)}
+                            placeholder="Es: 123456789012345"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <Label htmlFor="waba-id">WhatsApp Business Account ID</Label>
+                          <Input
+                            id="waba-id"
+                            value={wabaId}
+                            onChange={(e) => setWabaId(e.target.value)}
+                            placeholder="Opzionale"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="display-phone">Numero visualizzato</Label>
+                        <Input
+                          id="display-phone"
+                          value={displayPhone}
+                          onChange={(e) => setDisplayPhone(e.target.value)}
+                          placeholder="+39 055 1234567"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="access-token">Access Token *</Label>
+                        <Input
+                          id="access-token"
+                          type="password"
+                          value={accessToken}
+                          onChange={(e) => setAccessToken(e.target.value)}
+                          placeholder={
+                            channel?.has_credentials.access_token
+                              ? channel.credentials_preview.access_token
+                              : "Token permanente / system user"
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="app-secret">App Secret</Label>
+                        <Input
+                          id="app-secret"
+                          type="password"
+                          value={appSecret}
+                          onChange={(e) => setAppSecret(e.target.value)}
+                          placeholder={
+                            channel?.has_credentials.app_secret
+                              ? channel.credentials_preview.app_secret
+                              : "Per verificare la firma dei webhook"
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Button onClick={handleSaveManual} disabled={saving || !phoneNumberId.trim()}>
+                          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Salva configurazione
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import { resolveWebhookChallenge, verifyWhatsAppSignature } from "@/lib/whatsapp
 import { parseWhatsAppWebhook, getWhatsAppChannelByPhoneNumberId } from "@/lib/whatsapp/channels"
 import { WhatsAppProcessor } from "@/lib/whatsapp/processor"
 import { markWhatsAppRead } from "@/lib/whatsapp/client"
+import { getPlatformWhatsAppConfig } from "@/lib/whatsapp/platform"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 
 // Webhook is called by Meta servers, not the browser. No user auth here:
@@ -25,6 +26,19 @@ export async function GET(request: NextRequest) {
     return new NextResponse("Missing verify token", { status: 400 })
   }
 
+  // Embedded Signup model: a single shared webhook configured once by the
+  // platform admin. Accept the platform-level verify token first — this also
+  // works when NO tenant has connected yet (initial Meta dashboard handshake).
+  const platform = getPlatformWhatsAppConfig()
+  const platformChallenge = resolveWebhookChallenge(params, platform.verifyToken || null)
+  if (platformChallenge) {
+    return new NextResponse(platformChallenge, {
+      status: 200,
+      headers: { "Content-Type": "text/plain" },
+    })
+  }
+
+  // Fallback: legacy per-tenant manual setup (each tenant its own verify token).
   const supabase = createServiceClient()
   const { data } = await supabase
     .from("messaging_channels")
@@ -81,7 +95,9 @@ export async function POST(request: NextRequest) {
     }
 
     const typedChannel = channel as MessagingChannelRow
-    const appSecret = typedChannel.credentials?.app_secret ?? null
+    // Prefer the platform app secret (single shared Meta app); fall back to the
+    // per-tenant secret for legacy manual setups.
+    const appSecret = getPlatformWhatsAppConfig().appSecret || typedChannel.credentials?.app_secret || null
 
     // Verify the HMAC signature using the tenant's app secret.
     const signatureValid = verifyWhatsAppSignature(rawBody, signature, appSecret)
