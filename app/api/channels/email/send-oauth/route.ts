@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
       data: { user: authUser },
     } = await supabase.auth.getUser()
     const { html: signatureHtml } = authUser
-      ? await getUserSignature(supabase, authUser.id)
+      ? await getUserSignature(supabase, authUser.id, channel_id)
       : { html: null }
 
     // Normalise body to HTML so the signature renders with its styling.

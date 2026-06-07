@@ -265,6 +265,14 @@ export default function AdminUsersPage() {
       <div className="container mx-auto px-4 py-8">
         <AdminHeader title="Team & Permessi" subtitle="Gestisci utenti, gruppi e permessi sui canali" />
 
+        <div className="mb-4 flex justify-end">
+          <Link href="/admin/signatures">
+            <Button variant="outline" size="sm">
+              <Signature className="w-4 h-4 mr-1.5" /> Libreria firme email
+            </Button>
+          </Link>
+        </div>
+
         {error && (
           <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm">
             {error}

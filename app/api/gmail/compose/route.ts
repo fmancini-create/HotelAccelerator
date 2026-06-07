@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const fromName = channelData.display_name || channelData.name || fromAddress.split("@")[0]
 
     // Append the admin user's signature
-    const { html: signatureHtml } = await getUserSignature(supabase, user.id)
+    const { html: signatureHtml } = await getUserSignature(supabase, user.id, channelId)
     const bodyWithBreaks = emailBody.replace(/\n/g, "<br>")
     const finalBody = appendSignatureHtml(bodyWithBreaks, signatureHtml)
 

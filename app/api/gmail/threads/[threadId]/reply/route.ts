@@ -110,7 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (ccList.length > 0) messageParts.push(`Cc: ${ccList.join(", ")}`)
     if (bccList.length > 0) messageParts.push(`Bcc: ${bccList.join(", ")}`)
     // Append the admin user's signature (rich-text HTML stored on admin_users)
-    const { html: signatureHtml } = await getUserSignature(supabase, user.id)
+    const { html: signatureHtml } = await getUserSignature(supabase, user.id, channelId)
     const bodyWithBreaks = content.replace(/\n/g, "<br>")
     const finalBody = appendSignatureHtml(bodyWithBreaks, signatureHtml)
 

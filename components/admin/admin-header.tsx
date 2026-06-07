@@ -34,6 +34,7 @@ const pathMap: Record<string, { label: string; parent?: string }> = {
   "/admin/inbox": { label: "Inbox", parent: "/admin/dashboard" },
   "/admin/message-rules": { label: "Smart Messages", parent: "/admin/dashboard" },
   "/admin/users": { label: "Gestione Utenti", parent: "/admin/dashboard" },
+  "/admin/signatures": { label: "Firme Email", parent: "/admin/dashboard" },
   "/admin/profile": { label: "Il Mio Profilo", parent: "/admin/dashboard" },
   "/admin/settings": { label: "Impostazioni", parent: "/admin/dashboard" },
   "/admin/settings/domains": { label: "Domini", parent: "/admin/settings" },
