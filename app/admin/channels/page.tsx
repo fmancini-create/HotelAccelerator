@@ -54,12 +54,12 @@ const CHANNEL_CATEGORIES = [
       {
         id: "whatsapp",
         name: "WhatsApp",
-        description: "Messaggi WhatsApp Business",
+        description: "Messaggi WhatsApp Business (API Meta Cloud)",
         icon: MessagesSquare,
         color: "bg-emerald-500",
         configPath: "/admin/channels/whatsapp",
         available: true,
-        comingSoon: true,
+        comingSoon: false,
       },
       {
         id: "telegram",
@@ -172,16 +172,28 @@ export default function ChannelsPage() {
       if (!adminUser?.property_id) return
       setPropertyId(adminUser.property_id)
 
-      const { data: emailChannels } = await supabase
+      const { data: emailChannels } = (await supabase
         .from("email_channels")
         .select("id, is_active")
-        .eq("property_id", adminUser.property_id)
+        .eq("property_id", adminUser.property_id)) as {
+        data: Array<{ id: string; is_active: boolean }> | null
+      }
 
-      const { data: chatWidgets } = await supabase
+      const { data: chatWidgets } = (await supabase
         .from("embed_scripts")
         .select("id, is_active")
         .eq("property_id", adminUser.property_id)
-        .eq("script_type", "chat")
+        .eq("script_type", "chat")) as {
+        data: Array<{ id: string; is_active: boolean }> | null
+      }
+
+      const { data: waChannels } = (await supabase
+        .from("messaging_channels")
+        .select("id, is_active, config")
+        .eq("property_id", adminUser.property_id)
+        .eq("channel_type", "whatsapp")) as {
+        data: Array<{ id: string; is_active: boolean; config: { phone_number_id?: string } }> | null
+      }
 
       // Initialize all channel statuses
       const statuses: Record<string, ChannelStatus> = {}
@@ -201,6 +213,13 @@ export default function ChannelsPage() {
         enabled: chatWidgets?.some((c) => c.is_active) || false,
         configured: (chatWidgets?.length || 0) > 0,
         activeConnections: chatWidgets?.filter((c) => c.is_active).length || 0,
+      }
+      const waConfigured = (waChannels || []).filter((c) => c.config?.phone_number_id)
+      statuses.whatsapp = {
+        id: "whatsapp",
+        enabled: waConfigured.some((c) => c.is_active),
+        configured: waConfigured.length > 0,
+        activeConnections: waConfigured.filter((c) => c.is_active).length,
       }
 
       setChannelStatuses(statuses)
