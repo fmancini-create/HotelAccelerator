@@ -115,10 +115,15 @@ export class WhatsAppProcessor {
 
       return { success: true, messageId: message.id, conversationId: conversation.id }
     } catch (error) {
-      await this.logEvent(propertyId, msg.externalId, "error", {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" && error !== null
+            ? JSON.stringify(error)
+            : String(error)
+      console.error("[v0] WhatsApp processor error:", errMsg)
+      await this.logEvent(propertyId, msg.externalId, "error", { error: errMsg })
+      return { success: false, error: errMsg }
     }
   }
 
@@ -200,13 +205,14 @@ export class WhatsAppProcessor {
       .insert({
         property_id: propertyId,
         contact_id: contactId,
-        channel_id: channelId,
+        // NOTE: conversations.channel_id has a FK to email_channels, so it must
+        // stay NULL for WhatsApp. The messaging_channels id is kept in metadata.
         channel: "whatsapp",
         subject: `WhatsApp · ${name}`,
         status: "open",
         unread_count: 0,
         last_message_at: new Date().toISOString(),
-        metadata: { channel: "whatsapp", phone },
+        metadata: { channel: "whatsapp", phone, messaging_channel_id: channelId },
       })
       .select("id, unread_count")
       .single()
