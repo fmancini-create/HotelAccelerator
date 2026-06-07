@@ -10,6 +10,8 @@ import type {
 import { ValidationError, NotFoundError } from "@/lib/errors"
 import { logCommand } from "@/lib/logging/command-log"
 import { sendGmailEmail } from "@/lib/gmail-client"
+import { getWhatsAppChannelForProperty } from "@/lib/whatsapp/channels"
+import { sendWhatsAppText } from "@/lib/whatsapp/client"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export class InboxWriteService {
@@ -109,6 +111,13 @@ export class InboxWriteService {
       const emailSendResult = await this.sendEmailViaGmail(conversation, command.content, command.propertyId)
       if (!emailSendResult.success) {
         throw new ValidationError(emailSendResult.error || "Errore invio email")
+      }
+    }
+
+    if (conversation.channel === "whatsapp") {
+      const waSendResult = await this.sendWhatsAppReply(conversation, command.content, command.propertyId)
+      if (!waSendResult.success) {
+        throw new ValidationError(waSendResult.error || "Errore invio WhatsApp")
       }
     }
 
@@ -231,6 +240,50 @@ export class InboxWriteService {
     )
 
     return result
+  }
+
+  private async sendWhatsAppReply(
+    conversation: any,
+    content: string,
+    propertyId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    // Resolve recipient phone: conversation metadata first, then the contact.
+    let phone: string | undefined = conversation.metadata?.phone || conversation.metadata?.from_phone
+
+    if (!phone && conversation.contact_id) {
+      const { data: contact } = await this.supabase
+        .from("contacts")
+        .select("phone, whatsapp_id")
+        .eq("id", conversation.contact_id)
+        .single()
+      phone = contact?.whatsapp_id || contact?.phone || undefined
+    }
+
+    if (!phone) {
+      console.error("[v0] No WhatsApp recipient phone for conversation:", conversation.id)
+      return { success: false, error: "Numero WhatsApp del destinatario non trovato" }
+    }
+
+    const channel = await getWhatsAppChannelForProperty(this.supabase, propertyId)
+    if (!channel) {
+      return { success: false, error: "Nessun canale WhatsApp configurato" }
+    }
+
+    const result = await sendWhatsAppText(channel.config, channel.credentials, phone, content)
+
+    if (result.success) {
+      await this.supabase
+        .from("messaging_channels")
+        .update({ last_outbound_at: new Date().toISOString(), last_error: null })
+        .eq("id", channel.id)
+    } else {
+      await this.supabase
+        .from("messaging_channels")
+        .update({ last_error: result.error ?? "Errore invio WhatsApp" })
+        .eq("id", channel.id)
+    }
+
+    return { success: result.success, error: result.error }
   }
 
   async updateStatus(command: UpdateStatusCommand, actorId?: string) {
