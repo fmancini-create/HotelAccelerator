@@ -1,4 +1,14 @@
 import { getGraphVersion, type WhatsAppConfig, type WhatsAppCredentials } from "./types"
+import { getPlatformWhatsAppConfig } from "./platform"
+
+/**
+ * Resolve the access token to use for an outbound call: prefer the per-tenant
+ * token (manual/advanced setup) and fall back to the platform system-user token
+ * (Embedded Signup tenants share the single Meta app token).
+ */
+function resolveAccessToken(credentials: WhatsAppCredentials): string {
+  return credentials.access_token || getPlatformWhatsAppConfig().systemUserToken || ""
+}
 
 export interface SendTextResult {
   success: boolean
@@ -20,7 +30,7 @@ export async function sendWhatsAppText(
   text: string,
 ): Promise<SendTextResult> {
   const phoneNumberId = config.phone_number_id
-  const accessToken = credentials.access_token
+  const accessToken = resolveAccessToken(credentials)
 
   if (!phoneNumberId) {
     return { success: false, error: "phone_number_id mancante nella configurazione del canale" }
@@ -79,7 +89,7 @@ export async function markWhatsAppRead(
   messageId: string,
 ): Promise<void> {
   const phoneNumberId = config.phone_number_id
-  const accessToken = credentials.access_token
+  const accessToken = resolveAccessToken(credentials)
   if (!phoneNumberId || !accessToken || !messageId) return
 
   const version = getGraphVersion(config)
