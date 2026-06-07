@@ -406,7 +406,9 @@ export default function InboxPage() {
 
   // ── Inbox Mode ──
   type InboxMode = "gmail" | "smart"
-  const [inboxMode, setInboxMode] = useState<InboxMode>("gmail")
+  // Default to the unified ("smart") inbox so all channels (Email, WhatsApp,
+  // Telegram, Chat) are visible together. "gmail" is the Gmail-only mirror view.
+  const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
 
   // ── Gmail State ──
   const [gmailThreads, setGmailThreads] = useState<any[]>([])
@@ -451,6 +453,8 @@ export default function InboxPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("open")
+  // Channel filter for the unified (Smart) inbox: "all" or a specific channel.
+  const [channelFilter, setChannelFilter] = useState<"all" | "email" | "whatsapp" | "telegram" | "chat">("all")
   const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [lastSyncStatus, setLastSyncStatus] = useState<string | null>(null)
@@ -1072,7 +1076,8 @@ export default function InboxPage() {
     try {
       const queryParams = new URLSearchParams()
       if (statusFilter) queryParams.set("status", statusFilter)
-      queryParams.set("channel", "email") // Assuming email channels for smart mode
+      // Unified inbox: only constrain by channel when a specific one is selected.
+      if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
       queryParams.set("mode", "smart")
       if (searchQuery) queryParams.set("search", searchQuery)
       // Smart mode: "smart" is the legacy priority sort, others map 1:1 to DB ORDER BY
@@ -1088,7 +1093,7 @@ export default function InboxPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [statusFilter, searchQuery, inboxSort])
+  }, [statusFilter, searchQuery, inboxSort, channelFilter])
 
   // Database is the single source of truth, updated only by webhook
 
@@ -1755,7 +1760,7 @@ export default function InboxPage() {
         <div className="flex items-center gap-1 ml-auto">
           <Tabs value={inboxMode} onValueChange={(v) => setInboxMode(v as InboxMode)}>
             <TabsList className="bg-transparent border-0 h-8">
-              <TabsTrigger value="smart" className="text-xs h-6">Smart</TabsTrigger>
+              <TabsTrigger value="smart" className="text-xs h-6">Tutti i canali</TabsTrigger>
               <TabsTrigger value="gmail" className="text-xs h-6">Gmail</TabsTrigger>
             </TabsList>
           </Tabs>
@@ -2052,6 +2057,50 @@ export default function InboxPage() {
                   <span className="hidden md:inline">Importa storico</span>
                 </Button>
               )
+            )}
+
+            {inboxMode === "smart" && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 text-[13px] text-[#5f6368] font-normal gap-1 ml-1"
+                    title="Filtra per canale"
+                    aria-label="Filtra per canale"
+                  >
+                    {(() => {
+                      const cfg =
+                        channelFilter !== "all"
+                          ? channelConfig[channelFilter as keyof typeof channelConfig]
+                          : null
+                      const FilterIcon = cfg?.icon || Inbox
+                      return <FilterIcon className="h-4 w-4" />
+                    })()}
+                    <span className="hidden sm:inline">
+                      {channelFilter === "all" ? "Tutti i canali" : channelConfig[channelFilter as keyof typeof channelConfig]?.name}
+                    </span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuItem onClick={() => setChannelFilter("all")}>
+                    <Inbox className="mr-2 h-4 w-4" /> Tutti i canali
+                    {channelFilter === "all" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {(["email", "whatsapp", "telegram", "chat"] as const).map((ch) => {
+                    const cfg = channelConfig[ch]
+                    const ChIcon = cfg.icon
+                    return (
+                      <DropdownMenuItem key={ch} onClick={() => setChannelFilter(ch)}>
+                        <ChIcon className="mr-2 h-4 w-4" /> {cfg.name}
+                        {channelFilter === ch && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                      </DropdownMenuItem>
+                    )
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             {inboxMode === "gmail" && selectedGmailThreadIds.size > 0 && (
@@ -2380,8 +2429,21 @@ export default function InboxPage() {
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
                         <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
                       </button>
+                      {(() => {
+                        const cfg = channelConfig[conv.channel as keyof typeof channelConfig] || channelConfig.email
+                        const ChannelIcon = cfg.icon
+                        return (
+                          <span
+                            className={`flex-shrink-0 flex items-center justify-center h-5 w-5 rounded-full ${cfg.color}`}
+                            title={cfg.name}
+                          >
+                            <ChannelIcon className="h-3 w-3" />
+                            <span className="sr-only">{cfg.name}</span>
+                          </span>
+                        )
+                      })()}
                       <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
-                        {conv.contact?.name || conv.contact?.email || "Sconosciuto"}
+                        {conv.contact?.name || conv.contact?.email || conv.contact?.phone || "Sconosciuto"}
                       </span>
                       <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
                         <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
