@@ -773,6 +773,40 @@ export default function InboxPage() {
     [loadGmailThreads, isThreadReady, selectedGmailThread],
   )
 
+  // Bulk action on multiple selected threads (checkbox selection in the list).
+  // Operates directly on the given thread ids — does NOT depend on an open thread,
+  // unlike handleGmailAction which guards on selectedGmailThread.
+  const handleGmailBulkAction = useCallback(
+    async (action: "archive" | "trash" | "markAsRead", threadIds: string[]) => {
+      if (threadIds.length === 0) return
+      // Optimistically remove archived/trashed threads from the visible list
+      if (action === "archive" || action === "trash") {
+        setGmailThreads((prev) => prev.filter((t) => !threadIds.includes(t.id)))
+      }
+      const results = await Promise.allSettled(
+        threadIds.map((id) =>
+          fetch(`/api/gmail/threads/${id}/actions`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action, channelId: selectedChannelIdRef.current }),
+          }).then((res) => {
+            if (!res.ok) throw new Error(`HTTP ${res.status} on thread ${id}`)
+            return res
+          }),
+        ),
+      )
+      const failed = results.filter((r) => r.status === "rejected").length
+      if (failed > 0) {
+        console.error(`[v0] Bulk ${action}: ${failed}/${threadIds.length} falliti`, results)
+        setError(`${failed} su ${threadIds.length} email non elaborate. Riprovo a sincronizzare.`)
+      }
+      setSelectedGmailThreadIds(new Set())
+      // Re-sync with the server so the list reflects the real state
+      loadGmailThreads(gmailLabelId, undefined, gmailSearchQueryRef.current)
+    },
+    [loadGmailThreads, gmailLabelId],
+  )
+
   const handleGmailNotSpam = useCallback(
     async (thread: GmailThread, e?: React.MouseEvent) => {
       e?.stopPropagation()
@@ -2028,28 +2062,13 @@ export default function InboxPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => {
-                    Promise.all(Array.from(selectedGmailThreadIds).map(id => {
-                      const t = gmailThreads.find(t => t.id === id)
-                      return t ? handleGmailArchive(t) : Promise.resolve(false)
-                    })).then(() => { setSelectedGmailThreadIds(new Set()); loadGmailThreads(gmailLabelId) })
-                  }}>
+                  <DropdownMenuItem onClick={() => handleGmailBulkAction("archive", Array.from(selectedGmailThreadIds))}>
                     <Archive className="mr-2 h-4 w-4" /> Archivia
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    Promise.all(Array.from(selectedGmailThreadIds).map(id => {
-                      const t = gmailThreads.find(t => t.id === id)
-                      return t ? handleGmailTrash(t) : Promise.resolve(false)
-                    })).then(() => { setSelectedGmailThreadIds(new Set()); loadGmailThreads(gmailLabelId) })
-                  }}>
+                  <DropdownMenuItem onClick={() => handleGmailBulkAction("trash", Array.from(selectedGmailThreadIds))}>
                     <Trash2 className="mr-2 h-4 w-4" /> Elimina
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => {
-                    Promise.all(Array.from(selectedGmailThreadIds).map(id => {
-                      const t = gmailThreads.find(t => t.id === id)
-                      return t ? handleGmailMarkAsRead(t) : Promise.resolve(false)
-                    })).then(() => { setSelectedGmailThreadIds(new Set()); loadGmailThreads(gmailLabelId) })
-                  }}>
+                  <DropdownMenuItem onClick={() => handleGmailBulkAction("markAsRead", Array.from(selectedGmailThreadIds))}>
                     <MailOpen className="mr-2 h-4 w-4" /> Segna letto
                   </DropdownMenuItem>
                 </DropdownMenuContent>
