@@ -10,7 +10,7 @@ import type {
 import { ValidationError, NotFoundError } from "@/lib/errors"
 import { logCommand } from "@/lib/logging/command-log"
 import { sendGmailEmail } from "@/lib/gmail-client"
-import { getWhatsAppChannelForProperty } from "@/lib/whatsapp/channels"
+import { getWhatsAppChannelForConversation } from "@/lib/whatsapp/channels"
 import { sendWhatsAppText } from "@/lib/whatsapp/client"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -264,7 +264,7 @@ export class InboxWriteService {
       return { success: false, error: "Numero WhatsApp del destinatario non trovato" }
     }
 
-    const channel = await getWhatsAppChannelForProperty(this.supabase, propertyId)
+    const channel = await getWhatsAppChannelForConversation(this.supabase, propertyId, conversation)
     if (!channel) {
       return { success: false, error: "Nessun canale WhatsApp configurato" }
     }

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getWhatsAppQuota } from "@/lib/whatsapp/quota"
 import { maskSecret, type MessagingChannelRow } from "@/lib/whatsapp/types"
 
 /**
@@ -58,7 +59,8 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     const channels = (data as MessagingChannelRow[]).map(serializeChannel)
-    return NextResponse.json({ channels })
+    const quota = await getWhatsAppQuota(supabase, propertyId)
+    return NextResponse.json({ channels, quota })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
@@ -126,7 +128,6 @@ export async function POST(request: NextRequest) {
       config,
       credentials: mergedCredentials,
       is_active: is_active ?? true,
-      is_default: true,
       updated_at: new Date().toISOString(),
     }
 
@@ -142,9 +143,21 @@ export async function POST(request: NextRequest) {
       if (error) throw error
       row = data as MessagingChannelRow
     } else {
+      // Adding a NEW number: enforce the per-property quota.
+      const quota = await getWhatsAppQuota(supabase, propertyId)
+      if (!quota.canAddNumber) {
+        return NextResponse.json(
+          {
+            error: `Hai raggiunto il limite di numeri WhatsApp del tuo piano (${quota.limit}). Acquista un numero aggiuntivo per collegarne un altro.`,
+            code: "QUOTA_EXCEEDED",
+            quota: { limit: quota.limit, used: quota.used },
+          },
+          { status: 402 },
+        )
+      }
       const { data, error } = await supabase
         .from("messaging_channels")
-        .insert(payload)
+        .insert({ ...payload, is_default: quota.used === 0 })
         .select("*")
         .single()
       if (error) throw error
@@ -159,6 +172,60 @@ export async function POST(request: NextRequest) {
   }
 }
 
+/**
+ * PATCH: set a specific WhatsApp number as the default for the property.
+ * Body: { id: string, action: "set_default" }
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const supabase = createServiceClient()
+    const body = await request.json().catch(() => ({}))
+    const id: string | undefined = body?.id
+    const action: string | undefined = body?.action
+
+    if (!id) return NextResponse.json({ error: "id mancante" }, { status: 400 })
+
+    if (action === "set_default") {
+      // Ensure the target belongs to this property and is active.
+      const { data: target } = await supabase
+        .from("messaging_channels")
+        .select("id")
+        .eq("id", id)
+        .eq("property_id", propertyId)
+        .eq("channel_type", "whatsapp")
+        .eq("is_active", true)
+        .maybeSingle()
+      if (!target) return NextResponse.json({ error: "Numero non trovato" }, { status: 404 })
+
+      // Clear the current default(s), then set the new one. Two steps so the
+      // partial unique index (one default per property) never conflicts.
+      await supabase
+        .from("messaging_channels")
+        .update({ is_default: false, updated_at: new Date().toISOString() })
+        .eq("property_id", propertyId)
+        .eq("channel_type", "whatsapp")
+        .eq("is_default", true)
+
+      const { data, error } = await supabase
+        .from("messaging_channels")
+        .update({ is_default: true, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("property_id", propertyId)
+        .select("*")
+        .single()
+      if (error) throw error
+      return NextResponse.json({ channel: serializeChannel(data as MessagingChannelRow) })
+    }
+
+    return NextResponse.json({ error: "Azione non supportata" }, { status: 400 })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Errore"
+    const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
+    return NextResponse.json({ error: message }, { status })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
@@ -166,12 +233,39 @@ export async function DELETE(request: NextRequest) {
     const id = new URL(request.url).searchParams.get("id")
     if (!id) return NextResponse.json({ error: "id mancante" }, { status: 400 })
 
+    // Was this the default number? If so, we'll promote another one after delete.
+    const { data: removed } = await supabase
+      .from("messaging_channels")
+      .select("is_default")
+      .eq("id", id)
+      .eq("property_id", propertyId)
+      .maybeSingle()
+
     const { error } = await supabase
       .from("messaging_channels")
       .delete()
       .eq("id", id)
       .eq("property_id", propertyId)
     if (error) throw error
+
+    // Promote the oldest remaining active number to default if we removed it.
+    if (removed?.is_default) {
+      const { data: next } = await supabase
+        .from("messaging_channels")
+        .select("id")
+        .eq("property_id", propertyId)
+        .eq("channel_type", "whatsapp")
+        .eq("is_active", true)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (next?.id) {
+        await supabase
+          .from("messaging_channels")
+          .update({ is_default: true, updated_at: new Date().toISOString() })
+          .eq("id", next.id)
+      }
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

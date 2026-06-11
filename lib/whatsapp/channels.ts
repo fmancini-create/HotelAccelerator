@@ -23,7 +23,8 @@ export async function getWhatsAppChannelByPhoneNumberId(
 }
 
 /**
- * Get the active WhatsApp channel for a property (used for outbound sends).
+ * Get the DEFAULT active WhatsApp channel for a property (fallback for outbound
+ * sends when a conversation has no specific channel pinned).
  */
 export async function getWhatsAppChannelForProperty(
   supabase: SupabaseClient,
@@ -36,9 +37,66 @@ export async function getWhatsAppChannelForProperty(
     .eq("property_id", propertyId)
     .eq("is_active", true)
     .order("is_default", { ascending: false })
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()
   return (data as MessagingChannelRow) ?? null
+}
+
+/**
+ * Fetch a specific WhatsApp channel by id, scoped to the property (so a tenant
+ * can never send through another tenant's number).
+ */
+export async function getWhatsAppChannelById(
+  supabase: SupabaseClient,
+  propertyId: string,
+  channelId: string,
+): Promise<MessagingChannelRow | null> {
+  const { data } = await supabase
+    .from("messaging_channels")
+    .select("*")
+    .eq("id", channelId)
+    .eq("channel_type", "whatsapp")
+    .eq("property_id", propertyId)
+    .eq("is_active", true)
+    .maybeSingle()
+  return (data as MessagingChannelRow) ?? null
+}
+
+/**
+ * Resolve the WhatsApp channel to use when replying to a conversation.
+ *
+ * Multi-number aware: prefers the channel the conversation came in on
+ * (`metadata.messaging_channel_id`, written by the inbound processor), falling
+ * back to the property's default channel for older conversations.
+ */
+export async function getWhatsAppChannelForConversation(
+  supabase: SupabaseClient,
+  propertyId: string,
+  conversation: { metadata?: { messaging_channel_id?: string | null } | null } | null,
+): Promise<MessagingChannelRow | null> {
+  const pinnedId = conversation?.metadata?.messaging_channel_id
+  if (pinnedId) {
+    const pinned = await getWhatsAppChannelById(supabase, propertyId, pinnedId)
+    if (pinned) return pinned
+  }
+  return getWhatsAppChannelForProperty(supabase, propertyId)
+}
+
+/**
+ * List all WhatsApp channels for a property (active first, oldest first).
+ */
+export async function listWhatsAppChannelsForProperty(
+  supabase: SupabaseClient,
+  propertyId: string,
+): Promise<MessagingChannelRow[]> {
+  const { data } = await supabase
+    .from("messaging_channels")
+    .select("*")
+    .eq("channel_type", "whatsapp")
+    .eq("property_id", propertyId)
+    .order("created_at", { ascending: true })
+  return (data as MessagingChannelRow[]) ?? []
 }
 
 interface ParsedWebhook {
