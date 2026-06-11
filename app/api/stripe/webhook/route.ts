@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getFattureInCloudClient } from "@/lib/fattureincloud"
 import { getPlanById, formatPrice } from "@/lib/stripe-products"
+import { incrementExtraNumbers } from "@/lib/whatsapp/quota"
 import type Stripe from "stripe"
 
 export const runtime = "nodejs"
@@ -78,7 +79,34 @@ async function handleCheckoutCompleted(
   supabase: ReturnType<typeof createServiceClient>,
   session: Stripe.Checkout.Session,
 ) {
-  const { propertyId, planId, roomCount, propertyName } = session.metadata || {}
+  const { propertyId, planId, roomCount, propertyName, kind, quantity } = session.metadata || {}
+
+  // Extra WhatsApp number purchase: bump the property's quota so it can connect
+  // one (or more) additional numbers immediately.
+  if (kind === "whatsapp_extra_number") {
+    if (!propertyId) {
+      console.error("[Stripe Webhook] whatsapp_extra_number without propertyId")
+      return
+    }
+    const qty = Math.max(1, parseInt(quantity || "1", 10))
+    const total = await incrementExtraNumbers(supabase, propertyId, qty)
+    console.log(`[Stripe Webhook] +${qty} WhatsApp number(s) for ${propertyId} (extra now ${total})`)
+
+    // Record the subscription so it shows up in billing.
+    await supabase.from("stripe_subscriptions").upsert(
+      {
+        property_id: propertyId,
+        plan_id: "addon-whatsapp-extra-number",
+        plan_type: "addon",
+        stripe_customer_id: (session.customer as string | null) ?? null,
+        stripe_subscription_id: (session.subscription as string | null) ?? null,
+        status: "active",
+        current_period_start: new Date().toISOString(),
+      },
+      { onConflict: "property_id,plan_id" },
+    )
+    return
+  }
 
   if (!propertyId || !planId) {
     console.error("[Stripe Webhook] Missing metadata in checkout session")

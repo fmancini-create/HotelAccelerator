@@ -125,6 +125,25 @@ export default function WhatsAppChannelPage() {
     loadAll()
   }, [loadAll])
 
+  // Handle the return from the Stripe extra-number checkout.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const extra = params.get("extra_number")
+    if (!extra) return
+    if (extra === "success") {
+      setFeedback({
+        type: "success",
+        text: "Pagamento ricevuto! Il numero aggiuntivo è stato sbloccato: ora puoi collegarlo qui sotto.",
+      })
+    } else if (extra === "canceled") {
+      setFeedback({ type: "error", text: "Pagamento annullato." })
+    }
+    // Clean the URL so a refresh doesn't repeat the message.
+    params.delete("extra_number")
+    const qs = params.toString()
+    window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`)
+  }, [])
+
   // Load + init the Facebook JS SDK once we know the platform App ID.
   useEffect(() => {
     if (!publicConfig?.configured || !publicConfig.appId) return
