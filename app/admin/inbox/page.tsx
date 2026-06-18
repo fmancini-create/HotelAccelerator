@@ -2178,24 +2178,38 @@ export default function InboxPage() {
               </DropdownMenu>
             )}
             {inboxMode === "smart" && selectedConversationIds.size > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-xs h-7 bg-transparent ml-1">
-                    {selectedConversationIds.size} sel. <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => handleConversationBulkAction("archive")}>
-                    <Archive className="mr-2 h-4 w-4" /> Archivia
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleConversationBulkAction("markAsRead")}>
-                    <MailOpen className="mr-2 h-4 w-4" /> Segna letto
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleConversationBulkAction("spam")}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Segna spam
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-1 ml-1">
+                <span className="text-[13px] text-[#5f6368] tabular-nums mr-1">
+                  {selectedConversationIds.size} sel.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 bg-transparent gap-1"
+                  onClick={() => handleConversationBulkAction("archive")}
+                >
+                  <Archive className="h-4 w-4" />
+                  <span className="hidden sm:inline">Archivia</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 bg-transparent gap-1"
+                  onClick={() => handleConversationBulkAction("markAsRead")}
+                >
+                  <MailOpen className="h-4 w-4" />
+                  <span className="hidden sm:inline">Segna letto</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 bg-transparent gap-1"
+                  onClick={() => handleConversationBulkAction("spam")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Segna spam</span>
+                </Button>
+              </div>
             )}
             <div className="flex-1" />
             {inboxMode === "gmail" && (
@@ -2503,7 +2517,7 @@ export default function InboxPage() {
                         checked={selectedConversationIds.has(conv.id)}
                         onCheckedChange={() => handleConversationCheckboxToggle(conv.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
+                        className="h-5 w-5 flex-shrink-0"
                       />
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
                         <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
