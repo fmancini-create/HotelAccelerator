@@ -108,14 +108,25 @@ export class InboxWriteService {
     }
 
     if (conversation.channel === "email") {
-      const emailSendResult = await this.sendEmailViaGmail(conversation, command.content, command.propertyId)
+      const emailSendResult = await this.sendEmailViaGmail(
+        conversation,
+        command.content,
+        command.propertyId,
+        command.forwardTo,
+        command.forwardSubject,
+      )
       if (!emailSendResult.success) {
         throw new ValidationError(emailSendResult.error || "Errore invio email")
       }
     }
 
     if (conversation.channel === "whatsapp") {
-      const waSendResult = await this.sendWhatsAppReply(conversation, command.content, command.propertyId)
+      const waSendResult = await this.sendWhatsAppReply(
+        conversation,
+        command.content,
+        command.propertyId,
+        command.forwardTo,
+      )
       if (!waSendResult.success) {
         throw new ValidationError(waSendResult.error || "Errore invio WhatsApp")
       }
@@ -123,10 +134,15 @@ export class InboxWriteService {
 
     await this.repository.markMessagesAsReplied(command.conversationId, command.propertyId)
 
+    // Keep the timeline clear about forwards.
+    const storedContent = command.forwardTo
+      ? `↪ Inoltrato a ${command.forwardTo}:\n${command.content}`
+      : command.content
+
     const message = await this.repository.insertMessage(
       command.conversationId,
       command.propertyId,
-      command.content,
+      storedContent,
       "agent",
       actorId || null,
       "text",
@@ -149,6 +165,8 @@ export class InboxWriteService {
     conversation: any,
     content: string,
     propertyId: string,
+    forwardTo?: string,
+    forwardSubject?: string,
   ): Promise<{ success: boolean; error?: string }> {
     // Get the email channel for this property
     const { data: emailChannel, error: channelError } = await this.supabase
@@ -172,37 +190,43 @@ export class InboxWriteService {
         return { success: false, error: "Nessun canale email configurato" }
       }
 
-      return this.doSendEmail(anyChannel, conversation, content)
+      return this.doSendEmail(anyChannel, conversation, content, forwardTo, forwardSubject)
     }
 
-    return this.doSendEmail(emailChannel, conversation, content)
+    return this.doSendEmail(emailChannel, conversation, content, forwardTo, forwardSubject)
   }
 
   private async doSendEmail(
     emailChannel: { id: string; email_address: string },
     conversation: any,
     content: string,
+    forwardTo?: string,
+    forwardSubject?: string,
   ): Promise<{ success: boolean; error?: string }> {
-    // Get recipient email from conversation metadata or contact
-    let recipientEmail = conversation.contact_email
+    // Forwarding: send to the provided recipient as a fresh email (no threading).
+    const isForward = !!forwardTo?.trim()
 
-    if (!recipientEmail && conversation.metadata?.email) {
-      recipientEmail = conversation.metadata.email
-    }
+    let recipientEmail = isForward ? forwardTo!.trim() : conversation.contact_email
 
-    if (!recipientEmail && conversation.metadata?.from) {
-      recipientEmail = conversation.metadata.from
-    }
+    if (!isForward) {
+      if (!recipientEmail && conversation.metadata?.email) {
+        recipientEmail = conversation.metadata.email
+      }
 
-    if (!recipientEmail) {
-      // Try to get from contacts table
-      const { data: contact } = await this.supabase
-        .from("contacts")
-        .select("email")
-        .eq("id", conversation.contact_id)
-        .single()
+      if (!recipientEmail && conversation.metadata?.from) {
+        recipientEmail = conversation.metadata.from
+      }
 
-      recipientEmail = contact?.email
+      if (!recipientEmail) {
+        // Try to get from contacts table
+        const { data: contact } = await this.supabase
+          .from("contacts")
+          .select("email")
+          .eq("id", conversation.contact_id)
+          .single()
+
+        recipientEmail = contact?.email
+      }
     }
 
     if (!recipientEmail) {
@@ -210,17 +234,23 @@ export class InboxWriteService {
       return { success: false, error: "Email destinatario non trovata" }
     }
 
-    // Build subject - use Re: prefix for replies
-    const subject = conversation.subject?.startsWith("Re:")
-      ? conversation.subject
-      : `Re: ${conversation.subject || "Senza oggetto"}`
+    // Build subject
+    let subject: string
+    if (isForward) {
+      const base = forwardSubject?.trim() || conversation.subject || "Senza oggetto"
+      subject = base.startsWith("Fwd:") || base.startsWith("Fw:") ? base : `Fwd: ${base}`
+    } else {
+      subject = conversation.subject?.startsWith("Re:")
+        ? conversation.subject
+        : `Re: ${conversation.subject || "Senza oggetto"}`
+    }
 
     // Convert plain text to simple HTML
     const htmlContent = `<div style="font-family: Arial, sans-serif;">${content.replace(/\n/g, "<br>")}</div>`
 
-    // Get thread info for proper Gmail threading
-    const threadId = conversation.metadata?.gmail_thread_id
-    const replyToMessageId = conversation.metadata?.gmail_message_id
+    // Threading only for replies, not for forwards (forward = fresh email).
+    const threadId = isForward ? undefined : conversation.metadata?.gmail_thread_id
+    const replyToMessageId = isForward ? undefined : conversation.metadata?.gmail_message_id
 
     console.log("[v0] Sending email via Gmail:", {
       channelId: emailChannel.id,
@@ -228,6 +258,7 @@ export class InboxWriteService {
       subject,
       threadId,
       replyToMessageId,
+      isForward,
     })
 
     const result = await sendGmailEmail(
@@ -246,11 +277,14 @@ export class InboxWriteService {
     conversation: any,
     content: string,
     propertyId: string,
+    forwardTo?: string,
   ): Promise<{ success: boolean; error?: string }> {
-    // Resolve recipient phone: conversation metadata first, then the contact.
-    let phone: string | undefined = conversation.metadata?.phone || conversation.metadata?.from_phone
+    // Forwarding: send to the provided phone number instead of the contact.
+    let phone: string | undefined = forwardTo?.trim()
+      ? forwardTo.trim()
+      : conversation.metadata?.phone || conversation.metadata?.from_phone
 
-    if (!phone && conversation.contact_id) {
+    if (!phone && !forwardTo?.trim() && conversation.contact_id) {
       const { data: contact } = await this.supabase
         .from("contacts")
         .select("phone, whatsapp_id")

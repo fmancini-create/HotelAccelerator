@@ -31,6 +31,10 @@ export interface SendMessageCommand {
   senderId?: string
   contentType?: string
   attachments?: string[]
+  // Forwarding: when set, the message is sent to this recipient (email address
+  // or phone) instead of the conversation's contact, as a fresh message.
+  forwardTo?: string
+  forwardSubject?: string
 }
 
 export interface UpdateStatusCommand {

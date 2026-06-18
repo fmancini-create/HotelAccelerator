@@ -525,6 +525,9 @@ export default function InboxPage() {
   const [cannedTitle, setCannedTitle] = useState("")
   const [cannedShared, setCannedShared] = useState(false)
   const [savingCanned, setSavingCanned] = useState(false)
+  // Forward mode for the reply composer
+  const [isForwarding, setIsForwarding] = useState(false)
+  const [forwardSubject, setForwardSubject] = useState("")
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" })
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [attachments, setAttachments] = useState<File[]>([])
@@ -1659,16 +1662,101 @@ export default function InboxPage() {
     setReplyBcc("")
   setShowCcField(false)
   setShowBccField(false)
+  setIsForwarding(false)
   setShowReplyBox(true)
   if (cannedResponses.length === 0) loadCannedResponses()
+  }
+
+  // Open the composer in "forward" mode: empty recipient + quoted original body.
+  const openForwardBox = () => {
+    const sourceMessages = messages || []
+    const subjectBase =
+      (inboxMode === "gmail" ? (selectedGmailThread as any)?.subject : (selectedConversation as any)?.subject) ||
+      "Senza oggetto"
+
+    const quoted = sourceMessages
+      .map((m: any) => {
+        const who = m?.from?.email || m?.from?.name || (m?.sender_type === "agent" ? "Io" : "Mittente")
+        const when = m?.created_at ? new Date(m.created_at).toLocaleString("it-IT") : ""
+        const text =
+          typeof m?.content === "string" ? m.content.replace(/<[^>]+>/g, "").trim() : ""
+        return `Da: ${who}${when ? ` — ${when}` : ""}\n${text}`
+      })
+      .join("\n\n———\n\n")
+
+    const header = "\n\n---------- Messaggio inoltrato ----------\n"
+    setReplyText(header + quoted)
+    setForwardSubject(subjectBase.startsWith("Fwd:") ? subjectBase : `Fwd: ${subjectBase}`)
+    setReplyTo("")
+    setReplyCc("")
+    setReplyBcc("")
+    setShowCcField(false)
+    setShowBccField(false)
+    setIsForwarding(true)
+    setShowReplyBox(true)
+    if (cannedResponses.length === 0) loadCannedResponses()
+    requestAnimationFrame(() => replyTextareaRef.current?.focus())
   }
 
   const handleSendReply = async () => {
     if (!replyText.trim()) return
 
+    // Forwarding requires an explicit recipient.
+    if (isForwarding && !replyTo.trim()) {
+      setError("Inserisci un destinatario per l'inoltro")
+      return
+    }
+
     setIsSending(true)
     setError(null) // Clear previous errors
     try {
+      // --- Forward mode ---
+      if (isForwarding) {
+        if (inboxMode === "gmail") {
+          // Fresh email via compose endpoint
+          const res = await fetch("/api/gmail/compose", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: replyTo.trim(),
+              subject: forwardSubject.trim() || "Fwd:",
+              body: replyText,
+              channelId: selectedChannelIdRef.current,
+            }),
+          })
+          if (res.ok) {
+            setReplyText("")
+            setIsForwarding(false)
+            setShowReplyBox(false)
+          } else {
+            const data = await res.json().catch(() => ({}))
+            setError(data.error || "Errore durante l'inoltro")
+          }
+        } else if (selectedConversation) {
+          const res = await fetch(`/api/inbox/${selectedConversation.id}/send`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content: replyText,
+              channel: selectedConversation.channel,
+              forward_to: replyTo.trim(),
+              forward_subject: forwardSubject.trim() || undefined,
+            }),
+          })
+          if (res.ok) {
+            setReplyText("")
+            setIsForwarding(false)
+            setShowReplyBox(false)
+            await loadMessages(selectedConversation.id, false)
+            loadConversations()
+          } else {
+            const data = await res.json().catch(() => ({}))
+            setError(data.error || "Errore durante l'inoltro")
+          }
+        }
+        return
+      }
+
       // Gmail mode: use selected thread
       if (inboxMode === "gmail" && selectedGmailThread) {
         const res = await fetch(`/api/gmail/threads/${selectedGmailThread.id}/reply`, {
@@ -2547,6 +2635,21 @@ export default function InboxPage() {
                             </button>
                           </div>
                         )}
+                        {isForwarding && (
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
+                            <label htmlFor="forward-subject" className="text-xs font-medium text-gray-500 w-14 shrink-0">
+                              Oggetto
+                            </label>
+                            <input
+                              id="forward-subject"
+                              type="text"
+                              value={forwardSubject}
+                              onChange={(e) => setForwardSubject(e.target.value)}
+                              placeholder="Oggetto"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                            />
+                          </div>
+                        )}
                       </div>
 
   <div className="flex items-center gap-0.5 flex-wrap px-2 py-1 border-b border-gray-100">
@@ -2651,7 +2754,7 @@ export default function InboxPage() {
   </div>
   <Textarea
   ref={replyTextareaRef}
-  placeholder="Scrivi una risposta..."
+  placeholder={isForwarding ? "Aggiungi un messaggio e inoltra..." : "Scrivi una risposta..."}
   value={replyText}
   onChange={(e) => setReplyText(e.target.value)}
   className="min-h-[120px] border-0 focus-visible:ring-0 resize-none"
@@ -2667,13 +2770,20 @@ export default function InboxPage() {
                           className="bg-[#0b57d0] hover:bg-[#0842a0] text-white"
                         >
                           {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                          Invia
+                          {isForwarding ? "Inoltra" : "Invia"}
                         </Button>
                         <div className="flex items-center gap-1">
                           <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}>
                             <Paperclip className="h-4 w-4 text-gray-500" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setShowReplyBox(false)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setShowReplyBox(false)
+                              setIsForwarding(false)
+                            }}
+                          >
                             <Trash2 className="h-4 w-4 text-gray-500" />
                           </Button>
                         </div>
@@ -2692,7 +2802,7 @@ export default function InboxPage() {
                       <ChevronLeft className="h-4 w-4 mr-2 rotate-180" />
                       Rispondi
                     </Button>
-                    <Button variant="outline" className="rounded-full px-6">
+                    <Button variant="outline" className="rounded-full px-6" onClick={openForwardBox}>
                       <ChevronRight className="h-4 w-4 mr-2" />
                       Inoltra
                     </Button>
