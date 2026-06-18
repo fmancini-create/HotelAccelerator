@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         console.error(`[v0][poll-email] ${res.email}: ${res.error}`)
       } else {
         console.log(
-          `[v0][poll-email] ${res.email}: scanned=${res.scanned} imported=${res.imported} dup=${res.duplicates} err=${res.errors} stars+${res.starsAdded ?? 0}/-${res.starsRemoved ?? 0}`,
+          `[v0][poll-email] ${res.email}: scanned=${res.scanned} imported=${res.imported} dup=${res.duplicates} err=${res.errors} stars+${res.starsAdded ?? 0}/-${res.starsRemoved ?? 0} spam=${res.spamSynced ?? 0} trash=${res.trashSynced ?? 0} restored=${res.restored ?? 0} read=${res.readSynced ?? 0}`,
         )
       }
       results.push(res)
