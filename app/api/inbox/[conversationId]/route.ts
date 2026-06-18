@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxReadService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
+import { pushConversationStateToGmail } from "@/lib/email/gmail-state-sync"
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -66,6 +67,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Mirror state changes to Gmail (app -> Gmail). Best-effort.
+    const change: { read?: boolean; status?: string } = {}
+    if (typeof body.status === "string") change.status = body.status
+    if (typeof body.unread_count === "number") change.read = body.unread_count === 0
+    if (change.status !== undefined || change.read !== undefined) {
+      await pushConversationStateToGmail(supabase, conversationId, propertyId, change)
     }
 
     return NextResponse.json({ conversation: data })

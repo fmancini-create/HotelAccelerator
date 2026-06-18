@@ -37,6 +37,11 @@ export interface ChannelSyncResult {
   // Bidirectional star reconciliation (Gmail -> app)
   starsAdded?: number
   starsRemoved?: number
+  // Bidirectional state reconciliation (Gmail -> app)
+  spamSynced?: number
+  trashSynced?: number
+  restored?: number
+  readSynced?: number
   error?: string
 }
 
@@ -147,6 +152,10 @@ export async function syncChannelIncremental(
 
   const processor = new EmailProcessor(supabase)
 
+  // Authoritative read-state of the threads scanned this run (threadId -> isUnread).
+  // A thread counts as unread if any of its scanned messages still has UNREAD.
+  const scannedThreadRead = new Map<string, boolean>()
+
   for (const { id } of ids) {
     try {
       const msgRes = await fetch(
@@ -160,6 +169,10 @@ export async function syncChannelIncremental(
         continue
       }
       const msgData = await msgRes.json()
+      if (msgData?.threadId) {
+        const isUnread = Array.isArray(msgData.labelIds) && msgData.labelIds.includes("UNREAD")
+        scannedThreadRead.set(msgData.threadId, (scannedThreadRead.get(msgData.threadId) || false) || isUnread)
+      }
       const parsed: InboundEmail = parseGmailMessage(msgData)
       const result = await processor.processInboundEmail(parsed, channel.id, channel.property_id)
       if (result?.success) {
@@ -188,6 +201,18 @@ export async function syncChannelIncremental(
     out.starsRemoved = stars.removed
   } catch (e) {
     console.error("[v0][incremental-sync] star reconcile error:", e)
+  }
+
+  // Bidirectional state sync (Gmail -> app): spam, trash, restore-to-inbox and
+  // read state. Gmail is the source of truth. Best-effort, never fails the sync.
+  try {
+    const states = await reconcileChannelStates(supabase, channel, token, scannedThreadRead)
+    out.spamSynced = states.spam
+    out.trashSynced = states.trash
+    out.restored = states.restored
+    out.readSynced = states.read
+  } catch (e) {
+    console.error("[v0][incremental-sync] state reconcile error:", e)
   }
 
   await supabase
@@ -269,6 +294,140 @@ export async function reconcileChannelStars(
       .update({ is_starred: false, updated_at: new Date().toISOString() })
       .in("id", idsToUnstar)
     result.removed = idsToUnstar.length
+  }
+
+  return result
+}
+
+/** Lists Gmail thread IDs matching a query, capped. Returns a Set. */
+async function listThreadIds(token: string, q: string, cap = 200): Promise<Set<string>> {
+  const ids = new Set<string>()
+  const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/threads")
+  url.searchParams.set("q", q)
+  url.searchParams.set("maxResults", String(cap))
+  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`Gmail threads(${q}) HTTP ${res.status}`)
+  const data = await res.json()
+  for (const t of data.threads || []) if (t?.id) ids.add(t.id)
+  return ids
+}
+
+/**
+ * Reconciles spam / trash / restore-to-inbox / read state from Gmail to the app.
+ * Gmail is the source of truth for email conversation state. Only touches email
+ * conversations of THIS channel — WhatsApp and others are never affected.
+ *
+ * Mapping: SPAM -> status 'spam', TRASH -> status 'deleted', back in INBOX ->
+ * status 'open', UNREAD label -> unread_count.
+ *
+ * IMPORTANT (read safety): "mark as read" is only applied to threads whose
+ * actual labels we observed this run (scannedThreadRead), because a capped
+ * is:unread query cannot prove the ABSENCE of the UNREAD label when the mailbox
+ * has more unread mail than the cap. "Mark as unread" from the capped unread set
+ * is always safe (it is a positive signal).
+ */
+export async function reconcileChannelStates(
+  supabase: any,
+  channel: SyncableChannel,
+  token: string,
+  scannedThreadRead: Map<string, boolean>,
+): Promise<{ spam: number; trash: number; restored: number; read: number }> {
+  const result = { spam: 0, trash: 0, restored: 0, read: 0 }
+  const now = new Date().toISOString()
+
+  const spamSet = await listThreadIds(token, "in:spam", 200)
+  const trashSet = await listThreadIds(token, "in:trash", 200)
+
+  // 1) Threads now in SPAM -> mark app conversations 'spam'.
+  if (spamSet.size > 0) {
+    const { data } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("property_id", channel.property_id)
+      .eq("channel_id", channel.id)
+      .neq("status", "spam")
+      .in("gmail_thread_id", Array.from(spamSet))
+    const ids = (data || []).map((c: any) => c.id)
+    if (ids.length > 0) {
+      await supabase.from("conversations").update({ status: "spam", updated_at: now }).in("id", ids)
+      result.spam = ids.length
+    }
+  }
+
+  // 2) Threads now in TRASH -> mark app conversations 'deleted'.
+  if (trashSet.size > 0) {
+    const { data } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("property_id", channel.property_id)
+      .eq("channel_id", channel.id)
+      .neq("status", "deleted")
+      .in("gmail_thread_id", Array.from(trashSet))
+    const ids = (data || []).map((c: any) => c.id)
+    if (ids.length > 0) {
+      await supabase.from("conversations").update({ status: "deleted", updated_at: now }).in("id", ids)
+      result.trash = ids.length
+    }
+  }
+
+  // 3) Restore: app says spam/deleted but Gmail no longer has it there -> 'open'.
+  //    Bounded by the app's own spam/deleted set for this channel.
+  const { data: parked } = await supabase
+    .from("conversations")
+    .select("id, gmail_thread_id, status")
+    .eq("property_id", channel.property_id)
+    .eq("channel_id", channel.id)
+    .in("status", ["spam", "deleted"])
+  const toRestore = (parked || [])
+    .filter((c: any) => c.gmail_thread_id && !spamSet.has(c.gmail_thread_id) && !trashSet.has(c.gmail_thread_id))
+    .map((c: any) => c.id)
+  if (toRestore.length > 0) {
+    await supabase.from("conversations").update({ status: "open", updated_at: now }).in("id", toRestore)
+    result.restored = toRestore.length
+  }
+
+  // 4) Read state.
+  // 4a) Positive "unread" signal from a capped is:unread query: any of these
+  //     threads marked read in the app should become unread. Always safe.
+  const unreadSet = await listThreadIds(token, "is:unread in:inbox", 500)
+  if (unreadSet.size > 0) {
+    const { data } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("property_id", channel.property_id)
+      .eq("channel_id", channel.id)
+      .eq("unread_count", 0)
+      .in("gmail_thread_id", Array.from(unreadSet))
+    const ids = (data || []).map((c: any) => c.id)
+    if (ids.length > 0) {
+      await supabase.from("conversations").update({ unread_count: 1, updated_at: now }).in("id", ids)
+      result.read += ids.length
+    }
+  }
+
+  // 4b) Authoritative read-state for threads we actually scanned this run.
+  //     Safe to mark BOTH read and unread because we observed the real labels.
+  const scannedReadThreadIds = [...scannedThreadRead.entries()].filter(([, u]) => !u).map(([t]) => t)
+  if (scannedReadThreadIds.length > 0) {
+    const { data } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("property_id", channel.property_id)
+      .eq("channel_id", channel.id)
+      .gt("unread_count", 0)
+      .in("gmail_thread_id", scannedReadThreadIds)
+    const ids = (data || []).map((c: any) => c.id)
+    if (ids.length > 0) {
+      await supabase.from("conversations").update({ unread_count: 0, updated_at: now }).in("id", ids)
+      // Also flip the underlying messages so per-message read state stays coherent.
+      await supabase
+        .from("messages")
+        .update({ status: "read" })
+        .in("conversation_id", ids)
+        .eq("property_id", channel.property_id)
+        .eq("status", "received")
+      result.read += ids.length
+    }
   }
 
   return result
