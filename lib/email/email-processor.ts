@@ -116,6 +116,17 @@ export class EmailProcessor {
         })
         .eq("id", conversation.id)
 
+      // Reopen the conversation if it was archived/spam/deleted. A new inbound
+      // customer message means it needs attention again — this mirrors Gmail,
+      // where a new reply moves an archived thread back into the INBOX. Without
+      // this, replies to resolved threads stay hidden from the active inbox view
+      // ("Da fare" filters status='open') and look like "new mail not arriving".
+      await this.supabase
+        .from("conversations")
+        .update({ status: "open", updated_at: new Date().toISOString() })
+        .eq("id", conversation.id)
+        .in("status", ["resolved", "spam", "deleted"])
+
       // TASK 7: Log success
       await this.logEvent(propertyId, email.externalId, "email", "processed", {
         message_id: message.id,
