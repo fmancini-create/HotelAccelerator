@@ -75,6 +75,20 @@ export interface ConversationListItem {
 
   gmail_thread_id?: string | null
   gmail_labels?: string[] | null
+
+  // Origin account this conversation belongs to (which mailbox / which WhatsApp number).
+  // Useful when "Tutti i canali" is selected and several accounts are configured.
+  channel_id?: string | null
+  origin?: ConversationOrigin | null
+}
+
+export interface ConversationOrigin {
+  // Channel type of the origin account (mirrors conversation.channel)
+  type: string
+  // Human-readable label, e.g. "f.mancini@ibarronci.com" or "WhatsApp Reception"
+  label: string
+  // Optional secondary detail (e.g. the phone number for WhatsApp)
+  detail?: string | null
 }
 
 // Detail item - full data for selected conversation

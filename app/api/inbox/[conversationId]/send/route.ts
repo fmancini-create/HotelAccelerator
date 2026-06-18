@@ -10,7 +10,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { conversationId } = await params
     const body = await request.json()
 
-    const { content, sender_type = "agent", sender_id, content_type = "text", attachments = [] } = body
+    const {
+      content,
+      sender_type = "agent",
+      sender_id,
+      content_type = "text",
+      attachments = [],
+      forward_to,
+      forward_subject,
+    } = body
 
     const supabase = await createClient()
     const service = new InboxWriteService(supabase)
@@ -23,6 +31,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       senderId: sender_id,
       contentType: content_type,
       attachments,
+      forwardTo: forward_to,
+      forwardSubject: forward_subject,
     })
 
     return NextResponse.json({ message })

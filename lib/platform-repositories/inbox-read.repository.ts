@@ -45,6 +45,7 @@ export class InboxReadRepository {
         unread_count,
         booking_data,
         metadata,
+        channel_id,
         gmail_thread_id,
         gmail_labels,
         contact:contacts!inner(id, email, name, phone),
@@ -142,6 +143,61 @@ export class InboxReadRepository {
       }
     })
 
+    // Resolve the origin account of each conversation (which mailbox / which
+    // WhatsApp number). Email conversations point to email_channels via
+    // channel_id; WhatsApp conversations carry messaging_channel_id in metadata.
+    const emailChannelIds = new Set<string>()
+    const messagingChannelIds = new Set<string>()
+    for (const conv of data || []) {
+      if (conv.channel === "email" && conv.channel_id) {
+        emailChannelIds.add(conv.channel_id as string)
+      }
+      const mcid = (conv.metadata as any)?.messaging_channel_id
+      if (mcid) messagingChannelIds.add(mcid as string)
+    }
+
+    const emailOriginMap = new Map<string, { label: string; detail?: string | null }>()
+    if (emailChannelIds.size > 0) {
+      const { data: emailChannels } = await this.supabase
+        .from("email_channels")
+        .select("id, email_address, display_name")
+        .in("id", Array.from(emailChannelIds))
+      emailChannels?.forEach((ec) => {
+        emailOriginMap.set(ec.id, {
+          label: ec.email_address || ec.display_name || "Email",
+          detail: ec.display_name && ec.display_name !== ec.email_address ? ec.display_name : null,
+        })
+      })
+    }
+
+    const messagingOriginMap = new Map<string, { label: string; detail?: string | null }>()
+    if (messagingChannelIds.size > 0) {
+      const { data: messagingChannels } = await this.supabase
+        .from("messaging_channels")
+        .select("id, display_name, channel_type, config")
+        .in("id", Array.from(messagingChannelIds))
+      messagingChannels?.forEach((mc) => {
+        const phone = (mc.config as any)?.display_phone_number || null
+        messagingOriginMap.set(mc.id, {
+          label: mc.display_name || phone || "WhatsApp",
+          detail: phone,
+        })
+      })
+    }
+
+    const resolveOrigin = (conv: any): ConversationListItem["origin"] => {
+      if (conv.channel === "email" && conv.channel_id && emailOriginMap.has(conv.channel_id)) {
+        const o = emailOriginMap.get(conv.channel_id)!
+        return { type: "email", label: o.label, detail: o.detail ?? null }
+      }
+      const mcid = conv.metadata?.messaging_channel_id
+      if (mcid && messagingOriginMap.has(mcid)) {
+        const o = messagingOriginMap.get(mcid)!
+        return { type: conv.channel || "whatsapp", label: o.label, detail: o.detail ?? null }
+      }
+      return null
+    }
+
     return (data || []).map((conv) => ({
       ...conv,
       is_starred: conv.is_starred ?? false,
@@ -152,6 +208,7 @@ export class InboxReadRepository {
       booking_data: conv.booking_data || null,
       gmail_thread_id: conv.gmail_thread_id || null,
       gmail_labels: conv.gmail_labels || null,
+      origin: resolveOrigin(conv),
     })) as ConversationListItem[]
   }
 
