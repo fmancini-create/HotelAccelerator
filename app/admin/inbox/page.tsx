@@ -34,6 +34,15 @@ import {
   Phone,
   ArrowUpDown,
   History,
+  Bold,
+  Italic,
+  Strikethrough,
+  List,
+  ListOrdered,
+  Link2,
+  Smile,
+  BookText,
+  Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -52,6 +61,17 @@ import { formatDistanceToNow, format } from "date-fns"
 import { it } from "date-fns/locale"
 import { EmailKpiBar } from "@/components/admin/email-kpi-bar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 type InboxMode = "smart" | "gmail"
 
@@ -495,6 +515,16 @@ export default function InboxPage() {
   const [showCcField, setShowCcField] = useState(false)
   const [showBccField, setShowBccField] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
+  // Rich-text toolbar + canned (predefined) responses
+  const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const [cannedResponses, setCannedResponses] = useState<
+    { id: string; title: string; content: string; is_shared: boolean; is_owner: boolean }[]
+  >([])
+  const [cannedLoading, setCannedLoading] = useState(false)
+  const [showSaveCannedDialog, setShowSaveCannedDialog] = useState(false)
+  const [cannedTitle, setCannedTitle] = useState("")
+  const [cannedShared, setCannedShared] = useState(false)
+  const [savingCanned, setSavingCanned] = useState(false)
   const [composeData, setComposeData] = useState({ to: "", subject: "", body: "" })
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [attachments, setAttachments] = useState<File[]>([])
@@ -1484,6 +1514,131 @@ export default function InboxPage() {
     }
   }
 
+  // --- Rich-text toolbar: applies lightweight markers compatible with both
+  // WhatsApp (*bold*, _italic_, ~strike~) and email (still readable as plain text).
+  const applyInlineFormat = (marker: string) => {
+    const el = replyTextareaRef.current
+    if (!el) return
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    const value = replyText
+    const selected = value.slice(start, end) || "testo"
+    const next = value.slice(0, start) + marker + selected + marker + value.slice(end)
+    setReplyText(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(start + marker.length, start + marker.length + selected.length)
+    })
+  }
+
+  const applyLinePrefix = (kind: "bullet" | "ordered") => {
+    const el = replyTextareaRef.current
+    if (!el) return
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    const value = replyText
+    const before = value.slice(0, start)
+    const selection = value.slice(start, end) || "voce"
+    const after = value.slice(end)
+    const lines = selection.split("\n")
+    const formatted = lines
+      .map((line, i) => (kind === "bullet" ? `- ${line}` : `${i + 1}. ${line}`))
+      .join("\n")
+    const next = before + formatted + after
+    setReplyText(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(start, start + formatted.length)
+    })
+  }
+
+  const insertLink = () => {
+    const el = replyTextareaRef.current
+    if (!el) return
+    const url = window.prompt("Inserisci l'URL del link:", "https://")
+    if (!url) return
+    const start = el.selectionStart ?? 0
+    const end = el.selectionEnd ?? 0
+    const value = replyText
+    const selected = value.slice(start, end)
+    // Plain-text friendly: "testo (url)" or just the url. WhatsApp & email auto-link bare URLs.
+    const insertText = selected ? `${selected} (${url})` : url
+    const next = value.slice(0, start) + insertText + value.slice(end)
+    setReplyText(next)
+    requestAnimationFrame(() => {
+      el.focus()
+      el.setSelectionRange(start + insertText.length, start + insertText.length)
+    })
+  }
+
+  const insertEmoji = (emoji: string) => {
+    const el = replyTextareaRef.current
+    const start = el?.selectionStart ?? replyText.length
+    const end = el?.selectionEnd ?? replyText.length
+    const next = replyText.slice(0, start) + emoji + replyText.slice(end)
+    setReplyText(next)
+    requestAnimationFrame(() => {
+      if (!el) return
+      el.focus()
+      el.setSelectionRange(start + emoji.length, start + emoji.length)
+    })
+  }
+
+  // --- Canned (predefined) responses
+  const loadCannedResponses = async () => {
+    setCannedLoading(true)
+    try {
+      const res = await fetch("/api/inbox/canned-responses")
+      if (res.ok) {
+        const data = await res.json()
+        setCannedResponses(data.responses || [])
+      }
+    } catch (e) {
+      console.error("Errore caricamento risposte predefinite:", e)
+    } finally {
+      setCannedLoading(false)
+    }
+  }
+
+  const insertCannedResponse = (content: string) => {
+    setReplyText((prev) => (prev.trim() ? `${prev}\n${content}` : content))
+    requestAnimationFrame(() => replyTextareaRef.current?.focus())
+  }
+
+  const handleSaveCanned = async () => {
+    if (!cannedTitle.trim() || !replyText.trim()) return
+    setSavingCanned(true)
+    try {
+      const res = await fetch("/api/inbox/canned-responses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: cannedTitle.trim(), content: replyText, is_shared: cannedShared }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setCannedResponses((prev) => [...prev, data.response])
+        setShowSaveCannedDialog(false)
+        setCannedTitle("")
+        setCannedShared(false)
+      }
+    } catch (e) {
+      console.error("Errore salvataggio risposta predefinita:", e)
+    } finally {
+      setSavingCanned(false)
+    }
+  }
+
+  const handleDeleteCanned = async (id: string) => {
+    try {
+      const res = await fetch(`/api/inbox/canned-responses/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setCannedResponses((prev) => prev.filter((r) => r.id !== id))
+      }
+    } catch (e) {
+      console.error("Errore eliminazione risposta predefinita:", e)
+    }
+  }
+
   // Open the reply composer: pre-fill To with the last customer's email
   const openReplyBox = () => {
     try {
@@ -1502,9 +1657,10 @@ export default function InboxPage() {
     }
     setReplyCc("")
     setReplyBcc("")
-    setShowCcField(false)
-    setShowBccField(false)
-    setShowReplyBox(true)
+  setShowCcField(false)
+  setShowBccField(false)
+  setShowReplyBox(true)
+  if (cannedResponses.length === 0) loadCannedResponses()
   }
 
   const handleSendReply = async () => {
@@ -2393,16 +2549,117 @@ export default function InboxPage() {
                         )}
                       </div>
 
-                      <Textarea
-                        placeholder="Scrivi una risposta..."
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        className="min-h-[120px] border-0 focus-visible:ring-0 resize-none"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
-                        }}
-                      />
+  <div className="flex items-center gap-0.5 flex-wrap px-2 py-1 border-b border-gray-100">
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Grassetto" onClick={() => applyInlineFormat("*")}>
+      <Bold className="h-4 w-4 text-gray-600" />
+    </Button>
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Corsivo" onClick={() => applyInlineFormat("_")}>
+      <Italic className="h-4 w-4 text-gray-600" />
+    </Button>
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Barrato" onClick={() => applyInlineFormat("~")}>
+      <Strikethrough className="h-4 w-4 text-gray-600" />
+    </Button>
+    <span className="mx-1 h-4 w-px bg-gray-200" />
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Elenco puntato" onClick={() => applyLinePrefix("bullet")}>
+      <List className="h-4 w-4 text-gray-600" />
+    </Button>
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Elenco numerato" onClick={() => applyLinePrefix("ordered")}>
+      <ListOrdered className="h-4 w-4 text-gray-600" />
+    </Button>
+    <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Inserisci link" onClick={insertLink}>
+      <Link2 className="h-4 w-4 text-gray-600" />
+    </Button>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Emoji">
+          <Smile className="h-4 w-4 text-gray-600" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-2" align="start">
+        <div className="grid grid-cols-8 gap-1 text-xl">
+          {["😀","😅","😊","😍","👍","🙏","👏","🎉","✅","❤️","🔥","💪","😉","🤝","📌","⭐"].map((e) => (
+            <button
+              key={e}
+              type="button"
+              className="hover:bg-gray-100 rounded p-1 leading-none"
+              onClick={() => insertEmoji(e)}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+    <span className="mx-1 h-4 w-px bg-gray-200" />
+    <DropdownMenu onOpenChange={(open) => open && cannedResponses.length === 0 && loadCannedResponses()}>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs text-gray-600" title="Risposte predefinite">
+          <BookText className="h-4 w-4" />
+          <span className="hidden sm:inline">Predefinite</span>
+          <ChevronDown className="h-3 w-3" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72 max-h-80 overflow-y-auto">
+        {cannedLoading ? (
+          <div className="px-3 py-4 text-center text-sm text-gray-400">Caricamento…</div>
+        ) : cannedResponses.length === 0 ? (
+          <div className="px-3 py-4 text-center text-sm text-gray-400">Nessuna risposta salvata</div>
+        ) : (
+          cannedResponses.map((r) => (
+            <div key={r.id} className="group flex items-start gap-1 px-2 py-1.5 hover:bg-gray-50 rounded-sm">
+              <button
+                type="button"
+                className="flex-1 text-left min-w-0"
+                onClick={() => insertCannedResponse(r.content)}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-gray-800 truncate">{r.title}</span>
+                  {r.is_shared && (
+                    <span className="flex-shrink-0 rounded bg-blue-50 px-1 text-[10px] font-medium text-blue-600">Team</span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 truncate">{r.content}</p>
+              </button>
+              {r.is_owner && (
+                <button
+                  type="button"
+                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600"
+                  title="Elimina"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDeleteCanned(r.id)
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          ))
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(e) => {
+            e.preventDefault()
+            if (replyText.trim()) setShowSaveCannedDialog(true)
+          }}
+          disabled={!replyText.trim()}
+        >
+          <Plus className="mr-2 h-4 w-4" /> Salva risposta corrente
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+  <Textarea
+  ref={replyTextareaRef}
+  placeholder="Scrivi una risposta..."
+  value={replyText}
+  onChange={(e) => setReplyText(e.target.value)}
+  className="min-h-[120px] border-0 focus-visible:ring-0 resize-none"
+  autoFocus
+  onKeyDown={(e) => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
+  }}
+  />
                       <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
                         <Button
                           onClick={handleSendReply}
@@ -2576,6 +2833,52 @@ export default function InboxPage() {
             )}
           </div>
         </div>
+
+      <Dialog open={showSaveCannedDialog} onOpenChange={setShowSaveCannedDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Salva risposta predefinita</DialogTitle>
+            <DialogDescription>
+              Salva il testo corrente come modello riutilizzabile.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="canned-title">Titolo</Label>
+              <Input
+                id="canned-title"
+                value={cannedTitle}
+                onChange={(e) => setCannedTitle(e.target.value)}
+                placeholder="Es. Conferma prenotazione"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Anteprima</Label>
+              <div className="max-h-32 overflow-y-auto rounded-md border bg-gray-50 p-2 text-sm text-gray-600 whitespace-pre-wrap">
+                {replyText || "—"}
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-md border p-3">
+              <div>
+                <p className="text-sm font-medium">Condividi col team</p>
+                <p className="text-xs text-gray-500">
+                  {cannedShared ? "Visibile a tutti gli operatori della struttura" : "Visibile solo a te"}
+                </p>
+              </div>
+              <Switch checked={cannedShared} onCheckedChange={setCannedShared} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSaveCannedDialog(false)}>
+              Annulla
+            </Button>
+            <Button onClick={handleSaveCanned} disabled={!cannedTitle.trim() || savingCanned}>
+              {savingCanned ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Salva
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {showComposeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
