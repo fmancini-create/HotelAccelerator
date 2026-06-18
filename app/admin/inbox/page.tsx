@@ -2178,24 +2178,38 @@ export default function InboxPage() {
               </DropdownMenu>
             )}
             {inboxMode === "smart" && selectedConversationIds.size > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-xs h-7 bg-transparent ml-1">
-                    {selectedConversationIds.size} sel. <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => handleConversationBulkAction("archive")}>
-                    <Archive className="mr-2 h-4 w-4" /> Archivia
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleConversationBulkAction("markAsRead")}>
-                    <MailOpen className="mr-2 h-4 w-4" /> Segna letto
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleConversationBulkAction("spam")}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Segna spam
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-1 ml-1">
+                <span className="text-[13px] text-[#5f6368] tabular-nums mr-1">
+                  {selectedConversationIds.size} sel.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 bg-transparent gap-1"
+                  onClick={() => handleConversationBulkAction("archive")}
+                >
+                  <Archive className="h-4 w-4" />
+                  <span className="hidden sm:inline">Archivia</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 bg-transparent gap-1"
+                  onClick={() => handleConversationBulkAction("markAsRead")}
+                >
+                  <MailOpen className="h-4 w-4" />
+                  <span className="hidden sm:inline">Segna letto</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 bg-transparent gap-1"
+                  onClick={() => handleConversationBulkAction("spam")}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Segna spam</span>
+                </Button>
+              </div>
             )}
             <div className="flex-1" />
             {inboxMode === "gmail" && (
