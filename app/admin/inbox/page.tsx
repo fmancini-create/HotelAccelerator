@@ -131,6 +131,11 @@ interface Conversation {
     sender_type: string
     created_at: string
   } | null
+  origin?: {
+    type: string
+    label: string
+    detail?: string | null
+  } | null
 }
 
 interface Message {
@@ -2528,13 +2533,24 @@ export default function InboxPage() {
                         return (
                           <span
                             className={`flex-shrink-0 flex items-center justify-center h-5 w-5 rounded-full ${cfg.color}`}
-                            title={cfg.name}
+                            title={conv.origin?.label ? `${cfg.name} · ${conv.origin.label}` : cfg.name}
                           >
                             <ChannelIcon className="h-3 w-3" />
-                            <span className="sr-only">{cfg.name}</span>
+                            <span className="sr-only">
+                              {cfg.name}
+                              {conv.origin?.label ? ` · ${conv.origin.label}` : ""}
+                            </span>
                           </span>
                         )
                       })()}
+                      {channelFilter === "all" && conv.origin?.label && (
+                        <span
+                          className="flex-shrink-0 hidden md:inline-block max-w-[150px] truncate rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600"
+                          title={conv.origin.detail ? `${conv.origin.label} (${conv.origin.detail})` : conv.origin.label}
+                        >
+                          {conv.origin.label}
+                        </span>
+                      )}
                       <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
                         {conv.contact?.name || conv.contact?.email || conv.contact?.phone || "Sconosciuto"}
                       </span>
