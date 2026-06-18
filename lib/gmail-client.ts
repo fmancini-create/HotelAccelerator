@@ -286,33 +286,59 @@ export async function modifyGmailThread(
     return { success: false, error: error || "Token non disponibile" }
   }
 
-  try {
-    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}/modify`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        addLabelIds: addLabels,
-        removeLabelIds: removeLabels,
-      }),
-    })
+  // Gmail returns 429 "Too many concurrent requests for user" (and sometimes 403
+  // rateLimitExceeded) when UI actions overlap with the background poll. These are
+  // transient: retry with exponential backoff + jitter so the label change is not
+  // lost (otherwise the next poll, which treats Gmail as source of truth, would
+  // revert the user's action).
+  const MAX_ATTEMPTS = 5
+  let lastStatus = 0
+  let lastBody = ""
 
-    if (!response.ok) {
-      const errorBody = await response.text()
-      console.error("[v0] Gmail thread modify error:", response.status, errorBody)
-      return { success: false, error: `Errore Gmail API: ${response.status}` }
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}/modify`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          addLabelIds: addLabels,
+          removeLabelIds: removeLabels,
+        }),
+      })
+
+      if (response.ok) {
+        console.log(
+          `[v0] Gmail thread ${threadId} modified successfully - added: [${addLabels}], removed: [${removeLabels}]`,
+        )
+        return { success: true }
+      }
+
+      lastStatus = response.status
+      lastBody = await response.text()
+
+      const isRateLimited =
+        response.status === 429 || (response.status === 403 && lastBody.includes("rateLimitExceeded"))
+
+      if (!isRateLimited || attempt === MAX_ATTEMPTS - 1) {
+        console.error("[v0] Gmail thread modify error:", response.status, lastBody)
+        return { success: false, error: `Errore Gmail API: ${response.status}` }
+      }
+
+      // Backoff: 250ms, 500ms, 1s, 2s (+ up to 250ms jitter)
+      const delay = 250 * 2 ** attempt + Math.floor(Math.random() * 250)
+      console.warn(`[v0] Gmail thread ${threadId} rate limited (${response.status}), retry in ${delay}ms`)
+      await new Promise((r) => setTimeout(r, delay))
+    } catch (err) {
+      console.error("[v0] Gmail thread modify exception:", err)
+      return { success: false, error: "Errore durante la modifica del thread" }
     }
-
-    console.log(
-      `[v0] Gmail thread ${threadId} modified successfully - added: [${addLabels}], removed: [${removeLabels}]`,
-    )
-    return { success: true }
-  } catch (err) {
-    console.error("[v0] Gmail thread modify exception:", err)
-    return { success: false, error: "Errore durante la modifica del thread" }
   }
+
+  console.error("[v0] Gmail thread modify failed after retries:", lastStatus, lastBody)
+  return { success: false, error: `Errore Gmail API: ${lastStatus}` }
 }
 
 /**
