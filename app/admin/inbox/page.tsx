@@ -2503,7 +2503,7 @@ export default function InboxPage() {
                         checked={selectedConversationIds.has(conv.id)}
                         onCheckedChange={() => handleConversationCheckboxToggle(conv.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
+                        className="h-5 w-5 flex-shrink-0"
                       />
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
                         <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
