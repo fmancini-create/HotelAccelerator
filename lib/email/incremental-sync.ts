@@ -34,6 +34,9 @@ export interface ChannelSyncResult {
   duplicates: number
   errors: number
   scanned: number
+  // Bidirectional star reconciliation (Gmail -> app)
+  starsAdded?: number
+  starsRemoved?: number
   error?: string
 }
 
@@ -176,10 +179,97 @@ export async function syncChannelIncremental(
     }
   }
 
+  // Bidirectional star sync: reconcile the app's is_starred flag with Gmail's
+  // STARRED label (Gmail is the source of truth for email stars). This catches
+  // stars added/removed directly inside Gmail. Best-effort: never fail the sync.
+  try {
+    const stars = await reconcileChannelStars(supabase, channel, token)
+    out.starsAdded = stars.added
+    out.starsRemoved = stars.removed
+  } catch (e) {
+    console.error("[v0][incremental-sync] star reconcile error:", e)
+  }
+
   await supabase
     .from("email_channels")
     .update({ last_sync_at: new Date().toISOString(), updated_at: new Date().toISOString() })
     .eq("id", channel.id)
 
   return out
+}
+
+/**
+ * Reconciles the `is_starred` flag of this channel's email conversations with
+ * Gmail's STARRED label. Direction: Gmail -> app (the app -> Gmail direction is
+ * handled synchronously by the toggle-star route). Gmail is the source of truth
+ * for email stars, so this also clears stars that were removed inside Gmail.
+ *
+ * Only touches email conversations belonging to this channel — WhatsApp and
+ * other channels are never affected.
+ */
+export async function reconcileChannelStars(
+  supabase: any,
+  channel: SyncableChannel,
+  token: string,
+): Promise<{ added: number; removed: number }> {
+  const result = { added: 0, removed: 0 }
+
+  // 1) Collect the set of currently-starred Gmail thread IDs (small set).
+  const starredThreadIds = new Set<string>()
+  const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/threads")
+  listUrl.searchParams.set("q", "is:starred")
+  listUrl.searchParams.set("maxResults", "200")
+
+  const listRes = await fetch(listUrl.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!listRes.ok) {
+    throw new Error(`Gmail threads(is:starred) HTTP ${listRes.status}`)
+  }
+  const listData = await listRes.json()
+  for (const t of listData.threads || []) {
+    if (t?.id) starredThreadIds.add(t.id)
+  }
+
+  // 2) Star conversations whose thread is starred in Gmail but not in the app.
+  if (starredThreadIds.size > 0) {
+    const { data: toStar } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("property_id", channel.property_id)
+      .eq("channel_id", channel.id)
+      .eq("is_starred", false)
+      .in("gmail_thread_id", Array.from(starredThreadIds))
+
+    const idsToStar = (toStar || []).map((c: any) => c.id)
+    if (idsToStar.length > 0) {
+      await supabase
+        .from("conversations")
+        .update({ is_starred: true, updated_at: new Date().toISOString() })
+        .in("id", idsToStar)
+      result.added = idsToStar.length
+    }
+  }
+
+  // 3) Un-star conversations that are starred in the app but no longer in Gmail.
+  const { data: currentlyStarred } = await supabase
+    .from("conversations")
+    .select("id, gmail_thread_id")
+    .eq("property_id", channel.property_id)
+    .eq("channel_id", channel.id)
+    .eq("is_starred", true)
+
+  const idsToUnstar = (currentlyStarred || [])
+    .filter((c: any) => !c.gmail_thread_id || !starredThreadIds.has(c.gmail_thread_id))
+    .map((c: any) => c.id)
+
+  if (idsToUnstar.length > 0) {
+    await supabase
+      .from("conversations")
+      .update({ is_starred: false, updated_at: new Date().toISOString() })
+      .in("id", idsToUnstar)
+    result.removed = idsToUnstar.length
+  }
+
+  return result
 }
