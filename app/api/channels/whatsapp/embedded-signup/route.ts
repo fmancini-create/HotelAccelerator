@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getPlatformWhatsAppConfig, getPublicWhatsAppConfig } from "@/lib/whatsapp/platform"
+import { getWhatsAppQuota } from "@/lib/whatsapp/quota"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 
 export const runtime = "nodejs"
@@ -153,7 +154,8 @@ export async function POST(request: NextRequest) {
       verify_token: platform.verifyToken,
     }
 
-    // Upsert: one default WhatsApp channel per property.
+    // Is this exact number already connected for this property? If so we just
+    // refresh its config/credentials (re-onboarding the same number).
     const { data: existing } = await supabase
       .from("messaging_channels")
       .select("id")
@@ -162,31 +164,52 @@ export async function POST(request: NextRequest) {
       .eq("config->>phone_number_id", String(phoneNumberId))
       .maybeSingle()
 
-    const base = {
-      property_id: propertyId,
-      channel_type: "whatsapp" as const,
-      display_name: verifiedName || "WhatsApp",
-      config,
-      credentials,
-      is_active: true,
-      is_default: true,
-      updated_at: new Date().toISOString(),
-    }
-
     let row: MessagingChannelRow
     if (existing?.id) {
+      // Update an existing number (do not touch is_default here).
       const { data, error } = await supabase
         .from("messaging_channels")
-        .update(base)
+        .update({
+          display_name: verifiedName || "WhatsApp",
+          config,
+          credentials,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", existing.id)
         .select("*")
         .single()
       if (error) throw error
       row = data as MessagingChannelRow
     } else {
+      // Adding a NEW number: enforce the per-property quota.
+      const quota = await getWhatsAppQuota(supabase, propertyId)
+      if (!quota.canAddNumber) {
+        return NextResponse.json(
+          {
+            error: `Hai raggiunto il limite di numeri WhatsApp del tuo piano (${quota.limit}). Acquista un numero aggiuntivo per collegarne un altro.`,
+            code: "QUOTA_EXCEEDED",
+            quota: { limit: quota.limit, used: quota.used },
+          },
+          { status: 402 },
+        )
+      }
+
+      // First number for this property becomes the default automatically.
+      const isFirst = quota.used === 0
+
       const { data, error } = await supabase
         .from("messaging_channels")
-        .insert(base)
+        .insert({
+          property_id: propertyId,
+          channel_type: "whatsapp" as const,
+          display_name: verifiedName || "WhatsApp",
+          config,
+          credentials,
+          is_active: true,
+          is_default: isFirst,
+          updated_at: new Date().toISOString(),
+        })
         .select("*")
         .single()
       if (error) throw error

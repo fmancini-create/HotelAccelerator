@@ -17,6 +17,9 @@ import {
   Zap,
   ChevronDown,
   Trash2,
+  Star,
+  Plus,
+  Phone,
 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 
@@ -32,9 +35,19 @@ interface WhatsAppChannel {
   credentials_preview: { access_token: string; app_secret: string; verify_token: string }
   has_credentials: { access_token: boolean; app_secret: boolean; verify_token: boolean }
   is_active: boolean
+  is_default: boolean
   last_inbound_at: string | null
   last_outbound_at: string | null
   last_error: string | null
+}
+
+interface Quota {
+  limit: number
+  used: number
+  remaining: number
+  includedNumbers: number
+  extraNumbers: number
+  canAddNumber: boolean
 }
 
 interface PublicConfig {
@@ -44,7 +57,6 @@ interface PublicConfig {
   configured: boolean
 }
 
-// Minimal shape of the Embedded Signup session-info message Meta posts back.
 interface SessionInfo {
   phone_number_id?: string
   waba_id?: string
@@ -59,17 +71,19 @@ declare global {
 
 export default function WhatsAppChannelPage() {
   const [loading, setLoading] = useState(true)
-  const [channel, setChannel] = useState<WhatsAppChannel | null>(null)
+  const [channels, setChannels] = useState<WhatsAppChannel[]>([])
+  const [quota, setQuota] = useState<Quota | null>(null)
   const [publicConfig, setPublicConfig] = useState<PublicConfig | null>(null)
   const [sdkReady, setSdkReady] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [buyingExtra, setBuyingExtra] = useState(false)
 
-  // Captured from the Embedded Signup popup (phone_number_id + waba_id).
   const sessionInfoRef = useRef<SessionInfo>({})
 
-  // Advanced/manual form state
+  // Manual/add form state
   const [saving, setSaving] = useState(false)
   const [displayName, setDisplayName] = useState("WhatsApp")
   const [phoneNumberId, setPhoneNumberId] = useState("")
@@ -80,11 +94,11 @@ export default function WhatsAppChannelPage() {
   const [verifyToken, setVerifyToken] = useState("")
   const [webhookUrl, setWebhookUrl] = useState("")
 
-  // Test send
+  // Test send (per number)
   const [testNumber, setTestNumber] = useState("")
   const [testing, setTesting] = useState(false)
 
-  const isConnected = Boolean(channel?.config?.phone_number_id)
+  const hasNumbers = channels.length > 0
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -97,14 +111,8 @@ export default function WhatsAppChannelPage() {
       if (cfgRes.ok) setPublicConfig(cfg)
 
       const data = await chRes.json()
-      const ch: WhatsAppChannel | undefined = data.channels?.[0]
-      if (ch) {
-        setChannel(ch)
-        setDisplayName(ch.display_name || "WhatsApp")
-        setPhoneNumberId(ch.config.phone_number_id || "")
-        setWabaId(ch.config.waba_id || "")
-        setDisplayPhone(ch.config.display_phone_number || "")
-      }
+      setChannels(data.channels ?? [])
+      setQuota(data.quota ?? null)
     } catch {
       setFeedback({ type: "error", text: "Impossibile caricare la configurazione" })
     } finally {
@@ -116,6 +124,25 @@ export default function WhatsAppChannelPage() {
     setWebhookUrl(`${window.location.origin}/api/channels/whatsapp/webhook`)
     loadAll()
   }, [loadAll])
+
+  // Handle the return from the Stripe extra-number checkout.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const extra = params.get("extra_number")
+    if (!extra) return
+    if (extra === "success") {
+      setFeedback({
+        type: "success",
+        text: "Pagamento ricevuto! Il numero aggiuntivo è stato sbloccato: ora puoi collegarlo qui sotto.",
+      })
+    } else if (extra === "canceled") {
+      setFeedback({ type: "error", text: "Pagamento annullato." })
+    }
+    // Clean the URL so a refresh doesn't repeat the message.
+    params.delete("extra_number")
+    const qs = params.toString()
+    window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`)
+  }, [])
 
   // Load + init the Facebook JS SDK once we know the platform App ID.
   useEffect(() => {
@@ -205,7 +232,7 @@ export default function WhatsAppChannelPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Errore durante il collegamento")
-      setFeedback({ type: "success", text: "WhatsApp collegato con successo!" })
+      setFeedback({ type: "success", text: "Numero WhatsApp collegato con successo!" })
       await loadAll()
     } catch (e) {
       setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
@@ -222,7 +249,6 @@ export default function WhatsAppChannelPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: channel?.id,
           display_name: displayName,
           phone_number_id: phoneNumberId,
           waba_id: wabaId,
@@ -237,7 +263,11 @@ export default function WhatsAppChannelPage() {
       setAccessToken("")
       setAppSecret("")
       setVerifyToken("")
-      setFeedback({ type: "success", text: "Configurazione salvata correttamente" })
+      setPhoneNumberId("")
+      setWabaId("")
+      setDisplayPhone("")
+      setDisplayName("WhatsApp")
+      setFeedback({ type: "success", text: "Numero salvato correttamente" })
       await loadAll()
     } catch (e) {
       setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
@@ -246,23 +276,62 @@ export default function WhatsAppChannelPage() {
     }
   }
 
-  const handleDisconnect = async () => {
-    if (!channel?.id) return
-    if (!window.confirm("Scollegare WhatsApp da questa struttura?")) return
+  const handleSetDefault = async (id: string) => {
+    setBusyId(id)
     setFeedback(null)
     try {
-      const res = await fetch(`/api/channels/whatsapp?id=${channel.id}`, { method: "DELETE" })
+      const res = await fetch("/api/channels/whatsapp", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "set_default" }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Errore")
+      }
+      await loadAll()
+    } catch (e) {
+      setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleDisconnect = async (id: string) => {
+    if (!window.confirm("Scollegare questo numero WhatsApp?")) return
+    setBusyId(id)
+    setFeedback(null)
+    try {
+      const res = await fetch(`/api/channels/whatsapp?id=${id}`, { method: "DELETE" })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || "Errore disconnessione")
       }
-      setChannel(null)
-      setPhoneNumberId("")
-      setWabaId("")
-      setDisplayPhone("")
-      setFeedback({ type: "success", text: "WhatsApp scollegato." })
+      setFeedback({ type: "success", text: "Numero scollegato." })
+      await loadAll()
     } catch (e) {
       setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const handleBuyExtra = async () => {
+    setBuyingExtra(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/channels/whatsapp/extra-number/checkout", { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Checkout non disponibile")
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
+      throw new Error("URL di pagamento mancante")
+    } catch (e) {
+      setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setBuyingExtra(false)
     }
   }
 
@@ -289,15 +358,16 @@ export default function WhatsAppChannelPage() {
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text)
 
   const platformReady = Boolean(publicConfig?.configured)
+  const canAdd = quota?.canAddNumber ?? true
 
   return (
     <div className="min-h-screen bg-background">
       <AdminHeader
         title="WhatsApp Business"
-        subtitle="Collega il tuo numero WhatsApp in un clic"
+        subtitle="Collega uno o più numeri WhatsApp della tua struttura"
         actions={
-          <Badge variant={isConnected ? "default" : "secondary"} className={isConnected ? "bg-emerald-600" : ""}>
-            {isConnected ? "Collegato" : "Non collegato"}
+          <Badge variant={hasNumbers ? "default" : "secondary"} className={hasNumbers ? "bg-emerald-600" : ""}>
+            {hasNumbers ? `${channels.length} numero${channels.length > 1 ? "i" : ""}` : "Non collegato"}
           </Badge>
         }
       />
@@ -328,93 +398,142 @@ export default function WhatsAppChannelPage() {
               </div>
             )}
 
-            {/* Connected state */}
-            {isConnected ? (
-              <Card className="border-emerald-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-emerald-700">
-                    <CheckCircle2 className="h-5 w-5" />
-                    WhatsApp collegato
-                  </CardTitle>
-                  <CardDescription>
-                    Il tuo numero è attivo. I messaggi arrivano direttamente nell&apos;Inbox unificata.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
-                    <div>
-                      <div className="text-muted-foreground">Numero</div>
-                      <div className="font-medium">{channel?.config.display_phone_number || "—"}</div>
+            {/* Quota summary */}
+            {quota && (
+              <Card>
+                <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+                  <div className="text-sm">
+                    <div className="font-medium">
+                      Numeri collegati: {quota.used} / {quota.limit}
                     </div>
-                    <div>
-                      <div className="text-muted-foreground">Nome attività</div>
-                      <div className="font-medium">{channel?.display_name || "—"}</div>
+                    <div className="text-muted-foreground">
+                      {quota.includedNumbers} incluso nel piano
+                      {quota.extraNumbers > 0 ? ` + ${quota.extraNumbers} aggiuntivo${quota.extraNumbers > 1 ? "i" : ""}` : ""}
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={handleDisconnect}>
+                  <Button variant="outline" size="sm" onClick={handleBuyExtra} disabled={buyingExtra}>
+                    {buyingExtra ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                    Aggiungi numero extra
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Connected numbers list */}
+            {channels.map((ch) => (
+              <Card key={ch.id} className={ch.is_default ? "border-emerald-200" : ""}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Phone className="h-5 w-5 text-emerald-600" />
+                    {ch.config.display_phone_number || ch.display_name || "WhatsApp"}
+                    {ch.is_default && (
+                      <Badge variant="secondary" className="ml-1 gap-1">
+                        <Star className="h-3 w-3 fill-current" /> Predefinito
+                      </Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>{ch.display_name || "WhatsApp"}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {ch.last_error && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>Ultimo errore: {ch.last_error}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {!ch.is_default && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleSetDefault(ch.id)}
+                        disabled={busyId === ch.id}
+                      >
+                        {busyId === ch.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Star className="mr-2 h-4 w-4" />
+                        )}
+                        Imposta predefinito
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(ch.id)}
+                      disabled={busyId === ch.id}
+                    >
                       <Trash2 className="mr-2 h-4 w-4" /> Scollega
                     </Button>
                   </div>
                 </CardContent>
               </Card>
-            ) : (
-              /* Primary 1-click connect */
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageCircle className="h-5 w-5 text-emerald-600" />
-                    Collega WhatsApp in un clic
-                  </CardTitle>
-                  <CardDescription>
-                    Accedi con il tuo account Facebook, scegli il numero WhatsApp della tua struttura e il gioco è fatto.
-                    Nessun codice da copiare.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-4">
-                  <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
-                    <li className="flex items-center gap-2">
-                      <Zap className="h-4 w-4 text-emerald-600" /> Configurazione guidata da Meta
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4 text-emerald-600" /> Le credenziali restano sulla piattaforma, al
-                      sicuro
-                    </li>
-                  </ul>
+            ))}
 
-                  {!platformReady ? (
-                    <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>
-                        Il collegamento rapido non è ancora abilitato dall&apos;amministratore della piattaforma. Puoi
-                        usare la configurazione manuale qui sotto, oppure contattare il supporto.
-                      </span>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={launchSignup}
-                      disabled={!sdkReady || connecting}
-                      className="w-fit bg-[#1877F2] text-white hover:bg-[#1877F2]/90"
-                    >
-                      {connecting ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                      )}
-                      {sdkReady ? "Collega con Facebook" : "Caricamento..."}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            {/* Add a number (1-click) */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5 text-emerald-600" />
+                  {hasNumbers ? "Collega un altro numero" : "Collega WhatsApp in un clic"}
+                </CardTitle>
+                <CardDescription>
+                  Accedi con Facebook, scegli il numero WhatsApp della tua struttura e il gioco è fatto. Nessun codice da
+                  copiare.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <ul className="flex flex-col gap-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-emerald-600" /> Configurazione guidata da Meta
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" /> Le credenziali restano sulla piattaforma, al
+                    sicuro
+                  </li>
+                </ul>
 
-            {/* Test send (connected only) */}
-            {isConnected && (
+                {!canAdd ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      Hai raggiunto il limite di numeri del tuo piano ({quota?.limit}). Acquista un numero aggiuntivo per
+                      collegarne un altro.
+                    </span>
+                  </div>
+                ) : !platformReady ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      Il collegamento rapido non è ancora abilitato dall&apos;amministratore della piattaforma. Puoi
+                      usare la configurazione manuale qui sotto, oppure contattare il supporto.
+                    </span>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={launchSignup}
+                    disabled={!sdkReady || connecting}
+                    className="w-fit bg-[#1877F2] text-white hover:bg-[#1877F2]/90"
+                  >
+                    {connecting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                    )}
+                    {sdkReady ? "Collega con Facebook" : "Caricamento..."}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Test send (when at least one number connected) */}
+            {hasNumbers && (
               <Card>
                 <CardHeader>
                   <CardTitle>Invia messaggio di test</CardTitle>
                   <CardDescription>
-                    Funziona solo se il destinatario ha scritto al numero negli ultimi 24h (finestra di assistenza).
+                    Inviato dal numero predefinito. Funziona solo se il destinatario ha scritto al numero negli ultimi
+                    24h (finestra di assistenza).
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -444,7 +563,7 @@ export default function WhatsAppChannelPage() {
                 aria-expanded={showAdvanced}
               >
                 <ChevronDown className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
-                Configurazione manuale (avanzata)
+                Aggiungi numero manualmente (avanzato)
               </button>
 
               {showAdvanced && (
@@ -473,11 +592,7 @@ export default function WhatsAppChannelPage() {
                           id="verify-token"
                           value={verifyToken}
                           onChange={(e) => setVerifyToken(e.target.value)}
-                          placeholder={
-                            channel?.has_credentials.verify_token
-                              ? channel.credentials_preview.verify_token
-                              : "Stringa segreta da usare anche su Meta"
-                          }
+                          placeholder="Stringa segreta da usare anche su Meta"
                         />
                       </div>
                     </CardContent>
@@ -485,8 +600,8 @@ export default function WhatsAppChannelPage() {
 
                   <Card>
                     <CardHeader>
-                      <CardTitle>Credenziali API</CardTitle>
-                      <CardDescription>I valori segreti vengono mostrati mascherati.</CardDescription>
+                      <CardTitle>Credenziali API del nuovo numero</CardTitle>
+                      <CardDescription>I valori segreti vengono salvati cifrati lato piattaforma.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4">
                       <div className="flex flex-col gap-2">
@@ -529,11 +644,7 @@ export default function WhatsAppChannelPage() {
                           type="password"
                           value={accessToken}
                           onChange={(e) => setAccessToken(e.target.value)}
-                          placeholder={
-                            channel?.has_credentials.access_token
-                              ? channel.credentials_preview.access_token
-                              : "Token permanente / system user"
-                          }
+                          placeholder="Token permanente / system user"
                         />
                       </div>
                       <div className="flex flex-col gap-2">
@@ -543,18 +654,19 @@ export default function WhatsAppChannelPage() {
                           type="password"
                           value={appSecret}
                           onChange={(e) => setAppSecret(e.target.value)}
-                          placeholder={
-                            channel?.has_credentials.app_secret
-                              ? channel.credentials_preview.app_secret
-                              : "Per verificare la firma dei webhook"
-                          }
+                          placeholder="Per verificare la firma dei webhook"
                         />
                       </div>
                       <div>
-                        <Button onClick={handleSaveManual} disabled={saving || !phoneNumberId.trim()}>
+                        <Button onClick={handleSaveManual} disabled={saving || !phoneNumberId.trim() || !canAdd}>
                           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Salva configurazione
+                          Aggiungi numero
                         </Button>
+                        {!canAdd && (
+                          <p className="mt-2 text-xs text-amber-700">
+                            Limite numeri raggiunto. Acquista un numero aggiuntivo per aggiungerne un altro.
+                          </p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
