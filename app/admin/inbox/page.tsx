@@ -427,6 +427,8 @@ export default function InboxPage() {
   const [gmailDebugInfo, setGmailDebugInfo] = useState<GmailDebugInfo | null>(null)
   const [gmailApiVersion, setGmailApiVersion] = useState<string | null>(null)
   const [selectedGmailThreadIds, setSelectedGmailThreadIds] = useState<Set<string>>(new Set())
+  // Bulk-selection for the unified (smart) conversation list
+  const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string>>(new Set())
   const [isThreadReady, setIsThreadReady] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
   const [labelsExpanded, setLabelsExpanded] = useState(false)
@@ -1425,6 +1427,58 @@ export default function InboxPage() {
     }
   }
 
+  // Toggle a single conversation's checkbox in the unified (smart) list
+  const handleConversationCheckboxToggle = (convId: string) => {
+    setSelectedConversationIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(convId)) {
+        next.delete(convId)
+      } else {
+        next.add(convId)
+      }
+      return next
+    })
+  }
+
+  // Select / deselect every conversation currently shown
+  const handleToggleSelectAllConversations = () => {
+    setSelectedConversationIds((prev) =>
+      prev.size === conversations.length ? new Set() : new Set(conversations.map((c) => c.id)),
+    )
+  }
+
+  // Bulk actions for the unified list (archive = resolved, spam, mark as read)
+  const handleConversationBulkAction = async (action: "archive" | "spam" | "markAsRead") => {
+    const ids = Array.from(selectedConversationIds)
+    if (ids.length === 0) return
+    try {
+      await Promise.all(
+        ids.map((id) =>
+          action === "markAsRead"
+            ? fetch(`/api/inbox/${id}/messages/read`, { method: "POST" })
+            : fetch(`/api/inbox/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: action === "spam" ? "spam" : "resolved" }),
+              }),
+        ),
+      )
+      if (action === "markAsRead") {
+        setConversations((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, unread_count: 0 } : c)))
+      } else {
+        setConversations((prev) => prev.filter((c) => !ids.includes(c.id)))
+        if (selectedConversation && ids.includes(selectedConversation.id)) {
+          setSelectedConversation(null)
+          setSelectedConversationId(null)
+          setMessages([])
+        }
+      }
+      setSelectedConversationIds(new Set())
+    } catch (error) {
+      console.error("Error in bulk conversation action:", error)
+    }
+  }
+
   // Open the reply composer: pre-fill To with the last customer's email
   const openReplyBox = () => {
     try {
@@ -1964,9 +2018,9 @@ export default function InboxPage() {
               checked={
                 inboxMode === "gmail"
                   ? selectedGmailThreadIds.size === gmailThreads.length && gmailThreads.length > 0
-                  : false
+                  : selectedConversationIds.size === conversations.length && conversations.length > 0
               }
-              onCheckedChange={inboxMode === "gmail" ? handleSelectAllGmailThreads : undefined}
+              onCheckedChange={inboxMode === "gmail" ? handleSelectAllGmailThreads : handleToggleSelectAllConversations}
               className="h-[18px] w-[18px]"
             />
             <Button
@@ -2119,6 +2173,26 @@ export default function InboxPage() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleGmailBulkAction("markAsRead", Array.from(selectedGmailThreadIds))}>
                     <MailOpen className="mr-2 h-4 w-4" /> Segna letto
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {inboxMode === "smart" && selectedConversationIds.size > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-xs h-7 bg-transparent ml-1">
+                    {selectedConversationIds.size} sel. <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => handleConversationBulkAction("archive")}>
+                    <Archive className="mr-2 h-4 w-4" /> Archivia
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleConversationBulkAction("markAsRead")}>
+                    <MailOpen className="mr-2 h-4 w-4" /> Segna letto
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleConversationBulkAction("spam")}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Segna spam
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -2425,7 +2499,12 @@ export default function InboxPage() {
                             : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
                       }`}
                     >
-                      <Checkbox checked={false} onClick={(e) => e.stopPropagation()} className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100" />
+                      <Checkbox
+                        checked={selectedConversationIds.has(conv.id)}
+                        onCheckedChange={() => handleConversationCheckboxToggle(conv.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
+                      />
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
                         <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
                       </button>
