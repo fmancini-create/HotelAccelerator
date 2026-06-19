@@ -821,10 +821,10 @@ export default function InboxPage() {
   // Operates directly on the given thread ids — does NOT depend on an open thread,
   // unlike handleGmailAction which guards on selectedGmailThread.
   const handleGmailBulkAction = useCallback(
-    async (action: "archive" | "trash" | "markAsRead", threadIds: string[]) => {
+    async (action: "archive" | "trash" | "markAsRead" | "spam", threadIds: string[]) => {
       if (threadIds.length === 0) return
-      // Optimistically remove archived/trashed threads from the visible list
-      if (action === "archive" || action === "trash") {
+      // Optimistically remove archived/trashed/spam threads from the visible list
+      if (action === "archive" || action === "trash" || action === "spam") {
         setGmailThreads((prev) => prev.filter((t) => !threadIds.includes(t.id)))
       }
       const results = await Promise.allSettled(
@@ -2270,7 +2270,7 @@ export default function InboxPage() {
                   : selectedConversationIds.size === conversations.length && conversations.length > 0
               }
               onCheckedChange={inboxMode === "gmail" ? handleSelectAllGmailThreads : handleToggleSelectAllConversations}
-              className="h-[18px] w-[18px]"
+              className="h-7 w-7 [&_svg]:size-5"
             />
             <Button
               variant="ghost"
@@ -2406,60 +2406,58 @@ export default function InboxPage() {
               </DropdownMenu>
             )}
 
-            {inboxMode === "gmail" && selectedGmailThreadIds.size > 0 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-xs h-7 bg-transparent ml-1">
-                    {selectedGmailThreadIds.size} sel. <ChevronDown className="h-3 w-3 ml-1" />
+            {/* Bulk actions: always present in the bar, enabled when >=1 selected.
+                Works in both Gmail mode and unified (smart) mode, for "Tutti i
+                canali" and any single channel. */}
+            {(() => {
+              const count = inboxMode === "gmail" ? selectedGmailThreadIds.size : selectedConversationIds.size
+              const disabled = count === 0
+              const run = (action: "archive" | "spam" | "markAsRead") => {
+                if (disabled) return
+                if (inboxMode === "gmail") {
+                  handleGmailBulkAction(action, Array.from(selectedGmailThreadIds))
+                } else {
+                  handleConversationBulkAction(action)
+                }
+              }
+              return (
+                <div className="flex items-center gap-1 ml-1">
+                  {count > 0 && (
+                    <span className="text-[13px] text-[#5f6368] tabular-nums mr-1">{count} sel.</span>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled}
+                    className="text-xs h-7 bg-transparent gap-1"
+                    onClick={() => run("archive")}
+                  >
+                    <Archive className="h-4 w-4" />
+                    <span className="hidden sm:inline">Archivia</span>
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => handleGmailBulkAction("archive", Array.from(selectedGmailThreadIds))}>
-                    <Archive className="mr-2 h-4 w-4" /> Archivia
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleGmailBulkAction("trash", Array.from(selectedGmailThreadIds))}>
-                    <Trash2 className="mr-2 h-4 w-4" /> Elimina
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleGmailBulkAction("markAsRead", Array.from(selectedGmailThreadIds))}>
-                    <MailOpen className="mr-2 h-4 w-4" /> Segna letto
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {inboxMode === "smart" && selectedConversationIds.size > 0 && (
-              <div className="flex items-center gap-1 ml-1">
-                <span className="text-[13px] text-[#5f6368] tabular-nums mr-1">
-                  {selectedConversationIds.size} sel.
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-7 bg-transparent gap-1"
-                  onClick={() => handleConversationBulkAction("archive")}
-                >
-                  <Archive className="h-4 w-4" />
-                  <span className="hidden sm:inline">Archivia</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-7 bg-transparent gap-1"
-                  onClick={() => handleConversationBulkAction("markAsRead")}
-                >
-                  <MailOpen className="h-4 w-4" />
-                  <span className="hidden sm:inline">Segna letto</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-7 bg-transparent gap-1"
-                  onClick={() => handleConversationBulkAction("spam")}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Segna spam</span>
-                </Button>
-              </div>
-            )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled}
+                    className="text-xs h-7 bg-transparent gap-1"
+                    onClick={() => run("spam")}
+                  >
+                    <AlertCircle className="h-4 w-4" />
+                    <span className="hidden sm:inline">Spam</span>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={disabled}
+                    className="text-xs h-7 bg-transparent gap-1"
+                    onClick={() => run("markAsRead")}
+                  >
+                    <MailOpen className="h-4 w-4" />
+                    <span className="hidden sm:inline">Segna come letto</span>
+                  </Button>
+                </div>
+              )
+            })()}
             <div className="flex-1" />
             {inboxMode === "gmail" && (
               <div className="flex items-center gap-0">
@@ -2836,7 +2834,7 @@ export default function InboxPage() {
                         checked={selectedGmailThreadIds.has(thread.id)}
                         onCheckedChange={() => handleGmailCheckboxToggle(thread.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
+                        className="h-7 w-7 [&_svg]:size-5 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
                       />
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
                         <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
@@ -2889,7 +2887,7 @@ export default function InboxPage() {
                         checked={selectedConversationIds.has(conv.id)}
                         onCheckedChange={() => handleConversationCheckboxToggle(conv.id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-5 w-5 flex-shrink-0"
+                        className="h-7 w-7 [&_svg]:size-5 flex-shrink-0"
                       />
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
                         <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
