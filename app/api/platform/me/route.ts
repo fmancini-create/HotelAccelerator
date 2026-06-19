@@ -14,6 +14,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { ACTIVE_PROPERTY_COOKIE, isValidUuid } from "@/lib/platform-context"
+import { getMemberEffectiveAreas } from "@/lib/auth/area-access"
+import { BASELINE_AREA_KEYS } from "@/lib/platform/areas"
 
 export const dynamic = "force-dynamic"
 
@@ -68,6 +70,8 @@ export async function GET(request: NextRequest) {
       name: collaborator?.name || user.email.split("@")[0],
       tenants,
       activePropertyId,
+      // Admins have access to every area; empty list signals "no filtering".
+      areas: [],
     })
   }
 
@@ -76,7 +80,7 @@ export async function GET(request: NextRequest) {
   // access (role "tenant_admin") requires the is_tenant_admin flag.
   const { data: adminUser } = await supabase
     .from("admin_users")
-    .select("property_id, name, role, is_tenant_admin, can_manage_users")
+    .select("id, property_id, name, role, is_tenant_admin, can_manage_users")
     .eq("email", user.email)
     .maybeSingle()
 
@@ -95,6 +99,15 @@ export async function GET(request: NextRequest) {
 
   const isTenantAdmin = adminUser?.is_tenant_admin === true
 
+  // Effective areas drive nav filtering for regular members. Admins are not
+  // filtered (empty list). Members get baseline + granted areas (direct/group).
+  let areas: string[] = []
+  if (adminUser && !isTenantAdmin) {
+    areas = adminUser.property_id
+      ? await getMemberEffectiveAreas(adminUser.property_id, adminUser.id)
+      : [...BASELINE_AREA_KEYS]
+  }
+
   return NextResponse.json({
     // "tenant_admin" only for real admins; other members get "member".
     role: !adminUser ? "none" : isTenantAdmin ? "tenant_admin" : "member",
@@ -106,5 +119,6 @@ export async function GET(request: NextRequest) {
     name: adminUser?.name || user.email.split("@")[0],
     tenants,
     activePropertyId,
+    areas,
   })
 }

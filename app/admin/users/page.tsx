@@ -526,7 +526,7 @@ export default function AdminUsersPage() {
                 <div className="col-span-full text-center py-12 text-muted-foreground">
                   <UsersRound className="w-12 h-12 mx-auto mb-4 opacity-50" />
                   <p>Nessun gruppo creato</p>
-                  <p className="text-sm">Crea gruppi per organizzare il team e assegnare permessi sui canali</p>
+                  <p className="text-sm">Crea gruppi per organizzare il team e assegnare aree e permessi sui canali</p>
                 </div>
               )}
             </div>
@@ -535,10 +535,10 @@ export default function AdminUsersPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
               <h4 className="font-medium text-blue-900 mb-2">Come funzionano i gruppi?</h4>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Crea gruppi come "Reception", "Spa", "Ristorante" per organizzare il team</li>
+                <li>{"• Crea gruppi come \"Reception\", \"Spa\", \"Ristorante\" per organizzare il team"}</li>
                 <li>• Assegna utenti a uno o più gruppi</li>
-                <li>• Configura i permessi di ogni gruppo sui canali di comunicazione</li>
-                <li>• Gli utenti ereditano i permessi di tutti i gruppi a cui appartengono</li>
+                <li>• Configura le aree della piattaforma e i permessi sui canali di ogni gruppo</li>
+                <li>• Gli utenti ereditano aree e permessi di tutti i gruppi a cui appartengono</li>
               </ul>
             </div>
           </TabsContent>
