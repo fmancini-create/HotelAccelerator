@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
+import { GRANTABLE_AREA_KEYS } from "@/lib/platform/areas"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ groupId: string }> }) {
   try {
@@ -27,7 +28,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (error) throw error
 
-    return NextResponse.json({ permissions: permissions || [] })
+    const { data: areaRows } = await supabase
+      .from("group_area_permissions")
+      .select("area_key")
+      .eq("property_id", propertyId)
+      .eq("group_id", groupId)
+    const areas = (areaRows ?? []).map((r) => r.area_key).filter((k) => GRANTABLE_AREA_KEYS.has(k))
+
+    return NextResponse.json({ permissions: permissions || [], areas })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
@@ -74,6 +82,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const { error } = await supabase.from("group_channel_permissions").insert(permissionsToInsert)
 
       if (error) throw error
+    }
+
+    // Area permissions for the group (only present when client sends `areas`).
+    if (Array.isArray(body?.areas)) {
+      const areaKeys: string[] = Array.from(
+        new Set(
+          (body.areas as unknown[]).filter((k): k is string => typeof k === "string" && GRANTABLE_AREA_KEYS.has(k)),
+        ),
+      )
+
+      await supabase.from("group_area_permissions").delete().eq("group_id", groupId)
+
+      if (areaKeys.length > 0) {
+        const areaRows = areaKeys.map((area_key) => ({ property_id: propertyId, group_id: groupId, area_key }))
+        const { error: areaErr } = await supabase.from("group_area_permissions").insert(areaRows)
+        if (areaErr) throw areaErr
+      }
     }
 
     return NextResponse.json({ success: true })

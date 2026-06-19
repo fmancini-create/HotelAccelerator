@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
+import { GRANTABLE_AREA_KEYS } from "@/lib/platform/areas"
 
 /**
  * Per-user channel permissions.
@@ -103,7 +104,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     })
 
-    return NextResponse.json({ user, permissions })
+    // Area grants for this user (only grantable keys are surfaced).
+    const { data: areaRows } = await supabase
+      .from("user_area_permissions")
+      .select("area_key")
+      .eq("property_id", propertyId)
+      .eq("user_id", userId)
+    const areas = (areaRows ?? []).map((r) => r.area_key).filter((k) => GRANTABLE_AREA_KEYS.has(k))
+
+    return NextResponse.json({ user, permissions, areas })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
@@ -159,6 +168,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     if (rows.length > 0) {
       const { error } = await supabase.from("channel_user_assignments").insert(rows)
       if (error) throw error
+    }
+
+    // Area permissions: only present when the client sends `areas`. Replace the
+    // full set with the (sanitized) grantable keys. Unchecking removes a grant.
+    if (Array.isArray(body?.areas)) {
+      const areaKeys: string[] = Array.from(
+        new Set((body.areas as unknown[]).filter((k): k is string => typeof k === "string" && GRANTABLE_AREA_KEYS.has(k))),
+      )
+
+      await supabase
+        .from("user_area_permissions")
+        .delete()
+        .eq("property_id", propertyId)
+        .eq("user_id", userId)
+
+      if (areaKeys.length > 0) {
+        const areaRows = areaKeys.map((area_key) => ({ property_id: propertyId, user_id: userId, area_key }))
+        const { error: areaErr } = await supabase.from("user_area_permissions").insert(areaRows)
+        if (areaErr) throw areaErr
+      }
     }
 
     return NextResponse.json({ success: true, count: rows.length })

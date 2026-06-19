@@ -69,6 +69,13 @@ type NavItem = {
    * admin). I membri non-admin (es. "editor") non la vedono.
    */
   adminOnly?: boolean
+  /**
+   * Chiave dell'AREA (vedi lib/platform/areas.ts) che governa questa voce. Se
+   * presente, un membro non-admin la vede solo se l'area gli e' stata concessa
+   * (direttamente o via gruppo). Voci senza `area` (baseline, canali, utenti)
+   * seguono le regole module/adminOnly.
+   */
+  area?: string
 }
 
 // Primary navigation shown inline on the header (desktop).
@@ -81,6 +88,7 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Users,
     match: (p) => p.startsWith("/admin/crm"),
     module: "crm",
+    area: "crm",
   },
   {
     href: "/admin/cms",
@@ -88,6 +96,7 @@ const PRIMARY_NAV: NavItem[] = [
     icon: FileText,
     match: (p) => p.startsWith("/admin/cms"),
     module: "cms",
+    area: "cms",
   },
   {
     // Visible to all members: a non-admin lands on the email page where they
@@ -110,25 +119,27 @@ const PRIMARY_NAV: NavItem[] = [
 
 // Secondary sections accessible via the "Altro" dropdown.
 const MORE_NAV: NavItem[] = [
-  { href: "/admin/photos", label: "Foto", icon: ImageIcon },
-  { href: "/admin/gallery", label: "Gallery", icon: ImageIcon },
-  { href: "/admin/categories", label: "Categorie", icon: Tag },
-  { href: "/admin/message-rules", label: "Smart Messages", icon: MessageSquare, module: "inbox" },
+  { href: "/admin/photos", label: "Foto", icon: ImageIcon, area: "photos" },
+  { href: "/admin/gallery", label: "Gallery", icon: ImageIcon, area: "gallery" },
+  { href: "/admin/categories", label: "Categorie", icon: Tag, area: "categories" },
+  { href: "/admin/message-rules", label: "Smart Messages", icon: MessageSquare, module: "inbox", area: "message-rules" },
   {
     href: "/admin/tracking",
     label: "Tracking",
     icon: BarChart3,
     match: (p) => p.startsWith("/admin/tracking"),
     module: "tracking",
+    area: "tracking",
   },
-  { href: "/admin/todos", label: "Todos", icon: ListTodo },
-  { href: "/admin/monitoring", label: "Monitoring", icon: BarChart3 },
-  { href: "/admin/embed-scripts", label: "Embed scripts", icon: Mail },
+  { href: "/admin/todos", label: "Todos", icon: ListTodo, area: "todos" },
+  { href: "/admin/monitoring", label: "Monitoring", icon: BarChart3, area: "monitoring" },
+  { href: "/admin/embed-scripts", label: "Embed scripts", icon: Mail, area: "embed-scripts" },
   {
     href: "/admin/marketing",
     label: "Marketing",
     icon: Megaphone,
     match: (p) => p.startsWith("/admin/marketing"),
+    area: "marketing",
   },
   {
     href: "/admin/modules",
@@ -156,6 +167,8 @@ type PlatformMe = {
   memberRole?: string | null
   email?: string
   name?: string
+  /** Effective area keys for members; empty/undefined for admins (= all). */
+  areas?: string[]
 }
 
 const meFetcher = async (url: string): Promise<PlatformMe> => {
@@ -194,6 +207,18 @@ function filterByRole(items: NavItem[], isAdmin: boolean | undefined): NavItem[]
   return items.filter((item) => !item.adminOnly)
 }
 
+/**
+ * Nasconde le voci legate a un'AREA che non e' stata concessa al membro.
+ * Gli admin (isAdmin) vedono tutto. Per i membri si usa l'elenco `areas`
+ * effettivo (baseline + concesse dirette/gruppo). Fail-closed: finche' le aree
+ * non sono note, le voci area-gated restano nascoste.
+ */
+function filterByArea(items: NavItem[], isAdmin: boolean | undefined, areas: string[] | undefined): NavItem[] {
+  if (isAdmin) return items
+  const granted = new Set(areas ?? [])
+  return items.filter((item) => !item.area || granted.has(item.area))
+}
+
 function isActive(item: NavItem, pathname: string): boolean {
   if (item.match) return item.match(pathname)
   return pathname === item.href || pathname.startsWith(item.href + "/")
@@ -221,13 +246,14 @@ export function PlatformHeader() {
 
   const activeModules = modulesData?.activeModules
   const isAdmin = me?.isAdmin
+  const areas = me?.areas
   const primaryNav = useMemo(
-    () => filterByRole(filterByModules(PRIMARY_NAV, activeModules), isAdmin),
-    [activeModules, isAdmin],
+    () => filterByArea(filterByRole(filterByModules(PRIMARY_NAV, activeModules), isAdmin), isAdmin, areas),
+    [activeModules, isAdmin, areas],
   )
   const moreNav = useMemo(
-    () => filterByRole(filterByModules(MORE_NAV, activeModules), isAdmin),
-    [activeModules, isAdmin],
+    () => filterByArea(filterByRole(filterByModules(MORE_NAV, activeModules), isAdmin), isAdmin, areas),
+    [activeModules, isAdmin, areas],
   )
 
   const moreHasActive = useMemo(

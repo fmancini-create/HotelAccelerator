@@ -6,6 +6,7 @@ import { ArrowLeft, Mail, MessageSquare, Send, Phone, Check, Inbox, Bell, Power 
 import { Button } from "@/components/ui/button"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
+import { AreaPermissionsMatrix } from "@/components/admin/area-permissions-matrix"
 
 interface ChannelPermission {
   channel_type: string
@@ -37,6 +38,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
   const { userId } = use(params)
   const [user, setUser] = useState<TargetUser | null>(null)
   const [permissions, setPermissions] = useState<ChannelPermission[]>([])
+  const [areas, setAreas] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -60,6 +62,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       const data = await res.json()
       setUser(data.user)
       setPermissions(data.permissions || [])
+      setAreas(data.areas || [])
     } catch (e) {
       setError("Errore nel caricamento dei permessi")
     } finally {
@@ -98,7 +101,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       const res = await fetch(`/api/admin/users/${userId}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions }),
+        body: JSON.stringify({ permissions, areas }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -128,7 +131,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title={`Permessi: ${displayName}`}
-          subtitle="Assegna i canali e i permessi specifici di questo utente"
+          subtitle="Assegna le aree della piattaforma e i canali per questo utente"
           actions={
             <div className="flex gap-2">
               <Link href="/admin/users">
@@ -164,7 +167,24 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
           </div>
         )}
 
-        <div className="mt-6 space-y-4">
+        {!user?.is_tenant_admin && (
+          <div className="mt-6">
+            <AreaPermissionsMatrix
+              value={areas}
+              onChange={(next) => {
+                setSaved(false)
+                setAreas(next)
+              }}
+              disabled={saving}
+            />
+          </div>
+        )}
+
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Canali</h2>
+        </div>
+
+        <div className="mt-3 space-y-4">
           {permissions.length === 0 && (
             <div className="bg-card rounded-xl border p-8 text-center text-muted-foreground">
               Nessun canale configurato per questa struttura. Aggiungi un canale (Email, WhatsApp, ...) per

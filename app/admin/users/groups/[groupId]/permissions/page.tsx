@@ -6,6 +6,7 @@ import { ArrowLeft, Mail, MessageSquare, Phone, Send, Check, Eye, Edit3, Shield 
 import { Button } from "@/components/ui/button"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
+import { AreaPermissionsMatrix } from "@/components/admin/area-permissions-matrix"
 
 interface ChannelPermission {
   id?: string
@@ -29,6 +30,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
   const { groupId } = use(params)
   const [group, setGroup] = useState<{ id: string; name: string; color: string } | null>(null)
   const [permissions, setPermissions] = useState<ChannelPermission[]>([])
+  const [areas, setAreas] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -66,6 +68,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
           )
         })
         setPermissions(mergedPermissions)
+        setAreas(data.areas || [])
       }
     } catch (e) {
       console.error("Error loading data:", e)
@@ -80,7 +83,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
       const res = await fetch(`/api/admin/groups/${groupId}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions }),
+        body: JSON.stringify({ permissions, areas }),
       })
       if (res.ok) {
         // Show success
@@ -124,7 +127,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title={`Permessi: ${group?.name || ""}`}
-          subtitle="Configura i permessi sui canali di comunicazione"
+          subtitle="Configura le aree della piattaforma e i permessi sui canali per i membri del gruppo"
           breadcrumbs={[
             { label: "Team", href: "/admin/users" },
             { label: "Gruppi", href: "/admin/users?tab=groups" },
@@ -146,7 +149,18 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
           }
         />
 
-        <div className="mt-6 space-y-4">
+        <div className="mt-6">
+          <AreaPermissionsMatrix value={areas} onChange={setAreas} disabled={saving} />
+        </div>
+
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Canali</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            I membri del gruppo ereditano sia le aree sopra sia i permessi sui canali qui sotto.
+          </p>
+        </div>
+
+        <div className="mt-3 space-y-4">
           {CHANNEL_TYPES.map((ct) => {
             const permission = permissions.find((p) => p.channel_type === ct.type && !p.channel_id)
             const IconComponent = ct.icon
