@@ -2475,7 +2475,11 @@ export default function InboxPage() {
           </div>
 
           {/* Thread/Conversation rows OR Detail View */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
+          {/* `relative` makes this the containing block for absolutely-positioned
+              descendants (e.g. Tailwind `sr-only` spans in each row). Without it
+              those abs spans anchor to <html>, inflating document height and
+              producing a second, page-level scrollbar. */}
+          <div className="relative flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
             {(selectedGmailThread || selectedConversation) ? (
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
               <div className="flex flex-col h-full">
