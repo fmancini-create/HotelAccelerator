@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 
 // GET - Carica etichette e il loro stato di sincronizzazione
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
@@ -8,7 +8,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { id: channelId } = params
     const propertyId = await getAuthenticatedPropertyId(request)
 
-    const supabase = await createClient()
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, propertyId, channelId))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
+    }
+    const supabase = access.supabase
 
     // Carica le etichette dal database
     const { data: labels, error } = await supabase
@@ -42,7 +46,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       return NextResponse.json({ error: "labelId richiesto" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, propertyId, channelId))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
+    }
+    const supabase = access.supabase
 
     const { error } = await supabase
       .from("email_labels")

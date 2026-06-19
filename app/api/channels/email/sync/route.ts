@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 import { getValidGmailToken } from "@/lib/gmail-client"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import type { OAuthProvider } from "@/lib/oauth-config"
@@ -28,7 +28,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "channel_id e property_id obbligatori" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, property_id, channel_id))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
+    }
+    const supabase = access.supabase
 
     const { data: channel, error: channelError } = await supabase
       .from("email_channels")
