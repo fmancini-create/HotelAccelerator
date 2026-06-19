@@ -4,7 +4,8 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, CheckCircle } from "lucide-react"
+import Link from "next/link"
+import { Lock, Eye, EyeOff, CheckCircle, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
@@ -16,10 +17,28 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  // null = ancora in verifica, true/false = esito presenza sessione di recovery
+  const [hasRecoverySession, setHasRecoverySession] = useState<boolean | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    // Supabase gestisce automaticamente il token dall'URL
+    const supabase = createClient()
+
+    // Il client (@supabase/ssr, PKCE) scambia automaticamente il code/hash
+    // presente nell'URL del link di recupero e crea la sessione. Verifichiamo
+    // che ci sia, così possiamo mostrare un messaggio chiaro se il link è
+    // scaduto o assente invece di far fallire updateUser con errore generico.
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" || session) {
+        setHasRecoverySession(true)
+      }
+    })
+
+    supabase.auth.getSession().then(({ data }) => {
+      setHasRecoverySession((prev) => (prev === null ? Boolean(data.session) : prev))
+    })
+
+    return () => sub.subscription.unsubscribe()
   }, [])
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -75,6 +94,30 @@ export default function ResetPasswordPage() {
             <p className="text-stone-600">
               La tua password è stata aggiornata con successo. Verrai reindirizzato al login...
             </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (hasRecoverySession === false) {
+    return (
+      <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-amber-700" />
+            </div>
+            <h1 className="text-2xl font-serif text-stone-800 mb-2">Link non valido</h1>
+            <p className="text-stone-600 mb-6">
+              Il link di recupero è scaduto o non è valido. Richiedine uno nuovo dalla pagina di accesso.
+            </p>
+            <Link
+              href="/admin"
+              className="inline-flex items-center justify-center w-full h-10 rounded-md bg-amber-700 text-white text-sm font-medium hover:bg-amber-800"
+            >
+              Torna al login
+            </Link>
           </div>
         </div>
       </div>
@@ -143,6 +186,13 @@ export default function ResetPasswordPage() {
                 "Reimposta Password"
               )}
             </Button>
+
+            <Link
+              href="/admin"
+              className="block text-center text-sm text-stone-600 hover:text-stone-800"
+            >
+              Torna al login
+            </Link>
           </form>
         </div>
       </div>

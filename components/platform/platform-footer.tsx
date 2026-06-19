@@ -1,15 +1,26 @@
+"use client"
+
 /**
  * PlatformFooter
  *
  * Minimal footer shown on all internal admin pages. Intentionally slim so it
  * also fits inside dense app-shell pages like the Inbox.
  *
- * Kept server-only: no client state, no hooks.
+ * Client component so it can hide itself on auth pages (login / reset), which
+ * share the /admin layout but must not expose links to authenticated sections.
  */
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
+
+function isAuthPage(pathname: string): boolean {
+  return pathname === "/admin" || pathname === "/admin/login" || pathname.startsWith("/admin/reset-password")
+}
 
 export function PlatformFooter() {
+  const pathname = usePathname() || ""
+  if (isAuthPage(pathname)) return null
+
   const year = new Date().getFullYear()
   return (
     <footer

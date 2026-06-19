@@ -1,12 +1,45 @@
 /**
- * PROXY - Tenant Resolution & Routing (Next.js 16)
- * Risolve il tenant dal hostname e gestisce il routing multi-tenant
+ * PROXY - Auth guard + Tenant Resolution & Routing (Next.js 16)
+ * 1. Protegge le rotte /admin/* e /super-admin/* lato server (redirect al login
+ *    se non c'è sessione). In dev/preview il guard è disattivato.
+ * 2. Risolve il tenant dal hostname e gestisce il routing multi-tenant.
  */
 
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { readMiddlewareUser } from "@/lib/supabase/middleware"
 
-export default function proxy(request: NextRequest) {
+/** Host della preview v0 / dev locale dove si salta l'auth reale (NO vercel.app). */
+function isDevOrPreviewHost(hostname: string): boolean {
+  const h = hostname.split(":")[0]
+  return (
+    h === "localhost" ||
+    h === "127.0.0.1" ||
+    h.includes("vercel.run") ||
+    h.includes("vusercontent.net")
+  )
+}
+
+/** Rotte che richiedono una sessione autenticata. */
+function isProtectedPath(pathname: string): boolean {
+  // Pubbliche: login gate, reset password, pagina "non autorizzato", callback OAuth.
+  if (pathname === "/admin" || pathname.startsWith("/admin/reset-password") || pathname === "/admin/unauthorized") {
+    return false
+  }
+  if (pathname.startsWith("/auth")) return false
+  if (pathname === "/super-admin/login") return false
+
+  if (pathname.startsWith("/admin/")) return true
+  if (pathname.startsWith("/super-admin")) return true
+  return false
+}
+
+/** Pagina di login appropriata per la sezione richiesta. */
+function loginGateFor(pathname: string): string {
+  return pathname.startsWith("/super-admin") ? "/super-admin/login" : "/admin"
+}
+
+export default async function proxy(request: NextRequest) {
   const hostname = request.headers.get("host") || ""
   const pathname = request.nextUrl.pathname
 
@@ -15,13 +48,41 @@ export default function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  const devOrPreview = isDevOrPreviewHost(hostname)
+
+  // AUTH GUARD (solo in produzione): verifica la presenza di una sessione per le
+  // rotte protette. L'autorizzazione di ruolo resta nei layout/API.
+  if (!devOrPreview && isProtectedPath(pathname)) {
+    const { user, applyCookies } = await readMiddlewareUser(request)
+
+    if (!user) {
+      const redirect = NextResponse.redirect(new URL(loginGateFor(pathname), request.url))
+      applyCookies(redirect)
+      return redirect
+    }
+
+    const response = resolveTenant(request, hostname, pathname, devOrPreview)
+    applyCookies(response)
+    return response
+  }
+
+  return resolveTenant(request, hostname, pathname, devOrPreview)
+}
+
+/**
+ * Logica di risoluzione tenant (invariata): determina dominio piattaforma,
+ * subdomain o custom domain e inoltra gli header appropriati.
+ */
+function resolveTenant(
+  request: NextRequest,
+  hostname: string,
+  pathname: string,
+  devOrPreview: boolean,
+): NextResponse {
   const isPlatformDomain = isBaseDomain(hostname)
-  
-  // DEV/PREVIEW MODE: Allow /admin and /super-admin paths on vercel.run domains
-  const isDevOrPreview = hostname.includes("vercel.run") || hostname.includes("localhost")
-  
-  // In dev/preview, allow admin routes to pass through without blocking
-  if (isDevOrPreview && (pathname.startsWith("/admin") || pathname.startsWith("/super-admin"))) {
+
+  // In dev/preview, lascia passare le rotte admin senza blocchi
+  if (devOrPreview && (pathname.startsWith("/admin") || pathname.startsWith("/super-admin"))) {
     const response = NextResponse.next()
     response.headers.set("x-is-dev-mode", "true")
     return response

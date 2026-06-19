@@ -18,7 +18,7 @@
  */
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { useMemo, useState } from "react"
 import useSWR from "swr"
 import {
@@ -171,10 +171,19 @@ function isActive(item: NavItem, pathname: string): boolean {
   return pathname === item.href || pathname.startsWith(item.href + "/")
 }
 
+/**
+ * Auth pages (login gate, password reset) must NOT show the authenticated
+ * chrome. The /admin layout wraps every page in PlatformShell, so without this
+ * guard the full nav would still render on the login form after logout.
+ */
+function isAuthPage(pathname: string): boolean {
+  return pathname === "/admin" || pathname === "/admin/login" || pathname.startsWith("/admin/reset-password")
+}
+
 export function PlatformHeader() {
   const pathname = usePathname() || ""
-  const router = useRouter()
   const [signingOut, setSigningOut] = useState(false)
+  const onAuthPage = isAuthPage(pathname)
   const { data: me } = useSWR<PlatformMe>("/api/platform/me", meFetcher, {
     revalidateOnFocus: false,
   })
@@ -203,8 +212,9 @@ export function PlatformHeader() {
     try {
       const supabase = createClient()
       await supabase.auth.signOut()
-      router.push("/admin/login")
-      router.refresh()
+      // Full reload to /admin (the login gate). A hard navigation clears any
+      // cached SWR state (me / modules) so no authenticated data lingers.
+      window.location.href = "/admin"
     } finally {
       setSigningOut(false)
     }
@@ -216,6 +226,9 @@ export function PlatformHeader() {
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase())
     .join("")
+
+  // Auth pages render no chrome (login form stands alone).
+  if (onAuthPage) return null
 
   return (
     <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">
