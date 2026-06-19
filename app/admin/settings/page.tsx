@@ -17,6 +17,8 @@ interface SettingsItem {
   requiresPermission?: "can_manage_users"
   /** Only show to super admins */
   superAdminOnly?: boolean
+  /** Only show to tenant admins / super admins (hidden from regular members) */
+  adminOnly?: boolean
 }
 
 const settingsItems: SettingsItem[] = [
@@ -27,8 +29,11 @@ const settingsItems: SettingsItem[] = [
     icon: <Globe className="w-6 h-6" />,
     href: "/admin/settings/domains",
     color: "bg-teal-500",
+    adminOnly: true,
   },
   {
+    // Visible to everyone: a member uses this to connect/configure THEIR own
+    // mailbox. Admin-only channel config is gated on the channel pages.
     id: "channels",
     title: "Canali",
     description: "Email, WhatsApp, Telegram, Chat e Telefono IP",
@@ -43,6 +48,7 @@ const settingsItems: SettingsItem[] = [
     icon: <Boxes className="w-6 h-6" />,
     href: "/admin/modules",
     color: "bg-indigo-500",
+    adminOnly: true,
   },
   {
     id: "users",
@@ -52,6 +58,7 @@ const settingsItems: SettingsItem[] = [
     href: "/admin/users",
     color: "bg-purple-500",
     requiresPermission: "can_manage_users",
+    adminOnly: true,
   },
   {
     id: "tracking",
@@ -60,6 +67,7 @@ const settingsItems: SettingsItem[] = [
     icon: <BarChart3 className="w-6 h-6" />,
     href: "/admin/tracking",
     color: "bg-sky-600",
+    adminOnly: true,
   },
   {
     id: "cms",
@@ -68,6 +76,7 @@ const settingsItems: SettingsItem[] = [
     icon: <FileText className="w-6 h-6" />,
     href: "/admin/cms",
     color: "bg-green-500",
+    adminOnly: true,
   },
   {
     id: "billing",
@@ -76,8 +85,10 @@ const settingsItems: SettingsItem[] = [
     icon: <Activity className="w-6 h-6" />,
     href: "/admin/billing",
     color: "bg-amber-500",
+    adminOnly: true,
   },
   {
+    // Visible to everyone: change own password and view own permissions.
     id: "profile",
     title: "Il Mio Profilo",
     description: "Modifica la tua password e visualizza i permessi",
@@ -100,9 +111,12 @@ export default function AdminSettingsPage() {
   }
 
   const isSuperAdmin = adminUser?.role === "super_admin"
+  // A tenant admin has role "admin"; regular members are "editor".
+  const isAdmin = isSuperAdmin || adminUser?.role === "admin"
 
   const visibleItems = settingsItems.filter((item) => {
     if (item.superAdminOnly && !isSuperAdmin) return false
+    if (item.adminOnly && !isAdmin) return false
     if (item.requiresPermission && !adminUser?.[item.requiresPermission] && !isSuperAdmin) return false
     return true
   })
