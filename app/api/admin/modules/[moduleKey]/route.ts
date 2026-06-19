@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
+import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { getPlatformRole } from "@/lib/modules/auth"
 import { createServiceClient } from "@/lib/supabase/server"
 import { setModuleStatus, type ModuleStatus } from "@/lib/modules"
@@ -79,7 +79,9 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, moduleKey, status })
   } catch (error) {
-    console.error("[v0] Module PATCH error:", error)
-    return NextResponse.json({ error: "Failed to update module" }, { status: accessErrorStatus(error) })
+    if (!isAccessError(error)) console.error("[v0] Module PATCH error:", error)
+    const status = accessErrorStatus(error)
+    const message = error instanceof Error && status !== 500 ? error.message : "Failed to update module"
+    return NextResponse.json({ error: message }, { status })
   }
 }

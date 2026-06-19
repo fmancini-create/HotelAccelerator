@@ -137,3 +137,12 @@ export function accessErrorStatus(error: unknown): number {
   if (message.includes("Accesso negato")) return 403
   return 500
 }
+
+/**
+ * True for expected authorization outcomes (401/403). Use to avoid logging
+ * normal access denials as server errors.
+ */
+export function isAccessError(error: unknown): boolean {
+  const status = accessErrorStatus(error)
+  return status === 401 || status === 403 || status === 400
+}

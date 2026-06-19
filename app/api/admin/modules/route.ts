@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
+import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getModulesWithState } from "@/lib/modules"
 
@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ propertyId, modules })
   } catch (error) {
-    console.error("[v0] Modules GET error:", error)
-    return NextResponse.json({ error: "Failed to fetch modules" }, { status: accessErrorStatus(error) })
+    // 401/403 are expected access-control outcomes, not server errors.
+    if (!isAccessError(error)) console.error("[v0] Modules GET error:", error)
+    const status = accessErrorStatus(error)
+    const message = error instanceof Error && status !== 500 ? error.message : "Failed to fetch modules"
+    return NextResponse.json({ error: message }, { status })
   }
 }
