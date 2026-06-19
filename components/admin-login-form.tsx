@@ -2,23 +2,48 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, Mail, ArrowLeft, User, Zap } from "lucide-react"
+import { Lock, Eye, EyeOff, Mail, ArrowLeft, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
+import { authorizeUser } from "@/lib/auth/authorize-user"
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1Z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.3 9.14 5.38 12 5.38Z"
+      />
+    </svg>
+  )
+}
 
 type FormMode = "login" | "register" | "recovery"
 
-const DEV_CREDENTIALS = {
-  admin: {
-    email: "f.mancini@ibarronci.com",
-    password: "Pippolo75@",
-  },
-  superAdmin: {
-    email: "f.mancini@4bid.it",
-    password: "Pippolo75@",
-  },
+// Hostnames where the v0 preview / local dev should skip real auth. NOTE: this
+// intentionally excludes "vercel.app" so production-like deploys are never bypassed.
+function isDevOrPreviewHost(): boolean {
+  if (typeof window === "undefined") return false
+  const h = window.location.hostname
+  return (
+    h === "localhost" ||
+    h === "127.0.0.1" ||
+    h.includes("vercel.run") ||
+    h.includes("vusercontent.net")
+  )
 }
 
 export default function AdminLoginForm() {
@@ -29,32 +54,20 @@ export default function AdminLoginForm() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [mode, setMode] = useState<FormMode>("login")
   const [isClient, setIsClient] = useState(false)
-  const [isDevEnvironment, setIsDevEnvironment] = useState(false)
-  const router = useRouter()
 
   useEffect(() => {
     setIsClient(true)
-    const hostname = window.location.hostname
-    const isDev =
-      hostname === "localhost" ||
-      hostname.includes("preview") ||
-      hostname.includes("vercel.app") ||
-      hostname.includes("vusercontent.net") ||
-      process.env.NODE_ENV === "development"
-    setIsDevEnvironment(isDev)
+    // Surface the "unauthorized" outcome from the Google OAuth callback.
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("error") === "unauthorized") {
+      setError("Questo account Google non è autorizzato ad accedere.")
+    } else if (params.get("error") === "oauth") {
+      setError("Accesso con Google non riuscito. Riprova.")
+    }
   }, [])
-
-  const handleQuickLogin = () => {
-    setEmail(DEV_CREDENTIALS.admin.email)
-    setPassword(DEV_CREDENTIALS.admin.password)
-  }
-
-  const handleQuickLoginSuperAdmin = () => {
-    setEmail(DEV_CREDENTIALS.superAdmin.email)
-    setPassword(DEV_CREDENTIALS.superAdmin.password)
-  }
 
   const getSupabase = () => {
     if (!isClient) return null
@@ -71,31 +84,18 @@ export default function AdminLoginForm() {
     setError("")
     setIsLoading(true)
 
-    console.log("[v0] Login started with email:", email)
-
-    // DEV/PREVIEW BYPASS: Auto-login in development/preview environments
-    // Check hostname since process.env vars aren't available in client
-    const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-    const isDevOrPreview = hostname.includes("vercel.run") || 
-                           hostname.includes("localhost") || 
-                           hostname.includes("127.0.0.1") ||
-                           hostname.includes("vusercontent.net")
-
-    if (isDevOrPreview) {
-      console.log("[v0] DEV/PREVIEW MODE: Bypassing auth, redirecting to dashboard")
+    // DEV/PREVIEW BYPASS: the v0 preview has no real session, so go straight in.
+    if (isDevOrPreviewHost()) {
       window.location.href = "/admin/dashboard"
       return
     }
 
     const supabase = getSupabase()
     if (!supabase) {
-      console.log("[v0] Supabase client is null")
       setError("Errore di configurazione")
       setIsLoading(false)
       return
     }
-
-    console.log("[v0] Supabase client created, attempting signInWithPassword")
 
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
@@ -103,64 +103,19 @@ export default function AdminLoginForm() {
         password,
       })
 
-      console.log("[v0] signInWithPassword response:", { data, error: signInError })
-
-      if (signInError) {
-        console.log("[v0] Login error:", signInError.message)
+      if (signInError || !data.user) {
         setError("Credenziali non valide")
         setIsLoading(false)
         return
       }
 
-      if (!data.user) {
-        console.log("[v0] No user in response")
-        setError("Errore durante l'accesso")
-        setIsLoading(false)
+      const result = await authorizeUser(supabase, data.user)
+
+      if (result.authorized) {
+        window.location.href = result.destination
         return
       }
 
-      console.log("[v0] User authenticated:", data.user.id)
-
-      console.log("[v0] Checking admin_users table...")
-      const { data: adminUser, error: adminError } = await supabase
-        .from("admin_users")
-        .select("*")
-        .eq("id", data.user.id)
-        .single()
-
-      console.log("[v0] admin_users query result:", { adminUser, adminError })
-
-      if (adminUser) {
-        console.log("[v0] Admin user found:", adminUser)
-        console.log("[v0] Redirecting to /admin/dashboard...")
-        window.location.href = "/admin/dashboard"
-        return
-      }
-
-      console.log("[v0] User not in admin_users, checking platform_collaborators...")
-      const { data: collaborator, error: collaboratorError } = await supabase
-        .from("platform_collaborators")
-        .select("*")
-        .eq("email", data.user.email)
-        .single()
-
-      console.log("[v0] platform_collaborators query result:", { collaborator, collaboratorError })
-
-      if (collaborator && collaborator.role === "super_admin" && collaborator.is_active) {
-        console.log("[v0] Super admin found:", collaborator)
-
-        // Update last login
-        await supabase
-          .from("platform_collaborators")
-          .update({ last_login_at: new Date().toISOString() })
-          .eq("id", collaborator.id)
-
-        console.log("[v0] Redirecting to /super-admin...")
-        window.location.href = "/super-admin"
-        return
-      }
-
-      console.log("[v0] User not authorized in admin_users or platform_collaborators")
       setError("Utente non autorizzato")
       await supabase.auth.signOut()
       setIsLoading(false)
@@ -169,6 +124,36 @@ export default function AdminLoginForm() {
       setError("Si è verificato un errore durante l'accesso")
       setIsLoading(false)
     }
+  }
+
+  const handleGoogleLogin = async () => {
+    setError("")
+
+    // In dev/preview there is no real OAuth session; skip straight to the app.
+    if (isDevOrPreviewHost()) {
+      window.location.href = "/admin/dashboard"
+      return
+    }
+
+    const supabase = getSupabase()
+    if (!supabase) {
+      setError("Errore di configurazione")
+      return
+    }
+
+    setGoogleLoading(true)
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    if (oauthError) {
+      setError("Accesso con Google non riuscito. Riprova.")
+      setGoogleLoading(false)
+    }
+    // On success the browser is redirected to Google, so no further state needed.
   }
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -400,34 +385,6 @@ export default function AdminLoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
-      {isDevEnvironment && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-          <p className="text-xs text-amber-700 mb-2 font-medium">Accesso rapido (solo dev/preview)</p>
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleQuickLogin}
-              className="w-full border-green-300 text-green-700 hover:bg-green-100 bg-transparent"
-            >
-              <Zap className="w-4 h-4 mr-2" />
-              Admin Villa I Barronci
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleQuickLoginSuperAdmin}
-              className="w-full border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
-            >
-              <Zap className="w-4 h-4 mr-2" />
-              Super Admin
-            </Button>
-          </div>
-        </div>
-      )}
-
       <div>
         <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
         <div className="relative">
@@ -475,6 +432,32 @@ export default function AdminLoginForm() {
           </span>
         ) : (
           "Accedi"
+        )}
+      </Button>
+
+      <div className="relative flex items-center py-1" aria-hidden="true">
+        <div className="flex-grow border-t border-stone-200" />
+        <span className="mx-3 text-xs text-stone-400">oppure</span>
+        <div className="flex-grow border-t border-stone-200" />
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full bg-transparent"
+        onClick={handleGoogleLogin}
+        disabled={googleLoading || isLoading}
+      >
+        {googleLoading ? (
+          <span className="flex items-center gap-2">
+            <span className="w-4 h-4 border-2 border-stone-400 border-t-transparent rounded-full animate-spin" />
+            Reindirizzamento...
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <GoogleIcon className="w-5 h-5" />
+            Continua con Google
+          </span>
         )}
       </Button>
 
