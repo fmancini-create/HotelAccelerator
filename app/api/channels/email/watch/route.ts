@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 
 // Setup Gmail watch (Pub/Sub push notifications)
 export async function POST(request: NextRequest) {
@@ -8,6 +10,12 @@ export async function POST(request: NextRequest) {
 
     if (!channel_id) {
       return NextResponse.json({ error: "channel_id obbligatorio" }, { status: 400 })
+    }
+
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, propertyId, channel_id))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
     }
 
     const supabase = await createClient()
@@ -112,6 +120,12 @@ export async function DELETE(request: NextRequest) {
 
     if (!channel_id) {
       return NextResponse.json({ error: "channel_id obbligatorio" }, { status: 400 })
+    }
+
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, propertyId, channel_id))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
     }
 
     const supabase = await createClient()

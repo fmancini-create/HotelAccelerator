@@ -149,6 +149,9 @@ export default function EmailChannelsClient() {
   const [connecting, setConnecting] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [enablingPush, setEnablingPush] = useState<string | null>(null)
+  // Admins manage every mailbox of the tenant (and can assign users). A
+  // non-admin member only sees/manages their OWN mailbox.
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const [settings, setSettings] = useState({
     autoSync: true,
@@ -198,6 +201,23 @@ export default function EmailChannelsClient() {
       }
     }
   }, [channels])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/platform/me", { credentials: "include" })
+        if (!res.ok) return
+        const me = await res.json()
+        if (!cancelled) setIsAdmin(me?.isAdmin === true)
+      } catch {
+        // default: non-admin (least privilege)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const fetchData = async () => {
     try {
@@ -908,29 +928,34 @@ export default function EmailChannelsClient() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>Assegna a</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {users.map((user) => (
-                          <Button
-                            key={user.id}
-                            type="button"
-                            variant={formData.assigned_users.includes(user.id) ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              setFormData({
-                                ...formData,
-                                assigned_users: formData.assigned_users.includes(user.id)
-                                  ? formData.assigned_users.filter((id) => id !== user.id)
-                                  : [...formData.assigned_users, user.id],
-                              })
-                            }}
-                          >
-                            {user.name}
-                          </Button>
-                        ))}
+                    {/* Only admins can assign a mailbox to other users. A
+                        non-admin connects their OWN mailbox (auto-assigned
+                        server-side), so this control is hidden for them. */}
+                    {isAdmin && (
+                      <div className="space-y-2">
+                        <Label>Assegna a</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {users.map((user) => (
+                            <Button
+                              key={user.id}
+                              type="button"
+                              variant={formData.assigned_users.includes(user.id) ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  assigned_users: formData.assigned_users.includes(user.id)
+                                    ? formData.assigned_users.filter((id) => id !== user.id)
+                                    : [...formData.assigned_users, user.id],
+                                })
+                              }}
+                            >
+                              {user.name}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="flex gap-2">
                       <Button type="submit">{editingChannel ? "Salva" : "Aggiungi"}</Button>

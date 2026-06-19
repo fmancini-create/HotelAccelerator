@@ -90,12 +90,14 @@ const PRIMARY_NAV: NavItem[] = [
     module: "cms",
   },
   {
+    // Visible to all members: a non-admin lands on the email page where they
+    // can connect/configure their OWN mailbox. Admin-only channel config
+    // (WhatsApp, Telegram, ...) is guarded at the page/route level.
     href: "/admin/channels/email",
     label: "Canali",
     icon: Radio,
     match: (p) => p.startsWith("/admin/channels"),
     module: "inbox",
-    adminOnly: true,
   },
   {
     href: "/admin/users",

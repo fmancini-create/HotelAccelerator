@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -150,9 +151,31 @@ interface ChannelStatus {
 }
 
 export default function ChannelsPage() {
+  const router = useRouter()
   const [channelStatuses, setChannelStatuses] = useState<Record<string, ChannelStatus>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [propertyId, setPropertyId] = useState<string | null>(null)
+
+  // The channels overview is admin-only. A non-admin member can only manage
+  // their own mailbox, so we send them straight to the email page.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/platform/me", { credentials: "include" })
+        if (!res.ok) return
+        const me = await res.json()
+        if (!cancelled && me?.isAdmin === false) {
+          router.replace("/admin/channels/email")
+        }
+      } catch {
+        // ignore; APIs remain access-controlled server-side
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [router])
 
   useEffect(() => {
     fetchChannelStatuses()

@@ -105,3 +105,19 @@ export async function getAccessibleChannelIds(
 
   return result
 }
+
+/**
+ * True if the caller may operate on a specific email channel: admins always
+ * can; a restricted member can only act on channels explicitly assigned to
+ * them. Use to gate per-channel email routes (settings, labels, sync, update).
+ */
+export async function canAccessEmailChannel(
+  access: ChannelAccess,
+  propertyId: string,
+  channelId: string,
+): Promise<boolean> {
+  if (access.isAdmin) return true
+  if (!access.adminUserId) return false
+  const ids = await getAccessibleChannelIds(access.supabase, propertyId, access.adminUserId)
+  return ids.emailChannelIds.includes(channelId)
+}

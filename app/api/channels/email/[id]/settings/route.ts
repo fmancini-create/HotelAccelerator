@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 
 // GET - Carica impostazioni canale email
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -8,7 +8,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { id: channelId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
 
-    const supabase = await createClient()
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, propertyId, channelId))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
+    }
+    const supabase = access.supabase
 
     const { data, error } = await supabase
       .from("email_channels")
@@ -50,7 +54,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
 
-    const supabase = await createClient()
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, propertyId, channelId))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
+    }
+    const supabase = access.supabase
 
     // Aggiorna le impostazioni nel canale email
     const emailChannelUpdates: Record<string, boolean> = {}

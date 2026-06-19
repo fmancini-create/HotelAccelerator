@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 import { gmailFetch } from "@/lib/gmail-client"
 
 // Get Gmail labels for a channel
@@ -12,6 +13,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, propertyId, channelId))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
+    }
+
     const { data, error, status } = await gmailFetch(channelId, "labels")
 
     if (error) {
@@ -62,7 +69,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, property_id, channel_id))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
+    }
+    const supabase = access.supabase
 
     // Delete existing label settings
     await supabase.from("email_labels").delete().eq("channel_id", channel_id).eq("property_id", property_id)

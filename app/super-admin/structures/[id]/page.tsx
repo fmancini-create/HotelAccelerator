@@ -72,7 +72,10 @@ export default function StructureDetailPage() {
 
       const structureRes = await fetch(`/api/super-admin/structures/${structureId}`)
       if (!structureRes.ok) {
-        throw new Error("Structure not found")
+        // Surface the real backend reason (e.g. auth/permission) instead of a
+        // generic "not found", which previously hid the actual cause.
+        const body = await structureRes.json().catch(() => null)
+        throw new Error(body?.error || `Errore ${structureRes.status}: struttura non disponibile`)
       }
       const structureData = await structureRes.json()
       setStructure(structureData.structure)
