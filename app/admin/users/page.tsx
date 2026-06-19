@@ -404,6 +404,15 @@ export default function AdminUsersPage() {
                           {getRoleLabel(user.role)}
                         </span>
 
+                        {user.role !== "super_admin" && user.id && (
+                          <Link href={`/admin/users/${user.id}/permissions`}>
+                            <Button variant="outline" size="sm">
+                              <Lock className="w-4 h-4 mr-2" />
+                              Permessi
+                            </Button>
+                          </Link>
+                        )}
+
                         {user.role !== "super_admin" && (
                           <Button
                             variant="ghost"

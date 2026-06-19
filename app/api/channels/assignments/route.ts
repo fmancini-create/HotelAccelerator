@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { ChannelAssignmentService, type ChannelType } from "@/lib/platform-services/channel-assignment.service"
 
 const VALID_TYPES: ChannelType[] = ["email", "whatsapp", "telegram", "chat", "instagram", "facebook"]
@@ -38,7 +38,7 @@ async function assertChannelOwnership(
 
 export async function GET(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId(request)
+    const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
     const { searchParams } = new URL(request.url)
 
@@ -63,14 +63,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ userIds, users: users ?? [] })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
-    const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: message }, { status: accessErrorStatus(error) })
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId(request)
+    const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
     const body = await request.json().catch(() => ({}))
 
@@ -91,7 +90,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ success: true, userIds })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
-    const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: message }, { status: accessErrorStatus(error) })
   }
 }

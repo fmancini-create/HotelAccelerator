@@ -133,17 +133,23 @@ const MORE_NAV: NavItem[] = [
     label: "Moduli",
     icon: Boxes,
     match: (p) => p.startsWith("/admin/modules"),
+    adminOnly: true,
   },
   {
     href: "/admin/settings",
     label: "Impostazioni",
     icon: Settings,
     match: (p) => p.startsWith("/admin/settings"),
+    adminOnly: true,
   },
 ]
 
 type PlatformMe = {
-  role: "super_admin" | "tenant_admin" | "none"
+  role: "super_admin" | "tenant_admin" | "member" | "none"
+  isAdmin?: boolean
+  isTenantAdmin?: boolean
+  canManageUsers?: boolean
+  memberRole?: string | null
   email?: string
   name?: string
 }
@@ -173,6 +179,17 @@ function filterByModules(items: NavItem[], activeModules: string[] | null | unde
   return items.filter((item) => !item.module || active.has(item.module))
 }
 
+/**
+ * Nasconde le voci `adminOnly` ai membri che non sono amministratori.
+ * Fail-closed sul ruolo: finche' non sappiamo se l'utente e' admin
+ * (`isAdmin` undefined), le voci admin restano nascoste per non esporle a chi
+ * non ne ha diritto.
+ */
+function filterByRole(items: NavItem[], isAdmin: boolean | undefined): NavItem[] {
+  if (isAdmin) return items
+  return items.filter((item) => !item.adminOnly)
+}
+
 function isActive(item: NavItem, pathname: string): boolean {
   if (item.match) return item.match(pathname)
   return pathname === item.href || pathname.startsWith(item.href + "/")
@@ -199,13 +216,14 @@ export function PlatformHeader() {
   })
 
   const activeModules = modulesData?.activeModules
+  const isAdmin = me?.isAdmin
   const primaryNav = useMemo(
-    () => filterByModules(PRIMARY_NAV, activeModules),
-    [activeModules],
+    () => filterByRole(filterByModules(PRIMARY_NAV, activeModules), isAdmin),
+    [activeModules, isAdmin],
   )
   const moreNav = useMemo(
-    () => filterByModules(MORE_NAV, activeModules),
-    [activeModules],
+    () => filterByRole(filterByModules(MORE_NAV, activeModules), isAdmin),
+    [activeModules, isAdmin],
   )
 
   const moreHasActive = useMemo(
