@@ -91,10 +91,12 @@ export async function POST(request: NextRequest) {
 
     if (authError) throw authError
 
-    // Create admin_users record
+    // Create admin_users record. The PK has no DB default and is expected to
+    // match the Supabase auth user id (1:1 relationship), so it must be set here.
     const { data: user, error } = await supabase
       .from("admin_users")
       .insert({
+        id: authData.user.id,
         property_id: propertyId,
         email,
         name,
@@ -108,7 +110,12 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) throw error
+    if (error) {
+      // Roll back the just-created auth user so the email isn't left orphaned
+      // (which would make a retry fail with "email already registered").
+      await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {})
+      throw error
+    }
 
     // "Mail di default": if a mailbox with the same address as the user's login
     // email already exists for this tenant, auto-assign it to the new user (owner).

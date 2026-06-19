@@ -4,13 +4,14 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { EmailChannelService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const service = new EmailChannelService(supabase)
-    const channel = await service.getChannel(params.id, propertyId)
+    const channel = await service.getChannel(id, propertyId)
 
     if (!channel) {
       return NextResponse.json({ error: "Channel not found", code: "NOT_FOUND" }, { status: 404 })
@@ -23,8 +24,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
 
@@ -32,7 +34,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const { email_address, display_name, is_active, assigned_users, color } = body
 
     const service = new EmailChannelService(supabase)
-    const channel = await service.updateChannel(params.id, propertyId, {
+    const channel = await service.updateChannel(id, propertyId, {
       email_address,
       display_name: display_name || null,
       is_active: is_active ?? true,
@@ -47,13 +49,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const service = new EmailChannelService(supabase)
-    await service.deleteChannel(params.id, propertyId)
+    await service.deleteChannel(id, propertyId)
 
     return NextResponse.json({ success: true })
   } catch (error) {
@@ -62,13 +65,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const service = new EmailChannelService(supabase)
-    const channel = await service.toggleChannelStatus(params.id, propertyId)
+    const channel = await service.toggleChannelStatus(id, propertyId)
 
     return NextResponse.json({ channel })
   } catch (error) {
