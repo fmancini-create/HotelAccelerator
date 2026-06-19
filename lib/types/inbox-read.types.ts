@@ -166,4 +166,15 @@ export interface ConversationListOptions {
   mode?: "smart" | "gmail"
   gmail_label?: GmailLabel
   sort?: InboxSort
-}
+  /**
+   * Per-user channel access enforcement. When `restrict` is true, only
+   * conversations belonging to the listed channels are returned. Admins
+   * (super_admin / tenant admin) should pass `restrict: false` (or omit access).
+   */
+  access?: {
+    restrict: boolean
+    emailChannelIds: string[]
+    messagingChannelIds: string[]
+    chatChannelIds: string[]
+  }
+  }

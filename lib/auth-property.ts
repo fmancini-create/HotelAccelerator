@@ -11,7 +11,7 @@ function isDevOrPreviewHost(host: string): boolean {
   )
 }
 
-async function getDevBypass(request?: NextRequest): Promise<boolean> {
+export async function getDevBypass(request?: NextRequest): Promise<boolean> {
   // Se request è disponibile, leggi l'host da lì
   if (request) {
     const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
@@ -25,7 +25,7 @@ async function getDevBypass(request?: NextRequest): Promise<boolean> {
   return process.env.NODE_ENV === "development"
 }
 
-async function getTokenFromRequest(request: NextRequest): Promise<string | undefined> {
+export async function getTokenFromRequest(request: NextRequest): Promise<string | undefined> {
   if (await getDevBypass(request)) {
     return "dev-dummy-token-for-preview"
   }

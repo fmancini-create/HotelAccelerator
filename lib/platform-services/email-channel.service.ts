@@ -3,6 +3,7 @@ import { EmailChannelRepository } from "@/lib/platform-repositories/email-channe
 import type { EmailChannel } from "@/lib/platform-repositories/email-channel.repository"
 import { ValidationError, AuthorizationError, NotFoundError, ConflictError } from "@/lib/errors"
 import { logCommandExecution, CommandLogger } from "@/lib/logging/command-log"
+import { ChannelAssignmentService } from "@/lib/platform-services/channel-assignment.service"
 
 export interface ChannelWithAssignments extends EmailChannel {
   assignments: { user_id: string; user_name?: string }[]
@@ -26,9 +27,11 @@ export interface UpdateChannelRequest {
 
 export class EmailChannelService {
   private repository: EmailChannelRepository
+  private assignments: ChannelAssignmentService
 
   constructor(private supabase: SupabaseClient) {
     this.repository = new EmailChannelRepository(supabase)
+    this.assignments = new ChannelAssignmentService(supabase)
     CommandLogger.initialize(supabase)
   }
 
@@ -36,7 +39,7 @@ export class EmailChannelService {
     const channels = await this.repository.listByProperty(propertyId)
     const channelsWithAssignments = await Promise.all(
       channels.map(async (channel) => {
-        const assignments = await this.repository.listAssignments(channel.id)
+        const assignments = await this.assignments.listAssignments("email", channel.id)
         return {
           ...channel,
           assignments: assignments.map((a) => ({ user_id: a.user_id })),
@@ -52,7 +55,7 @@ export class EmailChannelService {
     if (channel.property_id !== propertyId) {
       throw new AuthorizationError("Non autorizzato ad accedere a questo canale")
     }
-    const assignments = await this.repository.listAssignments(channel.id)
+    const assignments = await this.assignments.listAssignments("email", channel.id)
     return {
       ...channel,
       assignments: assignments.map((a) => ({ user_id: a.user_id })),
@@ -82,10 +85,26 @@ export class EmailChannelService {
     await logCommandExecution(propertyId, "system", "channel.email.create", { email: data.email_address }, true)
 
     if (data.assigned_users.length > 0) {
-      await this.repository.setAssignments(channel.id, data.assigned_users)
+      await this.assignments.setAssignments(propertyId, "email", channel.id, data.assigned_users)
     }
 
-    const assignments = await this.repository.listAssignments(channel.id)
+    // "Mail di default": if a tenant user has this mailbox as their own login
+    // email, ensure they are assigned (owner) even if not selected manually.
+    try {
+      const { data: ownUser } = await this.supabase
+        .from("admin_users")
+        .select("id")
+        .eq("property_id", propertyId)
+        .ilike("email", data.email_address)
+        .maybeSingle()
+      if (ownUser?.id) {
+        await this.assignments.addAssignment(propertyId, "email", channel.id, ownUser.id, "owner")
+      }
+    } catch (err) {
+      console.error("[v0] Auto-assign mailbox owner failed:", err)
+    }
+
+    const assignments = await this.assignments.listAssignments("email", channel.id)
     return {
       ...channel,
       assignments: assignments.map((a) => ({ user_id: a.user_id })),
@@ -123,7 +142,7 @@ export class EmailChannelService {
       ...(data.color !== undefined ? { color: data.color } : {}),
     })
 
-    await this.repository.setAssignments(channelId, data.assigned_users)
+    await this.assignments.setAssignments(propertyId, "email", channelId, data.assigned_users)
 
     await logCommandExecution(
       propertyId,
@@ -133,7 +152,7 @@ export class EmailChannelService {
       true,
     )
 
-    const assignments = await this.repository.listAssignments(channelId)
+    const assignments = await this.assignments.listAssignments("email", channelId)
     return {
       ...updated,
       assignments: assignments.map((a) => ({ user_id: a.user_id })),
@@ -220,7 +239,7 @@ export class EmailChannelService {
       is_active: !channel.is_active,
     })
 
-    const assignments = await this.repository.listAssignments(channelId)
+    const assignments = await this.assignments.listAssignments("email", channelId)
     return {
       ...updated,
       assignments: assignments.map((a) => ({ user_id: a.user_id })),

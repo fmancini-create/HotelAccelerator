@@ -29,7 +29,29 @@ export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort } = options
+    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access } = options
+
+    // Per-user channel access enforcement (restricted, non-admin users).
+    // Build an OR filter so the user only sees conversations of their channels:
+    //  - email:     conversations.channel_id IN (assigned email channels)
+    //  - messaging: conversations.metadata->>messaging_channel_id IN (assigned)
+    // Chat conversations have no resolvable channel link and are intentionally
+    // not exposed to restricted users (admins still see everything).
+    let restrictOrFilter: string | null = null
+    if (access?.restrict) {
+      const orParts: string[] = []
+      if (access.emailChannelIds.length > 0) {
+        orParts.push(`channel_id.in.(${access.emailChannelIds.join(",")})`)
+      }
+      if (access.messagingChannelIds.length > 0) {
+        orParts.push(`metadata->>messaging_channel_id.in.(${access.messagingChannelIds.join(",")})`)
+      }
+      // No accessible channels -> nothing to show.
+      if (orParts.length === 0) {
+        return []
+      }
+      restrictOrFilter = orParts.join(",")
+    }
 
     let query = this.supabase
       .from("conversations")
@@ -110,6 +132,11 @@ export class InboxReadRepository {
 
     if (search) {
       query = query.or(`subject.ilike.%${search}%,contact.name.ilike.%${search}%,contact.email.ilike.%${search}%`)
+    }
+
+    // Apply per-user channel restriction (ANDed with any other filters above).
+    if (restrictOrFilter) {
+      query = query.or(restrictOrFilter)
     }
 
     const { data, error } = await query

@@ -22,6 +22,7 @@ import {
   Phone,
 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { ChannelUserAssignment } from "@/components/admin/channel-user-assignment"
 
 interface WhatsAppChannel {
   id: string
@@ -465,6 +466,13 @@ export default function WhatsAppChannelPage() {
                     >
                       <Trash2 className="mr-2 h-4 w-4" /> Scollega
                     </Button>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <ChannelUserAssignment channelType="whatsapp" channelId={ch.id} />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Gli utenti assegnati vedranno le conversazioni di questo numero nella Posta in arrivo.
+                    </p>
                   </div>
                 </CardContent>
               </Card>

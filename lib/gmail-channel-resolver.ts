@@ -57,15 +57,22 @@ export async function listAccessibleGmailChannels(
     if (rows.length > 0) return rows
   }
 
-  // 3. Explicit per-user grants (permissions + legacy assignments)
-  const [{ data: perms }, { data: assigns }] = await Promise.all([
+  // 3. Explicit per-user grants. Primary source is the generic
+  //    `channel_user_assignments` (channel_type='email'); legacy tables are kept
+  //    as fallback so nothing breaks before/while backfilling.
+  const [{ data: generic }, { data: perms }, { data: assigns }] = await Promise.all([
+    supabase
+      .from("channel_user_assignments")
+      .select("channel_id")
+      .eq("user_id", userId)
+      .eq("channel_type", "email"),
     supabase.from("user_channel_permissions").select("channel_id").eq("user_id", userId),
     supabase.from("email_channel_assignments").select("channel_id").eq("user_id", userId),
   ])
 
   const grantedIds = Array.from(
     new Set(
-      [...(perms ?? []), ...(assigns ?? [])]
+      [...(generic ?? []), ...(perms ?? []), ...(assigns ?? [])]
         .map((r: any) => r.channel_id)
         .filter(Boolean),
     ),

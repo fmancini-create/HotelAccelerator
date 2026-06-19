@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getChannelAccess, getAccessibleChannelIds } from "@/lib/channel-access"
 import { InboxReadService } from "@/lib/platform-services"
 import type { ConversationListOptions, GmailLabel, InboxSort } from "@/lib/types/inbox-read.types"
 
@@ -25,6 +26,18 @@ export async function GET(request: NextRequest) {
     const sort: InboxSort | undefined =
       rawSort && ALLOWED_SORTS.includes(rawSort) ? rawSort : undefined
 
+    // Resolve per-user channel access. Admins (super_admin / tenant admin) see
+    // everything; restricted users only see conversations of their assigned channels.
+    const channelAccess = await getChannelAccess(request)
+    let access: ConversationListOptions["access"] | undefined
+    if (!channelAccess.isAdmin && channelAccess.adminUserId) {
+      const ids = await getAccessibleChannelIds(channelAccess.supabase, propertyId, channelAccess.adminUserId)
+      access = { restrict: true, ...ids }
+    } else if (!channelAccess.isAdmin && !channelAccess.adminUserId) {
+      // Authenticated but unknown user (no admin_users record): show nothing.
+      access = { restrict: true, emailChannelIds: [], messagingChannelIds: [], chatChannelIds: [] }
+    }
+
     const options: ConversationListOptions = {
       status: (searchParams.get("status") as any) || "open",
       channel: (searchParams.get("channel") as any) || undefined,
@@ -35,6 +48,7 @@ export async function GET(request: NextRequest) {
       mode,
       gmail_label: gmailLabel || undefined,
       sort,
+      access,
     }
 
     console.log("[v0] Inbox options:", options)
