@@ -89,6 +89,8 @@ export interface ConversationOrigin {
   label: string
   // Optional secondary detail (e.g. the phone number for WhatsApp)
   detail?: string | null
+  // Optional hex color assigned to the origin mailbox, for at-a-glance distinction
+  color?: string | null
 }
 
 // Detail item - full data for selected conversation
@@ -164,4 +166,15 @@ export interface ConversationListOptions {
   mode?: "smart" | "gmail"
   gmail_label?: GmailLabel
   sort?: InboxSort
-}
+  /**
+   * Per-user channel access enforcement. When `restrict` is true, only
+   * conversations belonging to the listed channels are returned. Admins
+   * (super_admin / tenant admin) should pass `restrict: false` (or omit access).
+   */
+  access?: {
+    restrict: boolean
+    emailChannelIds: string[]
+    messagingChannelIds: string[]
+    chatChannelIds: string[]
+  }
+  }

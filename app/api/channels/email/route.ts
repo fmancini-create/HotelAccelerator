@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const body = await request.json()
-    const { email_address, display_name, is_active, assigned_users } = body
+    const { email_address, display_name, is_active, assigned_users, color } = body
 
     const service = new EmailChannelService(supabase)
     const channel = await service.createChannel(propertyId, {
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
       display_name: display_name || null,
       is_active: is_active ?? true,
       assigned_users: assigned_users || [],
+      color: color || null,
     })
 
     return NextResponse.json({ channel })

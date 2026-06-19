@@ -29,7 +29,29 @@ export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort } = options
+    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access } = options
+
+    // Per-user channel access enforcement (restricted, non-admin users).
+    // Build an OR filter so the user only sees conversations of their channels:
+    //  - email:     conversations.channel_id IN (assigned email channels)
+    //  - messaging: conversations.metadata->>messaging_channel_id IN (assigned)
+    // Chat conversations have no resolvable channel link and are intentionally
+    // not exposed to restricted users (admins still see everything).
+    let restrictOrFilter: string | null = null
+    if (access?.restrict) {
+      const orParts: string[] = []
+      if (access.emailChannelIds.length > 0) {
+        orParts.push(`channel_id.in.(${access.emailChannelIds.join(",")})`)
+      }
+      if (access.messagingChannelIds.length > 0) {
+        orParts.push(`metadata->>messaging_channel_id.in.(${access.messagingChannelIds.join(",")})`)
+      }
+      // No accessible channels -> nothing to show.
+      if (orParts.length === 0) {
+        return []
+      }
+      restrictOrFilter = orParts.join(",")
+    }
 
     let query = this.supabase
       .from("conversations")
@@ -112,6 +134,11 @@ export class InboxReadRepository {
       query = query.or(`subject.ilike.%${search}%,contact.name.ilike.%${search}%,contact.email.ilike.%${search}%`)
     }
 
+    // Apply per-user channel restriction (ANDed with any other filters above).
+    if (restrictOrFilter) {
+      query = query.or(restrictOrFilter)
+    }
+
     const { data, error } = await query
 
     if (error) handleSupabaseError(error)
@@ -156,21 +183,22 @@ export class InboxReadRepository {
       if (mcid) messagingChannelIds.add(mcid as string)
     }
 
-    const emailOriginMap = new Map<string, { label: string; detail?: string | null }>()
+    const emailOriginMap = new Map<string, { label: string; detail?: string | null; color?: string | null }>()
     if (emailChannelIds.size > 0) {
       const { data: emailChannels } = await this.supabase
         .from("email_channels")
-        .select("id, email_address, display_name")
+        .select("id, email_address, display_name, color")
         .in("id", Array.from(emailChannelIds))
       emailChannels?.forEach((ec) => {
         emailOriginMap.set(ec.id, {
           label: ec.email_address || ec.display_name || "Email",
           detail: ec.display_name && ec.display_name !== ec.email_address ? ec.display_name : null,
+          color: ec.color ?? null,
         })
       })
     }
 
-    const messagingOriginMap = new Map<string, { label: string; detail?: string | null }>()
+    const messagingOriginMap = new Map<string, { label: string; detail?: string | null; color?: string | null }>()
     if (messagingChannelIds.size > 0) {
       const { data: messagingChannels } = await this.supabase
         .from("messaging_channels")
@@ -188,7 +216,7 @@ export class InboxReadRepository {
     const resolveOrigin = (conv: any): ConversationListItem["origin"] => {
       if (conv.channel === "email" && conv.channel_id && emailOriginMap.has(conv.channel_id)) {
         const o = emailOriginMap.get(conv.channel_id)!
-        return { type: "email", label: o.label, detail: o.detail ?? null }
+        return { type: "email", label: o.label, detail: o.detail ?? null, color: o.color ?? null }
       }
       const mcid = conv.metadata?.messaging_channel_id
       if (mcid && messagingOriginMap.has(mcid)) {

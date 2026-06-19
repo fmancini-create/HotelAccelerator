@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { ChannelAssignmentService } from "@/lib/platform-services/channel-assignment.service"
 
 export async function GET(request: NextRequest) {
   try {
@@ -108,6 +109,25 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) throw error
+
+    // "Mail di default": if a mailbox with the same address as the user's login
+    // email already exists for this tenant, auto-assign it to the new user (owner).
+    // This is best-effort: a failure here must not block user creation.
+    try {
+      const { data: ownMailbox } = await supabase
+        .from("email_channels")
+        .select("id")
+        .eq("property_id", propertyId)
+        .ilike("email_address", email)
+        .maybeSingle()
+
+      if (ownMailbox?.id) {
+        const assignments = new ChannelAssignmentService(supabase)
+        await assignments.addAssignment(propertyId, "email", ownMailbox.id, user.id, "owner")
+      }
+    } catch (assignErr) {
+      console.error("[v0] Auto-assign default mailbox failed:", assignErr)
+    }
 
     return NextResponse.json({ user })
   } catch (error: any) {

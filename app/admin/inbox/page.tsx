@@ -155,6 +155,7 @@ interface Conversation {
     type: string
     label: string
     detail?: string | null
+    color?: string | null
   } | null
 }
 
@@ -2475,7 +2476,11 @@ export default function InboxPage() {
           </div>
 
           {/* Thread/Conversation rows OR Detail View */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
+          {/* `relative` makes this the containing block for absolutely-positioned
+              descendants (e.g. Tailwind `sr-only` spans in each row). Without it
+              those abs spans anchor to <html>, inflating document height and
+              producing a second, page-level scrollbar. */}
+          <div className="relative flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
             {(selectedGmailThread || selectedConversation) ? (
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
               <div className="flex flex-col h-full">
@@ -2910,10 +2915,27 @@ export default function InboxPage() {
                       })()}
                       {channelFilter === "all" && conv.origin?.label && (
                         <span
-                          className="flex-shrink-0 hidden md:inline-block max-w-[150px] truncate rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-600"
+                          style={
+                            conv.origin.color
+                              ? {
+                                  backgroundColor: `${conv.origin.color}1A`,
+                                  color: conv.origin.color,
+                                  borderColor: `${conv.origin.color}66`,
+                                }
+                              : undefined
+                          }
+                          className={`flex-shrink-0 hidden md:inline-flex items-center gap-1 max-w-[150px] rounded border px-1.5 py-0.5 text-[11px] font-medium ${
+                            conv.origin.color ? "" : "bg-gray-100 text-gray-600 border-transparent"
+                          }`}
                           title={conv.origin.detail ? `${conv.origin.label} (${conv.origin.detail})` : conv.origin.label}
                         >
-                          {conv.origin.label}
+                          {conv.origin.color && (
+                            <span
+                              className="h-2 w-2 flex-shrink-0 rounded-full"
+                              style={{ backgroundColor: conv.origin.color }}
+                            />
+                          )}
+                          <span className="truncate">{conv.origin.label}</span>
                         </span>
                       )}
                       <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
@@ -2924,7 +2946,7 @@ export default function InboxPage() {
                           {conv.subject || "(nessun oggetto)"}
                         </span>
                         {conv.lastMessage?.content && (
-                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" — "}{conv.lastMessage.content}</span>
+                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" �� "}{conv.lastMessage.content}</span>
                         )}
                       </div>
                       {conv.unread_count > 0 && (

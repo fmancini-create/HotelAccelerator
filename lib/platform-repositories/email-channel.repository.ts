@@ -13,6 +13,7 @@ export interface EmailChannel {
   oauth_access_token: string | null
   oauth_refresh_token: string | null
   oauth_expiry: string | null
+  color: string | null
   created_at: string
   updated_at: string
 }
@@ -36,6 +37,7 @@ export interface CreateChannelInput {
   oauth_refresh_token?: string | null
   oauth_expiry?: string | null
   sync_enabled?: boolean
+  color?: string | null
 }
 
 export interface UpdateChannelInput {
@@ -48,6 +50,7 @@ export interface UpdateChannelInput {
   oauth_expiry?: string | null
   sync_enabled?: boolean
   last_sync_at?: string | null
+  color?: string | null
 }
 
 export class EmailChannelRepository {
@@ -99,6 +102,7 @@ export class EmailChannelRepository {
         oauth_access_token: input.oauth_access_token || null,
         oauth_refresh_token: input.oauth_refresh_token || null,
         oauth_expiry: input.oauth_expiry || null,
+        color: input.color ?? null,
       })
       .select()
       .single()
