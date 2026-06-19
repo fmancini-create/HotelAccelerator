@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { EmailChannelRepository } from "@/lib/platform-repositories/email-channel.repository"
 import type { EmailChannel } from "@/lib/platform-repositories/email-channel.repository"
 import { ValidationError, AuthorizationError, NotFoundError, ConflictError } from "@/lib/errors"
-import { logCommandExecution, CommandLogger } from "@/lib/logging/command-log"
+import { CommandLogger } from "@/lib/logging/command-log"
 import { ChannelAssignmentService } from "@/lib/platform-services/channel-assignment.service"
 
 export interface ChannelWithAssignments extends EmailChannel {
@@ -82,7 +82,9 @@ export class EmailChannelService {
       color: data.color ?? null,
     })
 
-    await logCommandExecution(propertyId, "system", "channel.email.create", { email: data.email_address }, true)
+    await CommandLogger.logIntent("system", propertyId, "channel.email.create", "email_channel", channel.id, {
+      email: data.email_address,
+    })
 
     if (data.assigned_users.length > 0) {
       await this.assignments.setAssignments(propertyId, "email", channel.id, data.assigned_users)
@@ -144,13 +146,9 @@ export class EmailChannelService {
 
     await this.assignments.setAssignments(propertyId, "email", channelId, data.assigned_users)
 
-    await logCommandExecution(
-      propertyId,
-      "system",
-      "channel.email.update",
-      { channelId, email: data.email_address },
-      true,
-    )
+    await CommandLogger.logIntent("system", propertyId, "channel.email.update", "email_channel", channelId, {
+      email: data.email_address,
+    })
 
     const assignments = await this.assignments.listAssignments("email", channelId)
     return {
@@ -170,13 +168,9 @@ export class EmailChannelService {
 
     await this.repository.delete(channelId)
 
-    await logCommandExecution(
-      propertyId,
-      "system",
-      "channel.email.delete",
-      { channelId, email: channel.email_address },
-      true,
-    )
+    await CommandLogger.logIntent("system", propertyId, "channel.email.delete", "email_channel", channelId, {
+      email: channel.email_address,
+    })
   }
 
   async testConnection(channelId: string, propertyId: string): Promise<{ success: boolean; message: string }> {
