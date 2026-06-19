@@ -1,12 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
     const { userId } = await params
-    const propertyId = await getAuthenticatedPropertyId(request)
+    // Deleting users is reserved to tenant admins / super admins.
+    const caller = await requireTenantAdmin(request)
+    const propertyId = caller.propertyId
     const supabase = createServiceClient()
+
+    // Prevent an admin from deleting their own account (would lock themselves out).
+    if (caller.adminUserId && caller.adminUserId === userId) {
+      return NextResponse.json({ error: "Non puoi eliminare il tuo account" }, { status: 400 })
+    }
 
     // Verify user belongs to this property
     const { data: user, error: checkError } = await supabase
@@ -27,6 +34,6 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }

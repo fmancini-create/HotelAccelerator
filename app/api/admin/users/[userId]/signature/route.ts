@@ -1,12 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getCallerIdentity, AccessError, accessErrorStatus } from "@/lib/auth/admin-access"
 import { sanitizeSignatureHtml, htmlToPlainText } from "@/lib/html-sanitize"
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
     const { userId } = await params
-    const propertyId = await getAuthenticatedPropertyId(request)
+    // A user may edit their OWN signature; editing someone else's is admin-only.
+    const caller = await getCallerIdentity(request)
+    if (!caller) throw new AccessError("Non autenticato", 401)
+    const isSelf = caller.adminUserId === userId
+    if (!isSelf && !caller.isSuperAdmin && !caller.isTenantAdmin) {
+      throw new AccessError("Accesso negato", 403)
+    }
+    if (!caller.propertyId) throw new AccessError("Nessun tenant selezionato", 400)
+    const propertyId = caller.propertyId
     const supabase = createServiceClient()
     const body = await request.json()
 
@@ -42,6 +50,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }

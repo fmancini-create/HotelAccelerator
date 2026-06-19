@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const propertyId = await getAuthenticatedPropertyId(request)
+    const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
 
     const { data: groups, error } = await supabase
@@ -55,13 +55,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ groups: groupsWithCounts || [] })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId(request)
+    const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
     const body = await request.json()
 
@@ -82,6 +82,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ group })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }

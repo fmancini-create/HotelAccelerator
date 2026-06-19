@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getModulesWithState } from "@/lib/modules"
 
@@ -12,10 +12,7 @@ export const dynamic = "force-dynamic"
  */
 export async function GET(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId(request)
-    if (!propertyId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const { propertyId } = await requireTenantAdmin(request)
 
     // Service client: l'auth e' gia' verificata sopra e filtriamo per propertyId.
     const supabase = createServiceClient()
@@ -24,6 +21,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ propertyId, modules })
   } catch (error) {
     console.error("[v0] Modules GET error:", error)
-    return NextResponse.json({ error: "Failed to fetch modules" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch modules" }, { status: accessErrorStatus(error) })
   }
 }

@@ -64,6 +64,11 @@ type NavItem = {
    * Voci senza `module` sono sempre visibili.
    */
   module?: string
+  /**
+   * Se true, la voce e' riservata agli amministratori (super_admin o tenant
+   * admin). I membri non-admin (es. "editor") non la vedono.
+   */
+  adminOnly?: boolean
 }
 
 // Primary navigation shown inline on the header (desktop).
@@ -90,12 +95,14 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Radio,
     match: (p) => p.startsWith("/admin/channels"),
     module: "inbox",
+    adminOnly: true,
   },
   {
     href: "/admin/users",
     label: "Utenti",
     icon: Users,
     match: (p) => p.startsWith("/admin/users"),
+    adminOnly: true,
   },
 ]
 

@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { getPlatformRole } from "@/lib/modules/auth"
 import { createServiceClient } from "@/lib/supabase/server"
 import { setModuleStatus, type ModuleStatus } from "@/lib/modules"
@@ -25,10 +25,8 @@ export async function PATCH(
 ) {
   try {
     const { moduleKey } = await params
-    const propertyId = await getAuthenticatedPropertyId(request)
-    if (!propertyId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // Toggling modules is an administrative action.
+    const { propertyId } = await requireTenantAdmin(request)
 
     const body = await request.json().catch(() => ({}))
     const status = body?.status as ModuleStatus | undefined
@@ -82,6 +80,6 @@ export async function PATCH(
     return NextResponse.json({ success: true, moduleKey, status })
   } catch (error) {
     console.error("[v0] Module PATCH error:", error)
-    return NextResponse.json({ error: "Failed to update module" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to update module" }, { status: accessErrorStatus(error) })
   }
 }
