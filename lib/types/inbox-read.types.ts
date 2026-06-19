@@ -89,6 +89,8 @@ export interface ConversationOrigin {
   label: string
   // Optional secondary detail (e.g. the phone number for WhatsApp)
   detail?: string | null
+  // Optional hex color assigned to the origin mailbox, for at-a-glance distinction
+  color?: string | null
 }
 
 // Detail item - full data for selected conversation

@@ -156,21 +156,22 @@ export class InboxReadRepository {
       if (mcid) messagingChannelIds.add(mcid as string)
     }
 
-    const emailOriginMap = new Map<string, { label: string; detail?: string | null }>()
+    const emailOriginMap = new Map<string, { label: string; detail?: string | null; color?: string | null }>()
     if (emailChannelIds.size > 0) {
       const { data: emailChannels } = await this.supabase
         .from("email_channels")
-        .select("id, email_address, display_name")
+        .select("id, email_address, display_name, color")
         .in("id", Array.from(emailChannelIds))
       emailChannels?.forEach((ec) => {
         emailOriginMap.set(ec.id, {
           label: ec.email_address || ec.display_name || "Email",
           detail: ec.display_name && ec.display_name !== ec.email_address ? ec.display_name : null,
+          color: ec.color ?? null,
         })
       })
     }
 
-    const messagingOriginMap = new Map<string, { label: string; detail?: string | null }>()
+    const messagingOriginMap = new Map<string, { label: string; detail?: string | null; color?: string | null }>()
     if (messagingChannelIds.size > 0) {
       const { data: messagingChannels } = await this.supabase
         .from("messaging_channels")
@@ -188,7 +189,7 @@ export class InboxReadRepository {
     const resolveOrigin = (conv: any): ConversationListItem["origin"] => {
       if (conv.channel === "email" && conv.channel_id && emailOriginMap.has(conv.channel_id)) {
         const o = emailOriginMap.get(conv.channel_id)!
-        return { type: "email", label: o.label, detail: o.detail ?? null }
+        return { type: "email", label: o.label, detail: o.detail ?? null, color: o.color ?? null }
       }
       const mcid = conv.metadata?.messaging_channel_id
       if (mcid && messagingOriginMap.has(mcid)) {

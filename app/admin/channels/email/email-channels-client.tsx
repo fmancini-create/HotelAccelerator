@@ -78,6 +78,7 @@ interface EmailChannel {
   last_sync_at: string | null
   created_at: string
   property_id: string
+  color?: string | null
   oauth_expires_at?: string | null
   oauth_expiry?: string | null
   assignments?: { user_id: string }[]
@@ -116,6 +117,21 @@ const GMAIL_SYSTEM_LABELS: Record<string, { name: string; icon: React.ReactNode;
   CATEGORY_FORUMS: { name: "Forum", icon: <Tag className="w-4 h-4" />, color: "text-orange-500" },
 }
 
+// Preset palette for mailbox colors. Kept readable on light backgrounds and
+// visually distinct from each other for at-a-glance recognition in the inbox.
+const CHANNEL_COLORS = [
+  "#2563eb", // blue
+  "#16a34a", // green
+  "#dc2626", // red
+  "#ea580c", // orange
+  "#0891b2", // cyan
+  "#db2777", // pink
+  "#ca8a04", // amber
+  "#4f46e5", // indigo
+  "#0d9488", // teal
+  "#64748b", // slate
+]
+
 export default function EmailChannelsClient() {
   const [channels, setChannels] = useState<EmailChannel[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -151,6 +167,7 @@ export default function EmailChannelsClient() {
     display_name: "",
     is_active: true,
     assigned_users: [] as string[],
+    color: null as string | null,
   })
 
   const getAuthHeaders = async (): Promise<HeadersInit> => {
@@ -401,6 +418,7 @@ export default function EmailChannelsClient() {
           display_name: "",
           is_active: true,
           assigned_users: [],
+          color: null,
         })
       } else {
         const errorData = await res.json()
@@ -555,6 +573,7 @@ export default function EmailChannelsClient() {
       display_name: channel.display_name || "",
       is_active: channel.is_active,
       assigned_users: channel.assignments?.map((a) => a.user_id) || [],
+      color: channel.color ?? null,
     })
     setShowAddForm(true)
   }
@@ -854,6 +873,42 @@ export default function EmailChannelsClient() {
                     </div>
 
                     <div className="space-y-2">
+                      <Label>Colore casella</Label>
+                      <p className="text-sm text-muted-foreground">
+                        Usato nell&apos;inbox per riconoscere a colpo d&apos;occhio le email di questa casella.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {CHANNEL_COLORS.map((c) => {
+                          const selected = formData.color === c
+                          return (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, color: c })}
+                              className={`h-8 w-8 rounded-full transition-transform hover:scale-110 ${
+                                selected ? "ring-2 ring-offset-2 ring-foreground" : ""
+                              }`}
+                              style={{ backgroundColor: c }}
+                              aria-label={`Colore ${c}`}
+                              aria-pressed={selected}
+                              title={c}
+                            />
+                          )
+                        })}
+                        {formData.color && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFormData({ ...formData, color: null })}
+                          >
+                            Nessuno
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
                       <Label>Assegna a</Label>
                       <div className="flex flex-wrap gap-2">
                         {users.map((user) => (
@@ -938,6 +993,13 @@ export default function EmailChannelsClient() {
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
+                              {channel.color && (
+                                <span
+                                  className="h-3 w-3 flex-shrink-0 rounded-full"
+                                  style={{ backgroundColor: channel.color }}
+                                  title="Colore casella"
+                                />
+                              )}
                               <p className="font-medium">{channel.display_name || channel.email_address}</p>
                               {getProviderBadge(channel.provider)}
                               {channel.is_active ? (

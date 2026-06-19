@@ -13,6 +13,7 @@ export interface CreateChannelRequest {
   display_name: string | null
   is_active: boolean
   assigned_users: string[]
+  color?: string | null
 }
 
 export interface UpdateChannelRequest {
@@ -20,6 +21,7 @@ export interface UpdateChannelRequest {
   display_name: string | null
   is_active: boolean
   assigned_users: string[]
+  color?: string | null
 }
 
 export class EmailChannelService {
@@ -69,10 +71,12 @@ export class EmailChannelService {
 
     const channel = await this.repository.create({
       property_id: propertyId,
+      name: data.display_name || data.email_address,
       email_address: data.email_address,
       display_name: data.display_name,
       is_active: data.is_active,
       provider: "manual",
+      color: data.color ?? null,
     })
 
     await logCommandExecution(propertyId, "system", "channel.email.create", { email: data.email_address }, true)
@@ -116,6 +120,7 @@ export class EmailChannelService {
       email_address: data.email_address,
       display_name: data.display_name,
       is_active: data.is_active,
+      ...(data.color !== undefined ? { color: data.color } : {}),
     })
 
     await this.repository.setAssignments(channelId, data.assigned_users)
