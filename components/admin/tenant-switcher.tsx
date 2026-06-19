@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button"
 
 type PlatformMe = {
-  role: "super_admin" | "tenant_admin" | "none"
+  role: "super_admin" | "tenant_admin" | "member" | "none"
   email?: string
   name?: string
   tenants: Array<{ id: string; name: string; subdomain: string | null }>
@@ -59,8 +59,9 @@ export function TenantSwitcher() {
 
   const active = data.tenants.find((t) => t.id === data.activePropertyId) || data.tenants[0]
 
-  // Tenant admin on a single property: show a read-only badge for context.
-  if (data.role === "tenant_admin") {
+  // Tenant admin or non-admin member on a single property: show a read-only
+  // badge for context (only super_admins get the full switcher below).
+  if (data.role === "tenant_admin" || data.role === "member") {
     if (!active) return null
     return (
       <div

@@ -64,6 +64,11 @@ type NavItem = {
    * Voci senza `module` sono sempre visibili.
    */
   module?: string
+  /**
+   * Se true, la voce e' riservata agli amministratori (super_admin o tenant
+   * admin). I membri non-admin (es. "editor") non la vedono.
+   */
+  adminOnly?: boolean
 }
 
 // Primary navigation shown inline on the header (desktop).
@@ -90,12 +95,14 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Radio,
     match: (p) => p.startsWith("/admin/channels"),
     module: "inbox",
+    adminOnly: true,
   },
   {
     href: "/admin/users",
     label: "Utenti",
     icon: Users,
     match: (p) => p.startsWith("/admin/users"),
+    adminOnly: true,
   },
 ]
 
@@ -126,17 +133,23 @@ const MORE_NAV: NavItem[] = [
     label: "Moduli",
     icon: Boxes,
     match: (p) => p.startsWith("/admin/modules"),
+    adminOnly: true,
   },
   {
     href: "/admin/settings",
     label: "Impostazioni",
     icon: Settings,
     match: (p) => p.startsWith("/admin/settings"),
+    adminOnly: true,
   },
 ]
 
 type PlatformMe = {
-  role: "super_admin" | "tenant_admin" | "none"
+  role: "super_admin" | "tenant_admin" | "member" | "none"
+  isAdmin?: boolean
+  isTenantAdmin?: boolean
+  canManageUsers?: boolean
+  memberRole?: string | null
   email?: string
   name?: string
 }
@@ -166,6 +179,17 @@ function filterByModules(items: NavItem[], activeModules: string[] | null | unde
   return items.filter((item) => !item.module || active.has(item.module))
 }
 
+/**
+ * Nasconde le voci `adminOnly` ai membri che non sono amministratori.
+ * Fail-closed sul ruolo: finche' non sappiamo se l'utente e' admin
+ * (`isAdmin` undefined), le voci admin restano nascoste per non esporle a chi
+ * non ne ha diritto.
+ */
+function filterByRole(items: NavItem[], isAdmin: boolean | undefined): NavItem[] {
+  if (isAdmin) return items
+  return items.filter((item) => !item.adminOnly)
+}
+
 function isActive(item: NavItem, pathname: string): boolean {
   if (item.match) return item.match(pathname)
   return pathname === item.href || pathname.startsWith(item.href + "/")
@@ -192,13 +216,14 @@ export function PlatformHeader() {
   })
 
   const activeModules = modulesData?.activeModules
+  const isAdmin = me?.isAdmin
   const primaryNav = useMemo(
-    () => filterByModules(PRIMARY_NAV, activeModules),
-    [activeModules],
+    () => filterByRole(filterByModules(PRIMARY_NAV, activeModules), isAdmin),
+    [activeModules, isAdmin],
   )
   const moreNav = useMemo(
-    () => filterByModules(MORE_NAV, activeModules),
-    [activeModules],
+    () => filterByRole(filterByModules(MORE_NAV, activeModules), isAdmin),
+    [activeModules, isAdmin],
   )
 
   const moreHasActive = useMemo(
@@ -227,8 +252,22 @@ export function PlatformHeader() {
     .map((s) => s[0]?.toUpperCase())
     .join("")
 
-  // Auth pages render no chrome (login form stands alone).
-  if (onAuthPage) return null
+  // Auth pages (login / reset) show a consistent header but only the brand:
+  // no authenticated navigation, tenant switcher or user menu are exposed.
+  if (onAuthPage) {
+    return (
+      <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">
+        <div className="h-full flex items-center px-3 sm:px-4">
+          <Link href="/admin" className="flex items-center gap-2" aria-label="HotelAccelerator">
+            <div className="w-8 h-8 rounded-md bg-[#0b57d0] flex items-center justify-center text-white font-semibold text-sm">
+              HA
+            </div>
+            <span className="font-semibold text-[#111827] text-sm">HotelAccelerator</span>
+          </Link>
+        </div>
+      </header>
+    )
+  }
 
   return (
     <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">

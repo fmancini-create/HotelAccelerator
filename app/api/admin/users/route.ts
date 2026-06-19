@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { ChannelAssignmentService } from "@/lib/platform-services/channel-assignment.service"
 
 export async function GET(request: NextRequest) {
@@ -33,7 +33,8 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const propertyId = await getAuthenticatedPropertyId(request)
+    // Listing users is an administrative action: only tenant admins / super admins.
+    const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
 
     const { data: users, error } = await supabase
@@ -70,17 +71,26 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users: usersWithGroups || [] })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId(request)
+    // Creating users is reserved to tenant admins / super admins.
+    const caller = await requireTenantAdmin(request)
+    const propertyId = caller.propertyId
     const supabase = createServiceClient()
     const body = await request.json()
 
     const { email, password, name, role, is_tenant_admin } = body
+
+    // Privilege-escalation guard: only a platform super_admin can mint another
+    // super_admin. A tenant admin can create users (incl. tenant admins) only
+    // within their own tenant.
+    if (role === "super_admin" && !caller.isSuperAdmin) {
+      return NextResponse.json({ error: "Non puoi creare un super admin" }, { status: 403 })
+    }
 
     // Create auth user
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -138,6 +148,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ user })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }

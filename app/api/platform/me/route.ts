@@ -60,6 +60,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       role: "super_admin",
+      isAdmin: true,
+      isTenantAdmin: true,
+      canManageUsers: true,
+      memberRole: "super_admin",
       email: user.email,
       name: collaborator?.name || user.email.split("@")[0],
       tenants,
@@ -67,10 +71,12 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // Tenant admin path.
+  // Tenant member path. NOTE: a row in admin_users only means the user belongs
+  // to a tenant — it does NOT, by itself, grant admin powers. Administrative
+  // access (role "tenant_admin") requires the is_tenant_admin flag.
   const { data: adminUser } = await supabase
     .from("admin_users")
-    .select("property_id, name, role, is_tenant_admin")
+    .select("property_id, name, role, is_tenant_admin, can_manage_users")
     .eq("email", user.email)
     .maybeSingle()
 
@@ -87,8 +93,15 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  const isTenantAdmin = adminUser?.is_tenant_admin === true
+
   return NextResponse.json({
-    role: adminUser ? "tenant_admin" : "none",
+    // "tenant_admin" only for real admins; other members get "member".
+    role: !adminUser ? "none" : isTenantAdmin ? "tenant_admin" : "member",
+    isAdmin: isTenantAdmin,
+    isTenantAdmin,
+    canManageUsers: adminUser?.can_manage_users === true,
+    memberRole: adminUser?.role ?? null,
     email: user.email,
     name: adminUser?.name || user.email.split("@")[0],
     tenants,
