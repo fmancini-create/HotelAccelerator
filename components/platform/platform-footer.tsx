@@ -19,9 +19,25 @@ function isAuthPage(pathname: string): boolean {
 
 export function PlatformFooter() {
   const pathname = usePathname() || ""
-  if (isAuthPage(pathname)) return null
-
   const year = new Date().getFullYear()
+
+  // Auth pages (login / reset) keep a consistent footer but without links to
+  // authenticated sections (they would just bounce back to the login).
+  if (isAuthPage(pathname)) {
+    return (
+      <footer
+        className="flex-shrink-0 h-9 border-t border-[#e5e7eb] bg-white text-[#6b7280] text-[11px]"
+        aria-label="Footer piattaforma"
+      >
+        <div className="h-full flex items-center justify-center px-3 sm:px-4 gap-3">
+          <span className="truncate">&copy; {year} HotelAccelerator</span>
+          <span className="hidden sm:inline text-[#d1d5db]">|</span>
+          <span className="hidden sm:inline truncate">SaaS multitenant per hotel</span>
+        </div>
+      </footer>
+    )
+  }
+
   return (
     <footer
       className="flex-shrink-0 h-9 border-t border-[#e5e7eb] bg-white text-[#6b7280] text-[11px]"

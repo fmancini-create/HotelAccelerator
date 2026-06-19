@@ -227,8 +227,22 @@ export function PlatformHeader() {
     .map((s) => s[0]?.toUpperCase())
     .join("")
 
-  // Auth pages render no chrome (login form stands alone).
-  if (onAuthPage) return null
+  // Auth pages (login / reset) show a consistent header but only the brand:
+  // no authenticated navigation, tenant switcher or user menu are exposed.
+  if (onAuthPage) {
+    return (
+      <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">
+        <div className="h-full flex items-center px-3 sm:px-4">
+          <Link href="/admin" className="flex items-center gap-2" aria-label="HotelAccelerator">
+            <div className="w-8 h-8 rounded-md bg-[#0b57d0] flex items-center justify-center text-white font-semibold text-sm">
+              HA
+            </div>
+            <span className="font-semibold text-[#111827] text-sm">HotelAccelerator</span>
+          </Link>
+        </div>
+      </header>
+    )
+  }
 
   return (
     <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">
