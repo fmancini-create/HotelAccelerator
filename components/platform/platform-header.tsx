@@ -138,11 +138,13 @@ const MORE_NAV: NavItem[] = [
     adminOnly: true,
   },
   {
+    // Visible to everyone: the settings hub itself only shows items the user
+    // is allowed to use (e.g. a member sees "Canali" + "Il Mio Profilo").
+    // Admin-only destinations stay guarded at the page level.
     href: "/admin/settings",
     label: "Impostazioni",
     icon: Settings,
     match: (p) => p.startsWith("/admin/settings"),
-    adminOnly: true,
   },
 ]
 
