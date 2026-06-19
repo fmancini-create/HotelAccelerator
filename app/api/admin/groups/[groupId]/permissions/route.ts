@@ -33,7 +33,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .select("area_key")
       .eq("property_id", propertyId)
       .eq("group_id", groupId)
-    const areas = (areaRows ?? []).map((r) => r.area_key).filter((k) => GRANTABLE_AREA_KEYS.has(k))
+    const areas = (areaRows ?? [])
+      .map((r: { area_key: string }) => r.area_key)
+      .filter((k: string) => GRANTABLE_AREA_KEYS.has(k))
 
     return NextResponse.json({ permissions: permissions || [], areas })
   } catch (error: any) {

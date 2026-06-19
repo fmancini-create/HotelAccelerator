@@ -41,7 +41,7 @@ export async function getMemberEffectiveAreas(propertyId: string, adminUserId: s
     .select("group_id")
     .eq("user_id", adminUserId)
 
-  const groupIds = (memberships ?? []).map((m) => m.group_id).filter(Boolean)
+  const groupIds = (memberships ?? []).map((m: { group_id: string }) => m.group_id).filter(Boolean)
   if (groupIds.length > 0) {
     const { data: groupAreas } = await supabase
       .from("group_area_permissions")

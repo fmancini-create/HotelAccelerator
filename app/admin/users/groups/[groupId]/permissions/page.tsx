@@ -128,11 +128,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
         <AdminHeader
           title={`Permessi: ${group?.name || ""}`}
           subtitle="Configura le aree della piattaforma e i permessi sui canali per i membri del gruppo"
-          breadcrumbs={[
-            { label: "Team", href: "/admin/users" },
-            { label: "Gruppi", href: "/admin/users?tab=groups" },
-            { label: group?.name || "", href: `/admin/users/groups/${groupId}/permissions` },
-          ]}
           actions={
             <div className="flex gap-2">
               <Link href="/admin/users">
