@@ -34,12 +34,19 @@ export interface ConversationStateChange {
  * No-ops for non-email channels (WhatsApp, etc.) or conversations without a
  * linked Gmail thread/channel.
  */
+export interface PushResult {
+  // false when the conversation is not an email / has no linked Gmail thread
+  applicable: boolean
+  // true when every attempted Gmail label change succeeded
+  ok: boolean
+}
+
 export async function pushConversationStateToGmail(
   supabase: any,
   conversationId: string,
   propertyId: string,
   change: ConversationStateChange,
-): Promise<void> {
+): Promise<PushResult> {
   try {
     const { data: conv } = await supabase
       .from("conversations")
@@ -49,41 +56,49 @@ export async function pushConversationStateToGmail(
       .single()
 
     if (!conv || conv.channel !== "email" || !conv.channel_id || !conv.gmail_thread_id) {
-      return
+      return { applicable: false, ok: true }
     }
 
     const channelId = conv.channel_id as string
     const threadId = conv.gmail_thread_id as string
 
+    let ok = true
+    const track = (r: { success: boolean }) => {
+      if (!r?.success) ok = false
+    }
+
     if (change.read === true) {
-      await markGmailThreadAsRead(channelId, threadId)
+      track(await markGmailThreadAsRead(channelId, threadId))
     } else if (change.read === false) {
-      await markGmailThreadAsUnread(channelId, threadId)
+      track(await markGmailThreadAsUnread(channelId, threadId))
     }
 
     if (change.status) {
       switch (change.status) {
         case "resolved":
         case "archived":
-          await archiveGmailThread(channelId, threadId)
+          track(await archiveGmailThread(channelId, threadId))
           break
         case "spam":
-          await spamGmailThread(channelId, threadId)
+          track(await spamGmailThread(channelId, threadId))
           break
         case "deleted":
-          await trashGmailThread(channelId, threadId)
+          track(await trashGmailThread(channelId, threadId))
           break
         case "open":
         case "pending":
           // Restore to inbox: re-add INBOX, drop SPAM (TRASH cannot be undone
           // via labels — a trashed thread must be untrashed separately).
-          await modifyGmailThread(channelId, threadId, ["INBOX"], ["SPAM"])
+          track(await modifyGmailThread(channelId, threadId, ["INBOX"], ["SPAM"]))
           break
         default:
           break
       }
     }
+
+    return { applicable: true, ok }
   } catch (e) {
     console.error("[v0][gmail-state-sync] push error:", e)
+    return { applicable: true, ok: false }
   }
 }

@@ -455,6 +455,8 @@ export default function InboxPage() {
   const [selectedGmailThreadIds, setSelectedGmailThreadIds] = useState<Set<string>>(new Set())
   // Bulk-selection for the unified (smart) conversation list
   const [selectedConversationIds, setSelectedConversationIds] = useState<Set<string>>(new Set())
+  // Warns when a bulk action updated the inbox but some Gmail syncs failed
+  const [bulkSyncWarning, setBulkSyncWarning] = useState<string | null>(null)
   const [isThreadReady, setIsThreadReady] = useState(false)
   const [isActionLoading, setIsActionLoading] = useState<string | null>(null)
   const [labelsExpanded, setLabelsExpanded] = useState(false)
@@ -1491,17 +1493,19 @@ export default function InboxPage() {
     const ids = Array.from(selectedConversationIds)
     if (ids.length === 0) return
     try {
-      await Promise.all(
-        ids.map((id) =>
-          action === "markAsRead"
-            ? fetch(`/api/inbox/${id}/messages/read`, { method: "POST" })
-            : fetch(`/api/inbox/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: action === "spam" ? "spam" : "resolved" }),
-              }),
+      // Single bulk call: the server updates all rows at once and then pushes
+      // each change to Gmail SEQUENTIALLY. This avoids the previous
+      // Promise.all burst that triggered Gmail 429 "Too many concurrent
+      // requests" and silently left messages un-archived on Gmail.
+      const res = await fetch(`/api/inbox/bulk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          action === "markAsRead" ? { ids, markRead: true } : { ids, status: action === "spam" ? "spam" : "resolved" },
         ),
-      )
+      })
+      const data = await res.json().catch(() => null)
+
       if (action === "markAsRead") {
         setConversations((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, unread_count: 0 } : c)))
       } else {
@@ -1513,8 +1517,19 @@ export default function InboxPage() {
         }
       }
       setSelectedConversationIds(new Set())
+
+      // Surface partial Gmail sync failures so the user knows some messages may
+      // still show as not-archived in Gmail (and can retry).
+      if (res.ok && data?.gmailFailed > 0) {
+        setBulkSyncWarning(
+          `${data.gmailFailed} messaggi aggiornati nella inbox ma non sincronizzati su Gmail. Riprova tra qualche secondo.`,
+        )
+      } else {
+        setBulkSyncWarning(null)
+      }
     } catch (error) {
       console.error("Error in bulk conversation action:", error)
+      setBulkSyncWarning("Errore durante l'operazione di gruppo. Riprova.")
     }
   }
 
@@ -2474,6 +2489,25 @@ export default function InboxPage() {
               </div>
             )}
           </div>
+
+          {bulkSyncWarning && (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800"
+            >
+              <span className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {bulkSyncWarning}
+              </span>
+              <button
+                type="button"
+                onClick={() => setBulkSyncWarning(null)}
+                className="text-amber-700 hover:text-amber-900 text-xs font-medium"
+              >
+                Chiudi
+              </button>
+            </div>
+          )}
 
           {/* Thread/Conversation rows OR Detail View */}
           {/* `relative` makes this the containing block for absolutely-positioned
