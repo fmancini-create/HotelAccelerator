@@ -2,27 +2,26 @@ import type { NextRequest } from "next/server"
 import { createClient, createClientWithToken } from "@/lib/supabase/server"
 import { readActivePropertyOverride } from "@/lib/platform-context"
 
-function isDevOrPreviewHost(host: string): boolean {
-  return (
-    host.includes("vercel.run") ||
-    host.includes("localhost") ||
-    host.includes("127.0.0.1") ||
-    host.includes("vusercontent.net")
-  )
+// SECURITY: il bypass dev deve attivarsi SOLO in sviluppo locale.
+// Mai su preview pubbliche o produzione (host raggiungibili da terzi).
+function isLocalDevHost(host: string): boolean {
+  // Rimuovi eventuale porta (es. "localhost:3000") prima del confronto.
+  const hostname = host.split(":")[0].trim().toLowerCase()
+  return hostname === "localhost" || hostname === "127.0.0.1"
 }
 
 export async function getDevBypass(request?: NextRequest): Promise<boolean> {
-  // Se request è disponibile, leggi l'host da lì
+  // Il bypass è consentito solo in ambiente di sviluppo locale.
+  if (process.env.NODE_ENV !== "development") {
+    return false
+  }
+  // Se è disponibile una request, l'host deve essere esattamente localhost/127.0.0.1.
   if (request) {
     const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-    return isDevOrPreviewHost(host)
+    return isLocalDevHost(host)
   }
-  // Senza request (chiamata senza argomenti): usa env var o NODE_ENV
-  // In produzione NEXT_PUBLIC_APP_URL sarà un dominio reale
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
-  if (appUrl && !isDevOrPreviewHost(appUrl)) return false
-  // Fallback: NODE_ENV
-  return process.env.NODE_ENV === "development"
+  // Senza request: consentito solo perché NODE_ENV === "development".
+  return true
 }
 
 export async function getTokenFromRequest(request: NextRequest): Promise<string | undefined> {
@@ -156,16 +155,9 @@ export async function getAuthenticatedUser(request?: NextRequest) {
  * Ottiene l'email dell'utente autenticato
  */
 export async function getAuthenticatedUserEmail(request?: NextRequest): Promise<string> {
-  // DEV/PREVIEW BYPASS
-  if (request) {
-    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-    const isDevOrPreview = host.includes("vercel.run") || 
-                           host.includes("localhost") || 
-                           host.includes("127.0.0.1") ||
-                           host.includes("vusercontent.net")
-    if (isDevOrPreview) {
-      return "dev@hotelaccelerator.local"
-    }
+  // DEV BYPASS (solo sviluppo locale, logica centralizzata in getDevBypass)
+  if (await getDevBypass(request)) {
+    return "dev@hotelaccelerator.local"
   }
 
   const token = request ? await getTokenFromRequest(request) : undefined
