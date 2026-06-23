@@ -1,8 +1,16 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { SuperAdminService } from "@/lib/platform-services"
+import { handleServiceError } from "@/lib/errors"
+import { getAuthenticatedUserEmail } from "@/lib/auth-property"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Auth gate: stesso pattern delle altre route super-admin (structures/collaborators).
+    // Verifica sessione + ruolo super_admin attivo PRIMA di qualsiasi query.
+    const actorEmail = await getAuthenticatedUserEmail(request)
+    await new SuperAdminService().verifySuperAdmin(actorEmail)
+
     const supabase = await createClient()
 
     // Fetch all structures with stats
@@ -106,7 +114,7 @@ export async function GET() {
       alerts,
     })
   } catch (error) {
-    console.error("Dashboard error:", error)
-    return NextResponse.json({ error: "Failed to load dashboard" }, { status: 500 })
+    const { status, json } = handleServiceError(error)
+    return NextResponse.json(json, { status })
   }
 }
