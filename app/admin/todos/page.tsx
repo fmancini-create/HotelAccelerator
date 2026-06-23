@@ -231,6 +231,8 @@ export default function TodosPage() {
       due_date: todo.due_date ? todo.due_date.slice(0, 10) : "",
       tags: todo.tags.join(", "),
       send_to_manubot: todo.send_to_manubot || false,
+      manubot_assigned_to: "",
+      manubot_asset_id: "",
     })
     setEditingTodo(todo)
     setShowForm(true)
