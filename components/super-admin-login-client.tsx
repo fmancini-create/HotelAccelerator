@@ -6,15 +6,15 @@ import { Shield } from "lucide-react"
 import SuperAdminLoginForm from "@/components/super-admin-login-form"
 
 export default function SuperAdminLoginClient() {
-  // DEV/PREVIEW BYPASS: Auto-redirect in development/preview environments
+  // DEV BYPASS: auto-redirect consentito SOLO in sviluppo locale
+  // (NODE_ENV=development su host localhost/127.0.0.1, match esatto). Mai su
+  // preview pubbliche o produzione (host raggiungibili da terzi).
   useEffect(() => {
-    const hostname = window.location.hostname
-    const isDevOrPreview = hostname.includes("vercel.run") || 
-                           hostname.includes("localhost") || 
-                           hostname.includes("127.0.0.1")
-    
-    if (isDevOrPreview) {
-      console.log("[v0] DEV/PREVIEW MODE: Auto-redirecting to super-admin dashboard")
+    if (process.env.NODE_ENV !== "development") return
+    const hostname = window.location.hostname.split(":")[0].trim().toLowerCase()
+    const isLocalDevHost = hostname === "localhost" || hostname === "127.0.0.1"
+
+    if (isLocalDevHost) {
       window.location.href = "/super-admin"
     }
   }, [])
