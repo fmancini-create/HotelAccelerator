@@ -1,17 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
+import { getDevBypass } from "@/lib/auth-property"
 import { ChannelAssignmentService } from "@/lib/platform-services/channel-assignment.service"
 
 export async function GET(request: NextRequest) {
   try {
-    // DEV/PREVIEW BYPASS: Return dummy data in dev/preview mode
-    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-    const isDevOrPreview = host.includes("vercel.run") || 
-                           host.includes("localhost") || 
-                           host.includes("127.0.0.1")
-
-    if (isDevOrPreview) {
+    // DEV BYPASS: dati fittizi solo in sviluppo locale (regola centralizzata in getDevBypass).
+    if (await getDevBypass(request)) {
       return NextResponse.json({
         users: [
           {
