@@ -1,24 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getAuthenticatedPropertyId, getDevBypass } from "@/lib/auth-property"
 import { getManubotClient, HA_TO_MANUBOT_STATUS, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
-
-function isDevMode(request: NextRequest): boolean {
-  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-  return (
-    host.includes("vercel.run") ||
-    host.includes("localhost") ||
-    host.includes("127.0.0.1") ||
-    host.includes("vusercontent.net")
-  )
-}
 
 // PATCH /api/admin/todos/[id] - Update a todo
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
 
-    if (isDevMode(request)) {
+    // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (NODE_ENV=development
+    // + localhost/127.0.0.1, via getDevBypass). Mai su preview pubbliche/produzione.
+    if (await getDevBypass(request)) {
       const body = await request.json()
       return NextResponse.json({ todo: { id, ...body, updated_at: new Date().toISOString() } })
     }
@@ -77,7 +69,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     const { id } = await params
 
-    if (isDevMode(request)) {
+    // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (via getDevBypass).
+    if (await getDevBypass(request)) {
       return NextResponse.json({ success: true })
     }
 

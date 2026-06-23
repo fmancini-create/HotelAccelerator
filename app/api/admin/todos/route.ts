@@ -1,22 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getAuthenticatedPropertyId, getDevBypass } from "@/lib/auth-property"
 import { getManubotClient, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
-
-function isDevMode(request: NextRequest): boolean {
-  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
-  return (
-    host.includes("vercel.run") ||
-    host.includes("localhost") ||
-    host.includes("127.0.0.1") ||
-    host.includes("vusercontent.net")
-  )
-}
 
 // GET /api/admin/todos - List todos for tenant
 export async function GET(request: NextRequest) {
   try {
-    if (isDevMode(request)) {
+    // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (NODE_ENV=development
+    // + localhost/127.0.0.1, via getDevBypass). Mai su preview pubbliche/produzione.
+    if (await getDevBypass(request)) {
       return NextResponse.json({ todos: [] })
     }
 
@@ -53,7 +45,8 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/todos - Create a new todo
 export async function POST(request: NextRequest) {
   try {
-    if (isDevMode(request)) {
+    // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (via getDevBypass).
+    if (await getDevBypass(request)) {
       const body = await request.json()
       return NextResponse.json({
         todo: {
