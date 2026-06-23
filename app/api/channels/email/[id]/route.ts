@@ -4,6 +4,35 @@ import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 import { EmailChannelService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 
+/**
+ * SECURITY: i segreti del canale email (token OAuth, password SMTP) non devono
+ * MAI raggiungere il client. Questo serializer rimuove i campi sensibili dalla
+ * response e li sostituisce con booleani indicatori, sul modello di WhatsApp.
+ * NB: confinamento di response, non cifratura at-rest.
+ */
+const EMAIL_CHANNEL_SECRET_KEYS = [
+  "oauth_access_token",
+  "oauth_refresh_token",
+  "access_token",
+  "refresh_token",
+  "smtp_password",
+  "smtp_pass",
+  "imap_password",
+  "password",
+] as const
+
+function serializeEmailChannel<T extends Record<string, any> | null | undefined>(channel: T) {
+  if (!channel) return channel
+  const safe: Record<string, any> = {}
+  for (const [key, value] of Object.entries(channel)) {
+    if ((EMAIL_CHANNEL_SECRET_KEYS as readonly string[]).includes(key)) continue
+    safe[key] = value
+  }
+  safe.has_oauth = Boolean(channel.oauth_access_token || channel.oauth_refresh_token)
+  safe.has_smtp_password = Boolean(channel.smtp_password)
+  return safe
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -21,7 +50,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: "Channel not found", code: "NOT_FOUND" }, { status: 404 })
     }
 
-    return NextResponse.json({ channel })
+    return NextResponse.json({ channel: serializeEmailChannel(channel) })
   } catch (error) {
     const { status, json } = handleServiceError(error)
     return NextResponse.json(json, { status })
@@ -56,7 +85,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       color: color === undefined ? undefined : color || null,
     })
 
-    return NextResponse.json({ channel })
+    return NextResponse.json({ channel: serializeEmailChannel(channel) })
   } catch (error) {
     const { status, json } = handleServiceError(error)
     return NextResponse.json(json, { status })
@@ -96,7 +125,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const service = new EmailChannelService(access.supabase)
     const channel = await service.toggleChannelStatus(id, propertyId)
 
-    return NextResponse.json({ channel })
+    return NextResponse.json({ channel: serializeEmailChannel(channel) })
   } catch (error) {
     const { status, json } = handleServiceError(error)
     return NextResponse.json(json, { status })
