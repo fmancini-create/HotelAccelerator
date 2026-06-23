@@ -3,17 +3,10 @@
 import type React from "react"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Lock, Eye, EyeOff, Mail, Zap } from "lucide-react"
+import { Lock, Eye, EyeOff, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
-
-const DEV_CREDENTIALS = {
-  superAdmin: {
-    email: "f.mancini@4bid.it",
-    password: "Pippolo75@",
-  },
-}
 
 export default function SuperAdminLoginForm() {
   const [email, setEmail] = useState("")
@@ -22,29 +15,15 @@ export default function SuperAdminLoginForm() {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isClient, setIsClient] = useState(false)
-  const [isDevEnvironment, setIsDevEnvironment] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
     setIsClient(true)
-    const hostname = window.location.hostname
-    const isDev =
-      hostname === "localhost" ||
-      hostname.includes("preview") ||
-      hostname.includes("vercel.app") ||
-      hostname.includes("vusercontent.net") ||
-      process.env.NODE_ENV === "development"
-    setIsDevEnvironment(isDev)
   }, [])
 
   const getSupabase = () => {
     if (!isClient) return null
     return createClient()
-  }
-
-  const handleQuickLogin = () => {
-    setEmail(DEV_CREDENTIALS.superAdmin.email)
-    setPassword(DEV_CREDENTIALS.superAdmin.password)
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -160,22 +139,6 @@ export default function SuperAdminLoginForm() {
 
   return (
     <form onSubmit={handleLogin} className="space-y-4">
-      {isDevEnvironment && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4">
-          <p className="text-xs text-amber-400 mb-2 font-medium">Accesso rapido (solo dev/preview)</p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleQuickLogin}
-            className="w-full border-amber-500/50 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 bg-transparent"
-          >
-            <Zap className="w-4 h-4 mr-2" />
-            Super Admin
-          </Button>
-        </div>
-      )}
-
       <div>
         <label className="block text-sm font-medium text-neutral-300 mb-1">Email</label>
         <div className="relative">
