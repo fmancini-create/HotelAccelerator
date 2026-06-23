@@ -12,6 +12,7 @@
 
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
+import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import crypto from "crypto"
 
 /**
@@ -27,21 +28,15 @@ function requireEnv(name: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  // Solo in dev/preview
-  const host = req.headers.get("host") || ""
-  const isAllowed =
-    host.includes("vusercontent.net") ||
-    host.includes("vercel.run") ||
-    host.includes("localhost") ||
-    host.includes("127.0.0.1")
-
-  if (!isAllowed) {
-    return NextResponse.json({ error: "Solo in ambiente dev/preview" }, { status: 403 })
-  }
-
   const log: string[] = []
 
   try {
+    // SECURITY: gate di accesso con autenticazione reale (admin tenant o
+    // super-admin). Sostituisce il vecchio bypass host-based pubblico: su
+    // preview pubbliche e produzione l'endpoint richiede sempre auth reale,
+    // mentre in sviluppo locale resta consentito tramite il dev bypass sicuro
+    // (NODE_ENV=development + localhost/127.0.0.1) ereditato da requireTenantAdmin.
+    await requireTenantAdmin(req)
     // Credenziali Manubot da variabili ambiente (nessun valore hardcoded).
     // Se mancano, requireEnv lancia un errore controllato gestito dal catch.
     const MANUBOT_SUPABASE_URL = requireEnv("MANUBOT_SUPABASE_URL")
@@ -197,6 +192,11 @@ export async function GET(req: NextRequest) {
     })
 
   } catch (err: any) {
+    // Le negazioni di accesso (401/403) non sono errori server: mappale al
+    // codice corretto senza includere il log di debug.
+    if (isAccessError(err)) {
+      return NextResponse.json({ error: err.message }, { status: accessErrorStatus(err) })
+    }
     return NextResponse.json({ error: err.message, log }, { status: 500 })
   }
 }
