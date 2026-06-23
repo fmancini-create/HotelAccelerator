@@ -9,15 +9,15 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { readMiddlewareUser } from "@/lib/supabase/middleware"
 
-/** Host della preview v0 / dev locale dove si salta l'auth reale (NO vercel.app). */
-function isDevOrPreviewHost(hostname: string): boolean {
-  const h = hostname.split(":")[0]
-  return (
-    h === "localhost" ||
-    h === "127.0.0.1" ||
-    h.includes("vercel.run") ||
-    h.includes("vusercontent.net")
-  )
+/**
+ * SECURITY: l'auth-guard può essere saltato SOLO in sviluppo locale, cioè
+ * NODE_ENV=development su host localhost/127.0.0.1. Mai su preview pubbliche
+ * o produzione (host raggiungibili da terzi).
+ */
+function isLocalDevBypass(hostname: string): boolean {
+  if (process.env.NODE_ENV !== "development") return false
+  const h = hostname.split(":")[0].trim().toLowerCase()
+  return h === "localhost" || h === "127.0.0.1"
 }
 
 /** Rotte che richiedono una sessione autenticata. */
@@ -48,7 +48,7 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const devOrPreview = isDevOrPreviewHost(hostname)
+  const devOrPreview = isLocalDevBypass(hostname)
 
   // AUTH GUARD (solo in produzione): verifica la presenza di una sessione per le
   // rotte protette. L'autorizzazione di ruolo resta nei layout/API.
