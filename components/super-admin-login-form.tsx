@@ -31,25 +31,8 @@ export default function SuperAdminLoginForm() {
     setError("")
     setIsLoading(true)
 
-    console.log("[v0] Super Admin login started with email:", email)
-
-    // DEV/PREVIEW BYPASS: Auto-login in development/preview environments
-    // Check hostname since process.env vars aren't available in client
-    const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-    const isDevOrPreview = hostname.includes("vercel.run") || 
-                           hostname.includes("localhost") || 
-                           hostname.includes("127.0.0.1") ||
-                           hostname.includes("vusercontent.net")
-
-    if (isDevOrPreview) {
-      console.log("[v0] DEV/PREVIEW MODE: Bypassing super-admin auth, redirecting to dashboard")
-      window.location.href = "/super-admin"
-      return
-    }
-
     const supabase = getSupabase()
     if (!supabase) {
-      console.log("[v0] Supabase client is null")
       setError("Errore di configurazione")
       setIsLoading(false)
       return
@@ -61,24 +44,17 @@ export default function SuperAdminLoginForm() {
         password,
       })
 
-      console.log("[v0] signInWithPassword response:", { data, error: signInError })
-
       if (signInError) {
-        console.log("[v0] Login error:", signInError.message)
         setError("Credenziali non valide")
         setIsLoading(false)
         return
       }
 
       if (!data.user) {
-        console.log("[v0] No user in response")
         setError("Errore durante l'accesso")
         setIsLoading(false)
         return
       }
-
-      console.log("[v0] User authenticated:", data.user.id)
-      console.log("[v0] Checking platform_collaborators table...")
 
       const { data: collaborator, error: collaboratorError } = await supabase
         .from("platform_collaborators")
@@ -86,10 +62,7 @@ export default function SuperAdminLoginForm() {
         .eq("email", data.user.email)
         .single()
 
-      console.log("[v0] platform_collaborators query result:", { collaborator, collaboratorError })
-
       if (collaboratorError || !collaborator) {
-        console.log("[v0] User not a platform collaborator:", collaboratorError?.message)
         setError("Accesso non autorizzato. Solo i super admin della piattaforma possono accedere.")
         await supabase.auth.signOut()
         setIsLoading(false)
@@ -97,7 +70,6 @@ export default function SuperAdminLoginForm() {
       }
 
       if (collaborator.role !== "super_admin") {
-        console.log("[v0] User is not super admin:", collaborator.role)
         setError("Accesso non autorizzato. Ruolo super admin richiesto.")
         await supabase.auth.signOut()
         setIsLoading(false)
@@ -105,25 +77,19 @@ export default function SuperAdminLoginForm() {
       }
 
       if (!collaborator.is_active) {
-        console.log("[v0] User account is suspended")
         setError("Account sospeso. Contatta l'amministratore di sistema.")
         await supabase.auth.signOut()
         setIsLoading(false)
         return
       }
 
-      console.log("[v0] Super admin authorized:", collaborator)
-      console.log("[v0] Redirecting to /super-admin...")
-
       await supabase
         .from("platform_collaborators")
         .update({ last_login_at: new Date().toISOString() })
         .eq("id", collaborator.id)
 
-      // Redirect to super admin dashboard
       window.location.href = "/super-admin"
-    } catch (err) {
-      console.error("[v0] Login error:", err)
+    } catch {
       setError("Si è verificato un errore durante l'accesso")
       setIsLoading(false)
     }
