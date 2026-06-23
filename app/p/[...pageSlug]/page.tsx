@@ -22,7 +22,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const effectivePropertySlug = propertySlug || DEFAULT_PROPERTY_SLUG
 
   const { data: property } = await supabase
-    .from("properties")
+    .from("public_properties")
     .select("id")
     .or(`slug.eq.${effectivePropertySlug},subdomain.eq.${effectivePropertySlug}`)
     .single()
@@ -66,7 +66,7 @@ export default async function CMSPage({ params, searchParams }: Props) {
   console.log("[v0] CMS Page - effectivePropertySlug:", effectivePropertySlug)
 
   const { data: property, error: propertyError } = await supabase
-    .from("properties")
+    .from("public_properties")
     .select("id, slug, subdomain")
     .or(`slug.eq.${effectivePropertySlug},subdomain.eq.${effectivePropertySlug}`)
     .single()

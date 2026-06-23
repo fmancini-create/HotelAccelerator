@@ -9,7 +9,6 @@ export interface CurrentTenant {
   custom_domain: string | null
   frontend_enabled: boolean
   logo_url: string | null
-  settings: Record<string, unknown>
   seo_title?: string
   seo_description?: string
   seo_og_image?: string
@@ -38,9 +37,9 @@ export async function getCurrentTenant(): Promise<CurrentTenant | null> {
   const column = tenantType === "custom_domain" ? "custom_domain" : "subdomain"
 
   const { data, error } = await supabase
-    .from("properties")
+    .from("public_properties")
     .select(
-      "id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, settings, seo_title, seo_description, seo_og_image, seo_keywords",
+      "id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, seo_title, seo_description, seo_og_image, seo_keywords",
     )
     .eq(column, tenantIdentifier)
     .eq("frontend_enabled", true)

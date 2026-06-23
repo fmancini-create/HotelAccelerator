@@ -8,7 +8,6 @@ export interface TenantInfo {
   custom_domain: string | null
   frontend_enabled: boolean
   logo_url: string | null
-  settings: Record<string, unknown>
 }
 
 // Cache per evitare lookup ripetuti (TTL 5 minuti)
@@ -34,8 +33,8 @@ export async function resolveTenantFromHost(hostname: string): Promise<TenantInf
 
   // 1. Prova custom domain esatto
   const { data: byDomain } = await supabase
-    .from("properties")
-    .select("id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, settings")
+    .from("public_properties")
+    .select("id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url")
     .eq("custom_domain", hostname)
     .eq("frontend_enabled", true)
     .single()
@@ -47,8 +46,8 @@ export async function resolveTenantFromHost(hostname: string): Promise<TenantInf
     const subdomain = extractSubdomain(hostname)
     if (subdomain) {
       const { data: bySubdomain } = await supabase
-        .from("properties")
-        .select("id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url, settings")
+        .from("public_properties")
+        .select("id, name, slug, subdomain, custom_domain, frontend_enabled, logo_url")
         .eq("subdomain", subdomain)
         .eq("frontend_enabled", true)
         .single()
