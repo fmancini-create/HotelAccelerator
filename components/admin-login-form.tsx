@@ -33,17 +33,14 @@ function GoogleIcon({ className }: { className?: string }) {
 
 type FormMode = "login" | "register" | "recovery"
 
-// Hostnames where the v0 preview / local dev should skip real auth. NOTE: this
-// intentionally excludes "vercel.app" so production-like deploys are never bypassed.
-function isDevOrPreviewHost(): boolean {
+// SECURITY: il bypass auth UI può attivarsi SOLO in sviluppo locale, cioè
+// NODE_ENV=development su host localhost/127.0.0.1 (match esatto). Mai su
+// preview pubbliche o produzione (host raggiungibili da terzi).
+function isLocalDevBypass(): boolean {
   if (typeof window === "undefined") return false
-  const h = window.location.hostname
-  return (
-    h === "localhost" ||
-    h === "127.0.0.1" ||
-    h.includes("vercel.run") ||
-    h.includes("vusercontent.net")
-  )
+  if (process.env.NODE_ENV !== "development") return false
+  const h = window.location.hostname.split(":")[0].trim().toLowerCase()
+  return h === "localhost" || h === "127.0.0.1"
 }
 
 export default function AdminLoginForm() {
@@ -84,8 +81,8 @@ export default function AdminLoginForm() {
     setError("")
     setIsLoading(true)
 
-    // DEV/PREVIEW BYPASS: the v0 preview has no real session, so go straight in.
-    if (isDevOrPreviewHost()) {
+    // DEV BYPASS: solo in sviluppo locale (NODE_ENV=development + localhost/127.0.0.1).
+    if (isLocalDevBypass()) {
       window.location.href = "/admin/dashboard"
       return
     }
@@ -129,8 +126,8 @@ export default function AdminLoginForm() {
   const handleGoogleLogin = async () => {
     setError("")
 
-    // In dev/preview there is no real OAuth session; skip straight to the app.
-    if (isDevOrPreviewHost()) {
+    // DEV BYPASS: solo in sviluppo locale (NODE_ENV=development + localhost/127.0.0.1).
+    if (isLocalDevBypass()) {
       window.location.href = "/admin/dashboard"
       return
     }
