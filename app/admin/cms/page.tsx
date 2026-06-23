@@ -96,17 +96,17 @@ function CMSPagesContent() {
   }, [])
 
   async function loadPropertyAndPages() {
-    // DEV/PREVIEW BYPASS
-    const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-    const isDevOrPreview =
-      hostname.includes("vusercontent.net") ||
-      hostname.includes("vercel.run") ||
-      hostname.includes("localhost") ||
-      hostname.includes("127.0.0.1")
+    // DEV BYPASS: property fittizia SOLO in sviluppo locale (NODE_ENV=development
+    // su host localhost/127.0.0.1, match esatto). Mai su preview pubbliche o
+    // produzione (host raggiungibili da terzi).
+    const hostname =
+      typeof window !== "undefined" ? window.location.hostname.split(":")[0].trim().toLowerCase() : ""
+    const isLocalDevBypass =
+      process.env.NODE_ENV === "development" && (hostname === "localhost" || hostname === "127.0.0.1")
 
     let resolvedPropertyId: string | null = null
 
-    if (isDevOrPreview) {
+    if (isLocalDevBypass) {
       resolvedPropertyId = "c16ad260-2c34-4544-9909-5cd444773986"
     } else {
       const supabase = createClient()

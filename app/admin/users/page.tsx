@@ -106,11 +106,15 @@ export default function AdminUsersPage() {
     )
   }
 
-  // DEV/PREVIEW MODE: If adminUser is null but we're in dev mode, create a fake one
-  const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-  const isDevOrPreview = hostname.includes("vercel.run") || hostname.includes("localhost") || hostname.includes("vusercontent.net")
-  
-  const effectiveAdminUser = adminUser || (isDevOrPreview ? {
+  // DEV BYPASS: admin fittizio SOLO in sviluppo locale (NODE_ENV=development su
+  // host localhost/127.0.0.1, match esatto). Mai su preview pubbliche o
+  // produzione (host raggiungibili da terzi).
+  const hostname =
+    typeof window !== "undefined" ? window.location.hostname.split(":")[0].trim().toLowerCase() : ""
+  const isLocalDevBypass =
+    process.env.NODE_ENV === "development" && (hostname === "localhost" || hostname === "127.0.0.1")
+
+  const effectiveAdminUser = adminUser || (isLocalDevBypass ? {
     id: "dev-user",
     email: "dev@hotelaccelerator.local",
     name: "Dev Admin",

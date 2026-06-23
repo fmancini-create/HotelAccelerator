@@ -11,15 +11,15 @@ export default function AdminPage() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      // DEV/PREVIEW BYPASS: Skip auth in development/preview and go straight to dashboard.
-      const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-      const isDevOrPreview =
-        hostname.includes("vercel.run") ||
-        hostname.includes("localhost") ||
-        hostname.includes("127.0.0.1") ||
-        hostname.includes("vusercontent.net")
+      // DEV BYPASS: skip auth SOLO in sviluppo locale (NODE_ENV=development su
+      // host localhost/127.0.0.1, match esatto). Mai su preview pubbliche o
+      // produzione (host raggiungibili da terzi).
+      const hostname =
+        typeof window !== "undefined" ? window.location.hostname.split(":")[0].trim().toLowerCase() : ""
+      const isLocalDevBypass =
+        process.env.NODE_ENV === "development" && (hostname === "localhost" || hostname === "127.0.0.1")
 
-      if (isDevOrPreview) {
+      if (isLocalDevBypass) {
         window.location.replace("/admin/dashboard")
         return
       }
