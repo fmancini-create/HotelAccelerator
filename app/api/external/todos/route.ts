@@ -20,7 +20,7 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,7 +41,9 @@ export async function POST(request: NextRequest) {
     }
     const apiKey = authHeader.slice(7)
 
-    const supabase = await createClient()
+    // Service client: l'auth avviene via api_token verificato sotto.
+    // Non dipende dalla policy pubblica properties_read_all.
+    const supabase = createServiceClient()
 
     // Find property by slug and verify API key
     const { data: property, error: propError } = await supabase

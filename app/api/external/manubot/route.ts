@@ -28,7 +28,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { MANUBOT_TO_HA_STATUS, MANUBOT_TO_HA_PRIORITY } from "@/lib/manubot"
 
 export async function POST(request: NextRequest) {
@@ -40,7 +40,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Token mancante" }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    // Service client: l'auth avviene via api_token verificato sotto.
+    // Non dipende dalla policy pubblica properties_read_all.
+    const supabase = createServiceClient()
 
     // Trova la property tramite api_token
     const { data: property, error: propError } = await supabase
