@@ -33,14 +33,14 @@ export function useAdminAuth() {
           return
         }
 
-        // DEV/PREVIEW BYPASS: Auto-login in development/preview environments
-        const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-        const isDevOrPreview = hostname.includes("vercel.run") || 
-                               hostname.includes("localhost") || 
-                               hostname.includes("127.0.0.1") ||
-                               hostname.includes("vusercontent.net")
+        // DEV BYPASS: auto-login UI consentito SOLO in sviluppo locale
+        // (NODE_ENV=development su host localhost/127.0.0.1). Mai su preview
+        // pubbliche o produzione (host raggiungibili da terzi).
+        const hostname = typeof window !== "undefined" ? window.location.hostname.split(":")[0].trim().toLowerCase() : ""
+        const isLocalDevHost =
+          process.env.NODE_ENV === "development" && (hostname === "localhost" || hostname === "127.0.0.1")
 
-        if (isDevOrPreview) {
+        if (isLocalDevHost) {
           setAdminUser({
             id: "dev-user",
             email: "dev@hotelaccelerator.local",
