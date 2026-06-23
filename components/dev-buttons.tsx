@@ -3,17 +3,21 @@ import { Button } from "@/components/ui/button"
 import { ShieldAlert } from "lucide-react"
 import { headers } from "next/headers"
 
+// SECURITY: i dev buttons compaiono SOLO in sviluppo locale, cioè
+// NODE_ENV=development su host localhost/127.0.0.1 (match esatto, porta rimossa).
+// Mai su preview pubbliche o produzione (host raggiungibili da terzi).
+function isLocalDevHost(host: string): boolean {
+  if (process.env.NODE_ENV !== "development") return false
+  const hostname = host.split(":")[0].trim().toLowerCase()
+  return hostname === "localhost" || hostname === "127.0.0.1"
+}
+
 export default async function DevButtons() {
   // Get hostname from headers (server-side)
   const headersList = await headers()
   const host = headersList.get("x-forwarded-host") || headersList.get("host") || ""
-  
-  const isDevOrPreview = host.includes("vercel.run") || 
-                         host.includes("localhost") || 
-                         host.includes("127.0.0.1") ||
-                         host.includes("vusercontent.net")
 
-  if (!isDevOrPreview) return null
+  if (!isLocalDevHost(host)) return null
 
   return (
     <section className="py-8 px-4 bg-red-950/30 border-t border-red-900/50" aria-label="Development buttons">
