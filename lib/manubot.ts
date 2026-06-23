@@ -10,9 +10,17 @@
  *   - manubot_company_id: UUID company su Manubot
  */
 
-const MANUBOT_BASE_URL = "https://manubot.it/api"
-const MANUBOT_SUPABASE_URL = "https://qqcxeksvegvmgajmyqcz.supabase.co"
-const MANUBOT_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJibGdyZHVrZ3hrc3p1YXl6cWp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5Mzg3ODMsImV4cCI6MjA3NzUxNDc4M30._xD-w4B_kEy5yDLH3cvMKZJqRo4kAzJbLnNVARch3gw"
+/**
+ * Legge una variabile ambiente obbligatoria.
+ * Lancia un errore controllato (senza mai esporre il valore) se mancante.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim() === "") {
+    throw new Error(`Configurazione Manubot mancante: variabile ambiente ${name} non impostata`)
+  }
+  return value
+}
 
 export interface ManubotTask {
   id: string
@@ -94,7 +102,11 @@ export class ManubotClient {
   private supabaseUrl: string
 
   constructor(supabaseUrl?: string) {
-    this.supabaseUrl = supabaseUrl || MANUBOT_SUPABASE_URL
+    this.supabaseUrl = supabaseUrl || requireEnv("MANUBOT_SUPABASE_URL")
+  }
+
+  private get baseUrl(): string {
+    return requireEnv("MANUBOT_BASE_URL")
   }
 
   /**
@@ -107,7 +119,7 @@ export class ManubotClient {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "apikey": MANUBOT_ANON_KEY,
+          "apikey": requireEnv("MANUBOT_SUPABASE_ANON_KEY"),
         },
         body: JSON.stringify({ email, password }),
       }
@@ -133,7 +145,7 @@ export class ManubotClient {
    * Crea un task su Manubot
    */
   async createTask(payload: ManubotCreateTaskPayload): Promise<ManubotTask> {
-    const res = await fetch(`${MANUBOT_BASE_URL}/tasks/create`, {
+    const res = await fetch(`${this.baseUrl}/tasks/create`, {
       method: "POST",
       headers: this.authHeaders(),
       body: JSON.stringify(payload),
@@ -152,7 +164,7 @@ export class ManubotClient {
     taskId: string,
     updates: Partial<Pick<ManubotTask, "status" | "priority" | "assigned_to" | "notes">>
   ): Promise<ManubotTask> {
-    const res = await fetch(`${MANUBOT_BASE_URL}/tasks/${taskId}`, {
+    const res = await fetch(`${this.baseUrl}/tasks/${taskId}`, {
       method: "PATCH",
       headers: this.authHeaders(),
       body: JSON.stringify(updates),
@@ -168,7 +180,7 @@ export class ManubotClient {
    * Lista task della company
    */
   async getTasks(): Promise<ManubotTask[]> {
-    const res = await fetch(`${MANUBOT_BASE_URL}/tasks`, {
+    const res = await fetch(`${this.baseUrl}/tasks`, {
       headers: this.authHeaders(),
     })
     if (!res.ok) throw new Error("Errore fetch task Manubot")
@@ -180,7 +192,7 @@ export class ManubotClient {
    * Lista tecnici della company
    */
   async getTeam(): Promise<ManubotTeamMember[]> {
-    const res = await fetch(`${MANUBOT_BASE_URL}/team`, {
+    const res = await fetch(`${this.baseUrl}/team`, {
       headers: this.authHeaders(),
     })
     if (!res.ok) throw new Error("Errore fetch team Manubot")
@@ -192,7 +204,7 @@ export class ManubotClient {
    * Lista impianti/asset
    */
   async getAssets(): Promise<ManubotAsset[]> {
-    const res = await fetch(`${MANUBOT_BASE_URL}/assets`, {
+    const res = await fetch(`${this.baseUrl}/assets`, {
       headers: this.authHeaders(),
     })
     if (!res.ok) throw new Error("Errore fetch asset Manubot")
@@ -205,16 +217,15 @@ export class ManubotClient {
  * Factory: crea un ManubotClient autenticato con le credenziali della property
  * Usato dalle API routes interne
  */
-const MANUBOT_DEFAULT_EMAIL    = "f.mancini@ibarronci.com"
-const MANUBOT_DEFAULT_PASSWORD = "Pippolo75@manubot"
-
 export async function getManubotClient(property: {
   manubot_email?: string | null
   manubot_password?: string | null
   manubot_supabase_url?: string | null
 }): Promise<ManubotClient> {
-  const email    = property.manubot_email    || MANUBOT_DEFAULT_EMAIL
-  const password = property.manubot_password || MANUBOT_DEFAULT_PASSWORD
+  // Priorità alle credenziali della property; in assenza, usa le env di default.
+  // Nessun fallback hardcoded: se mancano sia property che env, errore controllato.
+  const email    = property.manubot_email    || requireEnv("MANUBOT_DEFAULT_EMAIL")
+  const password = property.manubot_password || requireEnv("MANUBOT_DEFAULT_PASSWORD")
 
   const client = new ManubotClient(property.manubot_supabase_url || undefined)
   try {

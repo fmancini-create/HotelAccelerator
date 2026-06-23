@@ -14,11 +14,17 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import crypto from "crypto"
 
-const MANUBOT_SUPABASE_URL = "https://qqcxeksvegvmgajmyqcz.supabase.co"
-const MANUBOT_ANON_KEY     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJibGdyZHVrZ3hrc3p1YXl6cWp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5Mzg3ODMsImV4cCI6MjA3NzUxNDc4M30._xD-w4B_kEy5yDLH3cvMKZJqRo4kAzJbLnNVARch3gw"
-const MANUBOT_EMAIL        = "f.mancini@ibarronci.com"
-const MANUBOT_PASSWORD     = "Pippolo75@manubot"
-const MANUBOT_BASE_URL     = "https://manubot.it/api"
+/**
+ * Legge una variabile ambiente obbligatoria.
+ * Lancia un errore controllato (senza esporre il valore) se mancante.
+ */
+function requireEnv(name: string): string {
+  const value = process.env[name]
+  if (!value || value.trim() === "") {
+    throw new Error(`Configurazione Manubot mancante: variabile ambiente ${name} non impostata`)
+  }
+  return value
+}
 
 export async function GET(req: NextRequest) {
   // Solo in dev/preview
@@ -36,6 +42,14 @@ export async function GET(req: NextRequest) {
   const log: string[] = []
 
   try {
+    // Credenziali Manubot da variabili ambiente (nessun valore hardcoded).
+    // Se mancano, requireEnv lancia un errore controllato gestito dal catch.
+    const MANUBOT_SUPABASE_URL = requireEnv("MANUBOT_SUPABASE_URL")
+    const MANUBOT_ANON_KEY     = requireEnv("MANUBOT_SUPABASE_ANON_KEY")
+    const MANUBOT_EMAIL        = requireEnv("MANUBOT_DEFAULT_EMAIL")
+    const MANUBOT_PASSWORD     = requireEnv("MANUBOT_DEFAULT_PASSWORD")
+    const MANUBOT_BASE_URL     = requireEnv("MANUBOT_BASE_URL")
+
     // ── Step 1: Login su Manubot ─────────────────────────────────────────
     log.push("1. Login su Manubot Supabase...")
     const loginRes = await fetch(
@@ -126,7 +140,7 @@ export async function GET(req: NextRequest) {
 
     // ── Step 3: Genera api_token per webhook receiver ─────────────────────
     const apiToken = crypto.randomBytes(32).toString("hex")
-    log.push(`3. api_token generato: ${apiToken}`)
+    log.push("3. api_token generato (valore non loggato per sicurezza)")
 
     // ── Step 4: Salva su HotelAccelerator Supabase ────────────────────────
     log.push("4. Salvataggio su HotelAccelerator Supabase...")
