@@ -12,6 +12,7 @@ import {
   modifyGmailMessage,
 } from "@/lib/gmail-client"
 import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 const API_VERSION = "v744"
 
@@ -23,7 +24,8 @@ async function getEmailChannelForUser(supabase: any, userId: string, requestedCh
     .select("id, oauth_access_token, oauth_refresh_token, email_address")
     .eq("id", channelId)
     .maybeSingle()
-  return channel
+  // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+  return decryptChannelSecrets(channel)
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ messageId: string }> }) {

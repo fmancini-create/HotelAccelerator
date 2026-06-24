@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 // Setup Gmail watch (Pub/Sub push notifications)
 export async function POST(request: NextRequest) {
@@ -21,15 +22,18 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Get channel
-    const { data: channel, error: channelError } = await supabase
+    const { data: rawChannel, error: channelError } = await supabase
       .from("email_channels")
       .select("*")
       .eq("id", channel_id)
       .single()
 
-    if (channelError || !channel) {
+    if (channelError || !rawChannel) {
       return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
     }
+
+    // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+    const channel = decryptChannelSecrets(rawChannel)
 
     if (channel.provider !== "gmail") {
       return NextResponse.json({ error: "Push notifications solo per Gmail" }, { status: 400 })
@@ -54,7 +58,7 @@ export async function POST(request: NextRequest) {
         .eq("id", channel_id)
         .single()
 
-      channel.oauth_access_token = refreshedChannel?.oauth_access_token
+      channel.oauth_access_token = decryptChannelSecrets(refreshedChannel)?.oauth_access_token
     }
 
     // Setup Gmail watch
@@ -130,11 +134,14 @@ export async function DELETE(request: NextRequest) {
 
     const supabase = await createClient()
 
-    const { data: channel } = await supabase.from("email_channels").select("*").eq("id", channel_id).single()
+    const { data: rawChannel } = await supabase.from("email_channels").select("*").eq("id", channel_id).single()
 
-    if (!channel) {
+    if (!rawChannel) {
       return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
     }
+
+    // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+    const channel = decryptChannelSecrets(rawChannel)
 
     // Stop watch
     await fetch("https://gmail.googleapis.com/gmail/v1/users/me/stop", {

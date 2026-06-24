@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import type { OAuthProvider } from "@/lib/oauth-config"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 // Send email via OAuth (Gmail or Outlook API)
 export async function POST(request: NextRequest) {
@@ -16,16 +17,19 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Get channel with OAuth credentials
-    const { data: channel, error: channelError } = await supabase
+    const { data: rawChannel, error: channelError } = await supabase
       .from("email_channels")
       .select("*")
       .eq("id", channel_id)
       .eq("property_id", property_id)
       .single()
 
-    if (channelError || !channel) {
+    if (channelError || !rawChannel) {
       return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
     }
+
+    // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+    const channel = decryptChannelSecrets(rawChannel)
 
     if (!channel.oauth_access_token || !channel.provider) {
       return NextResponse.json({ error: "Canale non configurato con OAuth" }, { status: 400 })
@@ -53,7 +57,7 @@ export async function POST(request: NextRequest) {
         .eq("id", channel_id)
         .single()
 
-      channel.oauth_access_token = refreshedChannel?.oauth_access_token
+      channel.oauth_access_token = decryptChannelSecrets(refreshedChannel)?.oauth_access_token
     }
 
     // Load the sending user's signature (rich-text HTML). Optional: if the

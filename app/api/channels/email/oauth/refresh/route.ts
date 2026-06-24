@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS, type OAuthProvider } from "@/lib/oauth-config"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 // Refresh OAuth token for a channel
 export async function POST(request: NextRequest) {
@@ -14,15 +15,18 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Get channel with refresh token
-    const { data: channel, error: fetchError } = await supabase
+    const { data: rawChannel, error: fetchError } = await supabase
       .from("email_channels")
       .select("id, provider, oauth_refresh_token, property_id")
       .eq("id", channel_id)
       .single()
 
-    if (fetchError || !channel) {
+    if (fetchError || !rawChannel) {
       return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
     }
+
+    // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+    const channel = decryptChannelSecrets(rawChannel)
 
     if (!channel.oauth_refresh_token || !channel.provider) {
       return NextResponse.json({ error: "Canale non configurato con OAuth" }, { status: 400 })

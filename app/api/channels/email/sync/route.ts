@@ -3,6 +3,7 @@ import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 import { getValidGmailToken } from "@/lib/gmail-client"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import type { OAuthProvider } from "@/lib/oauth-config"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 const API_VERSION = "v779-base64url-fix"
 
@@ -34,17 +35,20 @@ export async function POST(request: NextRequest) {
     }
     const supabase = access.supabase
 
-    const { data: channel, error: channelError } = await supabase
+    const { data: rawChannel, error: channelError } = await supabase
       .from("email_channels")
       .select("*")
       .eq("id", channel_id)
       .eq("property_id", property_id)
       .single()
 
-    if (channelError || !channel) {
+    if (channelError || !rawChannel) {
       console.error("[SMART-SYNC] Channel not found:", channelError)
       return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
     }
+
+    // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+    const channel = decryptChannelSecrets(rawChannel)
 
     console.log(`[SMART-SYNC] Channel found: provider=${channel.provider}, email=${channel.email_address}`)
 

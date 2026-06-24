@@ -11,6 +11,7 @@
 import { OAUTH_PROVIDERS, type OAuthProvider } from "@/lib/oauth-config"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import { parseGmailMessage } from "@/lib/email/gmail-parse"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 // How many recent INBOX messages to look at per run, per channel.
 // 25 comfortably covers any realistic gap between runs while staying fast.
@@ -51,8 +52,12 @@ export interface ChannelSyncResult {
  */
 async function ensureGmailToken(
   supabase: any,
-  channel: SyncableChannel,
+  rawChannel: SyncableChannel,
 ): Promise<{ token: string | null; error?: string }> {
+  // DUAL-READ: il channel arriva dal caller (cron/route) che lo legge dal DB.
+  // Tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+  const channel = decryptChannelSecrets(rawChannel)
+
   // 5 minute safety buffer
   const isExpired = channel.oauth_expiry
     ? new Date(channel.oauth_expiry).getTime() < Date.now() + 5 * 60 * 1000

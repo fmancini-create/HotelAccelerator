@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import * as nodemailer from "nodemailer"
 import { getUserSignature, appendSignatureHtml, appendSignatureText } from "@/lib/email/signature"
 import { captureOutboundRecipients } from "@/lib/crm/auto-capture"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 export async function POST(request: Request) {
   try {
@@ -70,6 +71,10 @@ export async function POST(request: Request) {
     if (!emailChannel) {
       return NextResponse.json({ error: "Nessun canale email configurato per questa struttura" }, { status: 400 })
     }
+
+    // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`
+    // (qui serve in particolare per smtp_password usato dal transporter SMTP).
+    emailChannel = decryptChannelSecrets(emailChannel)
 
     // 3. Verifica configurazione SMTP
     if (!emailChannel.smtp_host || !emailChannel.smtp_user || !emailChannel.smtp_password) {

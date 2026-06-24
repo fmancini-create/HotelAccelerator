@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS } from "@/lib/oauth-config"
+import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 interface EmailChannel {
   id: string
@@ -19,7 +20,7 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
   const supabase = await createClient()
 
   // Get channel with OAuth tokens
-  const { data: channel, error } = await supabase
+  const { data: rawChannel, error } = await supabase
     .from("email_channels")
     .select(
       "id, provider, oauth_access_token, oauth_refresh_token, oauth_expiry, property_id, email_address, display_name",
@@ -27,9 +28,12 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
     .eq("id", channelId)
     .single()
 
-  if (error || !channel) {
+  if (error || !rawChannel) {
     return { token: null, error: "Canale non trovato" }
   }
+
+  // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
+  const channel = decryptChannelSecrets(rawChannel)
 
   if (channel.provider !== "gmail") {
     return { token: null, error: "Il canale non è configurato con Gmail" }
