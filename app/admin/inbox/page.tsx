@@ -824,7 +824,7 @@ export default function InboxPage() {
   // Operates directly on the given thread ids — does NOT depend on an open thread,
   // unlike handleGmailAction which guards on selectedGmailThread.
   const handleGmailBulkAction = useCallback(
-    async (action: "archive" | "trash" | "markAsRead" | "spam", threadIds: string[]) => {
+    async (action: "archive" | "trash" | "markAsRead" | "markAsUnread" | "spam", threadIds: string[]) => {
       if (threadIds.length === 0) return
       // Optimistically remove archived/trashed/spam threads from the visible list
       if (action === "archive" || action === "trash" || action === "spam") {
@@ -1489,7 +1489,7 @@ export default function InboxPage() {
   }
 
   // Bulk actions for the unified list (archive = resolved, spam, mark as read)
-  const handleConversationBulkAction = async (action: "archive" | "spam" | "markAsRead") => {
+  const handleConversationBulkAction = async (action: "archive" | "spam" | "markAsRead" | "markAsUnread") => {
     const ids = Array.from(selectedConversationIds)
     if (ids.length === 0) return
     try {
@@ -1501,13 +1501,19 @@ export default function InboxPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          action === "markAsRead" ? { ids, markRead: true } : { ids, status: action === "spam" ? "spam" : "resolved" },
+          action === "markAsRead"
+            ? { ids, markRead: true }
+            : action === "markAsUnread"
+              ? { ids, markUnread: true }
+              : { ids, status: action === "spam" ? "spam" : "resolved" },
         ),
       })
       const data = await res.json().catch(() => null)
 
       if (action === "markAsRead") {
         setConversations((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, unread_count: 0 } : c)))
+      } else if (action === "markAsUnread") {
+        setConversations((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, unread_count: 1 } : c)))
       } else {
         setConversations((prev) => prev.filter((c) => !ids.includes(c.id)))
         if (selectedConversation && ids.includes(selectedConversation.id)) {
@@ -2428,7 +2434,19 @@ export default function InboxPage() {
             {(() => {
               const count = inboxMode === "gmail" ? selectedGmailThreadIds.size : selectedConversationIds.size
               const disabled = count === 0
-              const run = (action: "archive" | "spam" | "markAsRead") => {
+              // Se TUTTI gli elementi selezionati sono già letti, il pulsante
+              // offre l'azione inversa: "Segna come da leggere".
+              const allSelectedRead =
+                count > 0 &&
+                (inboxMode === "gmail"
+                  ? gmailThreads
+                      .filter((t) => selectedGmailThreadIds.has(t.id))
+                      .every((t) => !t.isUnread)
+                  : conversations
+                      .filter((c) => selectedConversationIds.has(c.id))
+                      .every((c) => (c.unread_count ?? 0) === 0))
+              const readAction: "markAsRead" | "markAsUnread" = allSelectedRead ? "markAsUnread" : "markAsRead"
+              const run = (action: "archive" | "spam" | "markAsRead" | "markAsUnread") => {
                 if (disabled) return
                 if (inboxMode === "gmail") {
                   handleGmailBulkAction(action, Array.from(selectedGmailThreadIds))
@@ -2466,10 +2484,12 @@ export default function InboxPage() {
                     size="sm"
                     disabled={disabled}
                     className="text-xs h-7 bg-transparent gap-1"
-                    onClick={() => run("markAsRead")}
+                    onClick={() => run(readAction)}
                   >
-                    <MailOpen className="h-4 w-4" />
-                    <span className="hidden sm:inline">Segna come letto</span>
+                    {allSelectedRead ? <Mail className="h-4 w-4" /> : <MailOpen className="h-4 w-4" />}
+                    <span className="hidden sm:inline">
+                      {allSelectedRead ? "Segna come da leggere" : "Segna come letto"}
+                    </span>
                   </Button>
                 </div>
               )
