@@ -12,6 +12,7 @@ import { OAUTH_PROVIDERS, type OAuthProvider } from "@/lib/oauth-config"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import { parseGmailMessage } from "@/lib/email/gmail-parse"
 import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
+import { encryptSecret } from "@/lib/crypto/secrets"
 
 // How many recent INBOX messages to look at per run, per channel.
 // 25 comfortably covers any realistic gap between runs while staying fast.
@@ -99,9 +100,10 @@ async function ensureGmailToken(
   await supabase
     .from("email_channels")
     .update({
-      oauth_access_token: tokens.access_token,
+      // WRITE-ENCRYPT: cifra i token prima del salvataggio.
+      oauth_access_token: encryptSecret(tokens.access_token),
       oauth_expiry,
-      ...(tokens.refresh_token && { oauth_refresh_token: tokens.refresh_token }),
+      ...(tokens.refresh_token && { oauth_refresh_token: encryptSecret(tokens.refresh_token) }),
       updated_at: new Date().toISOString(),
     })
     .eq("id", channel.id)

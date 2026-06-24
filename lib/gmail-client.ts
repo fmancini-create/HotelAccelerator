@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS } from "@/lib/oauth-config"
 import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
+import { encryptSecret } from "@/lib/crypto/secrets"
 
 interface EmailChannel {
   id: string
@@ -90,9 +91,10 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
     const { error: updateError } = await supabase
       .from("email_channels")
       .update({
-        oauth_access_token: tokens.access_token,
+        // WRITE-ENCRYPT: cifra i token prima del salvataggio.
+        oauth_access_token: encryptSecret(tokens.access_token),
         oauth_expiry,
-        ...(tokens.refresh_token && { oauth_refresh_token: tokens.refresh_token }),
+        ...(tokens.refresh_token && { oauth_refresh_token: encryptSecret(tokens.refresh_token) }),
         updated_at: new Date().toISOString(),
       })
       .eq("id", channelId)

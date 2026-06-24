@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { decryptSecretIfNeeded } from "@/lib/crypto/secrets"
+import { encryptChannelSecretsForWrite } from "@/lib/email/channel-secrets"
 
 /**
  * DUAL-READ: decifra i segreti del canale email letti dal DB, tollerando sia
@@ -125,18 +126,21 @@ export class EmailChannelRepository {
   async create(input: CreateChannelInput): Promise<EmailChannel> {
     const { data, error } = await this.supabase
       .from("email_channels")
-      .insert({
-        property_id: input.property_id,
-        email_address: input.email_address,
-        name: input.name,
-        display_name: input.display_name,
-        provider: input.provider || null,
-        is_active: input.is_active,
-        sync_enabled: input.sync_enabled ?? false,
-        oauth_access_token: input.oauth_access_token || null,
-        oauth_refresh_token: input.oauth_refresh_token || null,
-        oauth_expiry: input.oauth_expiry || null,
-      })
+      // WRITE-ENCRYPT: i segreti presenti vengono cifrati prima del salvataggio.
+      .insert(
+        encryptChannelSecretsForWrite({
+          property_id: input.property_id,
+          email_address: input.email_address,
+          name: input.name,
+          display_name: input.display_name,
+          provider: input.provider || null,
+          is_active: input.is_active,
+          sync_enabled: input.sync_enabled ?? false,
+          oauth_access_token: input.oauth_access_token || null,
+          oauth_refresh_token: input.oauth_refresh_token || null,
+          oauth_expiry: input.oauth_expiry || null,
+        }),
+      )
       .select()
       .single()
 
@@ -150,10 +154,13 @@ export class EmailChannelRepository {
   async update(channelId: string, input: UpdateChannelInput): Promise<EmailChannel> {
     const { data, error } = await this.supabase
       .from("email_channels")
-      .update({
-        ...input,
-        updated_at: new Date().toISOString(),
-      })
+      // WRITE-ENCRYPT: cifra solo i segreti presenti nell'input (partial-safe).
+      .update(
+        encryptChannelSecretsForWrite({
+          ...input,
+          updated_at: new Date().toISOString(),
+        }),
+      )
       .eq("id", channelId)
       .select()
       .single()
