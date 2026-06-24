@@ -30,12 +30,13 @@ export async function POST(request: NextRequest) {
     const ids: string[] = Array.isArray(body?.ids) ? body.ids.filter((id: unknown) => typeof id === "string") : []
     const status: string | undefined = typeof body?.status === "string" ? body.status : undefined
     const markRead: boolean = body?.markRead === true
+    const markUnread: boolean = body?.markUnread === true
 
     const validIds = ids.filter((id) => UUID_REGEX.test(id))
     if (validIds.length === 0) {
       return NextResponse.json({ error: "No valid conversation ids", code: "VALIDATION_ERROR" }, { status: 400 })
     }
-    if (!status && !markRead) {
+    if (!status && !markRead && !markUnread) {
       return NextResponse.json({ error: "Nothing to update", code: "VALIDATION_ERROR" }, { status: 400 })
     }
 
@@ -43,6 +44,8 @@ export async function POST(request: NextRequest) {
     const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (status) update.status = status
     if (markRead) update.unread_count = 0
+    // markUnread: ripristina lo stato "non letto" (almeno 1 messaggio non letto).
+    if (markUnread) update.unread_count = 1
 
     const { data: updatedRows, error } = await supabase
       .from("conversations")
@@ -61,6 +64,7 @@ export async function POST(request: NextRequest) {
     const change: { read?: boolean; status?: string } = {}
     if (status) change.status = status
     if (markRead) change.read = true
+    if (markUnread) change.read = false
 
     let gmailFailed = 0
     for (const id of updatedIds) {
