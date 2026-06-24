@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { resolveWebhookChallenge, verifyWhatsAppSignature } from "@/lib/whatsapp/verify"
 import { parseWhatsAppWebhook, getWhatsAppChannelByPhoneNumberId } from "@/lib/whatsapp/channels"
+import { decryptWhatsAppCredentials } from "@/lib/whatsapp/channel-secrets"
 import { WhatsAppProcessor } from "@/lib/whatsapp/processor"
 import { markWhatsAppRead } from "@/lib/whatsapp/client"
 import { getPlatformWhatsAppConfig } from "@/lib/whatsapp/platform"
@@ -48,7 +49,9 @@ export async function GET(request: NextRequest) {
 
   const rows = (data as Array<{ credentials: { verify_token?: string } }>) ?? []
   for (const row of rows) {
-    const challenge = resolveWebhookChallenge(params, row.credentials?.verify_token)
+    // Dual-read: tollera verify_token legacy in chiaro o cifrato `enc:v1:`.
+    const creds = decryptWhatsAppCredentials(row.credentials)
+    const challenge = resolveWebhookChallenge(params, creds?.verify_token as string | undefined)
     if (challenge) {
       return new NextResponse(challenge, {
         status: 200,

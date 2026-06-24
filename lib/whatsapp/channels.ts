@@ -1,6 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { InboundWhatsAppMessage } from "./processor"
 import type { MessagingChannelRow } from "./types"
+import { decryptWhatsAppCredentials } from "./channel-secrets"
+
+/**
+ * DUAL-READ: decifra i segreti annidati in `credentials` di un channel appena
+ * letto dal DB, tollerando sia il formato legacy in chiaro sia `enc:v1:...`.
+ * Lascia invariato ogni altro campo (incl. `config`) e non muta l'input.
+ * Centralizzando qui, tutti i consumer dei reader sotto ricevono credenziali
+ * già decifrate lato server. NON cifra e NON scrive nulla.
+ */
+function withDecryptedCredentials<T extends MessagingChannelRow | null>(channel: T): T {
+  if (!channel) return channel
+  return {
+    ...channel,
+    credentials: decryptWhatsAppCredentials(channel.credentials),
+  }
+}
 
 /**
  * Resolve the WhatsApp messaging channel for an incoming webhook by the
@@ -19,7 +35,7 @@ export async function getWhatsAppChannelByPhoneNumberId(
     .eq("config->>phone_number_id", phoneNumberId)
     .eq("is_active", true)
     .maybeSingle()
-  return (data as MessagingChannelRow) ?? null
+  return withDecryptedCredentials((data as MessagingChannelRow) ?? null)
 }
 
 /**
@@ -40,7 +56,7 @@ export async function getWhatsAppChannelForProperty(
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle()
-  return (data as MessagingChannelRow) ?? null
+  return withDecryptedCredentials((data as MessagingChannelRow) ?? null)
 }
 
 /**
@@ -60,7 +76,7 @@ export async function getWhatsAppChannelById(
     .eq("property_id", propertyId)
     .eq("is_active", true)
     .maybeSingle()
-  return (data as MessagingChannelRow) ?? null
+  return withDecryptedCredentials((data as MessagingChannelRow) ?? null)
 }
 
 /**
@@ -96,7 +112,7 @@ export async function listWhatsAppChannelsForProperty(
     .eq("channel_type", "whatsapp")
     .eq("property_id", propertyId)
     .order("created_at", { ascending: true })
-  return (data as MessagingChannelRow[]) ?? []
+  return ((data as MessagingChannelRow[]) ?? []).map((row) => withDecryptedCredentials(row))
 }
 
 interface ParsedWebhook {
