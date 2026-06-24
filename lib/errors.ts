@@ -87,13 +87,26 @@ export function handleServiceError(error: unknown): NextResponse {
         { status: 404 }
       )
     }
-    if (error.message.includes("unauthorized") || error.message.includes("Unauthorized")) {
+    // 401 — non autenticato (EN + IT). Senza questo, "Non autenticato"
+    // lanciato da getAuthenticatedPropertyId cadeva nel ramo generico 500.
+    if (
+      error.message.includes("unauthorized") ||
+      error.message.includes("Unauthorized") ||
+      error.message.includes("Non autenticato")
+    ) {
       return NextResponse.json(
         { error: error.message, code: "UNAUTHORIZED" },
         { status: 401 }
       )
     }
-    if (error.message.includes("forbidden") || error.message.includes("Forbidden")) {
+    // 403 — autenticato ma senza tenant/struttura associata (super admin senza
+    // tenant selezionato, oppure utente non collegato ad alcuna struttura).
+    if (
+      error.message.includes("forbidden") ||
+      error.message.includes("Forbidden") ||
+      error.message.includes("nessun tenant selezionato") ||
+      error.message.includes("non associato a nessuna struttura")
+    ) {
       return NextResponse.json(
         { error: error.message, code: "FORBIDDEN" },
         { status: 403 }
