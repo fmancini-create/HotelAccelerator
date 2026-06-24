@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getWhatsAppQuota } from "@/lib/whatsapp/quota"
 import { maskSecret, type MessagingChannelRow } from "@/lib/whatsapp/types"
+import { encryptWhatsAppCredentialsForWrite } from "@/lib/whatsapp/channel-secrets"
 
 /**
  * Per-tenant WhatsApp channel configuration.
@@ -103,15 +104,23 @@ export async function POST(request: NextRequest) {
       existing = (data as MessagingChannelRow) ?? null
     }
 
-    const mergedCredentials: Record<string, unknown> = { ...(existing?.credentials ?? {}) }
+    // WRITE-ENCRYPT: cifriamo SOLO i nuovi valori in arrivo (in chiaro) prima
+    // del merge. I segreti esistenti vengono preservati così come sono nel DB
+    // (sia legacy in chiaro sia `enc:v1:`), senza ricifratura: il merge dei soli
+    // campi nuovi evita di alterare i valori non inviati -> nessun backfill.
+    const incomingSecrets: Record<string, unknown> = {}
     if (typeof access_token === "string" && access_token.trim() !== "") {
-      mergedCredentials.access_token = access_token.trim()
+      incomingSecrets.access_token = access_token.trim()
     }
     if (typeof app_secret === "string" && app_secret.trim() !== "") {
-      mergedCredentials.app_secret = app_secret.trim()
+      incomingSecrets.app_secret = app_secret.trim()
     }
     if (typeof verify_token === "string" && verify_token.trim() !== "") {
-      mergedCredentials.verify_token = verify_token.trim()
+      incomingSecrets.verify_token = verify_token.trim()
+    }
+    const mergedCredentials: Record<string, unknown> = {
+      ...(existing?.credentials ?? {}),
+      ...encryptWhatsAppCredentialsForWrite(incomingSecrets),
     }
 
     const config: Record<string, unknown> = {

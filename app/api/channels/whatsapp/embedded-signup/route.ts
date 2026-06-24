@@ -4,6 +4,7 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getPlatformWhatsAppConfig, getPublicWhatsAppConfig } from "@/lib/whatsapp/platform"
 import { getWhatsAppQuota } from "@/lib/whatsapp/quota"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
+import { encryptWhatsAppCredentialsForWrite } from "@/lib/whatsapp/channel-secrets"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -146,13 +147,15 @@ export async function POST(request: NextRequest) {
       graph_version: v,
       provisioned_via: "embedded_signup",
     }
-    const credentials = {
-      // Platform-managed secrets (single Meta app). Stored so existing helpers
-      // resolve them per-row; rotating the env values overrides these at runtime.
+    // WRITE-ENCRYPT: i segreti gestiti dalla piattaforma (singola app Meta)
+    // vengono salvati cifrati `enc:v1:` at-rest. Il dual-read dei reader li
+    // decifra lato server; ruotare gli env sovrascrive comunque a runtime.
+    // Cifriamo SOLO i tre campi segreti; nessun campo non segreto qui.
+    const credentials = encryptWhatsAppCredentialsForWrite({
       access_token: platform.systemUserToken,
       app_secret: platform.appSecret,
       verify_token: platform.verifyToken,
-    }
+    })
 
     // Is this exact number already connected for this property? If so we just
     // refresh its config/credentials (re-onboarding the same number).
