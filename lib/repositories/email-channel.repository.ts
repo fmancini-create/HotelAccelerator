@@ -1,4 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { decryptSecretIfNeeded } from "@/lib/crypto/secrets"
+
+/**
+ * DUAL-READ: decifra i segreti del canale email letti dal DB, tollerando sia
+ * valori legacy in chiaro sia valori cifrati `enc:v1:...`. Tocca SOLO i campi
+ * segreti presenti nel record; lascia invariato tutto il resto. NON cifra nulla.
+ */
+function decryptEmailChannelSecrets<T extends Record<string, any> | null | undefined>(channel: T): T {
+  if (!channel) return channel
+  const result: Record<string, any> = { ...channel }
+  for (const key of ["oauth_access_token", "oauth_refresh_token", "smtp_password"]) {
+    if (key in result) {
+      result[key] = decryptSecretIfNeeded(result[key])
+    }
+  }
+  return result as T
+}
 
 export interface EmailChannel {
   id: string
@@ -68,7 +85,7 @@ export class EmailChannelRepository {
       .order("created_at", { ascending: false })
 
     if (error) throw error
-    return data || []
+    return (data || []).map(decryptEmailChannelSecrets)
   }
 
   /**
@@ -81,7 +98,7 @@ export class EmailChannelRepository {
       if (error.code === "PGRST116") return null // Not found
       throw error
     }
-    return data
+    return decryptEmailChannelSecrets(data)
   }
 
   /**
@@ -99,7 +116,7 @@ export class EmailChannelRepository {
       if (error.code === "PGRST116") return null
       throw error
     }
-    return data
+    return decryptEmailChannelSecrets(data)
   }
 
   /**
@@ -124,7 +141,7 @@ export class EmailChannelRepository {
       .single()
 
     if (error) throw error
-    return data
+    return decryptEmailChannelSecrets(data)
   }
 
   /**
@@ -142,7 +159,7 @@ export class EmailChannelRepository {
       .single()
 
     if (error) throw error
-    return data
+    return decryptEmailChannelSecrets(data)
   }
 
   /**
