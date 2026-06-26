@@ -10,6 +10,8 @@
  *   - manubot_company_id: UUID company su Manubot
  */
 
+import { decryptManubotPassword } from "@/lib/manubot/credential-secrets"
+
 /**
  * Legge una variabile ambiente obbligatoria.
  * Lancia un errore controllato (senza mai esporre il valore) se mancante.
@@ -222,10 +224,17 @@ export async function getManubotClient(property: {
   manubot_password?: string | null
   manubot_supabase_url?: string | null
 }): Promise<ManubotClient> {
-  // Priorità alle credenziali della property; in assenza, usa le env di default.
-  // Nessun fallback hardcoded: se mancano sia property che env, errore controllato.
-  const email    = property.manubot_email    || requireEnv("MANUBOT_DEFAULT_EMAIL")
-  const password = property.manubot_password || requireEnv("MANUBOT_DEFAULT_PASSWORD")
+  // DUAL-READ: `manubot_password` può essere salvata in chiaro (legacy) o
+  // cifrata `enc:v1:`. La decifriamo qui, in un unico punto centrale, così
+  // tutti i reader (admin/todos, todos/[id], team, assets) ricevono il valore
+  // utilizzabile senza doppia decifratura. Passthrough sui valori legacy.
+  const decryptedPassword = decryptManubotPassword(property.manubot_password)
+
+  // Priorità alle credenziali della property; in assenza (null/vuota), usa le
+  // env di default. Nessun fallback hardcoded: se mancano sia property che env,
+  // errore controllato.
+  const email    = property.manubot_email || requireEnv("MANUBOT_DEFAULT_EMAIL")
+  const password = decryptedPassword      || requireEnv("MANUBOT_DEFAULT_PASSWORD")
 
   const client = new ManubotClient(property.manubot_supabase_url || undefined)
   try {

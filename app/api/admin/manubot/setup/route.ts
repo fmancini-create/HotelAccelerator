@@ -13,6 +13,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
+import { encryptManubotPasswordForWrite } from "@/lib/manubot/credential-secrets"
 import crypto from "crypto"
 
 /**
@@ -158,11 +159,18 @@ export async function GET(req: NextRequest) {
       }, { status: 404 })
     }
 
+    // WRITE-ENCRYPT: salviamo `manubot_password` cifrata `enc:v1:` at-rest.
+    // Il dual-read in getManubotClient la decifra lato server al login.
+    // `api_token` resta INVARIATO (in chiaro): è usato in .eq("api_token", ...)
+    // dal webhook receiver e la cifratura non-deterministica romperebbe il
+    // lookup -> sarà gestito separatamente con hash ricercabile.
+    // `manubot_email`/`manubot_supabase_url`/`manubot_company_id` non sono
+    // segreti -> invariati.
     const { error: updateErr } = await supabase
       .from("properties")
       .update({
         manubot_email:        MANUBOT_EMAIL,
-        manubot_password:     MANUBOT_PASSWORD,
+        manubot_password:     encryptManubotPasswordForWrite(MANUBOT_PASSWORD),
         manubot_supabase_url: MANUBOT_SUPABASE_URL,
         manubot_company_id:   companyId,
         api_token:            apiToken,
