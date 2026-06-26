@@ -14,6 +14,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { encryptManubotPasswordForWrite } from "@/lib/manubot/credential-secrets"
+import { hashApiToken } from "@/lib/security/token-hash"
 import crypto from "crypto"
 
 /**
@@ -136,7 +137,12 @@ export async function GET(req: NextRequest) {
 
     // ── Step 3: Genera api_token per webhook receiver ─────────────────────
     const apiToken = crypto.randomBytes(32).toString("hex")
-    log.push("3. api_token generato (valore non loggato per sicurezza)")
+    // Hash deterministico ("hmac:v1:<hex>") per il futuro lookup webhook senza
+    // esporre il token in chiaro. In questo step è solo DUAL-WRITE: salviamo
+    // sia api_token (in chiaro, per compatibilità col webhook attuale) sia
+    // api_token_hash. Il webhook NON è ancora cambiato.
+    const apiTokenHash = hashApiToken(apiToken)
+    log.push("3. api_token generato (valore e hash non loggati per sicurezza)")
 
     // ── Step 4: Salva su HotelAccelerator Supabase ────────────────────────
     log.push("4. Salvataggio su HotelAccelerator Supabase...")
@@ -161,9 +167,10 @@ export async function GET(req: NextRequest) {
 
     // WRITE-ENCRYPT: salviamo `manubot_password` cifrata `enc:v1:` at-rest.
     // Il dual-read in getManubotClient la decifra lato server al login.
-    // `api_token` resta INVARIATO (in chiaro): è usato in .eq("api_token", ...)
-    // dal webhook receiver e la cifratura non-deterministica romperebbe il
-    // lookup -> sarà gestito separatamente con hash ricercabile.
+    // `api_token` resta salvato IN CHIARO (compatibilità temporanea): è ancora
+    // usato in .eq("api_token", ...) dal webhook receiver, NON modificato in
+    // questo step. DUAL-WRITE: salviamo in più `api_token_hash` (hmac:v1) per
+    // abilitare in futuro il lookup webhook per hash senza token in chiaro.
     // `manubot_email`/`manubot_supabase_url`/`manubot_company_id` non sono
     // segreti -> invariati.
     const { error: updateErr } = await supabase
@@ -174,6 +181,7 @@ export async function GET(req: NextRequest) {
         manubot_supabase_url: MANUBOT_SUPABASE_URL,
         manubot_company_id:   companyId,
         api_token:            apiToken,
+        api_token_hash:       apiTokenHash,
       })
       .eq("id", property.id)
 
