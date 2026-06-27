@@ -30,6 +30,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { MANUBOT_TO_HA_STATUS, MANUBOT_TO_HA_PRIORITY } from "@/lib/manubot"
+import { hashApiToken } from "@/lib/security/token-hash"
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,16 +45,49 @@ export async function POST(request: NextRequest) {
     // Non dipende dalla policy pubblica properties_read_all.
     const supabase = createServiceClient()
 
-    // Trova la property tramite api_token
-    const { data: property, error: propError } = await supabase
+    // DUAL-LOOKUP (Fase C): autentica PRIMA tramite api_token_hash (hmac:v1),
+    // poi FALLBACK temporaneo sul lookup legacy api_token in chiaro per le
+    // property non ancora ri-configurate. Il fallback va mantenuto finché tutte
+    // le righe attive avranno l'hash; non rimuoverlo qui.
+    // hashApiToken può lanciare se API_TOKEN_HASH_SECRET manca: gestito dal
+    // catch esterno (500 generico, nessun token/hash/secret esposto).
+    const tokenHash = hashApiToken(token)
+
+    // 1) Ramo primario: lookup per hash deterministico.
+    let property: { id: string; name: string } | null = null
+    let authBranch: "hash" | "legacy" | "none" = "none"
+
+    const hashLookup = await supabase
       .from("properties")
       .select("id, name")
-      .eq("api_token", token)
-      .single()
+      .eq("api_token_hash", tokenHash)
+      .maybeSingle()
 
-    if (propError || !property) {
+    if (hashLookup.data) {
+      property = hashLookup.data
+      authBranch = "hash"
+    } else {
+      // 2) Fallback legacy: lookup per api_token in chiaro.
+      const legacyLookup = await supabase
+        .from("properties")
+        .select("id, name")
+        .eq("api_token", token)
+        .maybeSingle()
+
+      if (legacyLookup.data) {
+        property = legacyLookup.data
+        authBranch = "legacy"
+      }
+    }
+
+    if (!property) {
+      // Nessun valore loggato (né token né hash).
+      console.warn("[Manubot Webhook] Auth fallita: token non riconosciuto")
       return NextResponse.json({ error: "Token non valido" }, { status: 401 })
     }
+
+    // Solo il ramo usato, senza valori sensibili.
+    console.log(`[Manubot Webhook] Auth OK via ramo: ${authBranch}`)
 
     const body = await request.json()
 
