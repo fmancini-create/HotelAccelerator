@@ -73,28 +73,42 @@ export async function GET(req: NextRequest) {
     log.push("2. Recupero company_id...")
     let companyId: string | null = null
 
-    // Tenta dal profilo utente in Supabase di Manubot
-    const profileRes = await fetch(
-      `${MANUBOT_SUPABASE_URL}/rest/v1/profiles?select=active_company_id,company_id&limit=1`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          apikey: accessToken,
-          Accept: "application/json",
-        },
-      }
-    )
-    if (profileRes.ok) {
-      const profiles = await profileRes.json()
-      log.push(`   Profiles raw: ${JSON.stringify(profiles)}`)
-      companyId = profiles?.[0]?.active_company_id || profiles?.[0]?.company_id || null
+    // Override manuale: ?company_id=... — bypassa l'autodetection. Utile quando
+    // il profilo/metadata Manubot non espone il company_id o l'API /companies
+    // rifiuta il token (es. 401). L'admin lo incolla dal proprio profilo Manubot.
+    const manualCompanyId = req.nextUrl.searchParams.get("company_id")?.trim()
+    if (manualCompanyId) {
+      companyId = manualCompanyId
+      log.push(`   company_id fornito manualmente: ${companyId}`)
     }
 
-    // Tenta da /user metadata
+    // Tenta dal profilo utente in Supabase di Manubot.
+    // apikey DEVE essere la anon key del progetto Manubot (NON l'access token).
+    if (!companyId) {
+      const profileRes = await fetch(
+        `${MANUBOT_SUPABASE_URL}/rest/v1/profiles?select=active_company_id,company_id&limit=1`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            apikey: MANUBOT_ANON_KEY,
+            Accept: "application/json",
+          },
+        }
+      )
+      log.push(`   profiles status: ${profileRes.status}`)
+      if (profileRes.ok) {
+        const profiles = await profileRes.json()
+        log.push(`   Profiles raw: ${JSON.stringify(profiles)}`)
+        companyId = profiles?.[0]?.active_company_id || profiles?.[0]?.company_id || null
+      }
+    }
+
+    // Tenta da /user metadata. GoTrue richiede SIA Authorization SIA apikey.
     if (!companyId) {
       const userRes = await fetch(`${MANUBOT_SUPABASE_URL}/auth/v1/user`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: { Authorization: `Bearer ${accessToken}`, apikey: MANUBOT_ANON_KEY },
       })
+      log.push(`   /user status: ${userRes.status}`)
       if (userRes.ok) {
         const user = await userRes.json()
         log.push(`   User metadata: ${JSON.stringify(user.user_metadata)}`)
