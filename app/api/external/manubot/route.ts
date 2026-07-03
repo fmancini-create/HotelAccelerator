@@ -30,6 +30,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { MANUBOT_TO_HA_STATUS, MANUBOT_TO_HA_PRIORITY } from "@/lib/manubot"
+import { getManubotWebhookPublicUrl } from "@/lib/manubot/environment-guard"
 import { hashApiToken } from "@/lib/security/token-hash"
 
 export async function POST(request: NextRequest) {
@@ -157,13 +158,14 @@ export async function POST(request: NextRequest) {
 }
 
 // GET — info endpoint per verificare che il bridge sia attivo
-export async function GET(request: NextRequest) {
-  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || ""
+export async function GET(_request: NextRequest) {
   return NextResponse.json({
     service: "HotelAccelerator ↔ Manubot Bridge",
     version: "2.0",
     status: "active",
-    webhook_url: `https://${host}/api/external/manubot`,
+    // INVARIANTE www (Step B1): mostra sempre l'endpoint canonico con `www`,
+    // non l'host della richiesta (che via apex farebbe perdere Authorization).
+    webhook_url: getManubotWebhookPublicUrl(),
     docs: {
       setup: "Manubot → Impostazioni → Integrazioni → Inserisci URL + Bearer token",
       events: ["task.created", "task.updated"],

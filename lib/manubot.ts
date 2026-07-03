@@ -11,6 +11,7 @@
  */
 
 import { decryptManubotPassword } from "@/lib/manubot/credential-secrets"
+import { validateManubotSupabaseUrlForEnvironment } from "@/lib/manubot/environment-guard"
 
 /**
  * Legge una variabile ambiente obbligatoria.
@@ -235,6 +236,13 @@ export async function getManubotClient(property: {
   // errore controllato.
   const email    = property.manubot_email || requireEnv("MANUBOT_DEFAULT_EMAIL")
   const password = decryptedPassword      || requireEnv("MANUBOT_DEFAULT_PASSWORD")
+
+  // GUARD PROD/DEV (Step B1): risolvi la URL effettiva (property o env) e
+  // validala PRIMA di creare il client e fare il login. In Production una URL
+  // che punta all'host DEV fa fallire qui, prima di qualunque chiamata esterna.
+  // `validate...` lancia ManubotEnvironmentError (messaggio con solo l'host).
+  const resolvedSupabaseUrl = property.manubot_supabase_url || process.env.MANUBOT_SUPABASE_URL
+  validateManubotSupabaseUrlForEnvironment(resolvedSupabaseUrl)
 
   const client = new ManubotClient(property.manubot_supabase_url || undefined)
   try {

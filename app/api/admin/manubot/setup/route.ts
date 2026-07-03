@@ -14,6 +14,11 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { encryptManubotPasswordForWrite } from "@/lib/manubot/credential-secrets"
+import {
+  validateManubotSupabaseUrlForEnvironment,
+  getManubotWebhookPublicUrl,
+  ManubotEnvironmentError,
+} from "@/lib/manubot/environment-guard"
 import { hashApiToken } from "@/lib/security/token-hash"
 import crypto from "crypto"
 
@@ -47,6 +52,12 @@ export async function GET(req: NextRequest) {
     const MANUBOT_PASSWORD     = requireEnv("MANUBOT_DEFAULT_PASSWORD")
     const MANUBOT_BASE_URL     = requireEnv("MANUBOT_BASE_URL")
 
+    // GUARD PROD/DEV (Step B1): in Production è ammesso solo l'host ManuBot
+    // PROD. Se la URL punta a DEV (o è invalida/assente), fallisce QUI, prima
+    // di qualunque login/chiamata esterna e prima di scrivere sul DB. Il
+    // messaggio espone al massimo l'host, mai la URL completa o i secret.
+    validateManubotSupabaseUrlForEnvironment(MANUBOT_SUPABASE_URL)
+
     // ── Step 1: Login su Manubot ─────────────────────────────────────────
     log.push("1. Login su Manubot Supabase...")
     const loginRes = await fetch(
@@ -76,7 +87,12 @@ export async function GET(req: NextRequest) {
     // Override manuale: ?company_id=... — bypassa l'autodetection. Utile quando
     // il profilo/metadata Manubot non espone il company_id o l'API /companies
     // rifiuta il token (es. 401). L'admin lo incolla dal proprio profilo Manubot.
-    const manualCompanyId = req.nextUrl.searchParams.get("company_id")?.trim()
+    // Accesso difensivo a nextUrl/searchParams: in runtime Next.js è sempre
+    // presente; il fallback (URL parse) mantiene il comportamento e rende la
+    // route robusta anche quando invocata con un Request generico (es. test).
+    const searchParams =
+      req.nextUrl?.searchParams ?? new URL(req.url, "http://localhost").searchParams
+    const manualCompanyId = searchParams.get("company_id")?.trim()
     if (manualCompanyId) {
       companyId = manualCompanyId
       log.push(`   company_id fornito manualmente: ${companyId}`)
@@ -205,16 +221,21 @@ export async function GET(req: NextRequest) {
 
     log.push(`   Salvato su property: ${property.name || property.id}`)
 
+    // INVARIANTE www (Step B1): l'endpoint mostrato/copiato deve essere sempre
+    // la versione canonica con `www`, non derivata da NEXT_PUBLIC_APP_URL (che
+    // su apex/preview potrebbe perdere l'header Authorization sul redirect).
+    const webhookEndpoint = getManubotWebhookPublicUrl()
+
     return NextResponse.json({
       success: true,
       property_id: property.id,
       property_name: property.name,
       manubot_company_id: companyId,
       api_token: apiToken,
-      webhook_endpoint: `${process.env.NEXT_PUBLIC_APP_URL}/api/external/manubot`,
+      webhook_endpoint: webhookEndpoint,
       instructions: [
         "Vai su Manubot → Dashboard → Impostazioni → Integrazioni",
-        `Inserisci l'endpoint: ${process.env.NEXT_PUBLIC_APP_URL}/api/external/manubot`,
+        `Inserisci l'endpoint: ${webhookEndpoint}`,
         `Inserisci il Bearer Token: ${apiToken}`,
         "Seleziona gli eventi: task.created, task.updated, task.completed",
       ],
@@ -226,6 +247,12 @@ export async function GET(req: NextRequest) {
     // codice corretto senza includere il log di debug.
     if (isAccessError(err)) {
       return NextResponse.json({ error: err.message }, { status: accessErrorStatus(err) })
+    }
+    // Guard PROD/DEV: misconfigurazione (es. Production → host DEV). 409 con
+    // messaggio chiaro e codice; il messaggio contiene al più l'host, mai URL
+    // complete o secret.
+    if (err instanceof ManubotEnvironmentError) {
+      return NextResponse.json({ error: err.message, code: err.code }, { status: 409 })
     }
     return NextResponse.json({ error: err.message, log }, { status: 500 })
   }
