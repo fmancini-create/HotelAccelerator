@@ -72,11 +72,33 @@ I token sono già utilizzabili come utility Tailwind, ad esempio:
 <div className="border border-ha-border bg-ha-card text-ha-card-foreground">…</div>
 ```
 
-Non sono ancora applicati a componenti esistenti: l'adozione avverrà nei
-prossimi micro-step, in modo controllato e reversibile.
+## Step 2 - primo consumo reale (module-card)
+
+`components/admin/module-card.tsx` è il primo (e unico) componente ad adottare
+i token `--ha-module-*`, come validazione in UI reale. Applicazione minima:
+bordo-sinistro d'accento sempre visibile + colore icona del modulo quando la
+card è attiva. Lo stato "attivo" usa ora `ring-1 ring-primary` (prima
+`border-primary`) per non coprire l'accento sinistro. Nessun cambiamento a
+struttura, testi, link, permessi o dimensioni.
+
+Mappatura `modules.key` → token (statica ed esplicita, classi letterali per
+compatibilità con lo scanner Tailwind v4):
+
+| modules.key      | modulo                    | token                   |
+| ---------------- | ------------------------- | ----------------------- |
+| `santaddeo`      | Revenue (Santaddeo)       | `ha-module-revenue`     |
+| `manubot`        | Operations (Manubot)      | `ha-module-maintenance` |
+| `hotelprofitai`  | HotelProfitAI             | `ha-module-profit`      |
+| `crm`, `inbox`   | CRM / Inbox               | `ha-module-crm`         |
+| `frontend`, `cms`| Sito pubblico / CMS       | `ha-module-marketing`   |
+| `ai`, `tracking` | AI / Tracking & Eventi    | `ha-module-automation`  |
+
+Chiavi non mappate → `FALLBACK_ACCENT` (bordo neutro `border-border`, icona
+`bg-primary`): comportamento invariato, nessun rischio.
 
 ## Cosa NON è stato toccato
 
 DB, API, auth, routing, Stripe, Gmail, ManuBot webhook, Scidoo/PMS, Supabase,
-logica moduli, permessi, `PlatformShell`, dashboard legacy, componenti.
-Solo `app/globals.css` (token additivi) e questo documento.
+logica moduli, permessi, `PlatformShell`, `PlatformHeader`, dashboard legacy,
+e ogni altro componente. Toccati solo `app/globals.css` (Step 1, token
+additivi), `components/admin/module-card.tsx` (Step 2) e questo documento.
