@@ -33,6 +33,36 @@ const ICONS: Record<string, LucideIcon> = {
   "bar-chart-3": BarChart3,
 }
 
+/**
+ * Accento cromatico per modulo (Step 2 - design token --ha-module-*).
+ * Mapping ESPLICITO e statico: le classi sono stringhe letterali cosi'
+ * Tailwind v4 le rileva (niente costruzione dinamica di classi).
+ * `borderL` = bordo-sinistro d'accento della card; `bg`/`fg` = icona attiva.
+ * Chiavi = valori reali della tabella `modules.key`.
+ */
+interface ModuleAccent {
+  borderL: string
+  bg: string
+  fg: string
+}
+const MODULE_ACCENT: Record<string, ModuleAccent> = {
+  santaddeo: { borderL: "border-l-ha-module-revenue", bg: "bg-ha-module-revenue", fg: "text-ha-module-revenue-foreground" },
+  manubot: { borderL: "border-l-ha-module-maintenance", bg: "bg-ha-module-maintenance", fg: "text-ha-module-maintenance-foreground" },
+  hotelprofitai: { borderL: "border-l-ha-module-profit", bg: "bg-ha-module-profit", fg: "text-ha-module-profit-foreground" },
+  crm: { borderL: "border-l-ha-module-crm", bg: "bg-ha-module-crm", fg: "text-ha-module-crm-foreground" },
+  inbox: { borderL: "border-l-ha-module-crm", bg: "bg-ha-module-crm", fg: "text-ha-module-crm-foreground" },
+  frontend: { borderL: "border-l-ha-module-marketing", bg: "bg-ha-module-marketing", fg: "text-ha-module-marketing-foreground" },
+  cms: { borderL: "border-l-ha-module-marketing", bg: "bg-ha-module-marketing", fg: "text-ha-module-marketing-foreground" },
+  ai: { borderL: "border-l-ha-module-automation", bg: "bg-ha-module-automation", fg: "text-ha-module-automation-foreground" },
+  tracking: { borderL: "border-l-ha-module-automation", bg: "bg-ha-module-automation", fg: "text-ha-module-automation-foreground" },
+}
+/** Fallback neutro: nessun accento di modulo, comportamento invariato. */
+const FALLBACK_ACCENT: ModuleAccent = {
+  borderL: "border-l-border",
+  bg: "bg-primary",
+  fg: "text-primary-foreground",
+}
+
 export interface ModuleView {
   key: string
   name: string
@@ -55,6 +85,7 @@ export function ModuleCard({
   const [pending, setPending] = useState(false)
   const Icon = (module.icon && ICONS[module.icon]) || Activity
   const isPaid = module.category === "product" || module.category === "addon"
+  const accent = MODULE_ACCENT[module.key] ?? FALLBACK_ACCENT
 
   async function toggle(next: boolean) {
     setPending(true)
@@ -81,13 +112,13 @@ export function ModuleCard({
   }
 
   return (
-    <Card className={module.active ? "border-primary" : ""}>
+    <Card className={`border-l-4 ${accent.borderL} ${module.active ? "ring-1 ring-primary" : ""}`}>
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-md ${
-                module.active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                module.active ? `${accent.bg} ${accent.fg}` : "bg-muted text-muted-foreground"
               }`}
             >
               <Icon className="h-5 w-5" />

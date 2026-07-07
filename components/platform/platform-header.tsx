@@ -159,6 +159,23 @@ const MORE_NAV: NavItem[] = [
   },
 ]
 
+/**
+ * Micro-indicatore cromatico della voce attiva (Step 3 - design token
+ * --ha-module-*). Mappa STATICA ed esplicita per `href` (chiave stabile gia'
+ * presente nel codice): niente derivazione fragile, niente lettura DB. Le
+ * classi sono stringhe letterali cosi' lo scanner di Tailwind v4 le rileva.
+ * Le voci non presenti qui non mostrano alcun dot => comportamento invariato.
+ */
+const NAV_ACCENT_DOT: Record<string, string> = {
+  "/admin/inbox": "bg-ha-module-crm",
+  "/admin/crm": "bg-ha-module-crm",
+  "/admin/channels/email": "bg-ha-module-crm",
+  "/admin/message-rules": "bg-ha-module-crm",
+  "/admin/cms": "bg-ha-module-marketing",
+  "/admin/marketing": "bg-ha-module-marketing",
+  "/admin/tracking": "bg-ha-module-automation",
+}
+
 type PlatformMe = {
   role: "super_admin" | "tenant_admin" | "member" | "none"
   isAdmin?: boolean
@@ -321,6 +338,7 @@ export function PlatformHeader() {
           {primaryNav.map((item) => {
             const active = isActive(item, pathname)
             const Icon = item.icon
+            const dot = active ? NAV_ACCENT_DOT[item.href] : undefined
             return (
               <Link
                 key={item.href}
@@ -332,6 +350,12 @@ export function PlatformHeader() {
                     : "text-[#374151] hover:bg-[#f3f4f6]",
                 ].join(" ")}
               >
+                {dot && (
+                  <span
+                    className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${dot}`}
+                    aria-hidden
+                  />
+                )}
                 <Icon className="h-4 w-4" aria-hidden />
                 <span>{item.label}</span>
               </Link>
@@ -365,6 +389,7 @@ export function PlatformHeader() {
               {primaryNav.map((item) => {
                 const Icon = item.icon
                 const active = isActive(item, pathname)
+                const dot = active ? NAV_ACCENT_DOT[item.href] : undefined
                 return (
                   <DropdownMenuItem key={item.href} asChild>
                     <Link
@@ -378,6 +403,12 @@ export function PlatformHeader() {
                     >
                       <Icon className="h-4 w-4" aria-hidden />
                       <span>{item.label}</span>
+                      {dot && (
+                        <span
+                          className={`ml-auto h-1.5 w-1.5 rounded-full flex-shrink-0 ${dot}`}
+                          aria-hidden
+                        />
+                      )}
                     </Link>
                   </DropdownMenuItem>
                 )
@@ -390,6 +421,7 @@ export function PlatformHeader() {
             {moreNav.map((item) => {
               const Icon = item.icon
               const active = isActive(item, pathname)
+              const dot = active ? NAV_ACCENT_DOT[item.href] : undefined
               return (
                 <DropdownMenuItem key={item.href} asChild>
                   <Link
@@ -403,6 +435,12 @@ export function PlatformHeader() {
                   >
                     <Icon className="h-4 w-4" aria-hidden />
                     <span>{item.label}</span>
+                    {dot && (
+                      <span
+                        className={`ml-auto h-1.5 w-1.5 rounded-full flex-shrink-0 ${dot}`}
+                        aria-hidden
+                      />
+                    )}
                   </Link>
                 </DropdownMenuItem>
               )

@@ -37,6 +37,61 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* ============================================================
+   * HotelAccelerator suite design tokens (Step 1 - ADDITIVE)
+   * Namespace: --ha-*  |  Do NOT replace shadcn tokens above.
+   * These define the shared "mother" design system used by the
+   * platform shell + modules. Light mode values.
+   * ============================================================ */
+
+  /* Brand */
+  --ha-brand: oklch(0.48 0.17 264);
+  --ha-brand-foreground: oklch(0.99 0 0);
+  --ha-brand-secondary: oklch(0.36 0.04 258);
+  --ha-brand-secondary-foreground: oklch(0.99 0 0);
+
+  /* Status / semantic */
+  --ha-success: oklch(0.6 0.13 158);
+  --ha-success-foreground: oklch(0.99 0 0);
+  --ha-premium: oklch(0.72 0.13 90);
+  --ha-premium-foreground: oklch(0.2 0.02 90);
+  --ha-info: oklch(0.55 0.16 245);
+  --ha-info-foreground: oklch(0.99 0 0);
+  --ha-warning: oklch(0.75 0.15 72);
+  --ha-warning-foreground: oklch(0.24 0.03 72);
+  --ha-error: oklch(0.58 0.22 27);
+  --ha-error-foreground: oklch(0.99 0 0);
+
+  /* Surfaces */
+  --ha-surface: oklch(0.99 0 0);
+  --ha-surface-muted: oklch(0.96 0 0);
+  --ha-surface-foreground: oklch(0.145 0 0);
+  --ha-card: oklch(1 0 0);
+  --ha-card-foreground: oklch(0.145 0 0);
+  --ha-border: oklch(0.9 0 0);
+
+  /* Chart base (suite-wide, distinct from shadcn --chart-*) */
+  --ha-chart-1: oklch(0.48 0.17 264);
+  --ha-chart-2: oklch(0.6 0.13 158);
+  --ha-chart-3: oklch(0.72 0.13 90);
+  --ha-chart-4: oklch(0.6 0.11 210);
+  --ha-chart-5: oklch(0.62 0.16 350);
+  --ha-chart-6: oklch(0.65 0.16 55);
+
+  /* Module accents */
+  --ha-module-revenue: oklch(0.52 0.16 250);
+  --ha-module-revenue-foreground: oklch(0.99 0 0);
+  --ha-module-maintenance: oklch(0.65 0.16 55);
+  --ha-module-maintenance-foreground: oklch(0.99 0 0);
+  --ha-module-profit: oklch(0.55 0.13 155);
+  --ha-module-profit-foreground: oklch(0.99 0 0);
+  --ha-module-crm: oklch(0.58 0.11 210);
+  --ha-module-crm-foreground: oklch(0.99 0 0);
+  --ha-module-marketing: oklch(0.6 0.16 350);
+  --ha-module-marketing-foreground: oklch(0.99 0 0);
+  --ha-module-automation: oklch(0.5 0.05 262);
+  --ha-module-automation-foreground: oklch(0.99 0 0);
 }
 
 .dark {
@@ -72,6 +127,59 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(0.2 0 0);
   --sidebar-ring: oklch(0.65 0.25 264);
+
+  /* ============================================================
+   * HotelAccelerator suite design tokens (Step 1 - ADDITIVE)
+   * Dark mode values. Namespace: --ha-*
+   * ============================================================ */
+
+  /* Brand */
+  --ha-brand: oklch(0.62 0.19 264);
+  --ha-brand-foreground: oklch(0.1 0 0);
+  --ha-brand-secondary: oklch(0.72 0.03 258);
+  --ha-brand-secondary-foreground: oklch(0.1 0 0);
+
+  /* Status / semantic */
+  --ha-success: oklch(0.7 0.15 158);
+  --ha-success-foreground: oklch(0.1 0 0);
+  --ha-premium: oklch(0.8 0.14 90);
+  --ha-premium-foreground: oklch(0.16 0.02 90);
+  --ha-info: oklch(0.68 0.16 245);
+  --ha-info-foreground: oklch(0.1 0 0);
+  --ha-warning: oklch(0.82 0.15 75);
+  --ha-warning-foreground: oklch(0.18 0.03 75);
+  --ha-error: oklch(0.68 0.2 27);
+  --ha-error-foreground: oklch(0.1 0 0);
+
+  /* Surfaces */
+  --ha-surface: oklch(0.12 0 0);
+  --ha-surface-muted: oklch(0.16 0 0);
+  --ha-surface-foreground: oklch(0.98 0 0);
+  --ha-card: oklch(0.12 0 0);
+  --ha-card-foreground: oklch(0.98 0 0);
+  --ha-border: oklch(0.2 0 0);
+
+  /* Chart base */
+  --ha-chart-1: oklch(0.62 0.19 264);
+  --ha-chart-2: oklch(0.7 0.15 158);
+  --ha-chart-3: oklch(0.8 0.14 90);
+  --ha-chart-4: oklch(0.68 0.12 210);
+  --ha-chart-5: oklch(0.68 0.16 350);
+  --ha-chart-6: oklch(0.72 0.16 55);
+
+  /* Module accents */
+  --ha-module-revenue: oklch(0.66 0.16 250);
+  --ha-module-revenue-foreground: oklch(0.1 0 0);
+  --ha-module-maintenance: oklch(0.72 0.16 55);
+  --ha-module-maintenance-foreground: oklch(0.1 0 0);
+  --ha-module-profit: oklch(0.68 0.14 155);
+  --ha-module-profit-foreground: oklch(0.1 0 0);
+  --ha-module-crm: oklch(0.68 0.12 210);
+  --ha-module-crm-foreground: oklch(0.1 0 0);
+  --ha-module-marketing: oklch(0.7 0.16 350);
+  --ha-module-marketing-foreground: oklch(0.1 0 0);
+  --ha-module-automation: oklch(0.68 0.05 262);
+  --ha-module-automation-foreground: oklch(0.1 0 0);
 }
 
 @theme inline {
@@ -111,6 +219,47 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* HotelAccelerator suite tokens (Step 1 - ADDITIVE) -> Tailwind utilities */
+  --color-ha-brand: var(--ha-brand);
+  --color-ha-brand-foreground: var(--ha-brand-foreground);
+  --color-ha-brand-secondary: var(--ha-brand-secondary);
+  --color-ha-brand-secondary-foreground: var(--ha-brand-secondary-foreground);
+  --color-ha-success: var(--ha-success);
+  --color-ha-success-foreground: var(--ha-success-foreground);
+  --color-ha-premium: var(--ha-premium);
+  --color-ha-premium-foreground: var(--ha-premium-foreground);
+  --color-ha-info: var(--ha-info);
+  --color-ha-info-foreground: var(--ha-info-foreground);
+  --color-ha-warning: var(--ha-warning);
+  --color-ha-warning-foreground: var(--ha-warning-foreground);
+  --color-ha-error: var(--ha-error);
+  --color-ha-error-foreground: var(--ha-error-foreground);
+  --color-ha-surface: var(--ha-surface);
+  --color-ha-surface-muted: var(--ha-surface-muted);
+  --color-ha-surface-foreground: var(--ha-surface-foreground);
+  --color-ha-card: var(--ha-card);
+  --color-ha-card-foreground: var(--ha-card-foreground);
+  --color-ha-border: var(--ha-border);
+  --color-ha-chart-1: var(--ha-chart-1);
+  --color-ha-chart-2: var(--ha-chart-2);
+  --color-ha-chart-3: var(--ha-chart-3);
+  --color-ha-chart-4: var(--ha-chart-4);
+  --color-ha-chart-5: var(--ha-chart-5);
+  --color-ha-chart-6: var(--ha-chart-6);
+  --color-ha-module-revenue: var(--ha-module-revenue);
+  --color-ha-module-revenue-foreground: var(--ha-module-revenue-foreground);
+  --color-ha-module-maintenance: var(--ha-module-maintenance);
+  --color-ha-module-maintenance-foreground: var(--ha-module-maintenance-foreground);
+  --color-ha-module-profit: var(--ha-module-profit);
+  --color-ha-module-profit-foreground: var(--ha-module-profit-foreground);
+  --color-ha-module-crm: var(--ha-module-crm);
+  --color-ha-module-crm-foreground: var(--ha-module-crm-foreground);
+  --color-ha-module-marketing: var(--ha-module-marketing);
+  --color-ha-module-marketing-foreground: var(--ha-module-marketing-foreground);
+  --color-ha-module-automation: var(--ha-module-automation);
+  --color-ha-module-automation-foreground: var(--ha-module-automation-foreground);
+
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
 }
