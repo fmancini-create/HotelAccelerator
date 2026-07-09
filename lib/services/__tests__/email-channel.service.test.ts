@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { EmailChannelService } from "../email-channel.service"
+import { EmailChannelService } from "@/lib/platform-services/email-channel.service"
 import { ValidationError, ConflictError, AuthorizationError } from "@/lib/errors"
 
 describe("EmailChannelService - Critical Invariants", () => {

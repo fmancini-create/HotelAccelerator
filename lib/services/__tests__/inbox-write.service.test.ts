@@ -18,7 +18,11 @@ describe("InboxWriteService - Critical Invariants", () => {
       toggleStar: vi.fn(),
     } as any
 
-    service = new InboxWriteService(mockRepository)
+    // Constructor now takes a SupabaseClient and builds its own repository.
+    // Cast a stub for the client, then inject the mock repository so the
+    // existing expectations on mockRepository.* remain valid.
+    service = new InboxWriteService({} as any)
+    service["repository"] = mockRepository as any
   })
 
   describe("INVARIANT: Outcome → Status Mapping", () => {
