@@ -12,7 +12,7 @@ interface BreadcrumbItem {
   href: string
 }
 
-interface AdminHeaderProps {
+export interface AdminHeaderProps {
   title: string
   subtitle?: string
   backHref?: string
