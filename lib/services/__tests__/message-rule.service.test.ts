@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { MessageRuleService } from "../message-rule.service"
-import { MessageRuleRepository } from "@/lib/repositories/message-rule.repository"
+import { MessageRuleService } from "@/lib/platform-services/message-rule.service"
+import { MessageRuleRepository } from "@/lib/platform-repositories/message-rule.repository"
 import { InvariantViolationError, ValidationError, ConflictError } from "@/lib/errors"
 
 // Mock the repository
-vi.mock("@/lib/repositories/message-rule.repository", () => ({
+vi.mock("@/lib/platform-repositories/message-rule.repository", () => ({
   MessageRuleRepository: {
     findById: vi.fn(),
     findByName: vi.fn(),
@@ -36,6 +36,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "page_visits",
+          message_type: "popup",
           conditions: { min: 1 },
           message_content: { body: "Test message" },
           is_active: true,
@@ -52,6 +53,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "page_visits",
+          message_type: "popup",
           conditions: { min: 1 },
           message_content: { body: "Test message" },
           is_active: true,
@@ -73,6 +75,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "page_visits",
+          message_type: "popup",
           conditions: { min: 1 },
           message_content: { body: "Test message" },
           is_active: true,
@@ -91,6 +94,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "return_visitor",
+          message_type: "popup",
           conditions: { min_days: 10, max_days: 5 }, // max < min
           message_content: { body: "Test message" },
           is_active: true,
@@ -105,6 +109,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "return_visitor",
+          message_type: "popup",
           conditions: { min_days: 10, max_days: 10 }, // max = min
           message_content: { body: "Test message" },
           is_active: true,
@@ -124,6 +129,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "return_visitor",
+          message_type: "popup",
           conditions: { min_days: 5, max_days: 10 }, // max > min
           message_content: { body: "Test message" },
           is_active: true,
@@ -140,6 +146,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "page_visits",
+          message_type: "popup",
           conditions: { min: 0 }, // Invalid: must be >= 1
           message_content: { body: "Test message" },
           is_active: true,
@@ -154,6 +161,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "room_interest",
+          message_type: "popup",
           conditions: { min_clicks: 0 }, // Invalid: must be >= 1
           message_content: { body: "Test message" },
           is_active: true,
@@ -174,6 +182,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Duplicate Rule",
           rule_type: "page_visits",
+          message_type: "popup",
           conditions: { min: 1 },
           message_content: { body: "Test message" },
           is_active: true,
@@ -188,6 +197,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "",
           rule_type: "page_visits",
+          message_type: "popup",
           conditions: { min: 1 },
           message_content: { body: "Test message" },
           is_active: true,
@@ -202,6 +212,7 @@ describe("MessageRuleService - Critical Invariants", () => {
         MessageRuleService.createRule(mockRequest, {
           name: "Test Rule",
           rule_type: "page_visits",
+          message_type: "popup",
           conditions: { min: 1 },
           message_content: { body: "" },
           is_active: true,
