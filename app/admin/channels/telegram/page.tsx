@@ -8,7 +8,6 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import { Send, Bot, CheckCircle2, Copy, ExternalLink, AlertCircle } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 
@@ -31,16 +30,7 @@ export default function TelegramChannelPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AdminHeader
-        title="Telegram Bot"
-        subtitle="Gestisci il canale Telegram"
-        breadcrumbs={[{ label: "Canali", href: "/admin/channels" }, { label: "Telegram" }]}
-      >
-        <Badge variant={isConnected ? "default" : "secondary"} className={isConnected ? "bg-blue-500" : ""}>
-          {isConnected ? "Connesso" : "Non connesso"}
-        </Badge>
-        <Button>Salva modifiche</Button>
-      </AdminHeader>
+      <AdminHeader title="Telegram Bot" subtitle="Gestisci il canale Telegram" />
 
       <div className="container py-6">
         <Tabs defaultValue="connection" className="space-y-6">
