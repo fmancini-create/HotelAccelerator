@@ -14,6 +14,7 @@ export interface AdminUser {
   can_move: boolean
   can_manage_users: boolean
   can_manage_categories?: boolean
+  property_id?: string
   created_at?: string
   updated_at?: string
 }

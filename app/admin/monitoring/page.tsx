@@ -149,11 +149,7 @@ export default function MonitoringPage() {
   if (authLoading || loading) {
     return (
       <>
-        <AdminHeader
-          title="Monitoring"
-          description="Stato del sistema e utilizzo risorse"
-          breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Monitoring" }]}
-        />
+        <AdminHeader title="Monitoring" />
         <div className="container py-6">
           <LoadingSkeleton />
         </div>
@@ -164,11 +160,7 @@ export default function MonitoringPage() {
   if (!effectiveUser) {
     return (
       <>
-        <AdminHeader
-          title="Monitoring"
-          description="Stato del sistema e utilizzo risorse"
-          breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Monitoring" }]}
-        />
+        <AdminHeader title="Monitoring" />
         <div className="container py-6">
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -183,11 +175,7 @@ export default function MonitoringPage() {
   if (error) {
     return (
       <>
-        <AdminHeader
-          title="Monitoring"
-          description="Stato del sistema e utilizzo risorse"
-          breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Monitoring" }]}
-        />
+        <AdminHeader title="Monitoring" />
         <div className="container py-6">
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -202,11 +190,7 @@ export default function MonitoringPage() {
   if (!quotaStatus || !stats) {
     return (
       <>
-        <AdminHeader
-          title="Monitoring"
-          description="Stato del sistema e utilizzo risorse"
-          breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Monitoring" }]}
-        />
+        <AdminHeader title="Monitoring" />
         <div className="container py-6">
           <LoadingSkeleton />
         </div>
@@ -218,11 +202,7 @@ export default function MonitoringPage() {
 
   return (
     <>
-      <AdminHeader
-        title="Monitoring"
-        description="Stato del sistema e utilizzo risorse"
-        breadcrumbs={[{ label: "Admin", href: "/admin" }, { label: "Monitoring" }]}
-      />
+      <AdminHeader title="Monitoring" />
       <div className="container py-6">
         <div className="space-y-6">
           {/* Health Status */}
