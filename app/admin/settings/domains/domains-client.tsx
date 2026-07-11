@@ -163,7 +163,6 @@ export function DomainsClient() {
         <AdminHeader
           title="Domini"
           subtitle="Configura il dominio del tuo sito"
-          breadcrumbs={[{ label: "Impostazioni", href: "/admin/settings" }, { label: "Domini" }]}
         />
 
         {/* Frontend Toggle */}

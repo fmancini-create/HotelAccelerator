@@ -747,7 +747,6 @@ export default function EmailChannelsClient() {
       <AdminHeader
         title="Email"
         subtitle="Configura e sincronizza i tuoi account email"
-        breadcrumbs={[{ label: "Canali", href: "/admin/channels" }, { label: "Email" }]}
       />
 
       <div className="container py-6 space-y-6">
