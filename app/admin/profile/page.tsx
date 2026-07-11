@@ -111,7 +111,6 @@ export default function AdminProfilePage() {
         <AdminHeader
           title="Profilo"
           subtitle="Gestisci il tuo account"
-          breadcrumbs={[{ label: "Profilo", href: "/admin/profile" }]}
         />
 
         {/* Profile Info */}

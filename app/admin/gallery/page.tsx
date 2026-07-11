@@ -178,7 +178,6 @@ export default function GalleryPage() {
         <AdminHeader
           title="Galleria"
           subtitle="Gestisci le foto della struttura"
-          breadcrumbs={[{ label: "Galleria", href: "/admin/gallery" }]}
         />
 
         {/* Upload Section */}

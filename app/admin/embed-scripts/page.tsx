@@ -70,7 +70,6 @@ export default function EmbedScriptsPage() {
       <AdminHeader
         title="Script Embed"
         subtitle="Gestisci gli script per siti esterni"
-        breadcrumbs={[{ label: "Script Embed", href: "/admin/embed-scripts" }]}
         actions={
           <Link href="/admin/embed-scripts/new">
             <Button>

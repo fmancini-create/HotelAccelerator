@@ -138,7 +138,6 @@ export default function CategoriesPage() {
         <AdminHeader
           title="Categorie"
           subtitle="Gestisci le categorie delle foto"
-          breadcrumbs={[{ label: "Categorie", href: "/admin/categories" }]}
           actions={
             <Button onClick={() => setIsAddDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />

@@ -252,7 +252,6 @@ function CMSPagesContent() {
       <AdminHeader
         title="Pagine CMS"
         subtitle="Gestisci le pagine del tuo sito"
-        breadcrumbs={[{ label: "CMS", href: "/admin/cms" }]}
         actions={
           <Button onClick={() => setIsCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />

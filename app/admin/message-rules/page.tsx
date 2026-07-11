@@ -274,7 +274,6 @@ export default function MessageRulesPage() {
         <AdminHeader
           title="Regole Messaggi"
           subtitle="Configura messaggi automatici basati sul comportamento"
-          breadcrumbs={[{ label: "Regole Messaggi", href: "/admin/message-rules" }]}
           actions={
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />

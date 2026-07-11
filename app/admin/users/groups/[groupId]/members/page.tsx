@@ -112,11 +112,6 @@ export default function GroupMembersPage({ params }: { params: Promise<{ groupId
         <AdminHeader
           title={`Membri: ${group?.name || ""}`}
           subtitle="Gestisci i membri di questo gruppo"
-          breadcrumbs={[
-            { label: "Team", href: "/admin/users" },
-            { label: "Gruppi", href: "/admin/users?tab=groups" },
-            { label: group?.name || "", href: `/admin/users/groups/${groupId}/members` },
-          ]}
           actions={
             <Link href="/admin/users">
               <Button variant="outline">

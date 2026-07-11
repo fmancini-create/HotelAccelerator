@@ -197,7 +197,6 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
       <AdminHeader
         title={page.title}
         subtitle={`/${page.slug}`}
-        breadcrumbs={[{ label: "CMS", href: "/admin/cms" }, { label: page.title }]}
         actions={
           <div className="flex items-center gap-2">
             {page.status === "published" && (
