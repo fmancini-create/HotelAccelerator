@@ -57,7 +57,7 @@ export class CommandLogger {
       }
 
       // Fire and forget - do not await
-      this.supabase.from("command_logs").insert(event).then().catch()
+      void this.supabase.from("command_logs").insert(event).then(undefined, () => {})
     } catch (error) {
       // Silent failure - logging must never break execution
     }
@@ -93,7 +93,7 @@ export class CommandLogger {
       }
 
       // Fire and forget - do not await
-      this.supabase.from("command_logs").insert(event).then().catch()
+      void this.supabase.from("command_logs").insert(event).then(undefined, () => {})
     } catch (error) {
       // Silent failure - logging must never break execution
     }
