@@ -2,20 +2,13 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Phone, Clock, FileText, Bot, Bell, CheckCircle2 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 
 export default function PhoneChannelPage() {
   return (
     <div className="min-h-screen bg-background">
-      <AdminHeader
-        title="Telefono IP"
-        subtitle="Gestione chiamate con trascrizione AI"
-        breadcrumbs={[{ label: "Canali", href: "/admin/channels" }, { label: "Telefono IP" }]}
-      >
-        <Badge variant="secondary">Prossimamente</Badge>
-      </AdminHeader>
+      <AdminHeader title="Telefono IP" subtitle="Gestione chiamate con trascrizione AI" />
 
       <div className="container py-6">
         <div className="max-w-2xl mx-auto space-y-6">
