@@ -55,7 +55,7 @@ export async function generateTenantMetadata(options: {
 }): Promise<{
   title: string
   description: string
-  keywords?: string
+  keywords?: string | string[]
   metadataBase: URL
   alternates: { canonical: string }
   openGraph: {
