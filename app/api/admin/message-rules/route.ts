@@ -1,8 +1,8 @@
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { MessageRuleService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     const rules = await MessageRuleService.listRules(request)
     return NextResponse.json({ rules })
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const rule = await MessageRuleService.createRule(request, body)

@@ -1,3 +1,4 @@
+import type { NextRequest } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { MessageRuleRepository } from "@/lib/platform-repositories/message-rule.repository"
 import type {
@@ -15,12 +16,12 @@ import {
 import { logCommandExecution } from "@/lib/logging/command-log"
 
 export class MessageRuleService {
-  static async listRules(request: Request): Promise<MessageRule[]> {
+  static async listRules(request: NextRequest): Promise<MessageRule[]> {
     const propertyId = await getAuthenticatedPropertyId(request)
     return MessageRuleRepository.findByPropertyId(propertyId)
   }
 
-  static async getRule(request: Request, ruleId: string): Promise<MessageRule> {
+  static async getRule(request: NextRequest, ruleId: string): Promise<MessageRule> {
     const propertyId = await getAuthenticatedPropertyId(request)
     const rule = await MessageRuleRepository.findById(ruleId)
     if (!rule) {
@@ -33,7 +34,7 @@ export class MessageRuleService {
   }
 
   static async createRule(
-    request: Request,
+    request: NextRequest,
     ruleData: Omit<CreateMessageRuleData, "property_id">,
     actorId?: string,
   ): Promise<MessageRule> {
@@ -81,7 +82,7 @@ export class MessageRuleService {
   }
 
   static async updateRule(
-    request: Request,
+    request: NextRequest,
     ruleId: string,
     ruleData: Omit<UpdateMessageRuleData, "property_id">,
     actorId?: string,
@@ -135,7 +136,7 @@ export class MessageRuleService {
     return await executeUpdate()
   }
 
-  static async deleteRule(request: Request, ruleId: string, actorId?: string): Promise<void> {
+  static async deleteRule(request: NextRequest, ruleId: string, actorId?: string): Promise<void> {
     const propertyId = await getAuthenticatedPropertyId(request)
     const rule = await MessageRuleRepository.findById(ruleId)
     if (!rule) {
@@ -153,7 +154,7 @@ export class MessageRuleService {
   }
 
   static async toggleRuleActive(
-    request: Request,
+    request: NextRequest,
     ruleId: string,
     isActive: boolean,
     actorId?: string,
