@@ -9,6 +9,7 @@ import { Lock, Eye, EyeOff, CheckCircle, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js"
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("")
@@ -28,13 +29,13 @@ export default function ResetPasswordPage() {
     // presente nell'URL del link di recupero e crea la sessione. Verifichiamo
     // che ci sia, così possiamo mostrare un messaggio chiaro se il link è
     // scaduto o assente invece di far fallire updateUser con errore generico.
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
       if (event === "PASSWORD_RECOVERY" || session) {
         setHasRecoverySession(true)
       }
     })
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(({ data }: { data: { session: Session | null } }) => {
       setHasRecoverySession((prev) => (prev === null ? Boolean(data.session) : prev))
     })
 
