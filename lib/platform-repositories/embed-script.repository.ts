@@ -42,11 +42,10 @@ export class EmbedScriptRepository {
       .insert({
         property_id: propertyId,
         name: input.name,
-        type: input.type,
+        description: input.description,
         destination_url: input.destination_url,
         config: input.config || {},
-        customization: input.customization || {},
-        status: "inactive",
+        status: "draft",
       })
       .select()
       .single()
@@ -59,7 +58,6 @@ export class EmbedScriptRepository {
     if (input.name !== undefined) updateData.name = input.name
     if (input.destination_url !== undefined) updateData.destination_url = input.destination_url
     if (input.config !== undefined) updateData.config = input.config
-    if (input.customization !== undefined) updateData.customization = input.customization
     if (input.status !== undefined) updateData.status = input.status
     updateData.updated_at = new Date().toISOString()
 
@@ -109,7 +107,7 @@ export class EmbedScriptRepository {
       if (script) {
         await this.supabase
           .from("embed_scripts")
-          .update({ views: (script.views || 0) + 1 })
+          .update({ views_count: (script.views_count || 0) + 1 })
           .eq("id", id)
       }
     }
@@ -123,7 +121,7 @@ export class EmbedScriptRepository {
       if (script) {
         await this.supabase
           .from("embed_scripts")
-          .update({ interactions: (script.interactions || 0) + 1 })
+          .update({ interactions_count: (script.interactions_count || 0) + 1 })
           .eq("id", id)
       }
     }
