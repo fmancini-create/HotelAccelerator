@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import type { NextRequest } from "next/server"
 import { MessageRuleService } from "@/lib/platform-services/message-rule.service"
 import { MessageRuleRepository } from "@/lib/platform-repositories/message-rule.repository"
 import { InvariantViolationError, ValidationError, ConflictError } from "@/lib/errors"
@@ -22,7 +23,7 @@ vi.mock("@/lib/auth-property", () => ({
 }))
 
 describe("MessageRuleService - Critical Invariants", () => {
-  const mockRequest = {} as Request
+  const mockRequest = {} as unknown as NextRequest
 
   beforeEach(() => {
     vi.clearAllMocks()
