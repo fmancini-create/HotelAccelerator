@@ -2,6 +2,15 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 
+type ScoreRow = {
+  lead_score: number | null
+}
+
+type BookingRow = {
+  total_bookings: number | null
+  total_revenue_cents: number | null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const propertyId = await getCurrentProperty(request)
@@ -35,11 +44,11 @@ export async function GET(request: NextRequest) {
     ])
 
     const avgScore = scoreData?.length
-      ? Math.round(scoreData.reduce((sum, c) => sum + (c.lead_score || 0), 0) / scoreData.length)
+      ? Math.round(scoreData.reduce((sum: number, c: ScoreRow) => sum + (c.lead_score || 0), 0) / scoreData.length)
       : 0
 
-    const totalBookings = bookingData?.reduce((sum, c) => sum + (c.total_bookings || 0), 0) || 0
-    const totalRevenue = bookingData?.reduce((sum, c) => sum + (c.total_revenue_cents || 0), 0) || 0
+    const totalBookings = bookingData?.reduce((sum: number, c: BookingRow) => sum + (c.total_bookings || 0), 0) || 0
+    const totalRevenue = bookingData?.reduce((sum: number, c: BookingRow) => sum + (c.total_revenue_cents || 0), 0) || 0
 
     return NextResponse.json({
       total_contacts: total_contacts || 0,
