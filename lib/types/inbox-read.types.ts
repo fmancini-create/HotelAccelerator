@@ -157,7 +157,7 @@ export type InboxSort = "smart" | "date_desc" | "date_asc" | "sender_asc" | "sen
 
 // Query options
 export interface ConversationListOptions {
-  status?: "open" | "closed" | "archived" | "all"
+  status?: "open" | "closed" | "archived" | "all" | "starred"
   channel?: "email" | "chat" | "whatsapp" | "telegram" | "all"
   limit?: number
   offset?: number
