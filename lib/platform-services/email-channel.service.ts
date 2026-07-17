@@ -190,7 +190,7 @@ export class EmailChannelService {
 
   async upsertOAuthChannel(
     propertyId: string,
-    provider: string,
+    provider: "gmail" | "outlook",
     email: string,
     accessToken: string,
     refreshToken: string,
