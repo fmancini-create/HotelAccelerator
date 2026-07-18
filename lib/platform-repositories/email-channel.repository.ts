@@ -24,7 +24,7 @@ export interface EmailChannel {
   email_address: string
   name: string
   display_name: string | null
-  provider: "gmail" | "outlook" | null
+  provider: "gmail" | "outlook" | "manual" | null
   is_active: boolean
   sync_enabled: boolean
   last_sync_at: string | null
@@ -50,7 +50,7 @@ export interface CreateChannelInput {
   name: string
   display_name: string | null
   is_active: boolean
-  provider?: "gmail" | "outlook" | null
+  provider?: "gmail" | "outlook" | "manual" | null
   oauth_access_token?: string | null
   oauth_refresh_token?: string | null
   oauth_expiry?: string | null
@@ -63,6 +63,7 @@ export interface UpdateChannelInput {
   name?: string
   display_name?: string | null
   is_active?: boolean
+  provider?: "gmail" | "outlook" | "manual" | null
   oauth_access_token?: string | null
   oauth_refresh_token?: string | null
   oauth_expiry?: string | null
