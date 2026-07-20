@@ -58,11 +58,14 @@ export async function GET(request: NextRequest) {
     const { data: memberships } = await supabase
       .from("user_group_members")
       .select("user_id, group_id")
-      .in("user_id", users?.map((u) => u.id) || [])
+      .in("user_id", users?.map((u: { id: string }) => u.id) || [])
 
-    const usersWithGroups = users?.map((user) => ({
+    const usersWithGroups = users?.map((user: { id: string }) => ({
       ...user,
-      groups: memberships?.filter((m) => m.user_id === user.id).map((m) => m.group_id) || [],
+      groups:
+        memberships
+          ?.filter((m: { user_id: string; group_id: string }) => m.user_id === user.id)
+          .map((m: { user_id: string; group_id: string }) => m.group_id) || [],
     }))
 
     return NextResponse.json({ users: usersWithGroups || [] })
