@@ -35,7 +35,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (error) throw error
 
-    const formattedMembers = members?.map((m) => ({
+    const formattedMembers = members?.map((m: { id: string; user_id: string; admin_users: unknown }) => ({
       id: m.id,
       user_id: m.user_id,
       user_name: (m.admin_users as any)?.name || "",
