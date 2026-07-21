@@ -42,11 +42,14 @@ export async function GET(request: NextRequest) {
     const { data: memberCounts } = await supabase
       .from("user_group_members")
       .select("group_id")
-      .in("group_id", groups?.map((g) => g.id) || [])
+      .in("group_id", groups?.map((g: { id: string }) => g.id) || [])
 
-    const groupsWithCounts = groups?.map((group) => ({
+    const groupsWithCounts = groups?.map((group: { id: string }) => ({
       ...group,
-      members: memberCounts?.filter((m) => m.group_id === group.id).map((m) => m.group_id) || [],
+      members:
+        memberCounts
+          ?.filter((m: { group_id: string }) => m.group_id === group.id)
+          .map((m: { group_id: string }) => m.group_id) || [],
     }))
 
     return NextResponse.json({ groups: groupsWithCounts || [] })
