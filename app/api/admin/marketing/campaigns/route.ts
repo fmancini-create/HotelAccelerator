@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     // Transform to include segment_name
     const campaigns =
-      data?.map((c) => ({
+      data?.map((c: { contact_segments?: { name?: string } | null; [key: string]: unknown }) => ({
         ...c,
         segment_name: c.contact_segments?.name,
       })) || []
