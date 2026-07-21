@@ -1,0 +1,18 @@
+{
+  "//": "Config TypeScript di base per il futuro monorepo (Step 1 - non ancora usata). tsconfig.json NON estende questo file in questo step. Rispecchia le opzioni attuali di tsconfig.json; verra collegata quando l'app sara spostata sotto apps/platform e i package condivisi saranno estratti. Vedi docs/MONOREPO_PLAN.md.",
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "target": "ES6",
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "incremental": true
+  }
+}
