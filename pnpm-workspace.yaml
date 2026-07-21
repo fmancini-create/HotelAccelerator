@@ -1,0 +1,12 @@
+# Monorepo workspace scaffold (Step 1 - non invasivo).
+#
+# In questo step l'app HotelAccelerator resta alla root ("."). Le cartelle
+# apps/* e packages/* sono predisposte per le fasi successive ma NON esistono
+# ancora: verranno popolate quando l'app verra spostata sotto apps/platform e
+# quando i package condivisi saranno estratti.
+#
+# Vedi docs/MONOREPO_PLAN.md per il piano completo.
+packages:
+  - "."
+  - "apps/*"
+  - "packages/*"
