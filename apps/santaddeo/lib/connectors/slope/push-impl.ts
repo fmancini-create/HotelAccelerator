@@ -3,14 +3,25 @@
  *
  * Endpoint: POST /v1/lodging-types/{lodgingTypeId}/rates-and-availability-updates
  *
- * Vincoli documentati (PDF API Slope, 13/07/2026):
+ * Vincoli documentati (PDF API Slope, 13/07/2026) + ESITO CERTIFICAZIONE
+ * (feedback Slope, 22/07/2026 — due fix obbligatori):
  *  - Max 500 "aggiornamenti" per richiesta (= somma dei giorni nei dateRange).
  *  - Max 5 chiamate/minuto per struttura -> retry con backoff su 429.
- *  - I prezzi vanno specificati per TUTTE le occupazioni da 1 a maximumCapacity
- *    della lodging type. Un prezzo 0.0 mette l'occupazione "non in vendita",
- *    quindi NON dobbiamo mai mandare 0 per occupazioni che non gestiamo:
- *    le occupazioni mancanti nel pricing grid vengono riempite clonando il
- *    prezzo dell'occupazione disponibile piu' vicina (mai 0).
+ *  - dateRange: start ed end sono ENTRAMBI INCLUSIVI. La certificazione e'
+ *    fallita perche' assumevamo end esclusivo (end = giorno+1): inviando il
+ *    1/8 Slope scriveva 1/8 E 2/8. Per un singolo giorno: start = end = giorno.
+ *  - Occupazioni: Slope ESIGE rates con ESATTAMENTE maximumCapacity elementi
+ *    (occ 1..maxCap), altrimenti 400 invalid.data "This field must have a
+ *    number of elements equal to the lodging maximum capacity" (visto live
+ *    all'attivazione autopilot Superlusso, 22/07/2026). Il rilievo della
+ *    certificazione NON era l'inviarle tutte, ma il CLONARE il prezzo
+ *    dell'occupazione selezionata sulle altre: le occupazioni non incluse
+ *    nella selezione vanno completate con i loro PREZZI REALI correnti
+ *    (pricing_grid, fallback last_sent_prices) cosi' per Slope risultano
+ *    invariate. Il clone dell'occupazione piu' vicina resta solo come
+ *    extrema ratio (con warning). MAI mandare 0 (0.0 = "non in vendita").
+ *    La capacity di riferimento e' la maximumCapacity della lodging type
+ *    LATO SLOPE (GET /v1/lodging-types), non il nostro max_occupancy.
  *  - Niente push su rate plan DERIVATI (isDerived=true): vanno filtrati a
  *    monte nel mapping; qui difendiamo comunque con warning.
  *  - L'aggiornamento e' processato in modo ASINCRONO (202 Accepted).
@@ -58,8 +69,9 @@ export async function pushViaSlope(
   // ---- 1) Raggruppa i change per (lodgingType, ratePlan, date) ----
   // groups: lodgingTypeId -> ratePlanId -> date -> (occupancy -> price)
   const groups = new Map<string, Map<string, Map<string, DayPrices>>>()
-  // maxCapacity per room type (per riempire le occupazioni mancanti)
-  const capacityByLodging = new Map<string, number>()
+  // Meta per completare le occupazioni mancanti: chiave "lodgingId|ratePlanId"
+  // -> id interni (per query pricing_grid/last_sent) e max_occupancy nostro.
+  const cellMeta = new Map<string, { roomTypeId: string; rateId: string; maxOcc: number | null }>()
 
   for (const change of changes) {
     const rt = roomTypeMappings.find((r) => r.id === change.roomTypeId)
@@ -95,7 +107,6 @@ export async function pushViaSlope(
 
     const maxOcc = rt.max_occupancy ?? null
     if (maxOcc !== null && change.occupancy > maxOcc) continue
-    if (maxOcc !== null) capacityByLodging.set(lodgingTypeId, maxOcc)
 
     let byRate = groups.get(lodgingTypeId)
     if (!byRate) groups.set(lodgingTypeId, (byRate = new Map()))
@@ -104,12 +115,23 @@ export async function pushViaSlope(
     let dayPrices = byDate.get(change.date)
     if (!dayPrices) byDate.set(change.date, (dayPrices = new Map()))
     dayPrices.set(change.occupancy, change.suggestedPrice)
+    cellMeta.set(`${lodgingTypeId}|${ratePlanId}`, {
+      roomTypeId: change.roomTypeId,
+      rateId: change.rateId,
+      maxOcc,
+    })
+  }
+
+  // ---- 1b) Completa le occupazioni mancanti fino a maximumCapacity ----
+  // Slope rifiuta con 400 rates che non coprano occ 1..maximumCapacity della
+  // lodging type. Le occupazioni non selezionate vengono completate con i
+  // PREZZI REALI correnti (pricing_grid -> last_sent_prices -> clone nearest
+  // come extrema ratio), cosi' per Slope risultano invariate.
+  if (groups.size > 0) {
+    await fillMissingOccupancies(client, groups, cellMeta, warnings, errors)
   }
 
   // ---- 2) Costruisce le richieste per lodging type ----
-  // La doc impone prezzi per TUTTE le occupazioni 1..maximumCapacity: le
-  // occupazioni mancanti vengono riempite con il prezzo dell'occupazione
-  // disponibile piu' vicina (clamp, mai 0).
   let totalDays = 0
   const requests: {
     lodgingTypeId: string
@@ -121,7 +143,6 @@ export async function pushViaSlope(
   }[] = []
 
   for (const [lodgingTypeId, byRate] of groups) {
-    const maxCapacity = capacityByLodging.get(lodgingTypeId) ?? 0
     const rateUpdates: (typeof requests)[number]["rateUpdates"] = []
 
     for (const [ratePlanId, byDate] of byRate) {
@@ -131,19 +152,21 @@ export async function pushViaSlope(
       let i = 0
       while (i < dates.length) {
         const startDate = dates[i]
-        const startPrices = fillOccupancies(byDate.get(startDate)!, maxCapacity, warnings, startDate)
+        const startPrices = toRates(byDate.get(startDate)!)
         let j = i
         while (
           j + 1 < dates.length &&
           isNextDay(dates[j], dates[j + 1]) &&
-          samePrices(startPrices, fillOccupancies(byDate.get(dates[j + 1])!, maxCapacity, warnings, dates[j + 1]))
+          samePrices(startPrices, toRates(byDate.get(dates[j + 1])!))
         ) {
           j++
         }
-        // NB: DateRange Slope e' [start; end) — end esclusivo (convenzione
-        // ISO dei loro esempi: [2025-05-31;2025-06-03) = 31/5, 1/6, 2/6).
+        // FIX certificazione 22/07/2026: il dateRange Slope e' INCLUSIVO su
+        // entrambi gli estremi (end = ultimo giorno, NON giorno+1). Con
+        // l'end esclusivo il push di un singolo giorno scriveva anche il
+        // giorno successivo (es. 1/8 -> scritti 1/8 e 2/8).
         rateUpdates.push({
-          dateRange: { start: startDate, end: addDays(dates[j], 1) },
+          dateRange: { start: startDate, end: dates[j] },
           ratePlanId,
           rates: startPrices,
         })
@@ -173,7 +196,7 @@ export async function pushViaSlope(
     let current: typeof req.rateUpdates = []
     let currentDays = 0
     for (const ru of req.rateUpdates) {
-      const days = daysBetween(ru.dateRange.start, ru.dateRange.end)
+      const days = daysInRange(ru.dateRange.start, ru.dateRange.end)
       if (currentDays + days > 500 && current.length > 0) {
         chunks.push(current)
         current = []
@@ -198,7 +221,7 @@ export async function pushViaSlope(
           })),
         }))
         await client.postRatesAndAvailabilityUpdates(req.lodgingTypeId, { rateUpdates: serialized })
-        sent += chunk.reduce((s, ru) => s + daysBetween(ru.dateRange.start, ru.dateRange.end), 0)
+        sent += chunk.reduce((s, ru) => s + daysInRange(ru.dateRange.start, ru.dateRange.end), 0)
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         errors.push(`Push fallito per lodging ${req.lodgingTypeId}: ${msg}`)
@@ -221,40 +244,128 @@ export async function pushViaSlope(
 }
 
 /**
- * Riempie le occupazioni mancanti 1..maxCapacity con il prezzo
- * dell'occupazione disponibile piu' vicina. MAI 0 (su Slope 0 = chiusura).
+ * Completa ogni cella (lodging/rate/giorno) fino a occ 1..maximumCapacity
+ * della lodging type SLOPE. Fonti in ordine di preferenza per le occupazioni
+ * mancanti: pricing_grid (prezzo corrente reale) -> last_sent_prices (ultimo
+ * inviato) -> clone dell'occupazione piu' vicina (extrema ratio, warning).
  */
-function fillOccupancies(
-  dayPrices: DayPrices,
-  maxCapacity: number,
+async function fillMissingOccupancies(
+  client: SlopeClient,
+  groups: Map<string, Map<string, Map<string, DayPrices>>>,
+  cellMeta: Map<string, { roomTypeId: string; rateId: string; maxOcc: number | null }>,
   warnings: string[],
-  date: string,
-): { occupancy: number; rate: number }[] {
-  const available = [...dayPrices.keys()].sort((a, b) => a - b)
-  if (available.length === 0) return []
-  const top = maxCapacity > 0 ? maxCapacity : available[available.length - 1]
-  const out: { occupancy: number; rate: number }[] = []
-  let filled = 0
-  for (let occ = 1; occ <= top; occ++) {
-    const exact = dayPrices.get(occ)
-    if (exact !== undefined) {
-      out.push({ occupancy: occ, rate: round2(exact) })
-    } else {
-      // clamp all'occupazione disponibile piu' vicina
-      const nearest = available.reduce((best, o) =>
-        Math.abs(o - occ) < Math.abs(best - occ) ? o : best,
-      )
-      out.push({ occupancy: occ, rate: round2(dayPrices.get(nearest)!) })
-      filled++
+  errors: string[],
+): Promise<void> {
+  // Capacity di riferimento: maximumCapacity LATO SLOPE (l'errore 400 usa
+  // quella). Fallback: max_occupancy del nostro mapping.
+  const slopeCapacity = new Map<string, number>()
+  try {
+    const lodgingTypes = await client.getLodgingTypes()
+    for (const lt of lodgingTypes) {
+      if (typeof lt.maximumCapacity === "number" && lt.maximumCapacity > 0) {
+        slopeCapacity.set(lt.id, lt.maximumCapacity)
+      }
     }
-  }
-  if (filled > 0) {
-    // Warning aggregato una sola volta per giorno (non per occupazione).
+  } catch (e) {
     warnings.push(
-      `${date}: ${filled} occupazioni senza prezzo nel grid, riempite col prezzo dell'occupazione piu' vicina (richiesta Slope: tutte le occ 1..maxCapacity)`,
+      `Impossibile leggere maximumCapacity da Slope (${e instanceof Error ? e.message : String(e)}): uso il max_occupancy del mapping`,
     )
   }
-  return out
+
+  // Individua le celle incomplete raggruppate per (roomTypeId, rateId).
+  type Missing = { dayPrices: DayPrices; date: string; occs: number[] }
+  const byPair = new Map<string, { roomTypeId: string; rateId: string; cells: Missing[] }>()
+
+  for (const [lodgingTypeId, byRate] of groups) {
+    for (const [ratePlanId, byDate] of byRate) {
+      const meta = cellMeta.get(`${lodgingTypeId}|${ratePlanId}`)
+      if (!meta) continue
+      const cap = slopeCapacity.get(lodgingTypeId) ?? meta.maxOcc ?? 0
+      if (cap <= 0) continue
+      for (const [date, dayPrices] of byDate) {
+        const missing: number[] = []
+        for (let occ = 1; occ <= cap; occ++) {
+          if (!dayPrices.has(occ)) missing.push(occ)
+        }
+        if (missing.length === 0) continue
+        const key = `${meta.roomTypeId}|${meta.rateId}`
+        let entry = byPair.get(key)
+        if (!entry) byPair.set(key, (entry = { roomTypeId: meta.roomTypeId, rateId: meta.rateId, cells: [] }))
+        entry.cells.push({ dayPrices, date, occs: missing })
+      }
+    }
+  }
+  if (byPair.size === 0) return
+
+  // Prezzi reali dal DB (service role: siamo in un flusso server-side).
+  const { createServiceRoleClient } = await import("@/lib/supabase/direct")
+  const supabase = await createServiceRoleClient()
+
+  for (const { roomTypeId, rateId, cells } of byPair.values()) {
+    const dates = [...new Set(cells.map((c) => c.date))]
+    const [{ data: gridRows }, { data: sentRows }] = await Promise.all([
+      supabase
+        .from("pricing_grid")
+        .select("date, occupancy, price")
+        .eq("room_type_id", roomTypeId)
+        .eq("rate_id", rateId)
+        .in("date", dates),
+      supabase
+        .from("last_sent_prices")
+        .select("target_date, occupancy, last_price")
+        .eq("room_type_id", roomTypeId)
+        .eq("rate_id", rateId)
+        .in("target_date", dates),
+    ])
+
+    const lookup = new Map<string, number>() // "date|occ" -> price
+    // last_sent prima, grid dopo: il grid (prezzo corrente) vince.
+    for (const r of sentRows ?? []) {
+      const p = Number(r.last_price)
+      if (Number.isFinite(p) && p > 0) lookup.set(`${r.target_date}|${r.occupancy}`, p)
+    }
+    for (const r of gridRows ?? []) {
+      const p = Number(r.price)
+      if (Number.isFinite(p) && p > 0) lookup.set(`${r.date}|${r.occupancy}`, p)
+    }
+
+    for (const cell of cells) {
+      const stillMissing: number[] = []
+      for (const occ of cell.occs) {
+        const p = lookup.get(`${cell.date}|${occ}`)
+        if (p !== undefined) {
+          cell.dayPrices.set(occ, p)
+        } else {
+          stillMissing.push(occ)
+        }
+      }
+      // Extrema ratio: clone dell'occupazione piu' vicina (MAI 0), con warning.
+      if (stillMissing.length > 0) {
+        const available = [...cell.dayPrices.keys()].sort((a, b) => a - b)
+        if (available.length === 0) {
+          errors.push(`Nessun prezzo disponibile per room ${roomTypeId} rate ${rateId} ${cell.date}`)
+          continue
+        }
+        for (const occ of stillMissing) {
+          const nearest = available.reduce((best, o) => (Math.abs(o - occ) < Math.abs(best - occ) ? o : best))
+          cell.dayPrices.set(occ, cell.dayPrices.get(nearest)!)
+        }
+        warnings.push(
+          `${cell.date}: occ ${stillMissing.join(",")} senza prezzo in grid/ultimo-inviato, clonato il prezzo dell'occupazione piu' vicina (Slope richiede occ 1..maxCapacity)`,
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Converte i prezzi del giorno nel payload rates, ordinati per occupazione
+ * crescente (dopo il completamento 1..maximumCapacity di fillMissingOccupancies).
+ */
+function toRates(dayPrices: DayPrices): { occupancy: number; rate: number }[] {
+  return [...dayPrices.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([occupancy, rate]) => ({ occupancy, rate: round2(rate) }))
 }
 
 function samePrices(
@@ -278,10 +389,11 @@ function addDays(iso: string, n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-function daysBetween(start: string, endExclusive: string): number {
+/** Giorni in un dateRange Slope con estremi ENTRAMBI INCLUSIVI (min 1). */
+function daysInRange(start: string, endInclusive: string): number {
   const s = new Date(`${start}T00:00:00Z`).getTime()
-  const e = new Date(`${endExclusive}T00:00:00Z`).getTime()
-  return Math.max(0, Math.round((e - s) / 86_400_000))
+  const e = new Date(`${endInclusive}T00:00:00Z`).getTime()
+  return Math.max(1, Math.round((e - s) / 86_400_000) + 1)
 }
 
 function round2(n: number): number {

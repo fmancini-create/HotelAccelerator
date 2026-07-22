@@ -500,7 +500,10 @@ export async function checkConnectorHealth(
       .eq("is_active", true)
       .maybeSingle()
 
-    const provider = (integration?.pms_name || "scidoo") as "scidoo" | "brig"
+    // FIX 22/07/2026: aggiunto "slope" — prima un hotel Slope cadeva nel ramo
+    // Scidoo e leggeva scidoo_raw_bookings (vuota) -> RAW 0 vs RMS 11, badge
+    // "Critico" perenne su Superlusso Test pur con sync perfettamente allineato.
+    const provider = (integration?.pms_name || "scidoo") as "scidoo" | "brig" | "slope"
 
     // FIX 27/05/2026 — la metrica RAW vs RMS era inquinata da due bug:
     //
@@ -530,26 +533,40 @@ export async function checkConnectorHealth(
     const todayISO = new Date().toISOString().slice(0, 10)
 
     // Helper per costruire una query sulla tabella raw del provider.
-    // BRiG e' in schema `connectors`, Scidoo in `public`.
+    // BRiG e Slope sono in schema `connectors`, Scidoo in `public`.
     const rawQuery = (countOnly = true) => {
       const builder =
         provider === "brig"
           ? supabase.schema("connectors").from("brig_raw_bookings")
-          : supabase.from("scidoo_raw_bookings")
+          : provider === "slope"
+            ? supabase.schema("connectors").from("slope_raw_bookings")
+            : supabase.from("scidoo_raw_bookings")
       const select = countOnly ? "*" : "id"
       return builder
         .select(select, { count: "exact", head: countOnly })
         .eq("hotel_id", hotelId) as ReturnType<typeof builder.select>
     }
 
+    // FIX 22/07/2026 — Cavallino "Critico" con diff_total +53 e diff_ann -329
+    // era un FALSO POSITIVO del check (dati raw/RMS allineati al 100%, verificato
+    // live): il filtro cancellate BRiG usava `status_code = 99`, un codice che
+    // NON ESISTE. I codici reali sono BRIG_STATUS (lib/connectors/brig/types.ts):
+    // CONFIRMED=0, NO_SHOW=2, CANCELLED=4, OPTIONAL=9. Con `neq.99` le 53
+    // cancellate con checkout futuro restavano nei "RAW attivi" (+53) e le
+    // cancellate raw risultavano 0 vs 329 RMS (-329). Con `neq.4`: 868=868, 329=329.
+    const BRIG_CANCELLED = 4 // BRIG_STATUS.CANCELLED
+
     // ---- RAW ATTIVI (checkout futuro o oggi, non cancellate) ----
     let rawActiveQuery = rawQuery()
     if (provider === "brig") {
-      // BRiG: cancellate identificate da raw_data->>'status' = 'CANCELLED'
-      // (gli `original_status` top-level sono NULL al 100% su sandbox).
       rawActiveQuery = rawActiveQuery
         .gte("checkout", todayISO)
-        .or("status_code.is.null,status_code.neq.99")
+        .or(`status_code.is.null,status_code.neq.${BRIG_CANCELLED}`)
+    } else if (provider === "slope") {
+      // Slope: flag booleano is_canceled scritto dal sync (da r.isCanceled).
+      rawActiveQuery = rawActiveQuery
+        .gte("checkout", todayISO)
+        .eq("is_canceled", false)
     } else {
       // Scidoo: status text con valori 'annullata','check_out','...'
       rawActiveQuery = rawActiveQuery
@@ -570,7 +587,9 @@ export async function checkConnectorHealth(
     // ---- RAW CANCELLED (info, su tutto lo storico) ----
     let rawCancelledQuery = rawQuery()
     if (provider === "brig") {
-      rawCancelledQuery = rawCancelledQuery.eq("status_code", 99)
+      rawCancelledQuery = rawCancelledQuery.eq("status_code", BRIG_CANCELLED)
+    } else if (provider === "slope") {
+      rawCancelledQuery = rawCancelledQuery.eq("is_canceled", true)
     } else {
       rawCancelledQuery = rawCancelledQuery.eq("status", "annullata")
     }
@@ -592,7 +611,11 @@ export async function checkConnectorHealth(
     if (provider === "brig") {
       rawAnnualQuery = rawAnnualQuery
         .gte("checkin", yearStart)
-        .or("status_code.is.null,status_code.neq.99")
+        .or(`status_code.is.null,status_code.neq.${BRIG_CANCELLED}`)
+    } else if (provider === "slope") {
+      rawAnnualQuery = rawAnnualQuery
+        .gte("checkin", yearStart)
+        .eq("is_canceled", false)
     } else {
       rawAnnualQuery = rawAnnualQuery
         .gte("checkin_date", yearStart)

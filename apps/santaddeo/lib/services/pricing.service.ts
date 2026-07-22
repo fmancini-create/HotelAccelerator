@@ -198,7 +198,17 @@ export async function getPricingGrid(
     const avail = Number(av.rooms_available) || 0
     const oos = Number(av.rooms_out_of_service) || 0
     const sold = Math.max(0, total - avail - oos)
-    occupancyMap[rtId][dateStr] = { occupied: sold, total, available: avail }
+    // FIX 21/07/2026: `total` restituito e' la capacita' NETTA (total_rooms - oos).
+    // Questo occupancyMap alimenta /api/accelerator/channel-production, che sulla
+    // pagina pricing SOVRASCRIVE l'occupancy della griglia (gia' corretta). La UI
+    // ignora il campo `occupied` e ricalcola sold = total - available: con `total`
+    // lordo le camere in ferie/manutenzione (che abbassano available ma non sono
+    // vendute) risultavano vendute -> Occupazione struttura 9/10 su Moriano feb-27
+    // mentre la dashboard mostrava 0% correttamente. Con `total` netto:
+    // sold = netTotal - available = camere realmente occupate, allineato agli
+    // altri due builder (pricing-grid route, recalculate-queued-prices).
+    const netTotal = Math.max(0, total - oos)
+    occupancyMap[rtId][dateStr] = { occupied: sold, total: netTotal, available: avail }
   }
 
   // --- Aggregate daily totals per room type ---
