@@ -2,6 +2,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server"
 import { isServiceUnavailableError, logSupabaseError } from "@/lib/supabase/error-utils"
 import { NextRequest, NextResponse } from "next/server"
 import { computeOnTheBooksByNight } from "@/lib/pace/compute"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 // Cron giornaliero: fotografa l'on-the-books (OTB) di OGGI per ogni hotel
 // attivo e lo salva in pace_snapshots. Da qui in avanti il confronto pace
@@ -15,12 +16,8 @@ const HORIZON_DAYS = 365
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (process.env.VERCEL_ENV === "production" && process.env.CRON_SECRET) {
-      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-    }
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) return unauthorized
 
     // Short-circuit per keep-warm (come le altre route): nessun lavoro pesante.
     if (request.nextUrl.searchParams.get("warm") === "1") {

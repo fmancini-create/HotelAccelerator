@@ -5,6 +5,7 @@
 
 import { type NextRequest, NextResponse } from "next/server"
 import { DataFreezeService } from "@/lib/services/data-freeze-service"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -12,10 +13,8 @@ export const dynamic = "force-dynamic"
 export async function GET(request: NextRequest) {
   try {
     // Verify cron secret
-    const authHeader = request.headers.get("authorization")
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) return unauthorized
 
     console.log("[Cron] Starting data freeze job")
 

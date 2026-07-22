@@ -1,15 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { SyncJobService } from "@/lib/services/sync-job-service"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { ScidooSyncService } from "@/lib/services/scidoo-sync-service"
 import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
     // Verify cron secret
-    const authHeader = request.headers.get("authorization")
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) return unauthorized
 
     console.log("[v0] Processing pending sync jobs...")
 

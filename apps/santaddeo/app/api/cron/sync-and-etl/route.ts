@@ -7,6 +7,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { isServiceUnavailableError, logSupabaseError } from "@/lib/supabase/error-utils"
 import { ScidooSyncService } from "@/lib/services/scidoo-sync-service"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { GSheetsSyncService } from "@/lib/services/gsheets-sync-service"
 import { logSyncErrors, autoResolveStaleSyncErrors } from "@/lib/services/sync-error-logger"
 import { invalidateHotelCache } from "@/lib/cache/redis"
@@ -22,10 +23,8 @@ export const maxDuration = 300
 
 export async function GET(request: NextRequest) {
   // Verify cron secret to prevent unauthorized access
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   try {
     const supabase = await createServiceRoleClient()

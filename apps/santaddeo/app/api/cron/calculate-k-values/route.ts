@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { isServiceUnavailableError, logSupabaseError } from "@/lib/supabase/error-utils"
 import { NextRequest, NextResponse } from "next/server"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { calculateAllKVariables, storeKVariableValues } from "@/lib/pricing/k-variables-service"
 import { updateHotelWeatherForecasts } from "@/lib/services/weather-service"
 import { maybeActivatePending } from "@/lib/web-traffic/pricing-activation"
@@ -11,13 +12,8 @@ import { maybeActivatePending } from "@/lib/web-traffic/pricing-activation"
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron secret in production
-    const authHeader = request.headers.get("authorization")
-    if (process.env.VERCEL_ENV === "production" && process.env.CRON_SECRET) {
-      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-    }
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) return unauthorized
 
     console.log("[v0] K-values cron job started")
 
@@ -251,12 +247,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Auth: stesso secret del cron
-    const authHeader = request.headers.get("authorization")
-    if (process.env.VERCEL_ENV === "production" && process.env.CRON_SECRET) {
-      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-    }
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) return unauthorized
 
     const body = await request.json().catch(() => ({}))
     const hotelId: string | undefined = body?.hotel_id

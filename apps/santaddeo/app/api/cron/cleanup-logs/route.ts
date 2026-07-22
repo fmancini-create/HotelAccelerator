@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export async function POST(request: NextRequest) {
-  // Verify CRON_SECRET
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   try {
     const supabase = await createServiceRoleClient()

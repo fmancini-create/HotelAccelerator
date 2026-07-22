@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { isServiceUnavailableError, logSupabaseError } from "@/lib/supabase/error-utils"
 import { ScidooSyncService } from "@/lib/services/scidoo-sync-service"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { ScidooClient } from "@/lib/services/scidoo-client"
 import { invalidateHotelCache } from "@/lib/cache/redis"
 import { emailService } from "@/lib/services/email-service"
@@ -37,12 +38,10 @@ export async function GET(request: NextRequest) {
   console.log("========================================")
 
   try {
-    const authHeader = request.headers.get("authorization")
-    const cronSecret = process.env.CRON_SECRET
-
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) {
       console.log("[CRON] UNAUTHORIZED - missing CRON_SECRET or auth mismatch")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized
     }
 
     const supabase = await createServiceRoleClient()
