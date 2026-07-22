@@ -836,9 +836,20 @@ export async function GET(request: Request) {
         const { SlopeError } = await import("@/lib/connectors/slope/client")
         let status = 500
         let details = error instanceof Error ? error.message : "Unknown error"
-        if (error instanceof SlopeError && (error.status === 401 || error.status === 403)) {
-          status = error.status
-          details = "Credenziali Slope non valide o scadute. Verifica la API key in Binding & Versioni."
+        if (error instanceof SlopeError && error.status === 401) {
+          status = 401
+          details = "Credenziali Slope non valide o scadute (401). Verifica la API key in Binding & Versioni."
+        } else if (error instanceof SlopeError && error.status === 403) {
+          // 22/07/2026 (caso HOTEL VERDI): il 403 di Slope in produzione NON e'
+          // (solo) credenziali sbagliate. Con token valido ma integrazione
+          // partner non ancora abilitata (pre-certificazione) Slope risponde
+          // 403 "Endpoint not allowed for your integration". Distinguere i due
+          // casi evita di far ricontrollare all'utente una API key corretta.
+          status = 403
+          const notAllowed = error.body.includes("Endpoint not allowed")
+          details = notAllowed
+            ? "Slope: 'Endpoint not allowed for your integration' — il token e' valido ma l'integrazione partner non e' ancora abilitata su questo endpoint (tipicamente in attesa di certificazione Slope). Non e' un problema di API key."
+            : "Accesso negato da Slope (403). Verifica la API key in Binding & Versioni o lo stato dell'integrazione partner presso Slope."
         }
         return NextResponse.json({ error: `Errore nel caricamento dati da Slope`, details }, { status })
       }

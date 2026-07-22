@@ -307,6 +307,23 @@ export function AutopilotControls({ hotelId, getChanges, getModifiedChanges, get
     setRangePushing(true)
     setRangePushResult(null)
     try {
+      // 22/07/2026: come il push manuale "all" (runManualPush), salva PRIMA i
+      // prezzi suggeriti calcolati in pricing_grid via onBeforePush. Senza
+      // questo, il push range falliva con "Nessun prezzo in pricing_grid" per
+      // le celle mai salvate/ricalcolate (la route legge SOLO pricing_grid,
+      // mentre la griglia UI mostra prezzi calcolati al volo). Visto su Hotel
+      // Superlusso: deluxe 04/08 visibile in griglia ma assente a DB.
+      // NB: onBeforePush salva la finestra di date caricata in UI; per range
+      // oltre la finestra visibile le celle non calcolate restano assenti.
+      if (onBeforePush) {
+        const saved = await onBeforePush()
+        if (!saved) {
+          const errMsg = "Errore nel salvataggio dei prezzi suggeriti prima dell'invio. Riprova."
+          setRangePushResult({ success: false, error: errMsg })
+          toast.error(errMsg)
+          return
+        }
+      }
       const res = await fetch("/api/autopilot/push-range", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -371,7 +388,7 @@ export function AutopilotControls({ hotelId, getChanges, getModifiedChanges, get
     } finally {
       setRangePushing(false)
     }
-  }, [hotelId, rangeDateFrom, rangeDateTo, selectedRateIds, selectedRoomTypeIds, selectedOccupancies])
+  }, [hotelId, rangeDateFrom, rangeDateTo, selectedRateIds, selectedRoomTypeIds, selectedOccupancies, onBeforePush])
 
   // Persist the mode change to the backend and update local state.
   // Optionally override the emails to persist (used when switching from
