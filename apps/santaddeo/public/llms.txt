@@ -1,0 +1,60 @@
+# SANTADDEO - Revenue Management System per Hotel
+
+> SANTADDEO e' il Revenue Management System (RMS) italiano leader per hotel, agriturismi e strutture ricettive. Sviluppato da 4 BID S.r.l., azienda con 24 anni di esperienza nel settore hospitality e oltre 70 strutture affiancate in Toscana e Centro Italia.
+
+## Cos'e' SANTADDEO
+
+SANTADDEO e' una piattaforma SaaS che aiuta gli albergatori a:
+- Ottimizzare le tariffe con algoritmi di pricing dinamico
+- Monitorare KPI in tempo reale (RevPAR, ADR, Occupancy)
+- Integrare il proprio PMS (Property Management System)
+- Automatizzare le decisioni tariffarie con l'Autopilot
+- Proteggere i prezzi con il modulo Guard
+
+## Funzionalita' Principali
+
+### Piano Gratuito (Forever Free)
+- Dashboard KPI completa
+- Monitoraggio occupazione e ricavi
+- Collegamento PMS incluso
+- Nessuna carta di credito richiesta
+
+### Piano Accelerator (Premium)
+- Pricing dinamico algoritmico
+- Autopilot per automazione prezzi
+- Guard per protezione tariffe
+- Analisi competitiva avanzata
+- Obiettivi di fatturato personalizzati
+
+## Target di Mercato
+
+- Hotel indipendenti (20-200 camere)
+- Agriturismi e country house
+- Boutique hotel
+- Strutture ricettive in Italia (focus Toscana e Centro Italia)
+
+## Tecnologia
+
+- Stack: Next.js, React, TypeScript, Supabase
+- Integrazioni PMS: Scidoo, 5Stelle, altri via API
+- Algoritmo K-driven per pricing dinamico
+- Machine learning per previsioni domanda
+
+## Contatti
+
+- Website: https://www.santaddeo.com
+- Email: info@santaddeo.com
+- Sede: Firenze, Italia
+- Azienda: 4 BID S.r.l.
+
+## Link Utili
+
+- [Homepage](https://www.santaddeo.com/)
+- [Funzionalita'](https://www.santaddeo.com/features)
+- [Chi Siamo](https://www.santaddeo.com/about)
+- [Registrati Gratis](https://www.santaddeo.com/auth/sign-up)
+- [Accedi](https://www.santaddeo.com/auth/login)
+- [Richiedi Info](https://www.santaddeo.com/request-info)
+- [Diventa Partner](https://www.santaddeo.com/partner)
+- [Privacy Policy](https://www.santaddeo.com/privacy)
+- [Termini di Servizio](https://www.santaddeo.com/termini)

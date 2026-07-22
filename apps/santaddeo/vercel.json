@@ -1,0 +1,100 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sales-inbox-sync",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/freeze-data",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/sync-and-etl",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-modules",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/perf-cleanup",
+      "schedule": "40 4 * * *"
+    },
+    {
+      "path": "/api/cron/connector-health",
+      "schedule": "25 * * * *"
+    },
+    {
+      "path": "/api/accelerator/process-pricing-queue",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/calculate-k-values",
+      "schedule": "5,35 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-logs",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-reviews",
+      "schedule": "10 * * * *"
+    },
+    {
+      "path": "/api/cron/ota-reminders",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/pricing-health",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/pricing-integrity",
+      "schedule": "15,45 * * * *"
+    },
+    {
+      "path": "/api/cron/availability-integrity",
+      "schedule": "5,35 * * * *"
+    },
+    {
+      "path": "/api/cron/notify-overdue-tasks",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-commissions",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/expire-prospect-assignments",
+      "schedule": "45 * * * *"
+    },
+    {
+      "path": "/api/cron/keep-warm",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/pace-snapshot",
+      "schedule": "15 1 * * *"
+    },
+    {
+      "path": "/api/cron/pace-analyzer",
+      "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/rate-shopper-pull",
+      "schedule": "0 5 * * 1"
+    },
+    {
+      "path": "/api/cron/press-mentions",
+      "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/cron/link-call-recaps",
+      "schedule": "12,42 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-sent-prices",
+      "schedule": "8,38 * * * *"
+    }
+  ]
+}
