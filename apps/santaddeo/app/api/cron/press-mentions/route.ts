@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 /**
  * Cron giornaliero "Parlano di noi".
@@ -174,12 +175,8 @@ async function fetchPublicationFeed(feed: { source: string; url: string }): Prom
 }
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (process.env.VERCEL_ENV === "production" && process.env.CRON_SECRET) {
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const started = Date.now()
   const supabase = await createServiceRoleClient()

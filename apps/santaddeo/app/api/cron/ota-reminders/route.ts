@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { sendEmail } from "@/lib/email/send-email"
 import { resolveUserEmails } from "@/lib/notifications/notify"
 import { getKVariableSourceMetadata } from "@/lib/pricing/k-variable-source-metadata"
@@ -39,10 +40,8 @@ const STALENESS_REMINDER_COOLDOWN_DAYS = 7
  */
 export async function GET(request: Request) {
   // Protect cron endpoint
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const supabase = await createServiceRoleClient()
   const now = new Date()

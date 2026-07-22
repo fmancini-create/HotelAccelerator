@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { logSupabaseError } from "@/lib/supabase/error-utils"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { getPullableProviders } from "@/lib/rate-shopper/registry"
 import { isSerpApiInCooldown } from "@/lib/rate-shopper/providers/serpapi"
 import { recordProviderOutcome } from "@/lib/rate-shopper/provider-state"
@@ -18,12 +19,8 @@ const HORIZON_DAYS = 60
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (process.env.VERCEL_ENV === "production" && process.env.CRON_SECRET) {
-      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-    }
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) return unauthorized
     if (request.nextUrl.searchParams.get("warm") === "1") {
       return NextResponse.json({ ok: true, warm: true })
     }

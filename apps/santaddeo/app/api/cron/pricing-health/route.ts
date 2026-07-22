@@ -22,6 +22,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { computeCoverageForAllHotels } from "@/lib/pricing/coverage-report"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { sendEmail } from "@/lib/email"
 import {
   buildPricingHealthEmail,
@@ -56,10 +57,8 @@ async function fetchAllPagesById<T>(build: (from: number, to: number) => any, pa
 }
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   console.log("[v0] [pricing-health] Starting daily health check")
 

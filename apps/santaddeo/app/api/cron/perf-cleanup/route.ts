@@ -5,16 +5,13 @@
  */
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
-  // Vercel automatically validates CRON_SECRET for cron jobs
-  // Manual invocations are blocked unless the header matches
-  const authHeader = request.headers.get("authorization")
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   try {
     const supabase = await createServiceRoleClient()
