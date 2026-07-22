@@ -3,15 +3,13 @@
     "features": [
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.250Z",
+    "scannedAt": "2026-06-04T11:16:31.835Z",
     "sourceFiles": 149
   },
   "/landing/agriturismi": {
     "features": [
       "Bottone: \"Inizia Gratis\"",
       "Bottone: \"Parla con noi\"",
-      "Link: \"aumentare l'ADR\"",
-      "Link: \"pricing dinamico\"",
       "Link: \"Funzionalita\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
@@ -24,11 +22,9 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
-      "Titolo: \"Revenue management per agriturismi\"",
       "Titolo: \"Pensato per chi vive il proprio agriturismo\"",
       "Titolo: \"Tutto quello che ti serve, niente di piu\"",
       "Titolo: \"Inizia oggi. Gratis.\"",
@@ -36,8 +32,8 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.256Z",
-    "sourceFiles": 34893
+    "scannedAt": "2026-06-04T11:16:31.840Z",
+    "sourceFiles": 24958
   },
   "/landing/autopilot": {
     "features": [
@@ -55,7 +51,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -68,8 +63,8 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.257Z",
-    "sourceFiles": 27478
+    "scannedAt": "2026-06-04T11:16:31.841Z",
+    "sourceFiles": 26675
   },
   "/landing/dashboard-gratuita": {
     "features": [
@@ -88,7 +83,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -112,10 +106,11 @@
       "Titolo: \"Variabili personalizzate\"",
       "Grafico/i dati visuali",
       "Esportazione/download dati",
-      "Ricerca/filtro dati"
+      "Ricerca/filtro dati",
+      "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.259Z",
-    "sourceFiles": 41393
+    "scannedAt": "2026-06-04T11:16:31.843Z",
+    "sourceFiles": 40590
   },
   "/landing/guard": {
     "features": [
@@ -133,7 +128,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -158,8 +152,8 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.261Z",
-    "sourceFiles": 45406
+    "scannedAt": "2026-06-04T11:16:31.845Z",
+    "sourceFiles": 44603
   },
   "/landing/performance-ota": {
     "features": [
@@ -177,7 +171,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -198,8 +191,8 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.262Z",
-    "sourceFiles": 36609
+    "scannedAt": "2026-06-04T11:16:31.847Z",
+    "sourceFiles": 35806
   },
   "/landing/recensioni": {
     "features": [
@@ -217,7 +210,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -235,8 +227,8 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.264Z",
-    "sourceFiles": 36913
+    "scannedAt": "2026-06-04T11:16:31.849Z",
+    "sourceFiles": 36110
   },
   "/landing/recupera-prenotazioni": {
     "features": [
@@ -253,7 +245,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -266,8 +257,8 @@
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.265Z",
-    "sourceFiles": 27183
+    "scannedAt": "2026-06-04T11:16:31.850Z",
+    "sourceFiles": 26380
   },
   "/landing/variabili-personalizzate": {
     "features": [
@@ -285,7 +276,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -303,8 +293,8 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.267Z",
-    "sourceFiles": 41384
+    "scannedAt": "2026-06-04T11:16:31.852Z",
+    "sourceFiles": 40581
   },
   "/landing/vendita": {
     "features": [
@@ -312,13 +302,10 @@
       "Bottone: \"Scopri come funziona\"",
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Accedi\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -339,19 +326,16 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.269Z",
-    "sourceFiles": 35997
+    "scannedAt": "2026-06-04T11:16:31.854Z",
+    "sourceFiles": 33649
   },
   "/privacy": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -379,19 +363,16 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.270Z",
-    "sourceFiles": 23434
+    "scannedAt": "2026-06-04T11:16:31.855Z",
+    "sourceFiles": 21715
   },
   "/termini": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -422,8 +403,8 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.271Z",
-    "sourceFiles": 25907
+    "scannedAt": "2026-06-04T11:16:31.856Z",
+    "sourceFiles": 24188
   },
   "/upgrade/hotel-accelerator": {
     "features": [
@@ -450,7 +431,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -466,10 +446,11 @@
       "Titolo: \"Dashboard Avanzata\"",
       "Titolo: \"Assistente AI\"",
       "Titolo: \"Simulatore\"",
-      "Titolo: \"Aliquote\""
+      "Titolo: \"Aliquote\"",
+      "Grafico/i dati visuali"
     ],
-    "scannedAt": "2026-07-22T15:59:31.274Z",
-    "sourceFiles": 65288
+    "scannedAt": "2026-06-04T11:16:31.859Z",
+    "sourceFiles": 64485
   },
   "/about": {
     "features": [
@@ -480,7 +461,6 @@
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -500,8 +480,8 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.276Z",
-    "sourceFiles": 29039
+    "scannedAt": "2026-06-04T11:16:31.861Z",
+    "sourceFiles": 27716
   },
   "/accelerator/activate": {
     "features": [
@@ -538,7 +518,7 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Selettore algoritmo: passa tra Base (regole semplici) e K-driven (8 variabili di mercato)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.278Z",
+    "scannedAt": "2026-06-04T11:16:31.863Z",
     "sourceFiles": 52519
   },
   "/accelerator/activate/success": {
@@ -553,29 +533,11 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.279Z",
+    "scannedAt": "2026-06-04T11:16:31.864Z",
     "sourceFiles": 8150
-  },
-  "/accelerator/commercial-balance": {
-    "features": [
-      "Sezione: \"Ricevute\"",
-      "Sezione: \"Cancellate\"",
-      "Sezione: \"Saldo netto\"",
-      "Sezione: \"Ritmo netto / giorno\"",
-      "Sezione: \"Obiettivi per mese di soggiorno\"",
-      "Sezione: \"Andamento giornaliero\"",
-      "Titolo: \"Bilancio Commerciale\"",
-      "Tabella dati con righe e colonne",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.281Z",
-    "sourceFiles": 32420
   },
   "/accelerator/dashboard": {
     "features": [
-      "Bottone: \"Attiva Hotel Accelerator per questa struttura\"",
       "Bottone: \"Modifica\"",
       "Bottone: \"Configura\"",
       "Bottone: \"Contatta Supporto\"",
@@ -593,8 +555,8 @@
       "Titolo: \"Hotel Accelerator Dashboard\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.282Z",
-    "sourceFiles": 22492
+    "scannedAt": "2026-06-04T11:16:31.865Z",
+    "sourceFiles": 19972
   },
   "/accelerator/events": {
     "features": [
@@ -616,8 +578,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.284Z",
-    "sourceFiles": 43333
+    "scannedAt": "2026-06-04T11:16:31.867Z",
+    "sourceFiles": 43310
   },
   "/accelerator/onboarding": {
     "features": [
@@ -644,40 +606,32 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.285Z",
+    "scannedAt": "2026-06-04T11:16:31.869Z",
     "sourceFiles": 29929
   },
   "/accelerator/pace": {
     "features": [
       "Bottone: \"Camere\"",
       "Bottone: \"Ricavo\"",
-      "Bottone: \"Come funziona\"",
-      "Bottone: \"Commissioni\"",
-      "Bottone: \"Annulla\"",
-      "Dialog: \"Commissioni per canale\"",
       "Sezione: \"Camere on-the-books\"",
       "Sezione: \"Ricavo on-the-books\"",
       "Sezione: \"ADR on-the-books\"",
       "Sezione: \"Pickup ultimi 7 gg\"",
-      "Sezione: \"Previsione di domanda\"",
-      "Sezione: \"Pickup per data di soggiorno\"",
-      "Sezione: \"Mix per canale\"",
       "Sezione: \"Curva di prenotazione\"",
       "Sezione: \"On-the-books per mese\"",
       "Titolo: \"Booking Pace\"",
       "Grafico/i dati visuali",
       "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
+      "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.289Z",
-    "sourceFiles": 78400
+    "scannedAt": "2026-06-04T11:16:31.870Z",
+    "sourceFiles": 27945
   },
   "/accelerator": {
     "features": [
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.289Z",
+    "scannedAt": "2026-06-04T11:16:31.871Z",
     "sourceFiles": 127
   },
   "/accelerator/price": {
@@ -690,54 +644,54 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.291Z",
-    "sourceFiles": 48005
+    "scannedAt": "2026-06-04T11:16:31.873Z",
+    "sourceFiles": 45346
   },
   "/accelerator/pricing": {
     "features": [
       "Bottone: \"BASIC\"",
       "Bottone: \"K-DRIVEN\"",
-      "Bottone: \"Intensificatore K\"",
       "Bottone: \"Annulla\"",
       "Bottone: \"Impostazioni\"",
       "Bottone: \"Oggi\"",
-      "Bottone: \"Riprova\"",
       "Bottone: \"Gestisci fasce\"",
       "Bottone: \"Salva ora\"",
       "Bottone: \"Applica\"",
-      "Bottone: \"Chiudi\"",
       "Bottone: \"Invia range\"",
+      "Bottone: \"Solo madri\"",
       "Bottone: \"Tutte\"",
       "Bottone: \"Nessuna\"",
-      "Bottone: \"Azzera\"",
-      "Bottone: \"Solo madri\"",
-      "Bottone: \"Periodo\"",
-      "Bottone: \"Giorno\"",
+      "Bottone: \"Chiudi\"",
       "Dialog: \"Compila intervallo date\"",
       "Spiegazione dialog: \"Seleziona il range di date da inviare al PMS. Verranno mandati tutti i\n                prezzi presenti nella griglia per quel periodo (camere x tariffe x occupazioni).\"",
       "Spiegazione dialog: \"Santaddeo offre due motori di calcolo prezzi. Qui sotto trovi cosa\n            fanno, come si differenziano e quale stai usando ora.\"",
-      "Spiegazione dialog: \"Regola quanto il coefficiente K influisce sul prezzo. Vale solo in\n            modalita&apos; K-Driven. Precedenza: giorno &gt; periodo &gt; default.\"",
       "Etichetta campo: \"Produzione\"",
       "Etichetta campo: \"Data inizio\"",
       "Etichetta campo: \"Data fine\"",
       "Etichetta campo: \"Giorni della settimana\"",
       "Etichetta campo: \"Valore\"",
-      "Etichetta campo: \"Note esistenti\"",
-      "Etichetta campo: \"Nuova nota\"",
       "Etichetta campo: \"Da\"",
       "Etichetta campo: \"Destinatari email\"",
-      "Etichetta campo: \"Al\"",
       "Titolo: \"Accesso non autorizzato\"",
       "Campo: \"Piano tariffario\"",
       "Campo: \"Es. 120\"",
-      "Campo: \"Es. Cambiato strategia: alzati i prezzi del weekend\"",
       "Campo: \"email@esempio.com\"",
-      "Campo: \"es. Ferragosto, evento...\"",
       "Grafico/i dati visuali",
-      "Drag-fill: trascina il bordo di una cella per copiare il valore su celle adiacenti"
+      "Drag-fill: trascina il bordo di una cella per copiare il valore su celle adiacenti",
+      "Compilazione multipla: applica un valore a un range di date con filtro giorni settimana",
+      "Autosave: le modifiche vengono salvate automaticamente",
+      "Esportazione/download dati",
+      "Notifiche toast per conferma azioni",
+      "Toggle on/off per attivare/disattivare opzioni",
+      "Ricerca/filtro dati",
+      "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date",
+      "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
+      "Spiegazione algoritmo: pulsante che apre un dialog con la guida del motore di pricing attivo",
+      "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline",
+      "Selettore algoritmo: passa tra Base (regole semplici) e K-driven (8 variabili di mercato)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.305Z",
-    "sourceFiles": 470754
+    "scannedAt": "2026-06-04T11:16:31.885Z",
+    "sourceFiles": 403745
   },
   "/accelerator/pricing/settings": {
     "features": [
@@ -782,8 +736,8 @@
       "Notifiche toast per conferma azioni",
       "Toggle on/off per attivare/disattivare opzioni"
     ],
-    "scannedAt": "2026-07-22T15:59:31.312Z",
-    "sourceFiles": 143078
+    "scannedAt": "2026-06-04T11:16:31.892Z",
+    "sourceFiles": 141991
   },
   "/accelerator/pricing/settings/reset-password": {
     "features": [
@@ -801,7 +755,7 @@
       "Form con validazione e salvataggio",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.312Z",
+    "scannedAt": "2026-06-04T11:16:31.893Z",
     "sourceFiles": 13754
   },
   "/accelerator/pricing/test": {
@@ -818,14 +772,14 @@
       "Ricerca/filtro dati",
       "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline"
     ],
-    "scannedAt": "2026-07-22T15:59:31.316Z",
+    "scannedAt": "2026-06-04T11:16:31.896Z",
     "sourceFiles": 87367
   },
   "/accelerator/rate-production": {
     "features": [
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.316Z",
+    "scannedAt": "2026-06-04T11:16:31.896Z",
     "sourceFiles": 202
   },
   "/accelerator/rate-shopper": {
@@ -861,8 +815,8 @@
       "Notifiche toast per conferma azioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.319Z",
-    "sourceFiles": 76447
+    "scannedAt": "2026-06-04T11:16:31.901Z",
+    "sourceFiles": 72383
   },
   "/accelerator/revman": {
     "features": [
@@ -870,7 +824,6 @@
       "Tab: \"Attività\"",
       "Tab: \"File\"",
       "Tab: \"Chat Taddeo\"",
-      "Tab: \"Dati\"",
       "Sezione: \"Nuova nota\"",
       "Sezione: \"Nuova attività\"",
       "Sezione: \"Carica file\"",
@@ -883,11 +836,10 @@
       "Campo: \"Non assegnata\"",
       "Campo: \"Es. Relazione di avvio mese 1\"",
       "Esportazione/download dati",
-      "Notifiche toast per conferma azioni",
-      "Ricerca/filtro dati"
+      "Notifiche toast per conferma azioni"
     ],
-    "scannedAt": "2026-07-22T15:59:31.321Z",
-    "sourceFiles": 49983
+    "scannedAt": "2026-06-04T11:16:31.902Z",
+    "sourceFiles": 39541
   },
   "/accelerator/trend": {
     "features": [
@@ -899,8 +851,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.323Z",
-    "sourceFiles": 44033
+    "scannedAt": "2026-06-04T11:16:31.904Z",
+    "sourceFiles": 43878
   },
   "/admin/analisi-tecnica": {
     "features": [
@@ -929,7 +881,7 @@
       "Esportazione/download dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.324Z",
+    "scannedAt": "2026-06-04T11:16:31.905Z",
     "sourceFiles": 25578
   },
   "/admin/dashboard": {
@@ -975,7 +927,7 @@
       "Grafico/i dati visuali",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.326Z",
+    "scannedAt": "2026-06-04T11:16:31.908Z",
     "sourceFiles": 53856
   },
   "/admin/email-templates": {
@@ -1003,7 +955,7 @@
       "Titolo: \"5. Salva le Modifiche\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.327Z",
+    "scannedAt": "2026-06-04T11:16:31.909Z",
     "sourceFiles": 25114
   },
   "/admin/import-csv": {
@@ -1011,7 +963,7 @@
       "Titolo: \"Import CSV Production Data\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.328Z",
+    "scannedAt": "2026-06-04T11:16:31.909Z",
     "sourceFiles": 1029
   },
   "/admin/performance": {
@@ -1030,7 +982,7 @@
       "Descrizione sezione: \"Richieste Totali\"",
       "Descrizione sezione: \"Tempo medio di risposta per route\"",
       "Descrizione sezione: \"Ultime 50 richieste\"",
-      "Descrizione sezione: \"Solo richieste strumentate con measureDb (misura reale)\"",
+      "Descrizione sezione: \"Media su tutte le richieste nel periodo\"",
       "Descrizione sezione: \"Tempo speso fuori dal DB (CPU, I/O esterno, network)\"",
       "Descrizione sezione: \"Avvio a freddo serverless\"",
       "Descrizione sezione: \"Istanza gia attiva\"",
@@ -1040,11 +992,10 @@
       "Campo: \"Tutti gli hotel\"",
       "Tabella dati con righe e colonne",
       "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Report copertura pricing: percentuale di celle con prezzo valido vs target"
+      "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.330Z",
-    "sourceFiles": 55145
+    "scannedAt": "2026-06-04T11:16:31.912Z",
+    "sourceFiles": 50835
   },
   "/admin/sql-executor": {
     "features": [
@@ -1053,7 +1004,7 @@
       "Titolo: \"Procedura (da fare UNA SOLA VOLTA):\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.331Z",
+    "scannedAt": "2026-06-04T11:16:31.913Z",
     "sourceFiles": 19111
   },
   "/auth/choose-profile": {
@@ -1061,8 +1012,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.331Z",
-    "sourceFiles": 6334
+    "scannedAt": "2026-06-04T11:16:31.914Z",
+    "sourceFiles": 6305
   },
   "/auth/forgot-password": {
     "features": [
@@ -1075,7 +1026,7 @@
       "Esportazione/download dati",
       "Form con validazione e salvataggio"
     ],
-    "scannedAt": "2026-07-22T15:59:31.332Z",
+    "scannedAt": "2026-06-04T11:16:31.915Z",
     "sourceFiles": 13503
   },
   "/auth/login": {
@@ -1094,7 +1045,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -1106,8 +1056,8 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.333Z",
-    "sourceFiles": 22594
+    "scannedAt": "2026-06-04T11:16:31.916Z",
+    "sourceFiles": 21177
   },
   "/auth/reset-password": {
     "features": [
@@ -1119,8 +1069,8 @@
       "Form con validazione e salvataggio",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.334Z",
-    "sourceFiles": 20694
+    "scannedAt": "2026-06-04T11:16:31.917Z",
+    "sourceFiles": 19858
   },
   "/auth/sign-up": {
     "features": [
@@ -1137,7 +1087,6 @@
       "Link: \"FAQ Santaddeo\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Programma Partner\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Contatti\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
@@ -1159,8 +1108,8 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.336Z",
-    "sourceFiles": 45327
+    "scannedAt": "2026-06-04T11:16:31.919Z",
+    "sourceFiles": 45153
   },
   "/auth/verify-email": {
     "features": [
@@ -1173,15 +1122,13 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.336Z",
+    "scannedAt": "2026-06-04T11:16:31.919Z",
     "sourceFiles": 13054
   },
   "/blog/[slug]": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Home\"",
       "Link: \"Blog\"",
       "Link: \"Prova la dashboard gratuita\"",
@@ -1189,7 +1136,6 @@
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -1201,29 +1147,25 @@
       "Link: \"Programma Partner\"",
       "Link: \"Privacy Policy\"",
       "Link: \"Termini di Servizio\"",
-      "Titolo: \"Domande frequenti\"",
       "Titolo: \"Vuoi vedere come si applica al tuo hotel?\"",
       "Titolo: \"Articoli correlati\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.338Z",
-    "sourceFiles": 28030
+    "scannedAt": "2026-06-04T11:16:31.920Z",
+    "sourceFiles": 24655
   },
   "/blog": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Prova la dashboard gratuita\"",
       "Link: \"Cos'e' il Revenue Management\"",
       "Link: \"FAQ piattaforma\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -1241,22 +1183,19 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.339Z",
-    "sourceFiles": 22381
+    "scannedAt": "2026-06-04T11:16:31.921Z",
+    "sourceFiles": 20662
   },
   "/blog/software-revenue-management-hotel-italia": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Scopri Santaddeo Guard\"",
       "Link: \"Home\"",
       "Link: \"Blog\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -1285,10 +1224,13 @@
       "Titolo: \"4. Niente storia, niente apprendimento\"",
       "Titolo: \"Occupazione vs storico\"",
       "Titolo: \"Lead time\"",
-      "Titolo: \"Eventi\""
+      "Titolo: \"Eventi\"",
+      "Titolo: \"Competitor set\"",
+      "Titolo: \"Il prezzo finale: una formula trasparente\"",
+      "Titolo: \"Algoritmo K-driven trasparente\""
     ],
-    "scannedAt": "2026-07-22T15:59:31.341Z",
-    "sourceFiles": 58963
+    "scannedAt": "2026-06-04T11:16:31.925Z",
+    "sourceFiles": 57244
   },
   "/bookings": {
     "features": [
@@ -1308,7 +1250,7 @@
       "Paginazione dei risultati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.344Z",
+    "scannedAt": "2026-06-04T11:16:31.927Z",
     "sourceFiles": 70135
   },
   "/calendar": {
@@ -1316,19 +1258,16 @@
       "Bottone: \"Esci da Impersonazione\"",
       "Titolo: \"Sincronizzazione Dati\"",
       "Navigazione mese/periodo con frecce avanti/indietro",
-      "Esportazione/download dati",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
+      "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.346Z",
-    "sourceFiles": 37510
+    "scannedAt": "2026-06-04T11:16:31.929Z",
+    "sourceFiles": 37400
   },
   "/coming-soon": {
     "features": [
       "Bottone: \"Scopri di Più\"",
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Bottone: \"Accetta tutti i cookie\"",
       "Bottone: \"Rifiuta\"",
       "Sezione: \"KPI in Tempo Reale\"",
@@ -1347,21 +1286,20 @@
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Titolo: \"Tutto quello che ti serve per crescere\"",
       "Titolo: \"Vuoi saperne di più?\"",
       "Titolo: \"Questo sito utilizza i cookie\"",
       "Grafico/i dati visuali",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.347Z",
-    "sourceFiles": 19885
+    "scannedAt": "2026-06-04T11:16:31.930Z",
+    "sourceFiles": 18340
   },
   "/dashboard": {
     "features": [
       "Bottone: \"Scopri Accelerator\"",
-      "Bottone: \"Ricarica\"",
       "Bottone: \"Vai alla configurazione\"",
+      "Bottone: \"Ricarica\"",
       "Sezione: \"Attiva Accelerator\"",
       "Sezione: \"Sincronizzazione ETL non attiva\"",
       "Sezione: \"Legenda Performance\"",
@@ -1375,29 +1313,27 @@
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.350Z",
-    "sourceFiles": 65483
+    "scannedAt": "2026-06-04T11:16:31.933Z",
+    "sourceFiles": 63319
   },
   "/dashboard-v2": {
     "features": [
       "Grafico/i dati visuali",
       "Esportazione/download dati",
       "Selettore data",
-      "Ricerca/filtro dati",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
+      "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.352Z",
-    "sourceFiles": 47492
+    "scannedAt": "2026-06-04T11:16:31.935Z",
+    "sourceFiles": 47376
   },
   "/dashboard-v3": {
     "features": [
       "Esportazione/download dati",
       "Selettore data",
-      "Ricerca/filtro dati",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
+      "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.355Z",
-    "sourceFiles": 54406
+    "scannedAt": "2026-06-04T11:16:31.937Z",
+    "sourceFiles": 54290
   },
   "/dati/ai-report": {
     "features": [
@@ -1408,7 +1344,7 @@
       "Esportazione/download dati",
       "AI Report: genera narrativa di analisi su un periodo con KPI e confronti YoY/periodo precedente"
     ],
-    "scannedAt": "2026-07-22T15:59:31.357Z",
+    "scannedAt": "2026-06-04T11:16:31.940Z",
     "sourceFiles": 47639
   },
   "/dati/analytics": {
@@ -1427,8 +1363,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.360Z",
-    "sourceFiles": 64092
+    "scannedAt": "2026-06-04T11:16:31.942Z",
+    "sourceFiles": 62756
   },
   "/dati/bookings": {
     "features": [
@@ -1458,8 +1394,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.364Z",
-    "sourceFiles": 87359
+    "scannedAt": "2026-06-04T11:16:31.946Z",
+    "sourceFiles": 83015
   },
   "/dati/calendario": {
     "features": [
@@ -1473,7 +1409,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.366Z",
+    "scannedAt": "2026-06-04T11:16:31.949Z",
     "sourceFiles": 57033
   },
   "/dati/check-data": {
@@ -1485,7 +1421,7 @@
       "Titolo: \"Statistiche:\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.367Z",
+    "scannedAt": "2026-06-04T11:16:31.949Z",
     "sourceFiles": 6679
   },
   "/dati/cleanup-null": {
@@ -1495,14 +1431,14 @@
       "Titolo: \"Risultato:\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.367Z",
+    "scannedAt": "2026-06-04T11:16:31.949Z",
     "sourceFiles": 5709
   },
   "/dati/commissioni-fatture": {
     "features": [
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.369Z",
+    "scannedAt": "2026-06-04T11:16:31.951Z",
     "sourceFiles": 35479
   },
   "/dati/database": {
@@ -1517,7 +1453,7 @@
       "Titolo: \"Verifica Database\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.370Z",
+    "scannedAt": "2026-06-04T11:16:31.952Z",
     "sourceFiles": 10589
   },
   "/dati/fix-mapping": {
@@ -1533,7 +1469,7 @@
       "Titolo: \"Room Types SANTADDEO:\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.370Z",
+    "scannedAt": "2026-06-04T11:16:31.953Z",
     "sourceFiles": 10360
   },
   "/dati/guard": {
@@ -1552,8 +1488,8 @@
       "Override tariffa per singola notte: assegna manualmente la tariffa corretta a un booking dal Guard",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.374Z",
-    "sourceFiles": 81436
+    "scannedAt": "2026-06-04T11:16:31.957Z",
+    "sourceFiles": 79179
   },
   "/dati/log-prezzi": {
     "features": [
@@ -1572,7 +1508,7 @@
       "Report copertura pricing: percentuale di celle con prezzo valido vs target",
       "Storico cambi prezzo: chi/quando/come ha modificato un prezzo (manuale, algoritmo, autopilot)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.376Z",
+    "scannedAt": "2026-06-04T11:16:31.961Z",
     "sourceFiles": 63653
   },
   "/dati/objectives": {
@@ -1584,8 +1520,8 @@
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.380Z",
-    "sourceFiles": 78712
+    "scannedAt": "2026-06-04T11:16:31.965Z",
+    "sourceFiles": 70081
   },
   "/dati/performance-ota": {
     "features": [
@@ -1602,7 +1538,7 @@
       "Ricerca/filtro dati",
       "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline"
     ],
-    "scannedAt": "2026-07-22T15:59:31.381Z",
+    "scannedAt": "2026-06-04T11:16:31.966Z",
     "sourceFiles": 29568
   },
   "/dati/production": {
@@ -1612,8 +1548,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.382Z",
-    "sourceFiles": 28070
+    "scannedAt": "2026-06-04T11:16:31.968Z",
+    "sourceFiles": 25411
   },
   "/dati/resync": {
     "features": [
@@ -1621,54 +1557,22 @@
       "Titolo: \"Attenzione\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.383Z",
+    "scannedAt": "2026-06-04T11:16:31.968Z",
     "sourceFiles": 1885
   },
   "/dati/reviews": {
     "features": [
-      "Bottone: \"Impostazioni risposte AI\"",
-      "Bottone: \"Chiudi\"",
       "Bottone: \"Genera insights\"",
       "Avviso: \"Seleziona un hotel per continuare.\"",
       "Sezione: \"Trend ultimi 12 mesi\"",
-      "Etichetta campo: \"Posizione nella pagina\"",
-      "Etichetta campo: \"Angolo\"",
-      "Etichetta campo: \"Ombra\"",
-      "Etichetta campo: \"Layout\"",
-      "Etichetta campo: \"Tema\"",
-      "Etichetta campo: \"Colore accento\"",
-      "Etichetta campo: \"Mostra punteggio complessivo\"",
-      "Etichetta campo: \"Mostra numero recensioni\"",
-      "Etichetta campo: \"Canali da mostrare\"",
-      "Etichetta campo: \"Anteprima live\"",
-      "Etichetta campo: \"Codice da incollare nel sito\"",
-      "Etichetta campo: \"Mostra il banner Last Minute\"",
-      "Etichetta campo: \"Messaggio\"",
-      "Etichetta campo: \"Cosa mostrare\"",
-      "Etichetta campo: \"Mostra le camere rimaste solo se non superano\"",
-      "Etichetta campo: \"Testo del pulsante\"",
-      "Etichetta campo: \"Firma\"",
-      "Etichetta campo: \"Tono e stile\"",
-      "Etichetta campo: \"Adatta il tono alla valutazione\"",
-      "Etichetta campo: \"Lunghezza della risposta\"",
-      "Etichetta campo: \"Lingua della risposta\"",
-      "Etichetta campo: \"Consenti emoji\"",
-      "Etichetta campo: \"Linee guida sempre applicate\"",
-      "Campo: \"Es. nome della struttura\"",
-      "Campo: \"email@webmaster.it\"",
-      "Campo: \"Offerta last minute {dates}\"",
-      "Campo: \"0 = mostra sempre\"",
-      "Campo: \"Prenota ora\"",
-      "Campo: \"https://prenota.tuohotel.it\"",
-      "Campo: \"Es. Lo staff di Villa I Barronci\"",
       "Campo: \"Cerca nel testo...\"",
       "Grafico/i dati visuali",
       "Esportazione/download dati",
-      "Toggle on/off per attivare/disattivare opzioni",
-      "Ricerca/filtro dati"
+      "Ricerca/filtro dati",
+      "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline"
     ],
-    "scannedAt": "2026-07-22T15:59:31.389Z",
-    "sourceFiles": 121270
+    "scannedAt": "2026-06-04T11:16:31.972Z",
+    "sourceFiles": 58914
   },
   "/dati/room-types-status": {
     "features": [
@@ -1677,7 +1581,7 @@
       "Titolo: \"Room Types Inattivi (NON visualizzati nel calendario)\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.389Z",
+    "scannedAt": "2026-06-04T11:16:31.972Z",
     "sourceFiles": 9503
   },
   "/dati/rooms-sold": {
@@ -1686,8 +1590,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.391Z",
-    "sourceFiles": 36432
+    "scannedAt": "2026-06-04T11:16:31.974Z",
+    "sourceFiles": 33773
   },
   "/dati/scidoo": {
     "features": [
@@ -1697,7 +1601,7 @@
       "Titolo: \"Scidoo Debug Test\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.391Z",
+    "scannedAt": "2026-06-04T11:16:31.975Z",
     "sourceFiles": 9492
   },
   "/dati/scidoo-price-test": {
@@ -1711,21 +1615,19 @@
       "Esportazione/download dati",
       "Toggle on/off per attivare/disattivare opzioni"
     ],
-    "scannedAt": "2026-07-22T15:59:31.392Z",
+    "scannedAt": "2026-06-04T11:16:31.976Z",
     "sourceFiles": 14150
   },
   "/demo/analytics": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.394Z",
-    "sourceFiles": 51520
+    "scannedAt": "2026-06-04T11:16:31.979Z",
+    "sourceFiles": 36963
   },
   "/demo/bookings": {
     "features": [
@@ -1733,16 +1635,14 @@
       "Bottone: \"Esplora la pagina\"",
       "Sezione: \"In attesa\"",
       "Sezione: \"Cancellation rate\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Cerca per ospite, ID, camera...\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.397Z",
-    "sourceFiles": 56103
+    "scannedAt": "2026-06-04T11:16:31.982Z",
+    "sourceFiles": 44501
   },
   "/demo/calendar": {
     "features": [
@@ -1752,96 +1652,82 @@
       "Bottone: \"Oggi\"",
       "Bottone: \"Suggerisci soglie\"",
       "Bottone: \"Ripristina default\"",
-      "Sezione: \"Taddeo\"",
       "Link: \"Apri Analytics\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.401Z",
-    "sourceFiles": 93267
+    "scannedAt": "2026-06-04T11:16:31.986Z",
+    "sourceFiles": 80701
   },
   "/demo/commissioni-fatture": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.403Z",
-    "sourceFiles": 65559
+    "scannedAt": "2026-06-04T11:16:31.989Z",
+    "sourceFiles": 52993
   },
   "/demo/disponibilita": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.406Z",
-    "sourceFiles": 51528
+    "scannedAt": "2026-06-04T11:16:31.991Z",
+    "sourceFiles": 36971
   },
   "/demo/eventi": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.408Z",
-    "sourceFiles": 51291
+    "scannedAt": "2026-06-04T11:16:31.993Z",
+    "sourceFiles": 36734
   },
   "/demo/guard": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.410Z",
-    "sourceFiles": 51593
+    "scannedAt": "2026-06-04T11:16:31.995Z",
+    "sourceFiles": 37036
   },
   "/demo/insight-ai": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "AI Report: genera narrativa di analisi su un periodo con KPI e confronti YoY/periodo precedente",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.412Z",
-    "sourceFiles": 51309
+    "scannedAt": "2026-06-04T11:16:31.997Z",
+    "sourceFiles": 36752
   },
   "/demo/log-prezzi": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
       "Bottone: \"Aggiorna\"",
-      "Sezione: \"Taddeo\"",
       "Sezione: \"Timeline Eventi\"",
       "Sezione: \"Analisi Copertura Push PMS\"",
       "Sezione: \"Recupero fallimenti permanenti\"",
       "Titolo: \"Log Gestione Prezzi\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Campo: \"Tutti gli hotel\"",
       "Campo: \"Tutti i tipi\"",
       "Grafico/i dati visuali",
@@ -1854,28 +1740,25 @@
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.416Z",
-    "sourceFiles": 108662
+    "scannedAt": "2026-06-04T11:16:32.002Z",
+    "sourceFiles": 97060
   },
   "/demo/obiettivi": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.418Z",
-    "sourceFiles": 51550
+    "scannedAt": "2026-06-04T11:16:32.004Z",
+    "sourceFiles": 36993
   },
   "/demo/ota": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
       "Avviso: \"Scegli un hotel dal menu in alto per visualizzare le performance OTA.\"",
       "Avviso: \"Impossibile caricare le statistiche OTA.\"",
-      "Sezione: \"Taddeo\"",
       "Sezione: \"Nessun KPI Booking ancora registrato\"",
       "Sezione: \"Andamento KPI Booking\"",
       "Sezione: \"Mix canali\"",
@@ -1883,170 +1766,101 @@
       "Descrizione sezione: \"Visualizzazioni e prenotazioni manuali inserite dall&apos;Extranet\"",
       "Descrizione sezione: \"Fonte: prenotazioni PMS ultimi 90 giorni\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Grafico/i dati visuali",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.422Z",
-    "sourceFiles": 72948
-  },
-  "/demo/pace": {
-    "features": [
-      "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
-      "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.424Z",
-    "sourceFiles": 51416
+    "scannedAt": "2026-06-04T11:16:32.008Z",
+    "sourceFiles": 61124
   },
   "/demo": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
       "Bottone: \"Per Reparto\"",
       "Bottone: \"Per Tipo Documento\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Selettore data",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.430Z",
-    "sourceFiles": 132578
+    "scannedAt": "2026-06-04T11:16:32.014Z",
+    "sourceFiles": 118814
   },
   "/demo/pricing": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.433Z",
-    "sourceFiles": 51447
+    "scannedAt": "2026-06-04T11:16:32.016Z",
+    "sourceFiles": 36890
   },
   "/demo/production": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
       "Sezione: \"Ricavi per Giorno e Tipologia Camera\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.435Z",
-    "sourceFiles": 64788
+    "scannedAt": "2026-06-04T11:16:32.019Z",
+    "sourceFiles": 52222
   },
   "/demo/produzione-canali": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.438Z",
-    "sourceFiles": 51468
-  },
-  "/demo/rate-shopper": {
-    "features": [
-      "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
-      "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.440Z",
-    "sourceFiles": 51333
+    "scannedAt": "2026-06-04T11:16:32.021Z",
+    "sourceFiles": 36911
   },
   "/demo/reviews": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Bottone: \"Impostazioni risposte AI\"",
-      "Bottone: \"Chiudi\"",
       "Bottone: \"Genera insights\"",
-      "Sezione: \"Taddeo\"",
       "Sezione: \"Trend ultimi 12 mesi\"",
-      "Etichetta campo: \"Posizione nella pagina\"",
-      "Etichetta campo: \"Angolo\"",
-      "Etichetta campo: \"Ombra\"",
-      "Etichetta campo: \"Layout\"",
-      "Etichetta campo: \"Tema\"",
-      "Etichetta campo: \"Colore accento\"",
-      "Etichetta campo: \"Mostra punteggio complessivo\"",
-      "Etichetta campo: \"Mostra numero recensioni\"",
-      "Etichetta campo: \"Canali da mostrare\"",
-      "Etichetta campo: \"Anteprima live\"",
-      "Etichetta campo: \"Codice da incollare nel sito\"",
-      "Etichetta campo: \"Mostra il banner Last Minute\"",
-      "Etichetta campo: \"Messaggio\"",
-      "Etichetta campo: \"Cosa mostrare\"",
-      "Etichetta campo: \"Mostra le camere rimaste solo se non superano\"",
-      "Etichetta campo: \"Testo del pulsante\"",
-      "Etichetta campo: \"Firma\"",
-      "Etichetta campo: \"Tono e stile\"",
-      "Etichetta campo: \"Adatta il tono alla valutazione\"",
-      "Etichetta campo: \"Lunghezza della risposta\"",
-      "Etichetta campo: \"Lingua della risposta\"",
-      "Etichetta campo: \"Consenti emoji\"",
-      "Etichetta campo: \"Linee guida sempre applicate\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
-      "Campo: \"Es. nome della struttura\"",
-      "Campo: \"email@webmaster.it\"",
-      "Campo: \"Offerta last minute {dates}\"",
-      "Campo: \"0 = mostra sempre\"",
-      "Campo: \"Prenota ora\"",
-      "Campo: \"https://prenota.tuohotel.it\"",
-      "Campo: \"Es. Lo staff di Villa I Barronci\"",
       "Campo: \"Cerca nel testo...\"",
-      "Grafico/i dati visuali"
+      "Grafico/i dati visuali",
+      "Esportazione/download dati",
+      "Ricerca/filtro dati",
+      "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline",
+      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.446Z",
-    "sourceFiles": 156493
+    "scannedAt": "2026-06-04T11:16:32.026Z",
+    "sourceFiles": 89262
   },
   "/demo/revman": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.448Z",
-    "sourceFiles": 51196
+    "scannedAt": "2026-06-04T11:16:32.028Z",
+    "sourceFiles": 36639
   },
   "/demo/trend": {
     "features": [
       "Bottone: \"Esplora la pagina\"",
-      "Sezione: \"Taddeo\"",
       "Campo: \"Seleziona struttura\"",
-      "Campo: \"Chiedi a Taddeo...\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.451Z",
-    "sourceFiles": 51369
+    "scannedAt": "2026-06-04T11:16:32.030Z",
+    "sourceFiles": 36812
   },
   "/demo-splash": {
     "features": [
@@ -2061,7 +1875,7 @@
       "Toggle on/off per attivare/disattivare opzioni",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.452Z",
+    "scannedAt": "2026-06-04T11:16:32.031Z",
     "sourceFiles": 25734
   },
   "/features": {
@@ -2085,7 +1899,6 @@
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -2105,10 +1918,11 @@
       "Titolo: \"I Pilastri di Santaddeo\"",
       "Titolo: \"Gestionali (PMS) integrati\"",
       "Esportazione/download dati",
-      "Ricerca/filtro dati"
+      "Ricerca/filtro dati",
+      "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.454Z",
-    "sourceFiles": 38092
+    "scannedAt": "2026-06-04T11:16:32.035Z",
+    "sourceFiles": 36769
   },
   "/integrazioni": {
     "features": [
@@ -2121,7 +1935,6 @@
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -2141,14 +1954,14 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.455Z",
-    "sourceFiles": 28421
+    "scannedAt": "2026-06-04T11:16:32.036Z",
+    "sourceFiles": 27098
   },
   "/login": {
     "features": [
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.455Z",
+    "scannedAt": "2026-06-04T11:16:32.036Z",
     "sourceFiles": 47
   },
   "/occupancy": {
@@ -2160,7 +1973,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.455Z",
+    "scannedAt": "2026-06-04T11:16:32.037Z",
     "sourceFiles": 10764
   },
   "/onboarding": {
@@ -2196,23 +2009,19 @@
       "Esportazione/download dati",
       "Form con validazione e salvataggio"
     ],
-    "scannedAt": "2026-07-22T15:59:31.457Z",
+    "scannedAt": "2026-06-04T11:16:32.039Z",
     "sourceFiles": 43934
   },
   "/": {
     "features": [
-      "Bottone: \"Prenota una demo\"",
       "Bottone: \"Vedi come funziona\"",
       "Bottone: \"Inizia gratis\"",
       "Bottone: \"Scopri i piani\"",
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -2240,47 +2049,19 @@
       "Titolo: \"Confronto Storico\"",
       "Titolo: \"Integrazione PMS\"",
       "Titolo: \"Hotel Accelerator\"",
-      "Titolo: \"Le OTA ti vendono sotto-prezzo?\""
+      "Titolo: \"Le OTA ti vendono sotto-prezzo?\"",
+      "Titolo: \"+20% fatturato in 30 giorni\"",
+      "Titolo: \"Pricing in automatico 24/7\"",
+      "Titolo: \"Dashboard KPI Gratuita\"",
+      "Titolo: \"Quanto stai perdendo?\""
     ],
-    "scannedAt": "2026-07-22T15:59:31.461Z",
-    "sourceFiles": 105334
-  },
-  "/parlano-di-noi": {
-    "features": [
-      "Bottone: \"Accedi\"",
-      "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
-      "Link: \"Funzionalita\"",
-      "Link: \"Chi Siamo\"",
-      "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
-      "Link: \"Gestionali Integrati\"",
-      "Link: \"Hotel Accelerator\"",
-      "Link: \"Richiedi Info\"",
-      "Link: \"Dashboard Gratuita\"",
-      "Link: \"Guard - Stop OTA Furbe\"",
-      "Link: \"Performance OTA\"",
-      "Link: \"Variabili Personalizzate\"",
-      "Link: \"Blog\"",
-      "Link: \"FAQ Santaddeo\"",
-      "Link: \"Programma Partner\"",
-      "Link: \"Privacy Policy\"",
-      "Link: \"Termini di Servizio\"",
-      "Titolo: \"Parlano di noi\"",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.462Z",
-    "sourceFiles": 28991
+    "scannedAt": "2026-06-04T11:16:32.044Z",
+    "sourceFiles": 104984
   },
   "/partner": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Avviso: \"Richiesta inviata con successo! Ti stiamo reindirizzando alla registrazione...\"",
       "Sezione: \"Commissione su Registrazione\"",
       "Sezione: \"Commissione su Upgrade\"",
@@ -2297,7 +2078,6 @@
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -2316,52 +2096,23 @@
       "Etichetta campo: \"Telefono *\"",
       "Etichetta campo: \"Ragione Sociale *\"",
       "Etichetta campo: \"Partita IVA *\"",
-      "Etichetta campo: \"Numero di Hotel/Clienti che Gestisci\""
+      "Etichetta campo: \"Numero di Hotel/Clienti che Gestisci\"",
+      "Titolo: \"Guadagna Aiutando gli Hotel a Crescere\"",
+      "Titolo: \"Struttura Commissioni\"",
+      "Titolo: \"Vantaggi del Programma Partner\""
     ],
-    "scannedAt": "2026-07-22T15:59:31.464Z",
-    "sourceFiles": 41558
-  },
-  "/prenota-call/[token]": {
-    "features": [
-      "Bottone: \"Accedi\"",
-      "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
-      "Link: \"Funzionalita\"",
-      "Link: \"Chi Siamo\"",
-      "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
-      "Link: \"Gestionali Integrati\"",
-      "Link: \"Hotel Accelerator\"",
-      "Link: \"Richiedi Info\"",
-      "Link: \"Dashboard Gratuita\"",
-      "Link: \"Guard - Stop OTA Furbe\"",
-      "Link: \"Performance OTA\"",
-      "Link: \"Variabili Personalizzate\"",
-      "Link: \"Blog\"",
-      "Link: \"FAQ Santaddeo\"",
-      "Link: \"Programma Partner\"",
-      "Link: \"Privacy Policy\"",
-      "Link: \"Termini di Servizio\"",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.466Z",
-    "sourceFiles": 25934
+    "scannedAt": "2026-06-04T11:16:32.046Z",
+    "sourceFiles": 39210
   },
   "/request-info": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Sezione: \"I tuoi dati\"",
       "Descrizione sezione: \"Compila il form per essere ricontattato dal nostro team\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -2390,38 +2141,30 @@
       "Ricerca/filtro dati",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.467Z",
-    "sourceFiles": 31029
+    "scannedAt": "2026-06-04T11:16:32.048Z",
+    "sourceFiles": 28681
   },
   "/sales/calendar": {
     "features": [
-      "Bottone: \"Richiedi demo\"",
       "Bottone: \"Mese\"",
       "Bottone: \"Settimana\"",
-      "Bottone: \"Solo il mio\"",
       "Bottone: \"Oggi\"",
       "Bottone: \"Cambia\"",
       "Bottone: \"Annulla\"",
       "Bottone: \"Riapri\"",
       "Bottone: \"Chiudi\"",
       "Dialog: \"Pianifica task\"",
-      "Spiegazione dialog: \"Proponi data e ora. La richiesta resta in attesa di conferma; una volta accettata verra&apos;\n            aggiunta al calendario clienti@4bid.it.\"",
       "Etichetta campo: \"Tipo\"",
       "Etichetta campo: \"Ora\"",
       "Etichetta campo: \"Struttura\"",
-      "Etichetta campo: \"Giorno\"",
-      "Etichetta campo: \"Inizio\"",
-      "Etichetta campo: \"Fine\"",
       "Titolo: \"Calendario\"",
       "Campo: \"Cerca nei tuoi prospect...\"",
       "Campo: \"Dettagli, riferimenti, link...\"",
-      "Campo: \"Contesto, link, riferimenti...\"",
       "Esportazione/download dati",
-      "Toggle on/off per attivare/disattivare opzioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.471Z",
-    "sourceFiles": 95275
+    "scannedAt": "2026-06-04T11:16:32.049Z",
+    "sourceFiles": 41759
   },
   "/sales/commissions": {
     "features": [
@@ -2435,7 +2178,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.472Z",
+    "scannedAt": "2026-06-04T11:16:32.050Z",
     "sourceFiles": 16587
   },
   "/sales/glossary": {
@@ -2447,79 +2190,48 @@
       "Sezioni espandibili/comprimibili",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.473Z",
+    "scannedAt": "2026-06-04T11:16:32.051Z",
     "sourceFiles": 20272
   },
   "/sales/leads/new": {
     "features": [
-      "Bottone: \"Salva senza inviare email\"",
       "Bottone: \"Modifica dati lead\"",
+      "Bottone: \"Salva senza inviare email\"",
       "Bottone: \"Annulla\"",
       "Bottone: \"Continua con il template selezionato\"",
-      "Bottone: \"+ Aggiungi Cc\"",
-      "Bottone: \"+ Aggiungi Ccn\"",
       "Link: \"Annulla\"",
       "Etichetta campo: \"Nome*\"",
       "Etichetta campo: \"Cognome*\"",
       "Etichetta campo: \"Nome struttura*\"",
       "Etichetta campo: \"Email*\"",
       "Etichetta campo: \"Oggetto\"",
-      "Etichetta campo: \"Corpo email\"",
-      "Etichetta campo: \"Data\"",
-      "Etichetta campo: \"Ora\"",
       "Etichetta campo: \"Anteprima\"",
       "Titolo: \"Inserisci un nuovo lead\"",
       "Titolo: \"Scegli un tema per l&apos;email\"",
-      "Campo: \"email1@esempio.it, email2@esempio.it\"",
       "Grafico/i dati visuali",
       "Esportazione/download dati",
       "Form con validazione e salvataggio"
     ],
-    "scannedAt": "2026-07-22T15:59:31.475Z",
-    "sourceFiles": 39656
+    "scannedAt": "2026-06-04T11:16:32.052Z",
+    "sourceFiles": 24697
   },
   "/sales/leads": {
     "features": [
-      "Bottone: \"Modifica\"",
       "Bottone: \"Annulla\"",
-      "Bottone: \"Continua con il template selezionato\"",
-      "Bottone: \"+ Aggiungi Cc\"",
-      "Bottone: \"+ Aggiungi Ccn\"",
-      "Bottone: \"Nota\"",
-      "Bottone: \"Chiamata\"",
       "Bottone: \"Richiedi assegnazione\"",
       "Bottone: \"Riprova\"",
-      "Tab: \"Conversazione\"",
-      "Tab: \"Cronologia\"",
-      "Dialog: \"Modifica lead\"",
       "Dialog: \"Richiedi assegnazione\"",
-      "Spiegazione dialog: \"Aggiorna i dati del potenziale cliente.\"",
-      "Spiegazione dialog: \"Email, risposte del cliente e cronologia attività del lead.\"",
       "Link: \"Nuovo lead\"",
-      "Etichetta campo: \"Nome\"",
-      "Etichetta campo: \"Cognome\"",
-      "Etichetta campo: \"Struttura\"",
-      "Etichetta campo: \"Email\"",
-      "Etichetta campo: \"Telefono\"",
-      "Etichetta campo: \"Note\"",
-      "Etichetta campo: \"Oggetto\"",
-      "Etichetta campo: \"Corpo email\"",
-      "Etichetta campo: \"Data\"",
-      "Etichetta campo: \"Ora\"",
-      "Etichetta campo: \"Anteprima\"",
       "Titolo: \"Cerca strutture nel database\"",
       "Titolo: \"I tuoi lead\"",
-      "Titolo: \"Scegli un tema per l&apos;email\"",
       "Titolo: \"Le tue richieste di assegnazione\"",
-      "Campo: \"email1@esempio.it, email2@esempio.it\"",
       "Tabella dati con righe e colonne",
-      "Grafico/i dati visuali",
       "Esportazione/download dati",
       "Notifiche toast per conferma azioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.479Z",
-    "sourceFiles": 98776
+    "scannedAt": "2026-06-04T11:16:32.054Z",
+    "sourceFiles": 33766
   },
   "/sales": {
     "features": [
@@ -2533,11 +2245,12 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.481Z",
-    "sourceFiles": 40204
+    "scannedAt": "2026-06-04T11:16:32.055Z",
+    "sourceFiles": 39319
   },
   "/sales/pipeline": {
     "features": [
+      "Bottone: \"Aggiorna\"",
       "Bottone: \"Nuovo Deal\"",
       "Bottone: \"Elimina\"",
       "Bottone: \"Annulla\"",
@@ -2568,8 +2281,8 @@
       "Form con validazione e salvataggio",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.483Z",
-    "sourceFiles": 47362
+    "scannedAt": "2026-06-04T11:16:32.057Z",
+    "sourceFiles": 47130
   },
   "/sales/playbook": {
     "features": [
@@ -2579,46 +2292,13 @@
       "Sezioni espandibili/comprimibili",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.484Z",
+    "scannedAt": "2026-06-04T11:16:32.059Z",
     "sourceFiles": 29751
-  },
-  "/sales/posta": {
-    "features": [
-      "Bottone: \"Scrivi\"",
-      "Bottone: \"Solo la mia\"",
-      "Bottone: \"Tutto il team\"",
-      "Bottone: \"Aggiorna\"",
-      "Bottone: \"Annulla\"",
-      "Bottone: \"Nota\"",
-      "Bottone: \"Chiamata\"",
-      "Bottone: \"+ Aggiungi Cc\"",
-      "Bottone: \"+ Aggiungi Ccn\"",
-      "Tab: \"Conversazione\"",
-      "Tab: \"Cronologia\"",
-      "Etichetta campo: \"Invia come venditore*\"",
-      "Etichetta campo: \"Nome*\"",
-      "Etichetta campo: \"Cognome*\"",
-      "Etichetta campo: \"Struttura*\"",
-      "Etichetta campo: \"Email destinatario*\"",
-      "Etichetta campo: \"Risposte predefinite\"",
-      "Etichetta campo: \"Oggetto*\"",
-      "Etichetta campo: \"Messaggio*\"",
-      "Titolo: \"Nuovo messaggio\"",
-      "Campo: \"Cerca nome, hotel o email...\"",
-      "Campo: \"Scrivi qui il testo dell'email...\"",
-      "Campo: \"email1@esempio.it, email2@esempio.it\"",
-      "Autosave: le modifiche vengono salvate automaticamente",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.488Z",
-    "sourceFiles": 71882
   },
   "/sales/prospects/[id]": {
     "features": [
       "Bottone: \"Modifica\"",
       "Bottone: \"Annulla\"",
-      "Bottone: \"Programma demo\"",
       "Bottone: \"Pianifica task\"",
       "Bottone: \"Completa\"",
       "Bottone: \"Riapri\"",
@@ -2630,9 +2310,6 @@
       "Sezione: \"Anagrafica\"",
       "Sezione: \"Deal collegati\"",
       "Link: \"Crea deal\"",
-      "Etichetta campo: \"Giorno\"",
-      "Etichetta campo: \"Inizio\"",
-      "Etichetta campo: \"Fine\"",
       "Etichetta campo: \"Scadenza\"",
       "Etichetta campo: \"Data e ora\"",
       "Etichetta campo: \"Esito\"",
@@ -2643,13 +2320,11 @@
       "Form con validazione e salvataggio",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.490Z",
-    "sourceFiles": 64107
+    "scannedAt": "2026-06-04T11:16:32.061Z",
+    "sourceFiles": 55745
   },
   "/sales/prospects": {
     "features": [
-      "Bottone: \"Stato\"",
-      "Bottone: \"Deal\"",
       "Bottone: \"Annulla\"",
       "Spiegazione dialog: \"Aggiorna lo stato e aggiungi note sul contatto\"",
       "Sezione: \"Totale Assegnati\"",
@@ -2671,8 +2346,8 @@
       "Paginazione dei risultati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.492Z",
-    "sourceFiles": 29823
+    "scannedAt": "2026-06-04T11:16:32.062Z",
+    "sourceFiles": 26221
   },
   "/sales/revman/[hotelId]": {
     "features": [
@@ -2680,7 +2355,6 @@
       "Tab: \"Attività\"",
       "Tab: \"File\"",
       "Tab: \"Chat Taddeo\"",
-      "Tab: \"Dati\"",
       "Sezione: \"Nuova nota\"",
       "Sezione: \"Nuova attività\"",
       "Sezione: \"Carica file\"",
@@ -2694,34 +2368,18 @@
       "Campo: \"Non assegnata\"",
       "Campo: \"Es. Relazione di avvio mese 1\"",
       "Esportazione/download dati",
-      "Notifiche toast per conferma azioni",
-      "Ricerca/filtro dati"
+      "Notifiche toast per conferma azioni"
     ],
-    "scannedAt": "2026-07-22T15:59:31.494Z",
-    "sourceFiles": 50765
+    "scannedAt": "2026-06-04T11:16:32.064Z",
+    "sourceFiles": 39804
   },
   "/sales/revman": {
     "features": [
       "Titolo: \"Area Revenue Manager\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.494Z",
-    "sourceFiles": 4540
-  },
-  "/sales/settings/calendar": {
-    "features": [
-      "Etichetta campo: \"Provider\"",
-      "Etichetta campo: \"Colore\"",
-      "Titolo: \"Calendario personale\"",
-      "Titolo: \"Calendari collegati\"",
-      "Campo: \"https://… oppure webcal://…\"",
-      "Campo: \"Es. Personale, Lavoro…\"",
-      "Esportazione/download dati",
-      "Notifiche toast per conferma azioni",
-      "Form con validazione e salvataggio"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.495Z",
-    "sourceFiles": 19284
+    "scannedAt": "2026-06-04T11:16:32.064Z",
+    "sourceFiles": 4516
   },
   "/sales/stats": {
     "features": [
@@ -2741,7 +2399,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.496Z",
+    "scannedAt": "2026-06-04T11:16:32.065Z",
     "sourceFiles": 27501
   },
   "/sales/tasks": {
@@ -2752,8 +2410,8 @@
       "Tab: \"Completati\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.497Z",
-    "sourceFiles": 16595
+    "scannedAt": "2026-06-04T11:16:32.066Z",
+    "sourceFiles": 16337
   },
   "/sales/team/[agentId]": {
     "features": [
@@ -2770,7 +2428,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.498Z",
+    "scannedAt": "2026-06-04T11:16:32.067Z",
     "sourceFiles": 20622
   },
   "/sales/team/commissions": {
@@ -2783,7 +2441,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.498Z",
+    "scannedAt": "2026-06-04T11:16:32.068Z",
     "sourceFiles": 14219
   },
   "/sales/team": {
@@ -2808,22 +2466,19 @@
       "Esportazione/download dati",
       "Notifiche toast per conferma azioni"
     ],
-    "scannedAt": "2026-07-22T15:59:31.500Z",
+    "scannedAt": "2026-06-04T11:16:32.069Z",
     "sourceFiles": 24346
   },
   "/seo/cos-e-revenue-management": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"come scegliere il giusto RMS\"",
       "Link: \"SANTADDEO\"",
       "Link: \"dashboard KPI\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -2853,19 +2508,16 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.501Z",
-    "sourceFiles": 32593
+    "scannedAt": "2026-06-04T11:16:32.070Z",
+    "sourceFiles": 30874
   },
   "/seo/faq-santaddeo": {
     "features": [
       "Bottone: \"Accedi\"",
       "Bottone: \"Registrati Gratis\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
       "Link: \"Funzionalita\"",
       "Link: \"Chi Siamo\"",
       "Link: \"Contatti\"",
-      "Link: \"Parlano di noi\"",
       "Link: \"Gestionali Integrati\"",
       "Link: \"Hotel Accelerator\"",
       "Link: \"Richiedi Info\"",
@@ -2887,18 +2539,18 @@
       "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.503Z",
-    "sourceFiles": 36544
+    "scannedAt": "2026-06-04T11:16:32.072Z",
+    "sourceFiles": 34196
   },
   "/settings/advanced": {
     "features": [
       "Bottone: \"Scollega\"",
       "Bottone: \"Annulla\"",
-      "Bottone: \"Collega Google Business\"",
       "Bottone: \"Vedi su Maps\"",
       "Sezione: \"Nessuna struttura trovata\"",
       "Sezione: \"Integrazioni Avanzate\"",
       "Sezione: \"Recensioni multi-canale\"",
+      "Sezione: \"Traffico web e analytics\"",
       "Sezione: \"KPI Extranet Booking.com\"",
       "Sezione: \"KPI Expedia Partner Central\"",
       "Sezione: \"Proponi una nuova variabile\"",
@@ -2906,8 +2558,7 @@
       "Descrizione sezione: \"Completa la configurazione iniziale per accedere alle impostazioni avanzate\"",
       "Descrizione sezione: \"Configura le integrazioni con Google Analytics, API meteo e Booking.com per ottenere insights avanzati\"",
       "Descrizione sezione: \"Aggrega automaticamente le recensioni da Google, Tripadvisor, Booking.com,\n                Expedia, Hotels.com e altri portali in un&apos;unica dashboard.\"",
-      "Descrizione sezione: \"Visite al tuo sito misurate in forma anonima e aggregata tramite il widget recensioni.\"",
-      "Descrizione sezione: \"Collega l&apos;account Google Business della struttura per pubblicare le risposte alle\n          recensioni Google direttamente da qui, senza passare dall&apos;extranet.\"",
+      "Descrizione sezione: \"Monitora i visitatori del tuo sito e integra i dati direttamente in\n                Santaddeo.\"",
       "Descrizione sezione: \"Spiega quale dato vorresti far entrare nel motore di pricing e\n            indicaci la fonte ufficiale da cui leggerlo.\"",
       "Etichetta campo: \"Google Places API Key\"",
       "Etichetta campo: \"Nome Hotel\"",
@@ -2924,17 +2575,18 @@
       "Campo: \"https://www.booking.com/hotel/it/villa-i-barronci.it.html\"",
       "Campo: \"https://www.vrbo.com/1234567\"",
       "Campo: \"https://www.airbnb.it/rooms/12345678\"",
-      "Campo: \"Scegli la sede da collegare…\"",
       "Campo: \"Es: Hotel Bella Vista\"",
       "Campo: \"Es: Via Roma 123, Milano\"",
       "Campo: \"es. 8.7\"",
       "Campo: \"es. 1\"",
       "Campo: \"es. 10\"",
       "Campo: \"es. Eventi locali, Visite sito web\"",
-      "Campo: \"es. TicketOne API, Google Analytics, file Excel mensile\""
+      "Campo: \"es. TicketOne API, Google Analytics, file Excel mensile\"",
+      "Campo: \"es. giornaliera, settimanale, mensile\"",
+      "Campo: \"es. API REST, CSV, Excel\""
     ],
-    "scannedAt": "2026-07-22T15:59:31.510Z",
-    "sourceFiles": 161197
+    "scannedAt": "2026-06-04T11:16:32.077Z",
+    "sourceFiles": 124568
   },
   "/settings/api": {
     "features": [
@@ -2975,7 +2627,7 @@
       "Toggle on/off per attivare/disattivare opzioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.511Z",
+    "scannedAt": "2026-06-04T11:16:32.079Z",
     "sourceFiles": 46649
   },
   "/settings/hotel": {
@@ -2998,13 +2650,11 @@
       "Etichetta campo: \"Tipologia Struttura *\"",
       "Etichetta campo: \"Valuta\"",
       "Etichetta campo: \"Timezone\"",
-      "Etichetta campo: \"Modalità importi\"",
       "Etichetta campo: \"Descrivi le modifiche necessarie *\"",
       "Titolo: \"Dati Azienda\"",
       "Titolo: \"Dati Struttura\"",
       "Titolo: \"Messaggio Motivazionale\"",
       "Titolo: \"Visibilita KPI Dashboard\"",
-      "Titolo: \"Visualizzazione importi (IVA)\"",
       "Campo: \"Inizia a digitare l'indirizzo...\"",
       "Campo: \"Es: FI\"",
       "Campo: \"Es: 50028\"",
@@ -3017,8 +2667,8 @@
       "Toggle on/off per attivare/disattivare opzioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.515Z",
-    "sourceFiles": 52417
+    "scannedAt": "2026-06-04T11:16:32.081Z",
+    "sourceFiles": 48352
   },
   "/settings/kpi": {
     "features": [
@@ -3030,7 +2680,7 @@
       "Ricerca/filtro dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.516Z",
+    "scannedAt": "2026-06-04T11:16:32.083Z",
     "sourceFiles": 44017
   },
   "/settings/last-minute-levels": {
@@ -3041,35 +2691,11 @@
       "Sezione: \"Configurazione Last Minute\"",
       "Etichetta campo: \"Livelli\"",
       "Etichetta campo: \"Fasce di camere libere\"",
-      "Etichetta campo: \"Posizione nella pagina\"",
-      "Etichetta campo: \"Angolo\"",
-      "Etichetta campo: \"Ombra\"",
-      "Etichetta campo: \"Layout\"",
-      "Etichetta campo: \"Tema\"",
-      "Etichetta campo: \"Colore accento\"",
-      "Etichetta campo: \"Mostra punteggio complessivo\"",
-      "Etichetta campo: \"Mostra numero recensioni\"",
-      "Etichetta campo: \"Canali da mostrare\"",
-      "Etichetta campo: \"Anteprima live\"",
-      "Etichetta campo: \"Codice da incollare nel sito\"",
-      "Etichetta campo: \"Mostra il banner Last Minute\"",
-      "Etichetta campo: \"Messaggio\"",
-      "Etichetta campo: \"Cosa mostrare\"",
-      "Etichetta campo: \"Mostra le camere rimaste solo se non superano\"",
-      "Etichetta campo: \"Testo del pulsante\"",
-      "Campo: \"Es. nome della struttura\"",
-      "Campo: \"email@webmaster.it\"",
-      "Campo: \"Offerta last minute {dates}\"",
-      "Campo: \"0 = mostra sempre\"",
-      "Campo: \"Prenota ora\"",
-      "Campo: \"https://prenota.tuohotel.it\"",
       "Esportazione/download dati",
-      "Toggle on/off per attivare/disattivare opzioni",
-      "Ricerca/filtro dati",
-      "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline"
+      "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.522Z",
-    "sourceFiles": 97611
+    "scannedAt": "2026-06-04T11:16:32.085Z",
+    "sourceFiles": 42185
   },
   "/settings/mappings": {
     "features": [
@@ -3114,7 +2740,7 @@
       "Campo: \"Es. Tariffa storica archiviata in Scidoo\"",
       "Tabella dati con righe e colonne"
     ],
-    "scannedAt": "2026-07-22T15:59:31.528Z",
+    "scannedAt": "2026-06-04T11:16:32.091Z",
     "sourceFiles": 136244
   },
   "/settings/notifications": {
@@ -3145,8 +2771,8 @@
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.530Z",
-    "sourceFiles": 56631
+    "scannedAt": "2026-06-04T11:16:32.093Z",
+    "sourceFiles": 54430
   },
   "/settings/occupancy-bands": {
     "features": [
@@ -3162,7 +2788,7 @@
       "Ricerca/filtro dati",
       "Report copertura pricing: percentuale di celle con prezzo valido vs target"
     ],
-    "scannedAt": "2026-07-22T15:59:31.532Z",
+    "scannedAt": "2026-06-04T11:16:32.095Z",
     "sourceFiles": 51156
   },
   "/settings/pms": {
@@ -3191,7 +2817,6 @@
       "Descrizione sezione: \"Configura e avvia la sincronizzazione dei dati dal tuo PMS. Puoi attivare la sincronizzazione\n            automatica per ogni modulo con la frequenza desiderata.\"",
       "Descrizione sezione: \"Ultime 10 sincronizzazioni eseguite\"",
       "Descrizione sezione: \"Ultime esecuzioni di tutti i moduli BRiG.\"",
-      "Descrizione sezione: \"Slope fornisce le prenotazioni tramite sincronizzazione incrementale. La disponibilità e le camere vendute\n          sono derivate dalle prenotazioni scaricate.\"",
       "Descrizione sezione: \"Invio dei prezzi calcolati dal motore RMS al PMS.\"",
       "Descrizione sezione: \"Importa prenotazioni e disponibilita dal foglio Google configurato\"",
       "Link: \"Produzione\"",
@@ -3206,10 +2831,11 @@
       "Etichetta campo: \"Struttura matrice rilevata\"",
       "Etichetta campo: \"Presente?\"",
       "Etichetta campo: \"Foglio matrice prezzi\"",
-      "Etichetta campo: \"Property ID\""
+      "Etichetta campo: \"Property ID\"",
+      "Etichetta campo: \"Abilita sincronizzazione automatica\""
     ],
-    "scannedAt": "2026-07-22T15:59:31.544Z",
-    "sourceFiles": 317272
+    "scannedAt": "2026-06-04T11:16:32.107Z",
+    "sourceFiles": 304702
   },
   "/settings/pms-log": {
     "features": [
@@ -3223,7 +2849,7 @@
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date",
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano"
     ],
-    "scannedAt": "2026-07-22T15:59:31.545Z",
+    "scannedAt": "2026-06-04T11:16:32.109Z",
     "sourceFiles": 32733
   },
   "/settings/rate-limits": {
@@ -3232,7 +2858,7 @@
       "Etichetta campo: \"Range\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.546Z",
+    "scannedAt": "2026-06-04T11:16:32.110Z",
     "sourceFiles": 21020
   },
   "/settings/users": {
@@ -3265,7 +2891,7 @@
       "Form con validazione e salvataggio",
       "Toggle on/off per attivare/disattivare opzioni"
     ],
-    "scannedAt": "2026-07-22T15:59:31.548Z",
+    "scannedAt": "2026-06-04T11:16:32.113Z",
     "sourceFiles": 58595
   },
   "/setup/initial": {
@@ -3289,7 +2915,7 @@
       "Selettore data",
       "Form con validazione e salvataggio"
     ],
-    "scannedAt": "2026-07-22T15:59:31.549Z",
+    "scannedAt": "2026-06-04T11:16:32.114Z",
     "sourceFiles": 26682
   },
   "/superadmin/api-keys": {
@@ -3321,8 +2947,8 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.551Z",
-    "sourceFiles": 44501
+    "scannedAt": "2026-06-04T11:16:32.116Z",
+    "sourceFiles": 44980
   },
   "/superadmin/assignment-requests": {
     "features": [
@@ -3334,7 +2960,7 @@
       "Notifiche toast per conferma azioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.552Z",
+    "scannedAt": "2026-06-04T11:16:32.117Z",
     "sourceFiles": 21374
   },
   "/superadmin/brig-spike": {
@@ -3345,7 +2971,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.553Z",
+    "scannedAt": "2026-06-04T11:16:32.118Z",
     "sourceFiles": 12585
   },
   "/superadmin/business-plan": {
@@ -3368,20 +2994,8 @@
       "Esportazione/download dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.555Z",
-    "sourceFiles": 57213
-  },
-  "/superadmin/calendar": {
-    "features": [
-      "Bottone: \"Oggi\"",
-      "Bottone: \"Mese\"",
-      "Bottone: \"Settimana\"",
-      "Titolo: \"Calendario generale\"",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.556Z",
-    "sourceFiles": 30388
+    "scannedAt": "2026-06-04T11:16:32.120Z",
+    "sourceFiles": 57692
   },
   "/superadmin/connectors-health/diagnose": {
     "features": [
@@ -3404,8 +3018,8 @@
       "Ricerca/filtro dati",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.561Z",
-    "sourceFiles": 102008
+    "scannedAt": "2026-06-04T11:16:32.125Z",
+    "sourceFiles": 101839
   },
   "/superadmin/connectors-health": {
     "features": [
@@ -3414,22 +3028,20 @@
       "Bottone: \"Indietro\"",
       "Bottone: \"Home\"",
       "Bottone: \"Segna tutte come lette\"",
-      "Bottone: \"Non eseguibile\"",
       "Sezione: \"Hotel Monitorati\"",
       "Sezione: \"Sincronizzati\"",
       "Sezione: \"Attenzione\"",
       "Sezione: \"Critici\"",
       "Sezione: \"Da configurare\"",
       "Sezione: \"Legenda Stati\"",
-      "Sezione: \"Test endpoint connettore\"",
       "Descrizione sezione: \"Confronto tra prenotazioni RAW (PMS) e prenotazioni normalizzate (RMS)\"",
       "Tabella dati con righe e colonne",
       "Esportazione/download dati",
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.563Z",
-    "sourceFiles": 52172
+    "scannedAt": "2026-06-04T11:16:32.127Z",
+    "sourceFiles": 38410
   },
   "/superadmin/connectors-mapping": {
     "features": [
@@ -3474,39 +3086,8 @@
       "Etichetta campo: \"Sito Web\"",
       "Etichetta campo: \"Documenti allegati\""
     ],
-    "scannedAt": "2026-07-22T15:59:31.572Z",
-    "sourceFiles": 238046
-  },
-  "/superadmin/dashboard-lab": {
-    "features": [
-      "Bottone: \"Attiva Accelerator\"",
-      "Bottone: \"Scopri come\"",
-      "Bottone: \"Tutte\"",
-      "Titolo: \"Dashboard Lab\"",
-      "Titolo: \"Centro di Controllo Performance\"",
-      "Titolo: \"Stato di Salute Performance\"",
-      "Titolo: \"Diagnostica Revenue\"",
-      "Grafico/i dati visuali",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
-      "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.573Z",
-    "sourceFiles": 23317
-  },
-  "/superadmin/demo-requests": {
-    "features": [
-      "Bottone: \"Rifiuta\"",
-      "Bottone: \"Modifica orario\"",
-      "Bottone: \"Accetta\"",
-      "Bottone: \"Annulla\"",
-      "Titolo: \"Richieste di demo\"",
-      "Esportazione/download dati",
-      "Notifiche toast per conferma azioni"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.574Z",
-    "sourceFiles": 23631
+    "scannedAt": "2026-06-04T11:16:32.137Z",
+    "sourceFiles": 235520
   },
   "/superadmin/features": {
     "features": [
@@ -3532,8 +3113,8 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.576Z",
-    "sourceFiles": 53364
+    "scannedAt": "2026-06-04T11:16:32.139Z",
+    "sourceFiles": 53843
   },
   "/superadmin/invoices": {
     "features": [
@@ -3572,7 +3153,7 @@
       "Notifiche toast per conferma azioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.581Z",
+    "scannedAt": "2026-06-04T11:16:32.144Z",
     "sourceFiles": 116169
   },
   "/superadmin/onboarding/[subscriptionId]": {
@@ -3605,28 +3186,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.583Z",
-    "sourceFiles": 41311
-  },
-  "/superadmin/onboarding": {
-    "features": [
-      "Bottone: \"Esci da Impersonazione\"",
-      "Bottone: \"Esci\"",
-      "Bottone: \"Indietro\"",
-      "Bottone: \"Home\"",
-      "Bottone: \"Segna tutte come lette\"",
-      "Spiegazione dialog: \"Annotazioni manuali sul percorso go-live (es. listino inviato, attesa credenziali PMS).\"",
-      "Sezione: \"Hotel registrati\"",
-      "Sezione: \"In configurazione\"",
-      "Sezione: \"Online\"",
-      "Campo: \"Cerca hotel o referente...\"",
-      "Campo: \"Aggiungi una nota...\"",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati",
-      "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.585Z",
-    "sourceFiles": 39848
+    "scannedAt": "2026-06-04T11:16:32.146Z",
+    "sourceFiles": 41790
   },
   "/superadmin/onboarding-templates": {
     "features": [
@@ -3637,72 +3198,70 @@
       "Bottone: \"Indietro\"",
       "Bottone: \"Home\"",
       "Bottone: \"Segna tutte come lette\"",
-      "Spiegazione dialog: \"Template riutilizzabile per la checklist di onboarding post-firma.\"",
       "Etichetta campo: \"Titolo\"",
       "Etichetta campo: \"Descrizione\"",
       "Etichetta campo: \"Categoria\"",
       "Etichetta campo: \"Ordine di default\"",
       "Etichetta campo: \"Attivo\"",
       "Titolo: \"Libreria Attivit&agrave; Onboarding\"",
-      "Campo: \"Es. Inviare listino ufficiale\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.586Z",
-    "sourceFiles": 28979
+    "scannedAt": "2026-06-04T11:16:32.152Z",
+    "sourceFiles": 28889
   },
   "/superadmin": {
     "features": [
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.586Z",
+    "scannedAt": "2026-06-04T11:16:32.152Z",
     "sourceFiles": 3845
   },
   "/superadmin/payments": {
     "features": [
-      "Bottone: \"Aggiungi su fattura\"",
-      "Bottone: \"Esporta CSV\"",
+      "Bottone: \"Aggiungi pagamento\"",
       "Bottone: \"Annulla\"",
-      "Bottone: \"Inserisci pagamenti\"",
-      "Bottone: \"Aggiungi riga\"",
-      "Bottone: \"Importa estratto conto\"",
-      "Bottone: \"Scegli file\"",
-      "Bottone: \"Cambia file\"",
       "Bottone: \"Selezione fatture\"",
       "Bottone: \"Incolla CSV\"",
       "Bottone: \"Aggiungi fatture\"",
       "Bottone: \"Carica nella griglia\"",
       "Bottone: \"Chiudi\"",
-      "Dialog: \"Associa pagamento a una fattura\"",
+      "Bottone: \"Esporta CSV\"",
+      "Bottone: \"Inserisci pagamenti\"",
+      "Bottone: \"Aggiungi riga\"",
+      "Bottone: \"Importa estratto conto\"",
+      "Bottone: \"Scegli file\"",
+      "Bottone: \"Cambia file\"",
+      "Tab: \"Registro Pagamenti\"",
+      "Tab: \"Pagamenti su Fatture\"",
       "Dialog: \"Modifica pagamento\"",
+      "Dialog: \"Registra pagamenti\"",
       "Dialog: \"Inserisci pagamenti\"",
       "Dialog: \"Importa estratto conto bancario\"",
-      "Dialog: \"Registra pagamenti\"",
       "Spiegazione dialog: \"Aggiungi una riga per ogni pagamento ricevuto. Struttura, importo e modalità sono richiesti; il\n            riferimento (es. n. fattura) è opzionale.\"",
       "Spiegazione dialog: \"Carica il PDF o il file CSV/Excel della banca. L&apos;AI estrae solo le entrate (data, importo,\n            mittente). A te resta da associare struttura e riferimento.\"",
-      "Etichetta campo: \"Cerca\"",
+      "Sezione: \"Pagamenti\"",
       "Etichetta campo: \"Struttura\"",
-      "Etichetta campo: \"Origine\"",
-      "Etichetta campo: \"Modalità\"",
       "Etichetta campo: \"Dal\"",
       "Etichetta campo: \"Al\"",
+      "Etichetta campo: \"Data pagamento\"",
+      "Etichetta campo: \"Cerca\"",
+      "Etichetta campo: \"Modalità\"",
       "Etichetta campo: \"Data\"",
       "Etichetta campo: \"Importo €\"",
       "Etichetta campo: \"Struttura / Organizzazione\"",
       "Etichetta campo: \"Riferimento\"",
-      "Etichetta campo: \"Note\"",
       "Etichetta campo: \"Causale / Riferimento\"",
       "Titolo: \"Gestione Pagamenti\"",
-      "Campo: \"Organizzazione, riferimento, mittente…\"",
+      "Campo: \"Es. 15/2025 o Tenuta Massabò\"",
+      "Campo: \"es. 1500,00\"",
       "Campo: \"Cerca per numero o struttura...\"",
+      "Campo: \"Organizzazione, riferimento, mittente…\"",
       "Campo: \"Nome organizzazione\"",
-      "Campo: \"0,00\"",
-      "Campo: \"Es. Fatt. 12/2026\"",
-      "Tabella dati con righe e colonne",
-      "Esportazione/download dati"
+      "Campo: \"0,00\""
     ],
-    "scannedAt": "2026-07-22T15:59:31.590Z",
-    "sourceFiles": 90781
+    "scannedAt": "2026-06-04T11:16:32.158Z",
+    "sourceFiles": 107677
   },
   "/superadmin/pms-roadmap": {
     "features": [
@@ -3730,8 +3289,8 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.592Z",
-    "sourceFiles": 58727
+    "scannedAt": "2026-06-04T11:16:32.161Z",
+    "sourceFiles": 59206
   },
   "/superadmin/pricing": {
     "features": [
@@ -3761,8 +3320,8 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.594Z",
-    "sourceFiles": 55214
+    "scannedAt": "2026-06-04T11:16:32.163Z",
+    "sourceFiles": 55693
   },
   "/superadmin/pricing-log": {
     "features": [
@@ -3786,8 +3345,8 @@
       "Report copertura pricing: percentuale di celle con prezzo valido vs target",
       "Storico cambi prezzo: chi/quando/come ha modificato un prezzo (manuale, algoritmo, autopilot)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.597Z",
-    "sourceFiles": 81296
+    "scannedAt": "2026-06-04T11:16:32.166Z",
+    "sourceFiles": 81775
   },
   "/superadmin/pricing-params-audit": {
     "features": [
@@ -3805,8 +3364,8 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.599Z",
-    "sourceFiles": 44273
+    "scannedAt": "2026-06-04T11:16:32.168Z",
+    "sourceFiles": 44752
   },
   "/superadmin/pricing-tools": {
     "features": [
@@ -3823,8 +3382,8 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Storico cambi prezzo: chi/quando/come ha modificato un prezzo (manuale, algoritmo, autopilot)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.600Z",
-    "sourceFiles": 35251
+    "scannedAt": "2026-06-04T11:16:32.170Z",
+    "sourceFiles": 35730
   },
   "/superadmin/progressive-sandbox": {
     "features": [
@@ -3853,8 +3412,8 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.602Z",
-    "sourceFiles": 47910
+    "scannedAt": "2026-06-04T11:16:32.172Z",
+    "sourceFiles": 48389
   },
   "/superadmin/prospects/assignments": {
     "features": [
@@ -3865,7 +3424,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.603Z",
+    "scannedAt": "2026-06-04T11:16:32.172Z",
     "sourceFiles": 10884
   },
   "/superadmin/prospects": {
@@ -3905,8 +3464,8 @@
       "Paginazione dei risultati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.605Z",
-    "sourceFiles": 57346
+    "scannedAt": "2026-06-04T11:16:32.175Z",
+    "sourceFiles": 56838
   },
   "/superadmin/push-prices": {
     "features": [
@@ -3926,8 +3485,8 @@
       "Modalita' Autopilot: il sistema pubblica i prezzi al PMS automaticamente quando cambiano",
       "Tracking ultimi prezzi inviati al PMS: confronto fra grid corrente e ultimo push"
     ],
-    "scannedAt": "2026-07-22T15:59:31.607Z",
-    "sourceFiles": 44867
+    "scannedAt": "2026-06-04T11:16:32.177Z",
+    "sourceFiles": 45346
   },
   "/superadmin/review-schedules": {
     "features": [
@@ -3951,8 +3510,8 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.609Z",
-    "sourceFiles": 49536
+    "scannedAt": "2026-06-04T11:16:32.180Z",
+    "sourceFiles": 50015
   },
   "/superadmin/revman/[hotelId]": {
     "features": [
@@ -3961,7 +3520,6 @@
       "Tab: \"Attività\"",
       "Tab: \"File\"",
       "Tab: \"Chat Taddeo\"",
-      "Tab: \"Dati\"",
       "Sezione: \"Nuova nota\"",
       "Sezione: \"Nuova attività\"",
       "Sezione: \"Carica file\"",
@@ -3978,8 +3536,8 @@
       "Notifiche toast per conferma azioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.611Z",
-    "sourceFiles": 55619
+    "scannedAt": "2026-06-04T11:16:32.182Z",
+    "sourceFiles": 45177
   },
   "/superadmin/rms-codes": {
     "features": [
@@ -4000,13 +3558,12 @@
       "Ricerca/filtro dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.613Z",
-    "sourceFiles": 51192
+    "scannedAt": "2026-06-04T11:16:32.184Z",
+    "sourceFiles": 51671
   },
   "/superadmin/sales/[id]": {
     "features": [
       "Bottone: \"Salva\"",
-      "Bottone: \"Usa\"",
       "Bottone: \"Associa struttura\"",
       "Bottone: \"Annulla\"",
       "Bottone: \"Nuovo periodo\"",
@@ -4015,8 +3572,6 @@
       "Link: \"← Torna alla lista\"",
       "Etichetta campo: \"Nome visualizzato\"",
       "Etichetta campo: \"Telefono\"",
-      "Etichetta campo: \"Email mittente\"",
-      "Etichetta campo: \"Nome visualizzato mittente\"",
       "Etichetta campo: \"% commissione default\"",
       "Etichetta campo: \"Venditore attivo\"",
       "Etichetta campo: \"Gerarchia / Capo area\"",
@@ -4031,8 +3586,6 @@
       "Etichetta campo: \"Valido dal\"",
       "Etichetta campo: \"Base di calcolo\"",
       "Titolo: \"Storico commissioni\"",
-      "Campo: \"n.cognome@santaddeo.com\"",
-      "Campo: \"Es. Mario Rossi (lascia vuoto = nome venditore)\"",
       "Campo: \"Nessun capo area\"",
       "Campo: \"Cerca per nome...\"",
       "Campo: \"es. 10\"",
@@ -4043,8 +3596,8 @@
       "Toggle on/off per attivare/disattivare opzioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.615Z",
-    "sourceFiles": 63448
+    "scannedAt": "2026-06-04T11:16:32.187Z",
+    "sourceFiles": 58665
   },
   "/superadmin/sales/commissions": {
     "features": [
@@ -4062,26 +3615,8 @@
       "Notifiche toast per conferma azioni",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.617Z",
+    "scannedAt": "2026-06-04T11:16:32.189Z",
     "sourceFiles": 37675
-  },
-  "/superadmin/sales/comunicazioni": {
-    "features": [
-      "Sezione: \"Messaggio\"",
-      "Descrizione sezione: \"Seleziona uno o più venditori a cui inviare la comunicazione.\"",
-      "Descrizione sezione: \"Ogni venditore riceve una copia individuale (con il proprio nome). Non viene usato il CC.\"",
-      "Descrizione sezione: \"Le comunicazioni inviate ai venditori. Il testo del messaggio non è archiviato, solo oggetto, mittente e\n          destinatari.\"",
-      "Etichetta campo: \"Mittente\"",
-      "Etichetta campo: \"Oggetto\"",
-      "Etichetta campo: \"Messaggio\"",
-      "Titolo: \"Comunicazioni venditori\"",
-      "Campo: \"Cerca nome o email…\"",
-      "Campo: \"Es. Aggiornamento campagna di settembre\"",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.618Z",
-    "sourceFiles": 27062
   },
   "/superadmin/sales/email-template": {
     "features": [
@@ -4095,7 +3630,7 @@
       "Campo: \"<p>Ciao {{nome_lead}}, ...</p>\"",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.619Z",
+    "scannedAt": "2026-06-04T11:16:32.189Z",
     "sourceFiles": 15225
   },
   "/superadmin/sales/leads": {
@@ -4117,12 +3652,11 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.620Z",
+    "scannedAt": "2026-06-04T11:16:32.190Z",
     "sourceFiles": 22704
   },
   "/superadmin/sales": {
     "features": [
-      "Bottone: \"Dashboard KPI\"",
       "Bottone: \"Commissioni\"",
       "Bottone: \"Lead\"",
       "Bottone: \"Template email\"",
@@ -4140,88 +3674,15 @@
       "Etichetta campo: \"Nome visualizzato\"",
       "Etichetta campo: \"Telefono\"",
       "Etichetta campo: \"% commissione default\"",
-      "Etichetta campo: \"Gerarchia / Capo area\"",
-      "Etichetta campo: \"È un capo area\"",
-      "Etichetta campo: \"Note interne\"",
       "Titolo: \"Venditori\"",
       "Titolo: \"Nessun venditore\"",
       "Campo: \"venditore@example.com\"",
       "Campo: \"Mario Rossi\"",
-      "Campo: \"Nessun capo area\"",
-      "Grafico/i dati visuali",
       "Esportazione/download dati",
-      "Notifiche toast per conferma azioni",
-      "Toggle on/off per attivare/disattivare opzioni",
-      "Ricerca/filtro dati"
+      "Notifiche toast per conferma azioni"
     ],
-    "scannedAt": "2026-07-22T15:59:31.622Z",
-    "sourceFiles": 43154
-  },
-  "/superadmin/sales/performance": {
-    "features": [
-      "Bottone: \"Aggiorna\"",
-      "Titolo: \"Performance venditori\"",
-      "Titolo: \"Nessun venditore\"",
-      "Esportazione/download dati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.623Z",
-    "sourceFiles": 22240
-  },
-  "/superadmin/sales/posta": {
-    "features": [
-      "Bottone: \"Scrivi\"",
-      "Bottone: \"Solo la mia\"",
-      "Bottone: \"Tutto il team\"",
-      "Bottone: \"Aggiorna\"",
-      "Bottone: \"Annulla\"",
-      "Bottone: \"Nota\"",
-      "Bottone: \"Chiamata\"",
-      "Bottone: \"+ Aggiungi Cc\"",
-      "Bottone: \"+ Aggiungi Ccn\"",
-      "Tab: \"Conversazione\"",
-      "Tab: \"Cronologia\"",
-      "Etichetta campo: \"Invia come venditore*\"",
-      "Etichetta campo: \"Nome*\"",
-      "Etichetta campo: \"Cognome*\"",
-      "Etichetta campo: \"Struttura*\"",
-      "Etichetta campo: \"Email destinatario*\"",
-      "Etichetta campo: \"Risposte predefinite\"",
-      "Etichetta campo: \"Oggetto*\"",
-      "Etichetta campo: \"Messaggio*\"",
-      "Titolo: \"Nuovo messaggio\"",
-      "Campo: \"Cerca nome, hotel o email...\"",
-      "Campo: \"Scrivi qui il testo dell'email...\"",
-      "Campo: \"email1@esempio.it, email2@esempio.it\"",
-      "Autosave: le modifiche vengono salvate automaticamente",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.626Z",
-    "sourceFiles": 72893
-  },
-  "/superadmin/sales/posta-non-abbinata": {
-    "features": [
-      "Bottone: \"Archivia\"",
-      "Titolo: \"Posta non abbinata\"",
-      "Campo: \"Scegli un venditore\"",
-      "Esportazione/download dati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.627Z",
-    "sourceFiles": 18694
-  },
-  "/superadmin/seo": {
-    "features": [
-      "Sezione: \"Query principali\"",
-      "Descrizione sezione: \"Clicca una query per vederne l&apos;andamento della posizione nel tempo.\"",
-      "Descrizione sezione: \"Posizione media giornaliera (1 = miglior risultato)\"",
-      "Titolo: \"Monitoraggio SEO\"",
-      "Tabella dati con righe e colonne",
-      "Grafico/i dati visuali",
-      "Esportazione/download dati",
-      "Ricerca/filtro dati"
-    ],
-    "scannedAt": "2026-07-22T15:59:31.629Z",
-    "sourceFiles": 19448
+    "scannedAt": "2026-06-04T11:16:32.192Z",
+    "sourceFiles": 32891
   },
   "/superadmin/sitemap": {
     "features": [
@@ -4230,8 +3691,8 @@
       "Esportazione/download dati",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.630Z",
-    "sourceFiles": 14487
+    "scannedAt": "2026-06-04T11:16:32.193Z",
+    "sourceFiles": 14670
   },
   "/superadmin/system-health": {
     "features": [
@@ -4245,7 +3706,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.631Z",
+    "scannedAt": "2026-06-04T11:16:32.193Z",
     "sourceFiles": 15381
   },
   "/superadmin/tenant-costs": {
@@ -4263,8 +3724,8 @@
       "Esportazione/download dati",
       "Push prezzi al PMS: invia in massa i prezzi calcolati su un range di date"
     ],
-    "scannedAt": "2026-07-22T15:59:31.633Z",
-    "sourceFiles": 51368
+    "scannedAt": "2026-06-04T11:16:32.196Z",
+    "sourceFiles": 51354
   },
   "/superadmin/variable-requests": {
     "features": [
@@ -4277,7 +3738,7 @@
       "Notifiche toast per conferma azioni",
       "Variabili K (K-driven): pesi 0-10 per occupancy, lead time, day of week, booking pace, stagionalita', cancellazioni, meteo, reputation; producono il coefficiente K che modula gli incrementi della pipeline"
     ],
-    "scannedAt": "2026-07-22T15:59:31.634Z",
+    "scannedAt": "2026-06-04T11:16:32.196Z",
     "sourceFiles": 20553
   },
   "/team": {
@@ -4305,19 +3766,18 @@
       "Tabella dati con righe e colonne",
       "Esportazione/download dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.635Z",
+    "scannedAt": "2026-06-04T11:16:32.198Z",
     "sourceFiles": 40267
   },
   "/upgrade/[addon]": {
     "features": [
       "Bottone: \"Vai al modulo\"",
-      "Bottone: \"Mensile\"",
       "Avviso: \"Il pagamento è stato annullato. Puoi riprovare quando vuoi.\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.636Z",
-    "sourceFiles": 18615
+    "scannedAt": "2026-06-04T11:16:32.199Z",
+    "sourceFiles": 14523
   },
   "/upgrade/[addon]/success": {
     "features": [
@@ -4325,8 +3785,8 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.637Z",
-    "sourceFiles": 7940
+    "scannedAt": "2026-06-04T11:16:32.199Z",
+    "sourceFiles": 7451
   },
   "/upgrade/consultation": {
     "features": [
@@ -4350,7 +3810,7 @@
       "Form con validazione e salvataggio",
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.637Z",
+    "scannedAt": "2026-06-04T11:16:32.200Z",
     "sourceFiles": 13773
   },
   "/upgrade": {
@@ -4365,21 +3825,20 @@
       "Pagina Obiettivi: produzione vs target con colonne DC/CSG/CM/CCA/CCC/AS/PS/CH per filtro stati",
       "Guard prezzi: rileva prenotazioni con prezzo lontano dall'expected (Mismatch >5%, Attenzione 1-5%, OK <1%)"
     ],
-    "scannedAt": "2026-07-22T15:59:31.638Z",
-    "sourceFiles": 14655
+    "scannedAt": "2026-06-04T11:16:32.200Z",
+    "sourceFiles": 14631
   },
   "/upgrade/premium-expert": {
     "features": [
       "Bottone: \"Torna alla Dashboard\"",
-      "Bottone: \"Mensile\"",
       "Avviso: \"Il pagamento e' stato annullato. Puoi riprovare quando vuoi.\"",
       "Sezione: \"Premium Expert Attivo\"",
       "Titolo: \"Premium Expert\"",
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.639Z",
-    "sourceFiles": 21556
+    "scannedAt": "2026-06-04T11:16:32.201Z",
+    "sourceFiles": 17189
   },
   "/upgrade/premium-expert/success": {
     "features": [
@@ -4387,7 +3846,7 @@
       "Esportazione/download dati",
       "Ricerca/filtro dati"
     ],
-    "scannedAt": "2026-07-22T15:59:31.639Z",
+    "scannedAt": "2026-06-04T11:16:32.202Z",
     "sourceFiles": 8992
   }
 }
