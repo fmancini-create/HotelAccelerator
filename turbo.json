@@ -1,6 +1,32 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "stream",
+  "globalEnv": [
+    "CRON_SECRET",
+    "DATABASE_URL",
+    "DATABASE_URL_UNPOOLED",
+    "SUPABASE_*",
+    "*_SUPABASE_*",
+    "STRIPE_*",
+    "SCIDOO_*",
+    "BRIG_*",
+    "GOOGLE_*",
+    "GSC_SITE_URL",
+    "SMTP_*",
+    "SALES_*",
+    "ADMIN_EMAIL",
+    "TEST_EMAIL",
+    "KV_*",
+    "UPSTASH_*",
+    "OPENAI_API_KEY",
+    "FATTUREINCLOUD_*",
+    "APIFY_*",
+    "SERPAPI_KEY",
+    "RATE_SHOPPER_*",
+    "RESUME_*",
+    "PRICING_*",
+    "DRY_RUN"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
