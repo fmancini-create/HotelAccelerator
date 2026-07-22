@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { notifyExpiredAssignments } from "@/lib/sales/prospect-expiry-notifier"
 import { isServiceUnavailableError, logSupabaseError, compactSupabaseErrorMessage } from "@/lib/supabase/error-utils"
 
@@ -19,10 +20,8 @@ export const maxDuration = 60
  *     notifyExpiredAssignments(). Fire-and-forget.
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const service = await createServiceRoleClient()
   console.log("[expire-prospect-assignments] starting")

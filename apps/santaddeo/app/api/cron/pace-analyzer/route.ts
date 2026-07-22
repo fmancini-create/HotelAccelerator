@@ -2,6 +2,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server"
 import { isServiceUnavailableError, logSupabaseError } from "@/lib/supabase/error-utils"
 import { NextRequest, NextResponse } from "next/server"
 import { notifyHotelUsersByPreference } from "@/lib/notifications/notify"
+import { requireCronAuth } from "@/lib/cron-auth"
 import type { Anomaly } from "@/lib/pace/analyzer"
 
 export const dynamic = "force-dynamic"
@@ -28,13 +29,9 @@ function monthLabel(ym: string): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
     const cronSecret = process.env.CRON_SECRET
-    if (process.env.VERCEL_ENV === "production" && cronSecret) {
-      if (authHeader !== `Bearer ${cronSecret}`) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
-    }
+    const unauthorized = requireCronAuth(request)
+    if (unauthorized) return unauthorized
 
     if (request.nextUrl.searchParams.get("warm") === "1") {
       return NextResponse.json({ ok: true, warm: true })

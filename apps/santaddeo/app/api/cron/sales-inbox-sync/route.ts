@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { syncSalesInboxReplies } from "@/lib/sales/inbox-reader"
 import { withTimeout } from "@/lib/supabase/error-utils"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -18,10 +19,8 @@ export const maxDuration = 60
  * env (dev) l'endpoint resta aperto per consentire i test manuali.
  */
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   console.log("[sales-inbox-sync] starting")
   try {

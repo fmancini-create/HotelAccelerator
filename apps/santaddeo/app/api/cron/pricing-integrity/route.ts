@@ -23,6 +23,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { getSuperAdminEmails } from "@/lib/email/get-superadmin-recipients"
+import { requireCronAuth } from "@/lib/cron-auth"
 import { sendEmail } from "@/lib/email"
 import {
   detectMassDeletes,
@@ -80,14 +81,8 @@ async function missingBaseRateInRange(
 }
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (
-    process.env.VERCEL_ENV === "production" &&
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   console.log("[v0] [pricing-integrity] Starting integrity check")
 

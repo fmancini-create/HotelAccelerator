@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { ApifyReviewService } from "@/lib/services/apify-review-service"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 /**
  * SCHEDULE-DRIVEN cron per la sync delle recensioni OTA via Apify.
@@ -57,12 +58,8 @@ interface SchedulePayload {
 }
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (process.env.VERCEL_ENV === "production" && process.env.CRON_SECRET) {
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const started = Date.now()
   const supabase = await createServiceRoleClient()

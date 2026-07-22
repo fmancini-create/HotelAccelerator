@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const dynamic = "force-dynamic"
 
@@ -40,13 +41,9 @@ function getBaseUrl(): string {
 }
 
 export async function GET(request: NextRequest) {
-  // Verifica cron secret in produzione (stesso pattern degli altri cron)
-  const authHeader = request.headers.get("authorization")
-  if (process.env.VERCEL_ENV === "production" && process.env.CRON_SECRET) {
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-  }
+  // Verifica cron secret (production, preview e chiamate manuali)
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const baseUrl = getBaseUrl()
 

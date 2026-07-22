@@ -22,15 +22,14 @@ import {
   reconcileSentPricesForHotel,
 } from "@/lib/pricing/reconcile-sent-prices"
 import { isTransientError, logSupabaseError } from "@/lib/supabase/error-utils"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300 // 5 min — il push al PMS puo' essere lento
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const hotelId = request.nextUrl.searchParams.get("hotelId")?.trim()
 

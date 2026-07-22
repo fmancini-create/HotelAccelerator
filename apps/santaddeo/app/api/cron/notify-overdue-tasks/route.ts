@@ -19,17 +19,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { notifyUser } from "@/lib/notifications/notify"
+import { requireCronAuth } from "@/lib/cron-auth"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 export async function GET(request: NextRequest) {
   // Auth cron
-  const auth = request.headers.get("authorization")
-  const expected = process.env.CRON_SECRET
-  if (!expected || auth !== `Bearer ${expected}`) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
+  const unauthorized = requireCronAuth(request)
+  if (unauthorized) return unauthorized
 
   const svc = await createServiceRoleClient()
   const now = new Date()
