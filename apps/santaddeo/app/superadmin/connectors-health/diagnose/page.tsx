@@ -31,7 +31,7 @@ import Link from "next/link"
 interface HotelDiagnose {
   hotel_id: string
   hotel_name: string
-  provider: "scidoo" | "brig"
+  provider: "scidoo" | "brig" | "slope"
   raw: { total: number; unprocessed: number; cancelled: number }
   rms: { total: number; cancelled: number }
   match: {
@@ -478,7 +478,9 @@ function HotelCard({ hotel, onDone }: { hotel: HotelDiagnose; onDone: () => void
                 className={
                   hotel.provider === "brig"
                     ? "uppercase font-semibold tracking-wide border-blue-200 bg-blue-50 text-blue-800"
-                    : "uppercase font-semibold tracking-wide border-emerald-200 bg-emerald-50 text-emerald-800"
+                    : hotel.provider === "slope"
+                      ? "uppercase font-semibold tracking-wide border-amber-200 bg-amber-50 text-amber-800"
+                      : "uppercase font-semibold tracking-wide border-emerald-200 bg-emerald-50 text-emerald-800"
                 }
               >
                 {hotel.provider}

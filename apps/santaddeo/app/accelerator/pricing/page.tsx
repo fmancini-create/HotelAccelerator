@@ -1403,32 +1403,14 @@ export default function AcceleratorPricingPage() {
     const kBase = algorithmType === "advanced" ? calculateK(dateStr).k : 0
     price = price * (1 + kBase * baseIntensityEff)
 
-    // 1b. LOGICA MADRE: Scenario storico (bassa/alta occupazione anno precedente)
-    // Determina il fattore di modulazione degli incrementi basandosi sullo storico
-    let scenarioModifier = 1.0 // default: neutral
-    let historicalScenario: "alta" | "bassa" | "media" | null = null
-    if (occThresholdLow > 0 && occThresholdHigh > 0) {
-      const monthDay = dateStr.slice(5) // "MM-DD"
-      const prevRooms = prevYearData[monthDay]?.rooms_occupied ?? null
-      if (prevRooms != null) {
-        if (prevRooms <= occThresholdLow) {
-          historicalScenario = "bassa"
-          // BASSA: smorzare gli incrementi. Piu' camere = tolleranza maggiore.
-          // Con poche camere (<=10) smorzare molto (0.5), con molte camere (>=40) smorzare poco (0.75)
-          const totalRoomsHotel = roomTypes.reduce((s, r) => s + (r.total_rooms || 0), 0)
-          const roomFactor = Math.min(1, Math.max(0.5, totalRoomsHotel / 60))
-          scenarioModifier = 0.5 + (roomFactor * 0.3) // range: 0.5 - 0.8
-        } else if (prevRooms >= occThresholdHigh) {
-          historicalScenario = "alta"
-          // ALTA: amplificare leggermente gli incrementi per massimizzare ADR
-          // Obiettivo: partire piu' vicini all'ADR storico e crescere piu' aggressivamente
-          scenarioModifier = 1.15
-        } else {
-          historicalScenario = "media"
-          scenarioModifier = 1.0
-        }
-      }
-    }
+    // 1b. Scenario storico (ALTA/BASSA anno precedente) — RIMOSSO DAL CALCOLO
+    // (22/07/2026, decisione utente). Il motore server (calculate-suggested-price
+    // .ts, usato da cron/push) non ha MAI caricato prevYearData e quindi non ha
+    // mai applicato l'amplificazione ALTA (x1.15) / smorzamento BASSA (x0.5-0.8)
+    // sugli incrementi: solo la UI lo faceva, creando drift UI vs prezzo
+    // realmente pushato (caso Barronci Economy 22/07: UI 179 vs Scidoo 176,
+    // giorno ALTA). Si e' scelto di allineare la UI al motore: la riga
+    // "SCENARIO STORICO" in griglia resta puramente informativa.
 
     // 2. Occupancy band increment (hotel-level)
     let totalSold = 0
@@ -1485,10 +1467,11 @@ export default function AcceleratorPricingPage() {
         const manualIncStr = getAlgoParam(`increment_band_${bandIdx}`, dateStr)
         const defaultInc = incMode === "eur" ? Number(band.increment_eur ?? 0) : Number(band.increment_pct ?? 0)
         let incrementVal = manualIncStr !== "" ? Number(manualIncStr) : defaultInc
-        // In modalità "basic" usa incremento puro della fascia, in "advanced" applica scenario + K
+        // In modalità "basic" usa incremento puro della fascia, in "advanced" applica K
+        // (identico al motore server: nessuno scenarioModifier, vedi nota 1b)
         if (algorithmType === "advanced") {
           const kCoeff = calculateK(dateStr).k
-          incrementVal = incrementVal * scenarioModifier * (1 + kCoeff * incrementIntensity)
+          incrementVal = incrementVal * (1 + kCoeff * incrementIntensity)
         }
         // In basic mode: incrementVal rimane puro senza modificatori
         if (!isNaN(incrementVal) && incrementVal !== 0) {
@@ -1524,13 +1507,14 @@ export default function AcceleratorPricingPage() {
       }
     }
 
-    // 4. Market demand weight (global multiplier, modulated by scenario + K solo in K-driven)
+    // 4. Market demand weight (global multiplier, modulated da K solo in K-driven;
+    // nessuno scenarioModifier, identico al motore server — vedi nota 1b)
     const demandStr = getAlgoParam("market_demand_weight", dateStr)
     if (demandStr && !isNaN(Number(demandStr))) {
       let demandPct = Number(demandStr)
       if (algorithmType === "advanced") {
         const kDemand = calculateK(dateStr).k
-        demandPct = demandPct * scenarioModifier * (1 + kDemand * incrementIntensity)
+        demandPct = demandPct * (1 + kDemand * incrementIntensity)
       }
       // In basic mode: demandPct rimane puro
       price = price * (1 + demandPct / 100)
@@ -2821,15 +2805,15 @@ export default function AcceleratorPricingPage() {
 
   // --- Sezione: Domanda di mercato (fasce di occupazione) ---
   // Visibile sia in basic che in K-Driven: il motore K-Driven usa
-  // l'incremento della banda come base e lo modula con scenarioModifier
-  // e coefficiente K (vedi formula a riga ~1139). Nasconderle in
+  // l'incremento della banda come base e lo modula con il coefficiente K
+  // (lo scenario storico NON modula piu' nulla, vedi nota 1b). Nasconderle in
   // K-Driven era un bug: l'utente non vedeva una variabile in uso.
   {
     paramRows.push({
       key: "__section_bands",
       label: "DOMANDA DI MERCATO",
       description: algorithmType === "advanced"
-        ? "Fasce di occupazione struttura -- in K-Driven gli incrementi vengono modulati dal coefficiente K e dallo scenario storico"
+        ? "Fasce di occupazione struttura -- in K-Driven gli incrementi vengono modulati dal coefficiente K"
         : "Fasce di occupazione struttura -- rappresentano la domanda di mercato",
       section: "__divider_bands__",
       unit: "",

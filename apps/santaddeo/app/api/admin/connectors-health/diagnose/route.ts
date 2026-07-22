@@ -33,17 +33,35 @@ const PAGE_SIZE = 1000
 //   il backfill anti-"Be Safe su OTA".
 // BRiG:   `cancellation_date IS NOT NULL` segna le cancellate, lo schema
 //   non ha rate_id (info di tariffa serializzate altrove).
-type ProviderName = "scidoo" | "brig"
+// 22/07/2026: aggiunto Slope. Prima gli hotel Slope (es. Superlusso Test) NON
+// comparivano affatto in questa pagina: la GET filtra con
+// .in("pms_name", Object.keys(PROVIDERS)) e slope non era tra i provider.
+// Slope: cancellate via flag booleano `is_canceled` (scritto dal sync da
+// r.isCanceled); chiave naturale `slope_reservation_id` -> bookings.pms_booking_id
+// (verificato live: 15 raw = 15 matched); niente rate_id nel raw.
+// NB schema: la tabella vive in `connectors.slope_raw_bookings` e NON ha una
+// vista in `public` (BRiG invece ce l'ha: `public.brig_raw_bookings` e' una
+// vista sulla tabella in connectors, per questo il resto della route usa
+// .from() semplice). Per Slope serve .schema("connectors").
+type ProviderName = "scidoo" | "brig" | "slope"
 
 interface ProviderConfig {
   rawTable: string
   rawIdField: string // colonna RAW da mappare a bookings.pms_booking_id
   hasRateInRaw: boolean
+  /** Schema Postgres della tabella raw se diverso da `public`. */
+  schema?: "connectors"
 }
 
 const PROVIDERS: Record<ProviderName, ProviderConfig> = {
   scidoo: { rawTable: "scidoo_raw_bookings", rawIdField: "scidoo_booking_id", hasRateInRaw: true },
   brig: { rawTable: "brig_raw_bookings", rawIdField: "brig_reservation_id", hasRateInRaw: false },
+  slope: {
+    rawTable: "slope_raw_bookings",
+    rawIdField: "slope_reservation_id",
+    hasRateInRaw: false,
+    schema: "connectors",
+  },
 }
 
 interface RawIdRow {
@@ -122,30 +140,36 @@ async function diagnoseHotel(
 ): Promise<HotelDiagnose> {
   const start = Date.now()
   const cfg = PROVIDERS[hotel.provider]
+  // Accesso alla tabella raw rispettando lo schema (Slope vive in `connectors`
+  // senza vista public; Scidoo e BRiG sono raggiungibili da `public`).
+  const rawFrom = () =>
+    cfg.schema ? supabase.schema(cfg.schema).from(cfg.rawTable) : supabase.from(cfg.rawTable)
 
   // ─── Counts aggregati lato server (HEAD requests, velocissimi) ───────────
-  // Cancellate: Scidoo via `status='annullata'`, BRiG via `cancellation_date IS NOT NULL`.
+  // Cancellate: Scidoo via `status='annullata'`, BRiG via `cancellation_date
+  // IS NOT NULL`, Slope via flag booleano `is_canceled`.
   const cancelledRawQuery =
     hotel.provider === "scidoo"
-      ? supabase
-          .from(cfg.rawTable)
+      ? rawFrom()
           .select("*", { count: "exact", head: true })
           .eq("hotel_id", hotel.id)
           .eq("status", "annullata")
-      : supabase
-          .from(cfg.rawTable)
-          .select("*", { count: "exact", head: true })
-          .eq("hotel_id", hotel.id)
-          .not("cancellation_date", "is", null)
+      : hotel.provider === "slope"
+        ? rawFrom()
+            .select("*", { count: "exact", head: true })
+            .eq("hotel_id", hotel.id)
+            .eq("is_canceled", true)
+        : rawFrom()
+            .select("*", { count: "exact", head: true })
+            .eq("hotel_id", hotel.id)
+            .not("cancellation_date", "is", null)
 
   const [rawTotal, rawUnprocessed, rawCancelled, rmsTotal, rmsCancelled, bookingsMissingRate] = await Promise.all([
-    supabase
-      .from(cfg.rawTable)
+    rawFrom()
       .select("*", { count: "exact", head: true })
       .eq("hotel_id", hotel.id)
       .then((r) => r.count ?? 0),
-    supabase
-      .from(cfg.rawTable)
+    rawFrom()
       .select("*", { count: "exact", head: true })
       .eq("hotel_id", hotel.id)
       .eq("processed", false)
@@ -178,15 +202,17 @@ async function diagnoseHotel(
 
   // ─── Pull degli ID per il diff (paginato) ────────────────────────────────
   // Scidoo: status (text) → cancellata se 'annullata'. BRiG: cancellation_date.
+  // Slope: flag booleano is_canceled.
   const rawSelectFields =
     hotel.provider === "scidoo"
       ? `${cfg.rawIdField}, status`
-      : `${cfg.rawIdField}, cancellation_date`
+      : hotel.provider === "slope"
+        ? `${cfg.rawIdField}, is_canceled`
+        : `${cfg.rawIdField}, cancellation_date`
 
   const [rawRowsRaw, bookingRows] = await Promise.all([
     fetchAllPaged<Record<string, unknown>>((from, to) =>
-      supabase
-        .from(cfg.rawTable)
+      rawFrom()
         .select(rawSelectFields)
         .eq("hotel_id", hotel.id)
         .range(from, to),
@@ -207,7 +233,9 @@ async function diagnoseHotel(
     const cancelled =
       hotel.provider === "scidoo"
         ? String(r.status ?? "").toLowerCase() === "annullata"
-        : r.cancellation_date != null
+        : hotel.provider === "slope"
+          ? r.is_canceled === true
+          : r.cancellation_date != null
     return { raw_id: id, is_cancelled: cancelled }
   })
 
@@ -292,8 +320,7 @@ async function diagnoseHotel(
       const BATCH = 500
       for (let off = 0; off < missingIds.length; off += BATCH) {
         const slice = missingIds.slice(off, off + BATCH)
-        const { data: rawSlice } = await supabase
-          .from(cfg.rawTable)
+        const { data: rawSlice } = await rawFrom()
           .select(`${cfg.rawIdField}, raw_data`)
           .eq("hotel_id", hotel.id)
           .in(cfg.rawIdField, slice)
