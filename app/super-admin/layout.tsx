@@ -63,7 +63,7 @@ export default function SuperAdminLayout({
         } = await supabase.auth.getUser()
 
         if (authError || !user) {
-          router.push("/super-admin/login")
+          router.push("/admin")
           return
         }
 
@@ -75,20 +75,20 @@ export default function SuperAdminLayout({
           .maybeSingle()
 
         if (collaboratorError || !collaborator) {
-          router.push("/super-admin/login")
+          router.push("/admin")
           return
         }
 
         if (collaborator.role !== "super_admin" || !collaborator.is_active) {
           await supabase.auth.signOut()
-          router.push("/super-admin/login")
+          router.push("/admin")
           return
         }
 
         setUserEmail(collaborator.email)
         setIsChecking(false)
       } catch (error) {
-        router.push("/super-admin/login")
+        router.push("/admin")
       }
     }
 
@@ -99,7 +99,7 @@ export default function SuperAdminLayout({
     try {
       const supabase = createClient()
       await supabase.auth.signOut()
-      router.push("/super-admin/login")
+      router.push("/admin")
     } catch (error) {
       console.error("[v0] Logout error:", error)
     }
