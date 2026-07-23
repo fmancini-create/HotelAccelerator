@@ -78,8 +78,8 @@ V1 al monorepo quando si estrae una funzionalità.
 |---|---|---|
 | 0 | Documento strategia (questo file) + grafica base Santaddeo-style | ✅ questa PR |
 | 1 | Restyling progressivo pagine `/admin` sul layout Santaddeo | todo |
-| 2 | Colonna `santaddeo_hotel_id` su `properties` + mapping strutture | todo |
-| 3 | Modulo Revenue v0: card KPI dashboard + calendario prezzi read-only | todo |
+| 2 | Colonna `santaddeo_hotel_id` su `properties` + mapping strutture | ✅ 23/07 (Barronci mappata) |
+| 3 | Modulo Revenue v0: card KPI dashboard read-only (calendario prezzi allo step 4) | ✅ card KPI in questa PR |
 | 4 | Modulo Revenue: pace + rate shopper read-only | todo |
 | 5 | ManuBot `/api/external/summary` + card KPI (pulizia credenziali hardcoded) | todo |
 | 6 | HotelProfitAI summary KPI + card | todo |
