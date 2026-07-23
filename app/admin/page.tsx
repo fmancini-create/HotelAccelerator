@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import AdminLoginForm from "@/components/admin-login-form"
+import UnifiedLoginForm from "@/components/auth/unified-login-form"
+import { authorizeUser } from "@/lib/auth/authorize-user"
 
 type GateState = "checking" | "authenticated" | "guest"
 
@@ -35,19 +36,16 @@ export default function AdminPage() {
           return
         }
 
-        // User is authenticated in Supabase — verify they are registered as admin
-        const { data: adminData } = await supabase
-          .from("admin_users")
-          .select("id")
-          .eq("id", user.id)
-          .single()
+        // User already authenticated: route by role (admin -> dashboard,
+        // super_admin -> /super-admin) with the same shared gate used at login.
+        const result = await authorizeUser(supabase, user)
 
-        if (adminData) {
-          window.location.replace("/admin/dashboard")
+        if (result.authorized) {
+          window.location.replace(result.destination)
           return
         }
 
-        // Authenticated user but NOT in admin_users → sign out and show login
+        // Authenticated user but not authorized → sign out and show login
         await supabase.auth.signOut()
         setState("guest")
       } catch (err) {
@@ -71,20 +69,16 @@ export default function AdminPage() {
     return null
   }
 
-  // Guest → show the login form
+  // Guest → show the unified login form (stessa UI per tutti i ruoli)
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Admin Login
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Accedi al pannello di amministrazione
-          </p>
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-md rounded-xl border border-border bg-card p-8">
+        <div className="mb-6 text-center">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground text-balance">HotelAccelerator</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Accedi alla piattaforma</p>
         </div>
-        <AdminLoginForm />
+        <UnifiedLoginForm />
       </div>
-    </div>
+    </main>
   )
 }

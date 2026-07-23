@@ -43,7 +43,16 @@ function isLocalDevBypass(): boolean {
   return h === "localhost" || h === "127.0.0.1"
 }
 
-export default function AdminLoginForm() {
+/**
+ * Login unico della piattaforma HotelAccelerator.
+ *
+ * UNA sola UI per tutti (superadmin, admin struttura, operatori): la
+ * differenza tra ruoli sta SOLO nella destinazione post-login decisa da
+ * `authorizeUser` (admin_users -> /admin/dashboard, platform_collaborators
+ * super_admin attivo -> /super-admin). Nessuna logica auth nuova: stessa
+ * pipeline Supabase signInWithPassword / signInWithOAuth già in produzione.
+ */
+export default function UnifiedLoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
@@ -244,7 +253,7 @@ export default function AdminLoginForm() {
   if (!isClient) {
     return (
       <div className="flex items-center justify-center py-8">
-        <span className="w-6 h-6 border-2 border-amber-700 border-t-transparent rounded-full animate-spin" />
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     )
   }
@@ -253,9 +262,9 @@ export default function AdminLoginForm() {
     return (
       <form onSubmit={handleRegister} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Nome</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">Nome</label>
           <div className="relative">
-            <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+            <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
               value={name}
@@ -267,9 +276,9 @@ export default function AdminLoginForm() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">Email</label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+            <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="email"
               value={email}
@@ -282,9 +291,9 @@ export default function AdminLoginForm() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">Password</label>
           <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+            <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type={showPassword ? "text" : "password"}
               value={password}
@@ -296,20 +305,21 @@ export default function AdminLoginForm() {
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showPassword ? "Nascondi password" : "Mostra password"}
             >
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
             </button>
           </div>
         </div>
 
-        {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
-        {success && <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm">{success}</div>}
+        {error && <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+        {success && <div className="rounded-lg bg-secondary p-3 text-sm text-foreground">{success}</div>}
 
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
               Registrazione...
             </span>
           ) : (
@@ -323,9 +333,9 @@ export default function AdminLoginForm() {
             setMode("login")
             resetForm()
           }}
-          className="w-full text-sm text-stone-600 hover:text-stone-800 flex items-center justify-center gap-1"
+          className="flex w-full items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4" />
           Torna al login
         </button>
       </form>
@@ -336,9 +346,9 @@ export default function AdminLoginForm() {
     return (
       <form onSubmit={handlePasswordRecovery} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+          <label className="mb-1 block text-sm font-medium text-foreground">Email</label>
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+            <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="email"
               value={email}
@@ -348,16 +358,16 @@ export default function AdminLoginForm() {
               required
             />
           </div>
-          <p className="text-xs text-stone-500 mt-1">Inserisci l'email associata al tuo account</p>
+          <p className="mt-1 text-xs text-muted-foreground">Inserisci l&apos;email associata al tuo account</p>
         </div>
 
-        {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
-        {success && <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm">{success}</div>}
+        {error && <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
+        {success && <div className="rounded-lg bg-secondary p-3 text-sm text-foreground">{success}</div>}
 
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? (
             <span className="flex items-center gap-2">
-              <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
               Invio in corso...
             </span>
           ) : (
@@ -371,9 +381,9 @@ export default function AdminLoginForm() {
             setMode("login")
             resetForm()
           }}
-          className="w-full text-sm text-stone-600 hover:text-stone-800 flex items-center justify-center gap-1"
+          className="flex w-full items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="h-4 w-4" />
           Torna al login
         </button>
       </form>
@@ -383,9 +393,9 @@ export default function AdminLoginForm() {
   return (
     <form onSubmit={handleLogin} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+        <label className="mb-1 block text-sm font-medium text-foreground">Email</label>
         <div className="relative">
-          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+          <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="email"
             value={email}
@@ -398,9 +408,9 @@ export default function AdminLoginForm() {
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
+        <label className="mb-1 block text-sm font-medium text-foreground">Password</label>
         <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+          <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
           <Input
             type={showPassword ? "text" : "password"}
             value={password}
@@ -412,19 +422,20 @@ export default function AdminLoginForm() {
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label={showPassword ? "Nascondi password" : "Mostra password"}
           >
-            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
           </button>
         </div>
       </div>
 
-      {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
+      {error && <div className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
 
       <Button type="submit" className="w-full" disabled={isLoading}>
         {isLoading ? (
           <span className="flex items-center gap-2">
-            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
             Accesso in corso...
           </span>
         ) : (
@@ -433,9 +444,9 @@ export default function AdminLoginForm() {
       </Button>
 
       <div className="relative flex items-center py-1" aria-hidden="true">
-        <div className="flex-grow border-t border-stone-200" />
-        <span className="mx-3 text-xs text-stone-400">oppure</span>
-        <div className="flex-grow border-t border-stone-200" />
+        <div className="flex-grow border-t border-border" />
+        <span className="mx-3 text-xs text-muted-foreground">oppure</span>
+        <div className="flex-grow border-t border-border" />
       </div>
 
       <Button
@@ -447,12 +458,12 @@ export default function AdminLoginForm() {
       >
         {googleLoading ? (
           <span className="flex items-center gap-2">
-            <span className="w-4 h-4 border-2 border-stone-400 border-t-transparent rounded-full animate-spin" />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
             Reindirizzamento...
           </span>
         ) : (
           <span className="flex items-center gap-2">
-            <GoogleIcon className="w-5 h-5" />
+            <GoogleIcon className="h-5 w-5" />
             Continua con Google
           </span>
         )}
@@ -465,7 +476,7 @@ export default function AdminLoginForm() {
             setMode("register")
             resetForm()
           }}
-          className="text-amber-700 hover:underline"
+          className="font-medium text-foreground hover:underline"
         >
           Registrati
         </button>
@@ -475,7 +486,7 @@ export default function AdminLoginForm() {
             setMode("recovery")
             resetForm()
           }}
-          className="text-stone-600 hover:underline"
+          className="text-muted-foreground hover:underline"
         >
           Password dimenticata?
         </button>

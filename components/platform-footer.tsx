@@ -80,7 +80,7 @@ export function PlatformFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/super-admin/login" className="hover:text-white transition-colors flex items-center gap-1">
+                <Link href="/admin" className="hover:text-white transition-colors flex items-center gap-1">
                   <Shield className="h-3 w-3" aria-hidden="true" />
                   Area Manager
                 </Link>
