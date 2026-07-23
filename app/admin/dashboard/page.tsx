@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button"
 import { useAdminAuth, getRoleLabel } from "@/lib/admin-hooks"
 import { createClient } from "@/lib/supabase/client"
 import { Progress } from "@/components/ui/progress"
+import RevenueSummaryCard from "@/components/admin/revenue-summary-card"
 
 interface DashboardModule {
   id: string
@@ -395,6 +396,9 @@ export default function AdminDashboardPage() {
             </div>
           </div>
         )}
+
+        {/* Revenue (modulo Santaddeo, read-only) */}
+        <RevenueSummaryCard />
 
         {/* Modules Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
