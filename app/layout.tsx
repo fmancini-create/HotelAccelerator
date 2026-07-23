@@ -1,15 +1,14 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Playfair_Display, Inter } from "next/font/google"
+import { Geist } from "next/font/google"
 import "./globals.css"
 import RootClientLayout from "./RootClientLayout"
 
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  display: "swap",
-})
-
-const inter = Inter({
+// Typography aligned to Santaddeo (master grafico): Geist everywhere.
+// Kept the RootClientLayout props shape (inter/playfair) to avoid touching
+// components in this step — both now resolve to Geist, so legacy
+// `font-serif` headings render in Geist as in Santaddeo.
+const geist = Geist({
   subsets: ["latin"],
   display: "swap",
 })
@@ -108,7 +107,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <RootClientLayout inter={inter} playfair={playfair}>
+    <RootClientLayout inter={geist} playfair={geist}>
       {children}
     </RootClientLayout>
   )
