@@ -13,10 +13,10 @@ export async function logout() {
 }
 
 /**
- * Logout for super admin - signs out and redirects to super admin login
+ * Logout for super admin - signs out and redirects to the unified login
  */
 export async function logoutSuperAdmin() {
   const supabase = await createClient()
   await supabase.auth.signOut()
-  redirect("/super-admin/login")
+  redirect("/admin")
 }
