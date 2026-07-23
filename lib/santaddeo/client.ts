@@ -22,6 +22,14 @@ export function getSantaddeoClient(): SupabaseClient | null {
     return null
   }
 
+  // Hardening: se l'URL non è valido (env vuota/placeholder/malformata),
+  // degrada a null → "not_configured", invece di far esplodere la route.
+  try {
+    new URL(url)
+  } catch {
+    return null
+  }
+
   return createClient(url, key, {
     auth: {
       persistSession: false,

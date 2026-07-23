@@ -2,22 +2,28 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getSantaddeoClient } from "@/lib/santaddeo/client"
+import { getSantaddeoKpis } from "@/lib/santaddeo/kpi"
 
 export const dynamic = "force-dynamic"
 
 /**
  * GET /api/admin/revenue/summary
  *
- * KPI Revenue read-only del mese corrente (dal 1° a oggi) letti dal DB
- * Santaddeo, con scoping OBBLIGATORIO su properties.santaddeo_hotel_id.
+ * KPI Revenue read-only del mese corrente (dal 1° a oggi) dal DB Santaddeo,
+ * con scoping OBBLIGATORIO su properties.santaddeo_hotel_id.
+ *
+ * Le formule replicano ESATTAMENTE la dashboard Santaddeo V1
+ * (metrics.service.ts): vedi lib/santaddeo/kpi.ts. I KPI sono in
+ * validation_status "pending_user_validation": la UI NON li mostra finché
+ * i numeri non sono validati contro la dashboard V1.
  *
  * Stati:
  * - not_configured: env SANTADDEO_* assenti sul progetto
  * - not_linked: la property corrente non ha santaddeo_hotel_id
- * - ready: KPI calcolati da dati reali (i KPI mancanti sono null → UI "n/d")
+ * - ready: KPI calcolati da dati reali (KPI non calcolabili = null, mai 0 finto)
  *
- * REGOLE: solo SELECT, nessuna scrittura; nessuna chiamata a PMS
- * (Scidoo/BRiG/Slope); mai numeri inventati (assenza dati = null, non 0).
+ * REGOLE: solo SELECT/RPC read-only, nessuna scrittura; nessuna chiamata a
+ * PMS (Scidoo/BRiG/Slope); mai numeri inventati.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -39,10 +45,7 @@ export async function GET(request: NextRequest) {
       .eq("id", propertyId)
       .maybeSingle()
 
-    if (propError || !prop) {
-      return NextResponse.json({ status: "not_linked" })
-    }
-    if (!prop.santaddeo_hotel_id) {
+    if (propError || !prop || !prop.santaddeo_hotel_id) {
       return NextResponse.json({ status: "not_linked" })
     }
 
@@ -54,89 +57,42 @@ export async function GET(request: NextRequest) {
 
     const hotelId = prop.santaddeo_hotel_id as string
 
-    // 4) Periodo: mese corrente, dal 1° a oggi (date locali Europe/Rome
-    //    approssimate a UTC: le tabelle usano date pure senza timezone).
+    // 4) Periodo: mese corrente, dal 1° a oggi (le tabelle usano date pure).
     const now = new Date()
     const from = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`
     const to = now.toISOString().slice(0, 10)
 
-    // 5) Letture read-only, entrambe con scoping esplicito su hotel_id.
-    const [prodRes, availRes] = await Promise.all([
-      santaddeo
-        .from("daily_production")
-        .select("date, total_revenue, rooms_occupied, adr, revpar, occupancy_rate")
-        .eq("hotel_id", hotelId)
-        .gte("date", from)
-        .lte("date", to)
-        .order("date", { ascending: true }),
-      santaddeo
-        .from("daily_availability")
-        .select("date, rooms_available, total_rooms")
-        .eq("hotel_id", hotelId)
-        .gte("date", from)
-        .lte("date", to),
-    ])
-
-    if (prodRes.error && availRes.error) {
-      // Entrambe le fonti irraggiungibili: errore reale, non dati vuoti.
+    // 5) KPI con formule V1 (lib/santaddeo/kpi.ts, scoping su hotelId).
+    let result
+    try {
+      result = await getSantaddeoKpis(santaddeo, hotelId, from, to)
+    } catch {
+      // Fonti irraggiungibili: errore reale, mai dati vuoti spacciati per zero.
       return NextResponse.json({ status: "error" }, { status: 502 })
-    }
-
-    const prod = prodRes.data ?? []
-    const avail = availRes.data ?? []
-
-    // 6) KPI da daily_production (valori PRE-CALCOLATI da Santaddeo).
-    //    Nessun dato → null (mai 0 spacciato per dato).
-    let revenueMonth: number | null = null
-    let roomsSold: number | null = null
-    let occupancyAvg: number | null = null
-    let adr: number | null = null
-    let revpar: number | null = null
-    let lastDataDate: string | null = null
-
-    if (prod.length > 0) {
-      revenueMonth = prod.reduce((s, r) => s + (Number(r.total_revenue) || 0), 0)
-      roomsSold = prod.reduce((s, r) => s + (Number(r.rooms_occupied) || 0), 0)
-      lastDataDate = String(prod[prod.length - 1].date)
-
-      const occRows = prod.filter((r) => r.occupancy_rate !== null && r.occupancy_rate !== undefined)
-      if (occRows.length > 0) {
-        occupancyAvg = occRows.reduce((s, r) => s + Number(r.occupancy_rate), 0) / occRows.length
-      }
-
-      // ADR: media pesata sulle camere occupate (più corretta della media semplice).
-      const adrRows = prod.filter((r) => r.adr !== null && r.adr !== undefined && Number(r.rooms_occupied) > 0)
-      const adrWeight = adrRows.reduce((s, r) => s + Number(r.rooms_occupied), 0)
-      if (adrWeight > 0) {
-        adr = adrRows.reduce((s, r) => s + Number(r.adr) * Number(r.rooms_occupied), 0) / adrWeight
-      }
-
-      const revparRows = prod.filter((r) => r.revpar !== null && r.revpar !== undefined)
-      if (revparRows.length > 0) {
-        revpar = revparRows.reduce((s, r) => s + Number(r.revpar), 0) / revparRows.length
-      }
-    }
-
-    // 7) Camere disponibili da daily_availability (somma per giorno su tutte
-    //    le tipologie, poi totale periodo).
-    let roomsAvailable: number | null = null
-    if (avail.length > 0) {
-      roomsAvailable = avail.reduce((s, r) => s + (Number(r.total_rooms) || 0), 0)
     }
 
     return NextResponse.json({
       status: "ready",
+      // I numeri NON vanno mostrati in UI finché non validati contro la
+      // dashboard V1 dall'utente.
+      validation_status: "pending_user_validation",
       property: { id: prop.id, name: prop.name },
+      santaddeo_hotel: { name: result.hotelName },
       period: { from, to },
       kpi: {
-        revenueMonth,
-        occupancyAvg,
-        adr,
-        revpar,
-        roomsSold,
-        roomsAvailable,
+        revenueMonth: result.revenueMonth,
+        occupancyAvg: result.occupancyAvg,
+        adr: result.adr,
+        revpar: result.revpar,
+        roomsSold: result.roomsSold,
+        roomsAvailable: result.roomsAvailable,
+        hotelTotalRooms: result.hotelTotalRooms,
       },
-      lastDataDate,
+      meta: {
+        revenueSource: result.revenueSource,
+        vatMode: result.vatMode,
+      },
+      lastDataDate: result.lastDataDate,
     })
   } catch {
     return NextResponse.json({ status: "error" }, { status: 500 })
