@@ -20,6 +20,24 @@ interface RevenueSummaryResponse {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
+const eur = new Intl.NumberFormat("it-IT", {
+  style: "currency",
+  currency: "EUR",
+  maximumFractionDigits: 0,
+})
+
+function fmtEur(v: number | null | undefined): string {
+  return v === null || v === undefined ? "n/d" : eur.format(v)
+}
+
+function fmtPct(v: number | null | undefined): string {
+  return v === null || v === undefined ? "n/d" : `${v.toFixed(1)}%`
+}
+
+function fmtInt(v: number | null | undefined): string {
+  return v === null || v === undefined ? "n/d" : String(Math.round(v))
+}
+
 function fmtDate(iso: string | null | undefined): string | null {
   if (!iso) return null
   const [y, m, d] = iso.split("-")
@@ -61,26 +79,43 @@ export default function RevenueSummaryCard() {
     )
   }
 
-  // HOTFIX 23/07/2026: i KPI calcolati dalla prima versione della API sono
-  // risultati incoerenti con Santaddeo V1 (rooms_occupied/adr/revpar nulli in
-  // daily_production, camere disponibili sommate come room-night). Finché la
-  // logica non replica esattamente le formule di Santaddeo V1, NESSUN numero
-  // viene mostrato: solo stato collegato + ultima data disponibile.
+  // KPI VALIDATI 23/07/2026: la pipeline replica le formule della dashboard
+  // Santaddeo V1 (metrics.service) e i valori sono stati confrontati 1:1 con
+  // /api/dashboard/metrics di V1 sullo stesso range (revenue, room nights,
+  // occupancy, ADR, RevPAR identici). KPI non calcolabili = "n/d", mai 0 finto.
+  const kpi = data?.kpi
   const updatedAt = fmtDate(data?.lastDataDate)
+
+  const items: { label: string; value: string }[] = [
+    { label: "Produzione mese", value: fmtEur(kpi?.revenueMonth) },
+    { label: "Occupazione media", value: fmtPct(kpi?.occupancyAvg) },
+    { label: "ADR", value: fmtEur(kpi?.adr) },
+    { label: "RevPAR", value: fmtEur(kpi?.revpar) },
+    { label: "Camere vendute", value: fmtInt(kpi?.roomsSold) },
+  ]
 
   return (
     <section aria-label="Revenue" className="mb-8 rounded-xl border border-border bg-card p-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="mb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <TrendingUp className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
             <h3 className="text-base font-medium text-foreground">Revenue</h3>
-            <p className="text-sm text-muted-foreground">Revenue collegato — dati in verifica</p>
+            <p className="text-sm text-muted-foreground">Mese corrente — dati Santaddeo (sola lettura)</p>
           </div>
         </div>
-        {updatedAt && <span className="text-xs text-muted-foreground">Ultimo dato disponibile: {updatedAt}</span>}
+        {updatedAt && <span className="text-xs text-muted-foreground">Aggiornato al {updatedAt}</span>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {items.map((item) => (
+          <div key={item.label} className="rounded-lg bg-secondary p-3">
+            <p className="text-lg font-semibold text-foreground">{item.value}</p>
+            <p className="text-xs text-muted-foreground">{item.label}</p>
+          </div>
+        ))}
       </div>
     </section>
   )
