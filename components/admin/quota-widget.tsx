@@ -35,12 +35,12 @@ export function QuotaWidget() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-xl border border-[#e5e5e5] p-6 animate-pulse">
-        <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+      <div className="bg-card rounded-xl border border-border p-6 animate-pulse">
+        <div className="h-6 bg-muted rounded w-1/3 mb-4"></div>
         <div className="space-y-4">
-          <div className="h-4 bg-gray-200 rounded"></div>
-          <div className="h-4 bg-gray-200 rounded"></div>
-          <div className="h-4 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-muted rounded"></div>
+          <div className="h-4 bg-muted rounded"></div>
+          <div className="h-4 bg-muted rounded"></div>
         </div>
       </div>
     )
@@ -48,12 +48,14 @@ export function QuotaWidget() {
 
   if (!quotas) return null
 
+  // Stile Santaddeo: colore SOLO come indicatore di stato (soglie),
+  // stato normale neutro (primary).
   const getProgressColor = (current: number, limit: number) => {
-    if (limit === -1) return "bg-emerald-500"
+    if (limit === -1) return "bg-primary"
     const percentage = (current / limit) * 100
     if (percentage >= 90) return "bg-red-500"
     if (percentage >= 75) return "bg-amber-500"
-    return "bg-emerald-500"
+    return "bg-primary"
   }
 
   const isNearLimit = (current: number, limit: number) => {
@@ -98,13 +100,13 @@ export function QuotaWidget() {
   const hasWarnings = quotaItems.some((q) => isNearLimit(q.current, q.limit))
 
   return (
-    <div className="bg-white rounded-xl border border-[#e5e5e5] p-6">
+    <div className="bg-card rounded-xl border border-border p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
-          <h3 className="text-lg font-medium text-[#5c5c5c]">Utilizzo Risorse</h3>
+          <h3 className="text-lg font-medium text-foreground">Utilizzo Risorse</h3>
           {hasWarnings && <AlertTriangle className="w-5 h-5 text-amber-500" />}
         </div>
-        <span className="px-3 py-1 bg-[#8b7355] text-white text-xs rounded-full uppercase tracking-wide">
+        <span className="px-3 py-1 bg-primary text-primary-foreground text-xs rounded-full uppercase tracking-wide">
           {quotas.plan}
         </span>
       </div>
@@ -117,15 +119,15 @@ export function QuotaWidget() {
           return (
             <div key={item.label}>
               <div className="flex justify-between text-sm mb-2">
-                <span className={`${nearLimit ? "text-amber-600 font-medium" : "text-[#8b8b8b]"}`}>
+                <span className={`${nearLimit ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
                   {item.label}
-                  {nearLimit && " ⚠️"}
+                  
                 </span>
-                <span className="text-[#5c5c5c] font-medium">
+                <span className="text-foreground font-medium">
                   {item.format(item.current)} / {item.limit === -1 ? "∞" : item.format(item.limit)}
                 </span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${getProgressColor(item.current, item.limit)}`}
                   style={{ width: `${Math.min(percentage, 100)}%` }}

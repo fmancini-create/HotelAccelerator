@@ -35,7 +35,6 @@ interface DashboardModule {
   description: string
   icon: React.ReactNode
   href: string
-  color: string
   requiresPermission?: "can_upload" | "can_delete" | "can_move" | "can_manage_users"
   comingSoon?: boolean
 }
@@ -45,150 +44,132 @@ const dashboardModules: DashboardModule[] = [
     id: "photos",
     title: "Gestione Foto",
     description: "Carica, elimina e organizza le foto delle camere",
-    icon: <Images className="w-8 h-8" />,
+    icon: <Images className="w-5 h-5" />,
     href: "/admin/photos",
-    color: "bg-blue-500",
   },
   {
     id: "cms",
     title: "Pagine CMS",
     description: "Crea e gestisci pagine libere del sito",
-    icon: <Layers className="w-8 h-8" />,
+    icon: <Layers className="w-5 h-5" />,
     href: "/admin/cms",
-    color: "bg-violet-500",
   },
   {
     id: "channels",
     title: "Canali",
     description: "Configura Email, Chat, WhatsApp, Social e altri canali",
-    icon: <Radio className="w-8 h-8" />,
+    icon: <Radio className="w-5 h-5" />,
     href: "/admin/channels",
-    color: "bg-rose-500",
   },
   {
     id: "inbox",
     title: "Inbox",
     description: "Gestisci tutte le conversazioni in un unico posto",
-    icon: <Inbox className="w-8 h-8" />,
+    icon: <Inbox className="w-5 h-5" />,
     href: "/admin/inbox",
-    color: "bg-emerald-500",
   },
   {
     id: "smart-messages",
     title: "Smart Messages",
     description: "Mostra offerte e messaggi personalizzati ai visitatori",
-    icon: <Megaphone className="w-8 h-8" />,
+    icon: <Megaphone className="w-5 h-5" />,
     href: "/admin/message-rules",
-    color: "bg-indigo-500",
   },
   {
     id: "demand-calendar",
     title: "Calendario Domanda",
     description: "Monitora le date più cercate dai visitatori",
-    icon: <Calendar className="w-8 h-8" />,
+    icon: <Calendar className="w-5 h-5" />,
     href: "/admin/tracking/demand",
-    color: "bg-amber-500",
   },
   {
     id: "tracking-visitors",
     title: "Visitatori Live",
     description: "Sessioni in tempo reale, timeline eventi e stitching al CRM",
-    icon: <Radio className="w-8 h-8" />,
+    icon: <Radio className="w-5 h-5" />,
     href: "/admin/tracking/visitors",
-    color: "bg-blue-600",
   },
   {
     id: "tracking-sites",
     title: "Siti Tracking",
     description: "Gestisci chiavi script-first e domini autorizzati per tenant",
-    icon: <Globe className="w-8 h-8" />,
+    icon: <Globe className="w-5 h-5" />,
     href: "/admin/tracking/sites",
-    color: "bg-sky-600",
   },
   {
     id: "todos",
     title: "Task & To-Do",
     description: "Gestisci attività, assegna task al team e sincronizza con Manubot",
-    icon: <CheckSquare className="w-8 h-8" />,
+    icon: <CheckSquare className="w-5 h-5" />,
     href: "/admin/todos",
-    color: "bg-lime-600",
   },
   {
     id: "monitoring",
     title: "Monitoring",
     description: "Monitora utilizzo risorse e performance",
-    icon: <Activity className="w-8 h-8" />,
+    icon: <Activity className="w-5 h-5" />,
     href: "/admin/monitoring",
-    color: "bg-red-500",
   },
   {
     id: "domains",
     title: "Domini",
     description: "Configura subdomain e dominio personalizzato",
-    icon: <Globe className="w-8 h-8" />,
+    icon: <Globe className="w-5 h-5" />,
     href: "/admin/settings/domains",
-    color: "bg-teal-500",
   },
   {
     id: "users",
     title: "Gestione Utenti",
     description: "Aggiungi e gestisci gli utenti admin",
-    icon: <Users className="w-8 h-8" />,
+    icon: <Users className="w-5 h-5" />,
     href: "/admin/users",
-    color: "bg-purple-500",
     requiresPermission: "can_manage_users",
   },
   {
     id: "profile",
     title: "Il Mio Profilo",
     description: "Modifica la tua password e visualizza i permessi",
-    icon: <Lock className="w-8 h-8" />,
+    icon: <Lock className="w-5 h-5" />,
     href: "/admin/profile",
-    color: "bg-gray-500",
   },
   {
     id: "content",
     title: "Contenuti",
     description: "Modifica testi e contenuti del sito",
-    icon: <FileText className="w-8 h-8" />,
+    icon: <FileText className="w-5 h-5" />,
     href: "/admin/content",
-    color: "bg-green-500",
     comingSoon: true,
   },
   {
     id: "bookings",
     title: "Prenotazioni",
     description: "Visualizza e gestisci le prenotazioni",
-    icon: <Calendar className="w-8 h-8" />,
+    icon: <Calendar className="w-5 h-5" />,
     href: "/admin/bookings",
-    color: "bg-orange-500",
     comingSoon: true,
   },
   {
     id: "reviews",
     title: "Recensioni",
     description: "Gestisci le recensioni degli ospiti",
-    icon: <MessageSquare className="w-8 h-8" />,
+    icon: <MessageSquare className="w-5 h-5" />,
     href: "/admin/reviews",
-    color: "bg-pink-500",
     comingSoon: true,
   },
   {
     id: "analytics",
     title: "Statistiche",
     description: "Analisi del traffico e performance",
-    icon: <BarChart3 className="w-8 h-8" />,
+    icon: <BarChart3 className="w-5 h-5" />,
     href: "/admin/analytics",
-    color: "bg-cyan-500",
     comingSoon: true,
   },
   {
     id: "settings",
     title: "Impostazioni",
     description: "Configurazione generale del sito",
-    icon: <Settings className="w-8 h-8" />,
+    icon: <Settings className="w-5 h-5" />,
     href: "/admin/settings",
-    color: "bg-slate-500",
     comingSoon: true,
   },
 ]
@@ -250,8 +231,8 @@ export default function AdminDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#8b7355]"></div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     )
   }
@@ -276,27 +257,27 @@ export default function AdminDashboardPage() {
   const siteButtonLabel = "Sito"
 
   return (
-    <main className="min-h-screen bg-[#f8f7f4]">
+    <main className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white border-b border-[#e5e5e5] sticky top-0 z-50">
+      <header className="bg-background border-b border-border sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-serif text-[#5c5c5c]">{headerTitle}</h1>
-              <span className="text-sm text-[#8b8b8b]">Dashboard</span>
+              <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
+              <span className="text-sm text-muted-foreground">Dashboard</span>
             </div>
 
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-[#5c5c5c]">{effectiveAdmin.name}</p>
-                <p className="text-xs text-[#8b8b8b]">{getRoleLabel(effectiveAdmin.role)}</p>
+                <p className="text-sm font-medium text-foreground">{effectiveAdmin.name}</p>
+                <p className="text-xs text-muted-foreground">{getRoleLabel(effectiveAdmin.role)}</p>
               </div>
               {isExternalSite ? (
                 <a href={siteUrl} target="_blank" rel="noopener noreferrer">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-[#8b7355] text-[#8b7355] hover:bg-[#8b7355] hover:text-white bg-transparent"
+                    className="bg-transparent"
                   >
                     <Home className="w-4 h-4 mr-2" />
                     {siteButtonLabel}
@@ -308,7 +289,7 @@ export default function AdminDashboardPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-[#8b7355] text-[#8b7355] hover:bg-[#8b7355] hover:text-white bg-transparent"
+                    className="bg-transparent"
                   >
                     <Home className="w-4 h-4 mr-2" />
                     {siteButtonLabel}
@@ -319,7 +300,7 @@ export default function AdminDashboardPage() {
                 variant="outline"
                 size="sm"
                 onClick={logout}
-                className="border-[#8b7355] text-[#8b7355] hover:bg-[#8b7355] hover:text-white bg-transparent"
+                className="bg-transparent"
               >
                 <LogOut className="w-4 h-4 mr-2" />
                 Esci
@@ -333,23 +314,23 @@ export default function AdminDashboardPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h2 className="text-2xl font-serif text-[#5c5c5c] mb-2">Benvenuto, {effectiveAdmin.name.split(" ")[0]}</h2>
-          <p className="text-[#8b8b8b]">Seleziona un modulo per iniziare.</p>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">Benvenuto, {effectiveAdmin.name.split(" ")[0]}</h2>
+          <p className="text-muted-foreground">Seleziona un modulo per iniziare.</p>
         </div>
 
         {quotas && !isSuperAdmin && (
-          <div className="mb-8 bg-white rounded-xl border border-[#e5e5e5] p-6">
+          <div className="mb-8 bg-card rounded-xl border border-border p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-[#5c5c5c]">Utilizzo Risorse</h3>
-              <span className="px-3 py-1 bg-[#8b7355] text-white text-xs rounded-full uppercase">
+              <h3 className="text-lg font-medium text-foreground">Utilizzo Risorse</h3>
+              <span className="px-3 py-1 bg-primary text-primary-foreground text-xs rounded-full uppercase">
                 Piano {quotas.plan}
               </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-[#8b8b8b]">Pagine CMS</span>
-                  <span className="text-[#5c5c5c] font-medium">
+                  <span className="text-muted-foreground">Pagine CMS</span>
+                  <span className="text-foreground font-medium">
                     {quotas.pages?.current ?? 0} / {quotas.pages?.limit === -1 ? "∞" : (quotas.pages?.limit ?? 0)}
                   </span>
                 </div>
@@ -362,8 +343,8 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-[#8b8b8b]">Foto</span>
-                  <span className="text-[#5c5c5c] font-medium">
+                  <span className="text-muted-foreground">Foto</span>
+                  <span className="text-foreground font-medium">
                     {quotas.photos?.current ?? 0} / {quotas.photos?.limit === -1 ? "∞" : (quotas.photos?.limit ?? 0)}
                   </span>
                 </div>
@@ -378,8 +359,8 @@ export default function AdminDashboardPage() {
               </div>
               <div>
                 <div className="flex justify-between text-sm mb-2">
-                  <span className="text-[#8b8b8b]">Conversazioni/mese</span>
-                  <span className="text-[#5c5c5c] font-medium">
+                  <span className="text-muted-foreground">Conversazioni/mese</span>
+                  <span className="text-foreground font-medium">
                     {quotas.conversations?.current ?? 0} /{" "}
                     {quotas.conversations?.limit === -1 ? "∞" : (quotas.conversations?.limit ?? 0)}
                   </span>
@@ -405,31 +386,25 @@ export default function AdminDashboardPage() {
           {availableModules.map((module) => (
             <div key={module.id} className="relative">
               {module.comingSoon ? (
-                <div className="bg-white rounded-xl border border-[#e5e5e5] p-6 opacity-60 cursor-not-allowed">
-                  <div
-                    className={`w-14 h-14 ${module.color} rounded-xl flex items-center justify-center text-white mb-4`}
-                  >
+                <div className="bg-card rounded-xl border border-border p-6 opacity-60 cursor-not-allowed">
+                  <div className="w-10 h-10 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center mb-4">
                     {module.icon}
                   </div>
-                  <h3 className="text-lg font-medium text-[#5c5c5c] mb-2">{module.title}</h3>
-                  <p className="text-sm text-[#8b8b8b] mb-4">{module.description}</p>
-                  <div className="flex items-center gap-2 text-sm text-[#8b8b8b]">
+                  <h3 className="text-base font-medium text-foreground mb-2">{module.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">{module.description}</p>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Lock className="w-4 h-4" />
                     <span>Prossimamente</span>
                   </div>
                 </div>
               ) : (
                 <Link href={module.href}>
-                  <div className="bg-white rounded-xl border border-[#e5e5e5] p-6 hover:shadow-lg hover:border-[#8b7355] transition-all duration-200 cursor-pointer group">
-                    <div
-                      className={`w-14 h-14 ${module.color} rounded-xl flex items-center justify-center text-white mb-4 group-hover:scale-110 transition-transform`}
-                    >
+                  <div className="bg-card rounded-xl border border-border p-6 hover:border-primary/40 hover:shadow-sm transition-colors duration-200 cursor-pointer group">
+                    <div className="w-10 h-10 rounded-lg bg-secondary text-foreground flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                       {module.icon}
                     </div>
-                    <h3 className="text-lg font-medium text-[#5c5c5c] mb-2 group-hover:text-[#8b7355] transition-colors">
-                      {module.title}
-                    </h3>
-                    <p className="text-sm text-[#8b8b8b]">{module.description}</p>
+                    <h3 className="text-base font-medium text-foreground mb-2">{module.title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{module.description}</p>
                   </div>
                 </Link>
               )}
@@ -439,23 +414,23 @@ export default function AdminDashboardPage() {
 
         {/* Quick Stats */}
         <div className="mt-12">
-          <h3 className="text-lg font-medium text-[#5c5c5c] mb-4">Riepilogo Rapido</h3>
+          <h3 className="text-lg font-medium text-foreground mb-4">Riepilogo Rapido</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">109</p>
-              <p className="text-sm text-[#8b8b8b]">Foto totali</p>
+            <div className="bg-card rounded-xl border border-border p-4">
+              <p className="text-2xl font-semibold text-foreground">109</p>
+              <p className="text-sm text-muted-foreground">Foto totali</p>
             </div>
-            <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">8</p>
-              <p className="text-sm text-[#8b8b8b]">Categorie camere</p>
+            <div className="bg-card rounded-xl border border-border p-4">
+              <p className="text-2xl font-semibold text-foreground">8</p>
+              <p className="text-sm text-muted-foreground">Categorie camere</p>
             </div>
-            <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">3</p>
-              <p className="text-sm text-[#8b8b8b]">Utenti attivi</p>
+            <div className="bg-card rounded-xl border border-border p-4">
+              <p className="text-2xl font-semibold text-foreground">3</p>
+              <p className="text-sm text-muted-foreground">Utenti attivi</p>
             </div>
-            <div className="bg-white rounded-xl border border-[#e5e5e5] p-4">
-              <p className="text-2xl font-semibold text-[#8b7355]">Online</p>
-              <p className="text-sm text-[#8b8b8b]">Stato sito</p>
+            <div className="bg-card rounded-xl border border-border p-4">
+              <p className="text-2xl font-semibold text-foreground">Online</p>
+              <p className="text-sm text-muted-foreground">Stato sito</p>
             </div>
           </div>
         </div>
