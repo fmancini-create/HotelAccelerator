@@ -306,7 +306,7 @@ export function PlatformHeader() {
       <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">
         <div className="h-full flex items-center px-3 sm:px-4">
           <Link href="/admin" className="flex items-center gap-2" aria-label="HotelAccelerator">
-            <div className="w-8 h-8 rounded-md bg-[#0b57d0] flex items-center justify-center text-white font-semibold text-sm">
+            <div className="w-8 h-8 rounded-md bg-ha-brand flex items-center justify-center text-ha-brand-foreground font-semibold text-sm">
               HA
             </div>
             <span className="font-semibold text-[#111827] text-sm">HotelAccelerator</span>
@@ -325,7 +325,7 @@ export function PlatformHeader() {
           className="flex items-center gap-2 flex-shrink-0 pr-2 sm:pr-4 border-r border-[#e5e7eb] h-full"
           aria-label="Torna alla dashboard"
         >
-          <div className="w-8 h-8 rounded-md bg-[#0b57d0] flex items-center justify-center text-white font-semibold text-sm">
+          <div className="w-8 h-8 rounded-md bg-ha-brand flex items-center justify-center text-ha-brand-foreground font-semibold text-sm">
             HA
           </div>
           <span className="hidden md:block font-semibold text-[#111827] text-sm">
@@ -346,7 +346,7 @@ export function PlatformHeader() {
                 className={[
                   "flex items-center gap-1.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors",
                   active
-                    ? "bg-[#eef2ff] text-[#0b57d0]"
+                    ? "bg-ha-brand-soft text-ha-brand-soft-foreground"
                     : "text-[#374151] hover:bg-[#f3f4f6]",
                 ].join(" ")}
               >
@@ -371,7 +371,7 @@ export function PlatformHeader() {
               size="sm"
               className={[
                 "h-9 text-[13px] font-medium gap-1",
-                moreHasActive ? "bg-[#eef2ff] text-[#0b57d0]" : "text-[#374151]",
+                moreHasActive ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-[#374151]",
               ].join(" ")}
               aria-label="Altre sezioni"
             >
@@ -396,7 +396,7 @@ export function PlatformHeader() {
                       href={item.href}
                       className={[
                         "flex items-center gap-2 cursor-pointer",
-                        active && "text-[#0b57d0] font-medium",
+                        active && "text-ha-brand-soft-foreground font-medium",
                       ]
                         .filter(Boolean)
                         .join(" ")}
@@ -428,7 +428,7 @@ export function PlatformHeader() {
                     href={item.href}
                     className={[
                       "flex items-center gap-2 cursor-pointer",
-                      active && "text-[#0b57d0] font-medium",
+                      active && "text-ha-brand-soft-foreground font-medium",
                     ]
                       .filter(Boolean)
                       .join(" ")}
@@ -461,7 +461,7 @@ export function PlatformHeader() {
               className="flex items-center gap-2 h-9 px-1.5 rounded-md hover:bg-[#f3f4f6] transition-colors"
               aria-label="Menu utente"
             >
-              <div className="w-7 h-7 rounded-full bg-[#0b57d0] flex items-center justify-center text-white text-[11px] font-semibold">
+              <div className="w-7 h-7 rounded-full bg-ha-brand flex items-center justify-center text-ha-brand-foreground text-[11px] font-semibold">
                 {userInitials || "?"}
               </div>
               <ChevronDown className="h-3 w-3 text-[#6b7280]" />
@@ -476,7 +476,7 @@ export function PlatformHeader() {
                   )}
                   <div className="text-xs text-[#6b7280] truncate">{me.email}</div>
                   {me.role === "super_admin" && (
-                    <div className="mt-1 inline-block px-1.5 py-0.5 rounded bg-[#eef2ff] text-[#0b57d0] text-[10px] font-medium">
+                    <div className="mt-1 inline-block px-1.5 py-0.5 rounded bg-ha-brand-soft text-ha-brand-soft-foreground text-[10px] font-medium">
                       Super Admin
                     </div>
                   )}

@@ -48,23 +48,39 @@
    * platform shell + modules. Light mode values.
    * ============================================================ */
 
-  /* Brand */
-  --ha-brand: oklch(0.48 0.17 264);
+  /* Brand
+   * FIX 24/07/2026 (correzione rotta post PR #130): il brand era BLU,
+   * ma il colore identitario di Santaddeo e' il VERDE (green-600 nelle
+   * dashboard V1: anello occupazione, KPI positivi, logo). Allineato. */
+  --ha-brand: oklch(0.627 0.194 149.214); /* Santaddeo green-600 */
   --ha-brand-foreground: oklch(0.99 0 0);
+  --ha-brand-soft: oklch(0.982 0.018 155.826); /* green-50 */
+  --ha-brand-soft-foreground: oklch(0.527 0.154 150.069); /* green-700 */
   --ha-brand-secondary: oklch(0.36 0.04 258);
   --ha-brand-secondary-foreground: oklch(0.99 0 0);
 
-  /* Status / semantic */
-  --ha-success: oklch(0.6 0.13 158);
+  /* Status / semantic — palette funzionale Santaddeo:
+   * verde=positivo, blu=operativo, ambra=warning, rosso=critico.
+   * Le varianti -soft replicano le card tenui della dashboard V1
+   * (bg-green-50 / bg-blue-50 / bg-amber-50 / bg-red-50). */
+  --ha-success: oklch(0.627 0.194 149.214); /* green-600 */
   --ha-success-foreground: oklch(0.99 0 0);
+  --ha-success-soft: oklch(0.982 0.018 155.826); /* green-50 */
+  --ha-success-soft-foreground: oklch(0.527 0.154 150.069); /* green-700 */
   --ha-premium: oklch(0.72 0.13 90);
   --ha-premium-foreground: oklch(0.2 0.02 90);
-  --ha-info: oklch(0.55 0.16 245);
+  --ha-info: oklch(0.546 0.245 262.881); /* blue-600 */
   --ha-info-foreground: oklch(0.99 0 0);
-  --ha-warning: oklch(0.75 0.15 72);
-  --ha-warning-foreground: oklch(0.24 0.03 72);
-  --ha-error: oklch(0.58 0.22 27);
+  --ha-info-soft: oklch(0.97 0.014 254.604); /* blue-50 */
+  --ha-info-soft-foreground: oklch(0.488 0.243 264.376); /* blue-700 */
+  --ha-warning: oklch(0.666 0.179 58.318); /* amber-600 */
+  --ha-warning-foreground: oklch(0.99 0 0);
+  --ha-warning-soft: oklch(0.987 0.022 95.277); /* amber-50 */
+  --ha-warning-soft-foreground: oklch(0.555 0.163 48.998); /* amber-700 */
+  --ha-error: oklch(0.577 0.245 27.325); /* red-600 */
   --ha-error-foreground: oklch(0.99 0 0);
+  --ha-error-soft: oklch(0.971 0.013 17.38); /* red-50 */
+  --ha-error-soft-foreground: oklch(0.505 0.213 27.518); /* red-700 */
 
   /* Surfaces */
   --ha-surface: oklch(0.99 0 0);
@@ -137,23 +153,33 @@
    * Dark mode values. Namespace: --ha-*
    * ============================================================ */
 
-  /* Brand */
-  --ha-brand: oklch(0.62 0.19 264);
+  /* Brand — verde Santaddeo, variante dark */
+  --ha-brand: oklch(0.723 0.192 149.579); /* green-500 */
   --ha-brand-foreground: oklch(0.1 0 0);
+  --ha-brand-soft: oklch(0.22 0.04 152);
+  --ha-brand-soft-foreground: oklch(0.792 0.209 151.711); /* green-400 */
   --ha-brand-secondary: oklch(0.72 0.03 258);
   --ha-brand-secondary-foreground: oklch(0.1 0 0);
 
-  /* Status / semantic */
-  --ha-success: oklch(0.7 0.15 158);
+  /* Status / semantic — varianti dark della palette Santaddeo */
+  --ha-success: oklch(0.723 0.192 149.579);
   --ha-success-foreground: oklch(0.1 0 0);
+  --ha-success-soft: oklch(0.22 0.04 152);
+  --ha-success-soft-foreground: oklch(0.792 0.209 151.711);
   --ha-premium: oklch(0.8 0.14 90);
   --ha-premium-foreground: oklch(0.16 0.02 90);
-  --ha-info: oklch(0.68 0.16 245);
+  --ha-info: oklch(0.623 0.214 259.815); /* blue-500 */
   --ha-info-foreground: oklch(0.1 0 0);
-  --ha-warning: oklch(0.82 0.15 75);
+  --ha-info-soft: oklch(0.22 0.05 262);
+  --ha-info-soft-foreground: oklch(0.707 0.165 254.624); /* blue-400 */
+  --ha-warning: oklch(0.769 0.188 70.08); /* amber-500 */
   --ha-warning-foreground: oklch(0.18 0.03 75);
-  --ha-error: oklch(0.68 0.2 27);
+  --ha-warning-soft: oklch(0.24 0.05 80);
+  --ha-warning-soft-foreground: oklch(0.828 0.189 84.429); /* amber-400 */
+  --ha-error: oklch(0.637 0.237 25.331); /* red-500 */
   --ha-error-foreground: oklch(0.1 0 0);
+  --ha-error-soft: oklch(0.24 0.06 27);
+  --ha-error-soft-foreground: oklch(0.704 0.191 22.216); /* red-400 */
 
   /* Surfaces */
   --ha-surface: oklch(0.12 0 0);
@@ -230,18 +256,28 @@
   /* HotelAccelerator suite tokens (Step 1 - ADDITIVE) -> Tailwind utilities */
   --color-ha-brand: var(--ha-brand);
   --color-ha-brand-foreground: var(--ha-brand-foreground);
+  --color-ha-brand-soft: var(--ha-brand-soft);
+  --color-ha-brand-soft-foreground: var(--ha-brand-soft-foreground);
   --color-ha-brand-secondary: var(--ha-brand-secondary);
   --color-ha-brand-secondary-foreground: var(--ha-brand-secondary-foreground);
   --color-ha-success: var(--ha-success);
   --color-ha-success-foreground: var(--ha-success-foreground);
+  --color-ha-success-soft: var(--ha-success-soft);
+  --color-ha-success-soft-foreground: var(--ha-success-soft-foreground);
   --color-ha-premium: var(--ha-premium);
   --color-ha-premium-foreground: var(--ha-premium-foreground);
   --color-ha-info: var(--ha-info);
   --color-ha-info-foreground: var(--ha-info-foreground);
+  --color-ha-info-soft: var(--ha-info-soft);
+  --color-ha-info-soft-foreground: var(--ha-info-soft-foreground);
   --color-ha-warning: var(--ha-warning);
   --color-ha-warning-foreground: var(--ha-warning-foreground);
+  --color-ha-warning-soft: var(--ha-warning-soft);
+  --color-ha-warning-soft-foreground: var(--ha-warning-soft-foreground);
   --color-ha-error: var(--ha-error);
   --color-ha-error-foreground: var(--ha-error-foreground);
+  --color-ha-error-soft: var(--ha-error-soft);
+  --color-ha-error-soft-foreground: var(--ha-error-soft-foreground);
   --color-ha-surface: var(--ha-surface);
   --color-ha-surface-muted: var(--ha-surface-muted);
   --color-ha-surface-foreground: var(--ha-surface-foreground);

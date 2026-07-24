@@ -232,7 +232,7 @@ export default function AdminDashboardPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
   }
@@ -322,7 +322,7 @@ export default function AdminDashboardPage() {
           <div className="mb-8 bg-card rounded-xl border border-border p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-foreground">Utilizzo Risorse</h3>
-              <span className="px-3 py-1 bg-primary text-primary-foreground text-xs rounded-full uppercase">
+              <span className="px-3 py-1 bg-ha-brand text-ha-brand-foreground text-xs rounded-full uppercase">
                 Piano {quotas.plan}
               </span>
             </div>
@@ -399,8 +399,9 @@ export default function AdminDashboardPage() {
                 </div>
               ) : (
                 <Link href={module.href}>
-                  <div className="bg-card rounded-xl border border-border p-6 hover:border-primary/40 hover:shadow-sm transition-colors duration-200 cursor-pointer group">
-                    <div className="w-10 h-10 rounded-lg bg-secondary text-foreground flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  {/* Accento verde Santaddeo: icona soft, hover pieno */}
+                  <div className="bg-card rounded-xl border border-border p-6 hover:border-ha-brand/40 hover:shadow-sm transition-colors duration-200 cursor-pointer group">
+                    <div className="w-10 h-10 rounded-lg bg-ha-brand-soft text-ha-brand-soft-foreground flex items-center justify-center mb-4 group-hover:bg-ha-brand group-hover:text-ha-brand-foreground transition-colors">
                       {module.icon}
                     </div>
                     <h3 className="text-base font-medium text-foreground mb-2">{module.title}</h3>
