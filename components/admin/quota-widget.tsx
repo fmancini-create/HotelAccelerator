@@ -48,14 +48,14 @@ export function QuotaWidget() {
 
   if (!quotas) return null
 
-  // Stile Santaddeo: colore SOLO come indicatore di stato (soglie),
-  // stato normale neutro (primary).
+  // Semantica Santaddeo: verde = in linea, ambra = richiede monitoraggio,
+  // rosso = intervento consigliato (stessa legenda della dashboard V1).
   const getProgressColor = (current: number, limit: number) => {
-    if (limit === -1) return "bg-primary"
+    if (limit === -1) return "bg-ha-success"
     const percentage = (current / limit) * 100
-    if (percentage >= 90) return "bg-red-500"
-    if (percentage >= 75) return "bg-amber-500"
-    return "bg-primary"
+    if (percentage >= 90) return "bg-ha-error"
+    if (percentage >= 75) return "bg-ha-warning"
+    return "bg-ha-success"
   }
 
   const isNearLimit = (current: number, limit: number) => {
@@ -104,9 +104,9 @@ export function QuotaWidget() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
           <h3 className="text-lg font-medium text-foreground">Utilizzo Risorse</h3>
-          {hasWarnings && <AlertTriangle className="w-5 h-5 text-amber-500" />}
+          {hasWarnings && <AlertTriangle className="w-5 h-5 text-ha-warning" />}
         </div>
-        <span className="px-3 py-1 bg-primary text-primary-foreground text-xs rounded-full uppercase tracking-wide">
+        <span className="px-3 py-1 bg-ha-brand text-ha-brand-foreground text-xs rounded-full uppercase tracking-wide">
           {quotas.plan}
         </span>
       </div>
@@ -119,7 +119,7 @@ export function QuotaWidget() {
           return (
             <div key={item.label}>
               <div className="flex justify-between text-sm mb-2">
-                <span className={`${nearLimit ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+                <span className={`${nearLimit ? "text-ha-warning font-medium" : "text-muted-foreground"}`}>
                   {item.label}
                   
                 </span>
@@ -139,8 +139,8 @@ export function QuotaWidget() {
       </div>
 
       {hasWarnings && (
-        <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-sm text-amber-800">
+        <div className="mt-4 p-3 bg-ha-warning-soft border border-ha-warning/30 rounded-lg">
+          <p className="text-sm text-ha-warning-soft-foreground">
             Stai raggiungendo i limiti del piano <strong>{quotas.plan}</strong>. Considera un upgrade per aumentare le
             risorse disponibili.
           </p>

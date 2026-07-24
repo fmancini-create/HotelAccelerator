@@ -98,7 +98,8 @@ export default function RevenueSummaryCard() {
     <section aria-label="Revenue" className="mb-8 rounded-xl border border-border bg-card p-6">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          {/* Verde identitario Santaddeo (solo styling, dati invariati) */}
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-ha-brand text-ha-brand-foreground">
             <TrendingUp className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
@@ -111,8 +112,8 @@ export default function RevenueSummaryCard() {
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {items.map((item) => (
-          <div key={item.label} className="rounded-lg bg-secondary p-3">
-            <p className="text-lg font-semibold text-foreground">{item.value}</p>
+          <div key={item.label} className="rounded-lg border border-ha-brand/15 bg-ha-brand-soft p-3">
+            <p className="text-lg font-semibold text-ha-brand-soft-foreground">{item.value}</p>
             <p className="text-xs text-muted-foreground">{item.label}</p>
           </div>
         ))}
