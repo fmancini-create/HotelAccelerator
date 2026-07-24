@@ -26,12 +26,12 @@ export function PlatformFooter() {
   if (isAuthPage(pathname)) {
     return (
       <footer
-        className="flex-shrink-0 h-9 border-t border-[#e5e7eb] bg-white text-[#6b7280] text-[11px]"
+        className="flex-shrink-0 h-9 border-t border-border bg-background text-muted-foreground text-[11px]"
         aria-label="Footer piattaforma"
       >
         <div className="h-full flex items-center justify-center px-3 sm:px-4 gap-3">
           <span className="truncate">&copy; {year} HotelAccelerator</span>
-          <span className="hidden sm:inline text-[#d1d5db]">|</span>
+          <span className="hidden sm:inline text-muted-foreground/40">|</span>
           <span className="hidden sm:inline truncate">SaaS multitenant per hotel</span>
         </div>
       </footer>
@@ -40,7 +40,7 @@ export function PlatformFooter() {
 
   return (
     <footer
-      className="flex-shrink-0 h-9 border-t border-[#e5e7eb] bg-white text-[#6b7280] text-[11px]"
+      className="flex-shrink-0 h-9 border-t border-border bg-background text-muted-foreground text-[11px]"
       aria-label="Footer piattaforma"
     >
       <div className="h-full flex items-center justify-between px-3 sm:px-4 gap-4">
@@ -48,7 +48,7 @@ export function PlatformFooter() {
           <span className="truncate">
             &copy; {year} HotelAccelerator
           </span>
-          <span className="hidden sm:inline text-[#d1d5db]">|</span>
+          <span className="hidden sm:inline text-muted-foreground/40">|</span>
           <span className="hidden sm:inline truncate">
             SaaS multitenant per hotel
           </span>
@@ -56,19 +56,19 @@ export function PlatformFooter() {
         <nav className="flex items-center gap-3" aria-label="Link utili">
           <Link
             href="/admin/monitoring"
-            className="hover:text-[#374151] transition-colors"
+            className="hover:text-ha-brand transition-colors"
           >
             Stato
           </Link>
           <Link
             href="/admin/settings"
-            className="hover:text-[#374151] transition-colors"
+            className="hover:text-ha-brand transition-colors"
           >
             Impostazioni
           </Link>
           <Link
             href="/admin/profile"
-            className="hover:text-[#374151] transition-colors hidden sm:inline"
+            className="hover:text-ha-brand transition-colors hidden sm:inline"
           >
             Profilo
           </Link>
