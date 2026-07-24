@@ -77,20 +77,20 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
   const breadcrumbs = buildBreadcrumbs(pathname)
 
   return (
-    <header className="bg-white border-b border-[#e5e5e5] sticky top-0 z-50">
+    <header className="bg-background border-b border-border sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             {/* Breadcrumb compatto */}
             <nav className="flex items-center gap-1.5 text-sm">
-              <Link href="/admin/dashboard" className="text-[#8b8b8b] hover:text-[#8b7355] transition-colors">
+              <Link href="/admin/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
                 <Home className="w-4 h-4" />
               </Link>
               {breadcrumbs.map((crumb, index) => (
                 <div key={crumb.href} className="flex items-center gap-1.5">
-                  <ChevronRight className="w-3 h-3 text-[#c0c0c0]" />
+                  <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
                   {index === breadcrumbs.length - 1 ? (
-                    <span className="flex items-center gap-1.5 text-[#5c5c5c] font-medium">
+                    <span className="flex items-center gap-1.5 text-foreground font-medium">
                       {SECTION_ACCENT_DOT[crumb.href] && (
                         <span
                           className={`h-1.5 w-1.5 rounded-full inline-block flex-shrink-0 ${SECTION_ACCENT_DOT[crumb.href]}`}
@@ -100,7 +100,7 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
                       {crumb.label}
                     </span>
                   ) : (
-                    <Link href={crumb.href} className="text-[#8b8b8b] hover:text-[#8b7355] transition-colors">
+                    <Link href={crumb.href} className="text-muted-foreground hover:text-foreground transition-colors">
                       {crumb.label}
                     </Link>
                   )}
@@ -111,8 +111,8 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
             {/* Separatore e sottotitolo */}
             {subtitle && (
               <>
-                <div className="h-4 w-px bg-[#e5e5e5]" />
-                <p className="text-xs text-[#8b8b8b]">{subtitle}</p>
+                <div className="h-4 w-px bg-border" />
+                <p className="text-xs text-muted-foreground">{subtitle}</p>
               </>
             )}
           </div>
