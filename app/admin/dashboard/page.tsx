@@ -184,6 +184,14 @@ export default function AdminDashboardPage() {
     conversations: { current: number; limit: number }
     plan: string
   } | null>(null)
+  // Conteggi REALI dal DB via /api/admin/quotas (getTenantUsage):
+  // usati dal "Riepilogo Rapido" al posto dei valori hardcoded.
+  const [usage, setUsage] = useState<{
+    photosCount: number
+    pagesCount: number
+    adminUsersCount: number
+    conversationsThisMonth: number
+  } | null>(null)
 
   // Qui siamo nella dashboard /admin, quindi è sempre un tenant admin
   const isSuperAdmin = false // In /admin siamo sempre nel contesto tenant
@@ -218,7 +226,21 @@ export default function AdminDashboardPage() {
         const response = await fetch("/api/admin/quotas")
         if (response.ok) {
           const data = await response.json()
-          setQuotas(data)
+          // getQuotaStatus risponde {quotas, usage, percentages, warnings}:
+          // mappiamo i conteggi REALI (prima il client leggeva una shape
+          // inesistente e "Utilizzo Risorse" mostrava sempre 0/0).
+          if (data?.usage && data?.quotas) {
+            setQuotas({
+              pages: { current: data.usage.pagesCount ?? 0, limit: data.quotas.maxPagesCount ?? 0 },
+              photos: { current: data.usage.photosCount ?? 0, limit: data.quotas.maxPhotosCount ?? 0 },
+              conversations: {
+                current: data.usage.conversationsThisMonth ?? 0,
+                limit: data.quotas.maxConversationsPerMonth ?? 0,
+              },
+              plan: typeof data.plan === "string" ? data.plan : "",
+            })
+            setUsage(data.usage)
+          }
         }
       } catch (error) {
         // silently fail
@@ -322,9 +344,11 @@ export default function AdminDashboardPage() {
           <div className="mb-8 bg-card rounded-xl border border-border p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium text-foreground">Utilizzo Risorse</h3>
-              <span className="px-3 py-1 bg-ha-brand text-ha-brand-foreground text-xs rounded-full uppercase">
-                Piano {quotas.plan}
-              </span>
+              {quotas.plan && (
+                <span className="px-3 py-1 bg-ha-brand text-ha-brand-foreground text-xs rounded-full uppercase">
+                  Piano {quotas.plan}
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -413,25 +437,30 @@ export default function AdminDashboardPage() {
           ))}
         </div>
 
-        {/* Quick Stats */}
+        {/* Quick Stats — SOLO conteggi reali dal DB (getTenantUsage via
+            /api/admin/quotas). Se il dato non è arrivato: "n/d", mai
+            numeri inventati. Le voci senza fonte reale (categorie camere,
+            stato sito) sono state rimosse. */}
         <div className="mt-12">
           <h3 className="text-lg font-medium text-foreground mb-4">Riepilogo Rapido</h3>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">109</p>
+              <p className="text-2xl font-semibold text-foreground">{usage ? usage.photosCount : "n/d"}</p>
               <p className="text-sm text-muted-foreground">Foto totali</p>
             </div>
             <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">8</p>
-              <p className="text-sm text-muted-foreground">Categorie camere</p>
+              <p className="text-2xl font-semibold text-foreground">{usage ? usage.pagesCount : "n/d"}</p>
+              <p className="text-sm text-muted-foreground">Pagine CMS</p>
             </div>
             <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">3</p>
+              <p className="text-2xl font-semibold text-foreground">{usage ? usage.adminUsersCount : "n/d"}</p>
               <p className="text-sm text-muted-foreground">Utenti attivi</p>
             </div>
             <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">Online</p>
-              <p className="text-sm text-muted-foreground">Stato sito</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {usage ? usage.conversationsThisMonth : "n/d"}
+              </p>
+              <p className="text-sm text-muted-foreground">Conversazioni mese</p>
             </div>
           </div>
         </div>
