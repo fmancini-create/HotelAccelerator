@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createClient } from "@/lib/supabase/client"
 import { authorizeUser } from "@/lib/auth/authorize-user"
+import { authErrorMessage } from "@/lib/auth/auth-error-messages"
 
 function GoogleIcon({ className }: { className?: string }) {
   return (
@@ -194,7 +195,8 @@ export default function UnifiedLoginForm() {
       })
 
       if (signUpError) {
-        setError(`Errore: ${signUpError.message}`)
+        console.error("[v0] Registration failed:", signUpError)
+        setError(authErrorMessage("register", signUpError))
         setIsLoading(false)
         return
       }
@@ -236,7 +238,10 @@ export default function UnifiedLoginForm() {
       })
 
       if (error) {
-        setError(`Errore: ${error.message}`)
+        // L'errore reale (rate limit del mailer, SMTP non configurato, ecc.)
+        // resta nei log: all'utente arriva solo un messaggio generico.
+        console.error("[v0] Password recovery failed:", error)
+        setError(authErrorMessage("recovery", error))
         setIsLoading(false)
         return
       }
@@ -245,7 +250,7 @@ export default function UnifiedLoginForm() {
       setIsLoading(false)
     } catch (err) {
       console.error("[v0] Password recovery error:", err)
-      setError("Si è verificato un errore")
+      setError(authErrorMessage("recovery", err))
       setIsLoading(false)
     }
   }
