@@ -1,15 +1,21 @@
--- Script per aggiornare la password del super admin
--- La password viene gestita da Supabase Auth, quindi bisogna usare la dashboard Supabase
--- o l'API admin per cambiarla
+-- Verifica esistenza di un super admin prima di cambiarne la password.
+--
+-- SICUREZZA: questo file conteneva una password reale in chiaro in un commento,
+-- ora rimossa. Vedi docs/SECURITY_SECRET_ROTATION_NOTES.md.
+-- Non inserire MAI password reali qui: i file .sql sono tracciati da git.
+--
+-- Sostituire il placeholder prima di eseguire.
 
--- Questo script verifica che l'utente esista nella tabella platform_collaborators
 SELECT id, email, role, is_active, created_at, last_login_at
 FROM platform_collaborators
-WHERE email = 'f.mancini@4bid.it';
+WHERE email = '<EMAIL_SUPER_ADMIN>';
 
--- NOTA: Per aggiornare la password dell'utente in Supabase Auth:
--- 1. Vai nella Supabase Dashboard > Authentication > Users
--- 2. Trova l'utente f.mancini@4bid.it
--- 3. Clicca sui 3 puntini e seleziona "Send password recovery"
--- OPPURE usa l'API Admin di Supabase:
--- await supabase.auth.admin.updateUserById(userId, { password: 'Pippolo75@' })
+-- Per cambiare la password (gestita da Supabase Auth, non da questa tabella):
+--
+-- Opzione A - dalla dashboard:
+--   Supabase Dashboard > Authentication > Users > utente > "Send password recovery"
+--
+-- Opzione B - via script, con i valori passati da environment
+--   (nessun valore in chiaro nel repo):
+--   node --env-file-if-exists=.env.local scripts/update-superadmin-password.js
+--   env richieste: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TARGET_USER_ID, NEW_PASSWORD
