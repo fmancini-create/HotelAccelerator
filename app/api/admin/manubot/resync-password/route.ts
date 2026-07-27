@@ -15,15 +15,24 @@
  * webhook ManuBot -> hub, interrompendo l'arrivo dei task. Questa route fa
  * l'unica cosa necessaria e nulla di più.
  *
+ * VALIDAZIONE PRIMA DELLA SCRITTURA (hardening):
+ * la password viene prima PROVATA contro l'auth di ManuBot (login read-only con
+ * l'email della property). Se il login non riesce, il DB NON viene toccato.
+ * Senza questo controllo `success: true` significava solo "colonna riscritta",
+ * non "credenziale valida": era possibile persistere una password sbagliata,
+ * ed è realmente accaduto una volta.
+ *
  * GARANZIE (verificabili leggendo il codice qui sotto):
- *  - UPDATE su UNA SOLA colonna: `manubot_password`. Nessun'altra colonna è
- *    presente nell'oggetto passato a `.update()`.
+ *  - UPDATE su DUE sole colonne: `manubot_password` e `updated_at`. Nessun'altra
+ *    colonna è presente nell'oggetto passato a `.update()`.
  *  - `api_token` / `api_token_hash` NON sono toccati né rigenerati.
  *  - `manubot_email`, `manubot_company_id`, `manubot_supabase_url` invariati.
- *  - Nessuna chiamata di rete: nessun login a ManuBot, nessun Telegram/
- *    WhatsApp, nessuno Stripe, nessun cron.
- *  - Nessuno schema DB modificato.
- *  - La risposta NON contiene password, token, api_token o valori di env.
+ *  - L'unica chiamata di rete è il login di verifica all'auth di ManuBot:
+ *    nessuna creazione/modifica/cancellazione di task, nessun webhook, nessun
+ *    Telegram/WhatsApp, nessuno Stripe, nessun cron.
+ *  - Nessuno schema DB modificato (`updated_at` è una colonna già esistente).
+ *  - La risposta NON contiene password, token, api_token o valori di env: solo
+ *    categorie d'errore generiche.
  *  - Nessun log di plaintext, ciphertext o chiave.
  *
  * È POST (non GET) proprio perché ha un side effect: non può essere innescata
@@ -46,6 +55,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCallerIdentity, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { encryptManubotPasswordForWrite } from "@/lib/manubot/credential-secrets"
+import { ManubotClient } from "@/lib/manubot"
+import { validateManubotSupabaseUrlForEnvironment } from "@/lib/manubot/environment-guard"
+import { categorizeManubotError, logManubotError } from "@/lib/manubot/route-errors"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -129,9 +141,11 @@ export async function POST(req: NextRequest) {
 
     // La property deve esistere: evita UPDATE silenziosi a zero righe su un ID
     // inesistente (che risponderebbero success senza aver aggiornato nulla).
+    // Si leggono solo `manubot_email` e `manubot_supabase_url`, necessari per il
+    // login di verifica. `manubot_password` NON viene letta: la si riscrive.
     const { data: property, error: lookupError } = await supabase
       .from("properties")
-      .select("id")
+      .select("id, manubot_email, manubot_supabase_url")
       .eq("id", propertyId)
       .maybeSingle()
 
@@ -143,11 +157,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "property_not_found" }, { status: 404 })
     }
 
-    // UPDATE su UNA SOLA COLONNA: qualsiasi aggiunta qui va considerata una
+    // ------------------------------------------------------------------
+    // VALIDAZIONE: la password deve funzionare DAVVERO prima di scriverla.
+    // Solo un login (lettura) all'auth di ManuBot: nessun task creato o
+    // modificato, nessun webhook, nessuna notifica.
+    // Se qualcosa non torna si esce QUI, senza toccare il DB.
+    // ------------------------------------------------------------------
+    const email = property.manubot_email || process.env.MANUBOT_DEFAULT_EMAIL
+    if (!email) {
+      return NextResponse.json({ success: false, error: "tenant_not_configured" }, { status: 400 })
+    }
+
+    try {
+      // Guard prod/dev sulla URL Supabase risolta, prima di qualunque rete.
+      const resolvedSupabaseUrl = property.manubot_supabase_url || process.env.MANUBOT_SUPABASE_URL
+      validateManubotSupabaseUrlForEnvironment(resolvedSupabaseUrl)
+
+      const client = new ManubotClient(property.manubot_supabase_url || undefined)
+      // Il token ottenuto viene scartato: serviva solo a provare la credenziale.
+      await client.login(email, envPassword)
+    } catch (validationError) {
+      const category = categorizeManubotError(validationError)
+      logManubotError("resync-password: validation failed (DB non aggiornato)", validationError, category)
+      return NextResponse.json(
+        {
+          success: false,
+          error: category,
+          updated: false,
+          message:
+            "La password non è stata accettata da ManuBot: il database NON è stato modificato. Verifica MANUBOT_DEFAULT_PASSWORD e ricorda di fare un nuovo deploy dopo averla cambiata.",
+        },
+        { status: 400 },
+      )
+    }
+
+    // UPDATE su DUE SOLE COLONNE: qualsiasi aggiunta qui va considerata una
     // modifica di sicurezza. In particolare NON aggiungere api_token.
+    // `updated_at` è aggiornato esplicitamente perché la tabella `properties`
+    // NON ha trigger che lo facciano: senza questa riga il timestamp resterebbe
+    // fermo anche a resync riuscito, rendendo la rotazione non verificabile.
     const { error: updateError } = await supabase
       .from("properties")
-      .update({ manubot_password: encrypted })
+      .update({ manubot_password: encrypted, updated_at: new Date().toISOString() })
       .eq("id", propertyId)
 
     if (updateError) {
@@ -160,7 +211,9 @@ export async function POST(req: NextRequest) {
       success: true,
       property_id: propertyId,
       updated: true,
+      validated: true,
       password_format: "enc:v1",
+      updated_at_refreshed: true,
     })
   } catch (error) {
     if (isAccessError(error)) {
