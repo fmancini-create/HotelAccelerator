@@ -2,8 +2,23 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId, getDevBypass } from "@/lib/auth-property"
 import { getManubotClient, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
+import { resolvePropertyIdForCaller } from "@/lib/auth/property-scope"
 
-// GET /api/admin/todos - List todos for tenant
+/**
+ * GET /api/admin/todos — elenco dei todo del tenant.
+ *
+ * Il tenant si risolve con `resolvePropertyIdForCaller`, che accetta un
+ * `?property_id=` esplicito. Prima si usava `getAuthenticatedPropertyId`, che
+ * per un super admin senza tenant selezionato lanciava un Error finito nel
+ * catch generico: la risposta era un 500 con il messaggio interno in chiaro,
+ * quindi indistinguibile da un guasto del server. Ora quel caso è un 400
+ * `property_required`, e un property_id inesistente un 404 invece di una lista
+ * vuota ambigua.
+ *
+ * SOLA LETTURA: nessuna scrittura sul DB, nessuna chiamata a ManuBot (il push
+ * dei task vive solo nella POST, che resta invariata).
+ */
 export async function GET(request: NextRequest) {
   try {
     // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (NODE_ENV=development
@@ -12,10 +27,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ todos: [] })
     }
 
-    const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = createServiceClient()
+    const identity = await getCallerIdentity(request)
+    if (!identity) {
+      return NextResponse.json({ error: "unauthorized", todos: [] }, { status: 401 })
+    }
+    if (!identity.isSuperAdmin && !identity.isTenantAdmin) {
+      return NextResponse.json({ error: "forbidden", todos: [] }, { status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
+
+    const scope = await resolvePropertyIdForCaller(identity, searchParams.get("property_id"))
+    if (!scope.ok) {
+      return NextResponse.json(
+        { error: scope.error, message: scope.message, todos: [] },
+        { status: scope.status },
+      )
+    }
+    const propertyId = scope.propertyId
+
+    const supabase = createServiceClient()
+
     const status = searchParams.get("status")
     const assignedTo = searchParams.get("assigned_to")
 
@@ -38,7 +70,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ todos })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    // Il messaggio originale resta nei log server: al client va una categoria
+    // generica, per non esporre dettagli interni o testi di Supabase.
+    console.error("[v0] GET /api/admin/todos failed:", error?.message)
+    return NextResponse.json({ error: "internal_error", todos: [] }, { status: 500 })
   }
 }
 
