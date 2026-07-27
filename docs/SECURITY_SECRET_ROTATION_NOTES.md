@@ -121,3 +121,65 @@ in quest'ordine.
 - Nei test usare valori palesemente finti.
 - Se un segreto finisce comunque nel repo: **prima ruotare**, poi rimuovere,
   poi eventualmente valutare la history.
+
+---
+
+## 6. Ruotare la password ManuBot usata dall'hub
+
+Dopo aver cambiato la password su ManuBot, l'hub continua a usare **quella
+vecchia**: in `lib/manubot.ts` il DB vince sull'env.
+
+```ts
+const password = decryptedPassword || requireEnv("MANUBOT_DEFAULT_PASSWORD")
+```
+
+`MANUBOT_DEFAULT_PASSWORD` e' solo un fallback per quando
+`properties.manubot_password` e' vuota. Se la colonna e' popolata l'env non
+viene nemmeno letta: va riscritta la colonna. Questo e' il passo 3.2 di questo
+documento, reso eseguibile.
+
+### Procedura, in quest'ordine
+
+1. Cambiare la password sul pannello ManuBot.
+2. Aggiornare `MANUBOT_DEFAULT_PASSWORD` nelle env del progetto (Production e,
+   se usato, Preview).
+3. **Fare un nuovo deploy.** Le env sono iniettate al build/avvio: senza
+   redeploy le funzioni in esecuzione vedono ancora il valore vecchio e il
+   passo 4 riscriverebbe la password vecchia.
+4. Chiamare, **da sessione autenticata come admin o super admin** della
+   struttura interessata:
+
+   ```
+   POST /api/admin/manubot/resync-password
+   ```
+
+   Dalla console del browser, gia' loggati nell'hub:
+
+   ```js
+   await fetch("/api/admin/manubot/resync-password", { method: "POST" }).then((r) => r.json())
+   ```
+
+   Risposta attesa:
+
+   ```json
+   { "success": true, "property_id": "...", "updated": true, "password_format": "enc:v1" }
+   ```
+
+   `{"success": false, "error": "not_configured"}` significa che il passo 2 o
+   il passo 3 non sono stati completati.
+
+5. Verificare **senza leggere il segreto**: `properties.updated_at` si e'
+   spostato e il campo inizia ancora per `enc:v1:`.
+
+### Non usare `GET /api/admin/manubot/setup` per questo
+
+Quella route riscrive tutta la configurazione e **rigenera
+`api_token`/`api_token_hash`**, restituendo il token in chiaro nella risposta.
+Usarla per un semplice cambio password invalida il Bearer Token del webhook
+ManuBot -> hub e i task smettono di arrivare. Se la si usa comunque (per
+ricreare l'integrazione da zero), va poi aggiornato il webhook su ManuBot con
+il nuovo token.
+
+`resync-password` esiste per evitare questo effetto collaterale: `UPDATE` su
+**una sola colonna** (`manubot_password`), nessun tocco ad `api_token`, nessuna
+chiamata a ManuBot, nessun segreto in risposta.
