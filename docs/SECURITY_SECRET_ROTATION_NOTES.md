@@ -168,6 +168,25 @@ documento, reso eseguibile.
    `{"success": false, "error": "not_configured"}` significa che il passo 2 o
    il passo 3 non sono stati completati.
 
+   **Da super admin** il tenant attivo dipende dall'impersonificazione UI, che
+   non e' ancora implementata: senza body la risposta e' `property_required`.
+   Va quindi indicata la property nel body:
+
+   ```js
+   await fetch("/api/admin/manubot/resync-password", {
+     method: "POST",
+     headers: { "Content-Type": "application/json" },
+     body: JSON.stringify({ property_id: "<uuid della property>" }),
+   }).then((r) => r.json())
+   ```
+
+   Un tenant admin non ha bisogno del body (usa la propria property) e non puo'
+   indicare l'ID di un altro tenant: riceve `403 forbidden`.
+
+   Altri esiti possibili: `invalid_property_id` (non e' un UUID),
+   `property_not_found` (la property non esiste), `unauthorized` (nessuna
+   sessione), `forbidden` (sessione senza privilegi di amministratore).
+
 5. Verificare **senza leggere il segreto**: `properties.updated_at` si e'
    spostato e il campo inizia ancora per `enc:v1:`.
 
