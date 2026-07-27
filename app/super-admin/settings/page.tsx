@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Save, Globe, Mail, Bell, Shield, Database, Key } from "lucide-react"
+import { Save, Globe, Mail, Bell, Shield, Database, Key, Eye, EyeOff, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -14,6 +14,15 @@ import { createClient } from "@/lib/supabase/client"
 export default function SuperAdminSettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [userEmail, setUserEmail] = useState("")
+
+  // Cambio password: campi controllati + esito, prima assenti del tutto
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPasswords, setShowPasswords] = useState(false)
+  const [passwordError, setPasswordError] = useState("")
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
 
   // Platform settings state
   const [platformSettings, setPlatformSettings] = useState({
@@ -55,6 +64,75 @@ export default function SuperAdminSettingsPage() {
     // TODO: Save settings to database
     await new Promise((r) => setTimeout(r, 1000))
     setIsSaving(false)
+  }
+
+  // Cambio password del proprio account super admin.
+  // Prima questa sezione era solo grafica: gli Input non erano controllati e il
+  // pulsante non aveva onClick, quindi il click non faceva assolutamente nulla.
+  const handleUpdatePassword = async () => {
+    setPasswordError("")
+    setPasswordSuccess(false)
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError("Compila tutti i campi.")
+      return
+    }
+    if (newPassword.length < 8) {
+      setPasswordError("La nuova password deve essere di almeno 8 caratteri.")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("La nuova password e la conferma non corrispondono.")
+      return
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError("La nuova password deve essere diversa da quella attuale.")
+      return
+    }
+    if (!userEmail) {
+      setPasswordError("Sessione non disponibile. Ricarica la pagina e riprova.")
+      return
+    }
+
+    setIsUpdatingPassword(true)
+    try {
+      const supabase = createClient()
+
+      // Riautenticazione: verifica che chi sta al terminale conosca la password
+      // attuale. updateUser() da solo NON la richiede, quindi senza questo
+      // passaggio una sessione lasciata aperta basterebbe a cambiare la
+      // password dell'account super admin.
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: userEmail,
+        password: currentPassword,
+      })
+      if (reauthError) {
+        setPasswordError("La password attuale non è corretta.")
+        return
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+      if (updateError) {
+        // Nessun dettaglio tecnico in UI: il messaggio reale resta nei log.
+        console.error("[super-admin/settings] update password failed:", updateError.message)
+        setPasswordError(
+          updateError.message.toLowerCase().includes("weak")
+            ? "Password troppo debole: scegline una più complessa."
+            : "Non è stato possibile aggiornare la password. Riprova più tardi.",
+        )
+        return
+      }
+
+      setPasswordSuccess(true)
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+    } catch (err) {
+      console.error("[super-admin/settings] update password error:", err)
+      setPasswordError("Non è stato possibile aggiornare la password. Riprova più tardi.")
+    } finally {
+      setIsUpdatingPassword(false)
+    }
   }
 
   return (
@@ -272,21 +350,73 @@ export default function SuperAdminSettingsPage() {
 
               <div className="border-t pt-6 space-y-4">
                 <h3 className="font-medium text-neutral-900">Cambio Password</h3>
-                <div className="space-y-4">
+                <form
+                  className="space-y-4"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    handleUpdatePassword()
+                  }}
+                >
                   <div className="space-y-2">
                     <Label htmlFor="currentPassword">Password Attuale</Label>
-                    <Input id="currentPassword" type="password" />
+                    <Input
+                      id="currentPassword"
+                      type={showPasswords ? "text" : "password"}
+                      autoComplete="current-password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="newPassword">Nuova Password</Label>
-                    <Input id="newPassword" type="password" />
+                    <Input
+                      id="newPassword"
+                      type={showPasswords ? "text" : "password"}
+                      autoComplete="new-password"
+                      placeholder="Minimo 8 caratteri"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="confirmPassword">Conferma Password</Label>
-                    <Input id="confirmPassword" type="password" />
+                    <Input
+                      id="confirmPassword"
+                      type={showPasswords ? "text" : "password"}
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
                   </div>
-                  <Button variant="outline">Aggiorna Password</Button>
-                </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswords((v) => !v)}
+                    className="flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-900"
+                  >
+                    {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPasswords ? "Nascondi password" : "Mostra password"}
+                  </button>
+
+                  {passwordError && (
+                    <div role="alert" className="bg-red-50 text-red-700 border border-red-200 p-3 rounded-lg text-sm">
+                      {passwordError}
+                    </div>
+                  )}
+                  {passwordSuccess && (
+                    <div
+                      role="status"
+                      className="flex items-center gap-2 bg-green-50 text-green-800 border border-green-200 p-3 rounded-lg text-sm"
+                    >
+                      <CheckCircle className="w-4 h-4 shrink-0" />
+                      Password aggiornata con successo.
+                    </div>
+                  )}
+
+                  <Button type="submit" variant="outline" disabled={isUpdatingPassword}>
+                    {isUpdatingPassword ? "Aggiornamento..." : "Aggiorna Password"}
+                  </Button>
+                </form>
               </div>
             </CardContent>
           </Card>
