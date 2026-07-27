@@ -23,8 +23,7 @@
 
 import type { CallerIdentity } from "@/lib/auth/admin-access"
 import { createServiceClient } from "@/lib/supabase/server"
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+import { resolvePropertyIdForCaller } from "@/lib/auth/property-scope"
 
 /** Sottoinsieme di `properties` accettato da `getManubotClient`. */
 export interface ManubotPropertyCredentials {
@@ -49,32 +48,16 @@ export async function loadManubotPropertyForCaller(
   identity: CallerIdentity,
   requested?: string | null,
 ): Promise<ManubotPropertyResolution> {
-  const requestedPropertyId = requested?.trim() || null
-
-  if (requestedPropertyId && !UUID_RE.test(requestedPropertyId)) {
-    return { ok: false, status: 400, error: "invalid_property_id" }
+  // TENANT ISOLATION delegata all'helper condiviso (lib/auth/property-scope):
+  // valida l'UUID, nega un property_id altrui ai tenant admin e richiede un
+  // tenant esplicito al super admin senza impersonificazione. `verifyExists` è
+  // false perché l'esistenza viene già accertata dal SELECT qui sotto, che deve
+  // comunque leggere le colonne di configurazione.
+  const scope = await resolvePropertyIdForCaller(identity, requested, { verifyExists: false })
+  if (!scope.ok) {
+    return { ok: false, status: scope.status, error: scope.error, message: scope.message }
   }
-
-  // TENANT ISOLATION: solo il super admin può indicare una property diversa.
-  let propertyId: string
-  if (requestedPropertyId) {
-    if (!identity.isSuperAdmin && requestedPropertyId !== identity.propertyId) {
-      return { ok: false, status: 403, error: "forbidden" }
-    }
-    propertyId = requestedPropertyId
-  } else {
-    if (!identity.propertyId) {
-      // Caso tipico del super admin senza impersonificazione attiva. NON si
-      // ripiega sulle env globali: si chiede quale tenant leggere.
-      return {
-        ok: false,
-        status: 400,
-        error: "property_required",
-        message: "Nessun tenant attivo: indica property_id nella richiesta.",
-      }
-    }
-    propertyId = identity.propertyId
-  }
+  const propertyId = scope.propertyId
 
   const supabase = createServiceClient()
   const { data, error } = await supabase
