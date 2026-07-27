@@ -29,6 +29,14 @@
  * È POST (non GET) proprio perché ha un side effect: non può essere innescata
  * da un semplice prefetch o dall'apertura di un URL.
  *
+ * QUALE PROPERTY VIENE AGGIORNATA:
+ *  - tenant admin: la propria, presa dalla sessione. Se passa un `property_id`
+ *    diverso dal proprio riceve 403 (tenant isolation).
+ *  - super admin: può indicare `{ "property_id": "..." }` nel body, perché il
+ *    tenant attivo dipende dall'impersonificazione UI non ancora disponibile.
+ *    Senza body e senza tenant attivo la risposta è `property_required`.
+ *  - in entrambi i casi la property deve esistere, altrimenti 404.
+ *
  * Idempotente: rieseguirla con la stessa env riscrive lo stesso valore logico
  * (il ciphertext cambia perché `enc:v1` non è deterministico, ma la password
  * decifrata resta la medesima).
@@ -36,15 +44,65 @@
 
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
+import { getCallerIdentity, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { encryptManubotPasswordForWrite } from "@/lib/manubot/credential-secrets"
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export async function POST(req: NextRequest) {
   try {
-    // Stesso guard delle altre route admin ManuBot: richiede una sessione con
-    // privilegi di tenant admin o super admin e un tenant selezionato.
-    // Lancia AccessError (401/403/400) se non autorizzato.
-    const { propertyId } = await requireTenantAdmin(req)
+    // Guard: sessione valida + privilegi di amministratore.
+    // NB: si usa getCallerIdentity invece di requireTenantAdmin perché
+    // quest'ultimo esige un tenant *già selezionato*, e per un super admin il
+    // tenant attivo arriva dall'impersonificazione UI, non ancora disponibile.
+    // I controlli di ruolo replicati qui sotto sono gli stessi.
+    const identity = await getCallerIdentity(req)
+    if (!identity) {
+      return NextResponse.json({ success: false, error: "unauthorized" }, { status: 401 })
+    }
+    if (!identity.isSuperAdmin && !identity.isTenantAdmin) {
+      return NextResponse.json({ success: false, error: "forbidden" }, { status: 403 })
+    }
+
+    // Body opzionale: { "property_id": "..." }. Assente/non-JSON => null.
+    let requestedPropertyId: string | null = null
+    try {
+      const body = await req.json()
+      if (body && typeof body.property_id === "string" && body.property_id.trim()) {
+        requestedPropertyId = body.property_id.trim()
+      }
+    } catch {
+      // Nessun body: si userà il tenant della sessione.
+    }
+
+    if (requestedPropertyId && !UUID_RE.test(requestedPropertyId)) {
+      return NextResponse.json({ success: false, error: "invalid_property_id" }, { status: 400 })
+    }
+
+    // TENANT ISOLATION: solo un super admin può indicare una property diversa
+    // dalla propria. Un tenant admin che prova a passare l'ID di un altro
+    // tenant riceve 403, esattamente come prima.
+    let propertyId: string
+    if (requestedPropertyId) {
+      if (!identity.isSuperAdmin && requestedPropertyId !== identity.propertyId) {
+        return NextResponse.json({ success: false, error: "forbidden" }, { status: 403 })
+      }
+      propertyId = requestedPropertyId
+    } else {
+      if (!identity.propertyId) {
+        // Caso tipico del super admin senza impersonificazione attiva:
+        // errore esplicito e azionabile, non un "forbidden" fuorviante.
+        return NextResponse.json(
+          {
+            success: false,
+            error: "property_required",
+            message: "Nessun tenant attivo: indica property_id nel body della richiesta.",
+          },
+          { status: 400 },
+        )
+      }
+      propertyId = identity.propertyId
+    }
 
     // Letta server-side. Il valore non viene mai loggato né restituito.
     const envPassword = process.env.MANUBOT_DEFAULT_PASSWORD
@@ -69,8 +127,22 @@ export async function POST(req: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // La property è quella del tenant della sessione: nessun ID hardcoded e
-    // nessun modo di scrivere sul tenant di qualcun altro.
+    // La property deve esistere: evita UPDATE silenziosi a zero righe su un ID
+    // inesistente (che risponderebbero success senza aver aggiornato nulla).
+    const { data: property, error: lookupError } = await supabase
+      .from("properties")
+      .select("id")
+      .eq("id", propertyId)
+      .maybeSingle()
+
+    if (lookupError) {
+      console.error("[v0] resync-password: lookup failed:", lookupError.message)
+      return NextResponse.json({ success: false, error: "lookup_failed" }, { status: 500 })
+    }
+    if (!property) {
+      return NextResponse.json({ success: false, error: "property_not_found" }, { status: 404 })
+    }
+
     // UPDATE su UNA SOLA COLONNA: qualsiasi aggiunta qui va considerata una
     // modifica di sicurezza. In particolare NON aggiungere api_token.
     const { error: updateError } = await supabase
