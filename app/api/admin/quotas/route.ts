@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getPropertyFromSession } from "@/lib/auth-property"
 import { getQuotaStatus } from "@/lib/tenant-quotas"
 import { checkRateLimit, RATE_LIMITS, rateLimitExceeded, rateLimitHeaders } from "@/lib/rate-limiter"
+import { handleServiceError } from "@/lib/errors"
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,9 +24,10 @@ export async function GET(request: NextRequest) {
       headers: rateLimitHeaders(rateLimitResult),
     })
   } catch (error) {
-    console.error("Error fetching quotas:", error)
-    const message = error instanceof Error ? error.message : "Failed to fetch quota status"
-    const status = message === "Non autenticato" ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    // handleServiceError mappa gia' "Non autenticato" -> 401 e
+    // "nessun tenant selezionato"/"non associato a nessuna struttura" -> 403,
+    // e non logga come errore le condizioni di auth attese.
+    // Prima qui c'era un console.error con stack su OGNI sessione scaduta.
+    return handleServiceError(error)
   }
 }

@@ -66,11 +66,41 @@ export class RateLimitError extends ServiceError {
 export const AuthorizationError = UnauthorizedError
 
 /**
+ * Condizioni di autenticazione/autorizzazione ATTESE, non guasti:
+ * sessione assente o scaduta, super admin senza tenant selezionato,
+ * utente non associato a una struttura.
+ *
+ * Perche' serve: `getAuthenticatedPropertyId` LANCIA "Non autenticato"
+ * invece di restituire null, quindi ogni richiesta senza sessione valida
+ * (utente sulla pagina di login, tab lasciata aperta, prefetch) finiva nel
+ * catch e veniva loggata come console.error con stack trace completo.
+ * Nei log sembrava un errore applicativo: e' solo un 401 fisiologico.
+ * Vanno loggate in forma breve, non come errori.
+ */
+export function isExpectedAuthError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const m = error.message
+  return (
+    m.includes("Non autenticato") ||
+    m.includes("Unauthorized") ||
+    m.includes("unauthorized") ||
+    m.includes("nessun tenant selezionato") ||
+    m.includes("non associato a nessuna struttura")
+  )
+}
+
+/**
  * Handles service errors and returns appropriate NextResponse
  * Always returns a Response to ensure route handlers don't fail
  */
 export function handleServiceError(error: unknown): NextResponse {
-  console.error("[ServiceError]", error)
+  // Le condizioni di auth attese non sono guasti: log breve senza stack,
+  // cosi' i log restano leggibili e i veri errori non si perdono nel rumore.
+  if (isExpectedAuthError(error)) {
+    console.warn("[auth] richiesta non autorizzata:", (error as Error).message)
+  } else {
+    console.error("[ServiceError]", error)
+  }
 
   if (error instanceof ServiceError) {
     return NextResponse.json(
