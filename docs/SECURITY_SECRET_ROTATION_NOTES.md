@@ -162,11 +162,24 @@ documento, reso eseguibile.
    Risposta attesa:
 
    ```json
-   { "success": true, "property_id": "...", "updated": true, "password_format": "enc:v1" }
+   {
+     "success": true,
+     "property_id": "...",
+     "updated": true,
+     "validated": true,
+     "password_format": "enc:v1",
+     "updated_at_refreshed": true
+   }
    ```
 
    `{"success": false, "error": "not_configured"}` significa che il passo 2 o
    il passo 3 non sono stati completati.
+
+   **La route valida la password prima di scriverla.** Prova un login all'auth di
+   ManuBot: se la credenziale non e' accettata risponde
+   `{"success": false, "error": "auth_failed", "updated": false}` e **il DB non
+   viene modificato**. Quindi `success: true` significa ora "credenziale valida
+   E colonna riscritta", non solo la seconda cosa.
 
    **Da super admin** il tenant attivo dipende dall'impersonificazione UI, che
    non e' ancora implementata: senza body la risposta e' `property_required`.
@@ -186,9 +199,32 @@ documento, reso eseguibile.
    Altri esiti possibili: `invalid_property_id` (non e' un UUID),
    `property_not_found` (la property non esiste), `unauthorized` (nessuna
    sessione), `forbidden` (sessione senza privilegi di amministratore).
+   Esiti della validazione: `auth_failed` (password rifiutata da ManuBot),
+   `tenant_not_configured` (email o URL Supabase della property assenti o non
+   ammesse per l'ambiente), `env_missing`, `network_error`, `permission_error`.
 
-5. Verificare **senza leggere il segreto**: `properties.updated_at` si e'
-   spostato e il campo inizia ancora per `enc:v1:`.
+5. Verificare **senza leggere il segreto**, con tutti e tre i criteri:
+
+   ```sql
+   select
+     (manubot_password like 'enc:v1:%')            as cifrata,
+     (updated_at > timestamp '<istante prima del resync>') as updated_at_mosso,
+     (api_token is not null and api_token <> '')   as api_token_ancora_presente
+   from public.properties
+   where id = '<uuid della property>';
+   ```
+
+   Attesi tutti e tre `true`. Il terzo e' il controllo che il webhook
+   ManuBot -> hub non e' stato invalidato: `api_token` deve restare **invariato**.
+
+   > **Nota storica.** Fino al 27/07/2026 questo passo diceva solo "verificare
+   > che `updated_at` si sia spostato", ma era un criterio **inapplicabile**: la
+   > tabella `public.properties` non ha trigger che aggiornino `updated_at` e la
+   > route non lo scriveva, quindi il timestamp restava fermo anche a resync
+   > riuscito. In quell'occasione la verifica fu fatta ripiegando sulla lunghezza
+   > del campo cifrato (70 -> 73 caratteri). Ora la route aggiorna
+   > esplicitamente `updated_at`, quindi il criterio sopra e' valido: non serve
+   > piu' ragionare su lunghezze o hash.
 
 ### Non usare `GET /api/admin/manubot/setup` per questo
 
