@@ -12,6 +12,7 @@
 
 import { decryptManubotPassword } from "@/lib/manubot/credential-secrets"
 import { validateManubotSupabaseUrlForEnvironment } from "@/lib/manubot/environment-guard"
+import { ManubotUpstreamError, upstreamErrorFromResponse } from "@/lib/manubot/upstream-error"
 
 /**
  * Legge una variabile ambiente obbligatoria.
@@ -128,8 +129,13 @@ export class ManubotClient {
       }
     )
     if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`Login Manubot fallito: ${err}`)
+      // Prima il body grezzo veniva concatenato nel messaggio senza filtri e
+      // senza status. Ora lo status è un campo dell'errore e il body passa da
+      // `redactSecrets`: `isLoginPhase` serve perché Supabase risponde 400 (non
+      // 401) alle credenziali non valide.
+      throw await upstreamErrorFromResponse("login", "/auth/v1/token", res, {
+        isLoginPhase: true,
+      })
     }
     const data = await res.json()
     this.accessToken = data.access_token
@@ -153,10 +159,8 @@ export class ManubotClient {
       headers: this.authHeaders(),
       body: JSON.stringify(payload),
     })
-    if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`Creazione task Manubot fallita: ${err}`)
-    }
+    // Solo diagnostica: il comportamento in caso di successo è invariato.
+    if (!res.ok) throw await upstreamErrorFromResponse("tasks/create", "/tasks/create", res)
     return res.json()
   }
 
@@ -172,10 +176,10 @@ export class ManubotClient {
       headers: this.authHeaders(),
       body: JSON.stringify(updates),
     })
-    if (!res.ok) {
-      const err = await res.text()
-      throw new Error(`Aggiornamento task Manubot fallito: ${err}`)
-    }
+    // Solo diagnostica: il comportamento in caso di successo è invariato.
+    // Il taskId NON entra nel path loggato: è un id di risorsa, non un segreto,
+    // ma tenere i path stabili rende i log aggregabili.
+    if (!res.ok) throw await upstreamErrorFromResponse("tasks/update", "/tasks/{id}", res)
     return res.json()
   }
 
@@ -186,7 +190,7 @@ export class ManubotClient {
     const res = await fetch(`${this.baseUrl}/tasks`, {
       headers: this.authHeaders(),
     })
-    if (!res.ok) throw new Error("Errore fetch task Manubot")
+    if (!res.ok) throw await upstreamErrorFromResponse("tasks", "/tasks", res)
     const data = await res.json()
     return Array.isArray(data) ? data : data.tasks || []
   }
@@ -198,7 +202,7 @@ export class ManubotClient {
     const res = await fetch(`${this.baseUrl}/team`, {
       headers: this.authHeaders(),
     })
-    if (!res.ok) throw new Error("Errore fetch team Manubot")
+    if (!res.ok) throw await upstreamErrorFromResponse("team", "/team", res)
     const data = await res.json()
     return Array.isArray(data) ? data : data.team || []
   }
@@ -210,7 +214,7 @@ export class ManubotClient {
     const res = await fetch(`${this.baseUrl}/assets`, {
       headers: this.authHeaders(),
     })
-    if (!res.ok) throw new Error("Errore fetch asset Manubot")
+    if (!res.ok) throw await upstreamErrorFromResponse("assets", "/assets", res)
     const data = await res.json()
     return Array.isArray(data) ? data : data.assets || []
   }
@@ -249,6 +253,11 @@ export async function getManubotClient(property: {
     await client.login(email, password)
     return client
   } catch (e: any) {
-    throw new Error(`Login Manubot fallito: ${e.message}`)
+    // NON rienvolgere un ManubotUpstreamError in un Error generico: si
+    // perderebbero `status` e `isLoginPhase`, cioè esattamente l'informazione
+    // che serve a distinguere "credenziali rifiutate" da "ManuBot non
+    // raggiungibile". Prima il re-wrap appiattiva tutto su un messaggio.
+    if (e instanceof ManubotUpstreamError) throw e
+    throw new Error(`Login Manubot fallito: ${e?.message ?? "errore sconosciuto"}`)
   }
 }
