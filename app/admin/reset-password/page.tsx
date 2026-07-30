@@ -4,7 +4,6 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import { Lock, Eye, EyeOff, CheckCircle, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -20,7 +19,31 @@ export default function ResetPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   // null = ancora in verifica, true/false = esito presenza sessione di recovery
   const [hasRecoverySession, setHasRecoverySession] = useState<boolean | null>(null)
+  const [isLeaving, setIsLeaving] = useState(false)
   const router = useRouter()
+
+  // Aprire il link di recupero crea una sessione Supabase valida a tutti gli
+  // effetti, anche se la password non è stata ancora cambiata. Senza signOut,
+  // /admin trova quella sessione, chiama authorizeUser e reindirizza alla
+  // dashboard: l'utente entrerebbe senza aver mai completato il recupero.
+  // Va quindi chiusa PRIMA di tornare al login.
+  const handleBackToLogin = async () => {
+    if (isLeaving) return
+    setIsLeaving(true)
+
+    try {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+    } catch (err) {
+      // Se non c'è nessuna sessione da chiudere (link scaduto) signOut può
+      // fallire: non è un problema, l'obiettivo è comunque uscire.
+      console.error("[v0] signOut on cancel failed:", err)
+    }
+
+    // replace (non push) per non lasciare la pagina di reset nella cronologia,
+    // e ricarica completa così /admin rivaluta l'auth da zero.
+    window.location.replace("/admin")
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -93,7 +116,7 @@ export default function ResetPasswordPage() {
             </div>
             <h1 className="text-2xl font-serif text-stone-800 mb-2">Password reimpostata!</h1>
             <p className="text-stone-600">
-              La tua password è stata aggiornata con successo. Verrai reindirizzato al login...
+              La tua password è stata aggiornata con successo. Verrai reindirizzato tra pochi istanti...
             </p>
           </div>
         </div>
@@ -113,12 +136,14 @@ export default function ResetPasswordPage() {
             <p className="text-stone-600 mb-6">
               Il link di recupero è scaduto o non è valido. Richiedine uno nuovo dalla pagina di accesso.
             </p>
-            <Link
-              href="/admin"
-              className="inline-flex items-center justify-center w-full h-10 rounded-md bg-amber-700 text-white text-sm font-medium hover:bg-amber-800"
+            <button
+              type="button"
+              onClick={handleBackToLogin}
+              disabled={isLeaving}
+              className="inline-flex items-center justify-center w-full h-10 rounded-md bg-amber-700 text-white text-sm font-medium hover:bg-amber-800 disabled:opacity-60"
             >
-              Torna al login
-            </Link>
+              {isLeaving ? "Uscita in corso..." : "Torna al login"}
+            </button>
           </div>
         </div>
       </div>
@@ -188,12 +213,14 @@ export default function ResetPasswordPage() {
               )}
             </Button>
 
-            <Link
-              href="/admin"
-              className="block text-center text-sm text-stone-600 hover:text-stone-800"
+            <button
+              type="button"
+              onClick={handleBackToLogin}
+              disabled={isLeaving}
+              className="block w-full text-center text-sm text-stone-600 hover:text-stone-800 disabled:opacity-60"
             >
-              Torna al login
-            </Link>
+              {isLeaving ? "Uscita in corso..." : "Annulla e torna al login"}
+            </button>
           </form>
         </div>
       </div>
