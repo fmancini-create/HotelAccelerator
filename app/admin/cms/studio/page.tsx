@@ -68,6 +68,7 @@ export default function CMSStudioPage() {
           const savedTemplateId = projectData.project.template_id
           setTemplateId(loadedTemplates.some((template) => template.id === savedTemplateId) ? savedTemplateId : loadedTemplates[0]?.id || "luxury-editorial")
           setSiteName(projectData.project.site_name || "")
+          setPropertyProfile(projectData.project.property_profile || "")
           setStylePrompt(projectData.project.style_prompt || "")
           setPagePrompt(projectData.project.page_prompt || "")
           setStep(projectData.project.current_step || 1)
@@ -136,7 +137,7 @@ export default function CMSStudioPage() {
       const response = await fetch("/api/cms/ai-project", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template_id: templateId, site_name: siteName, style_prompt: stylePrompt, page_prompt: pagePrompt, current_step: nextStep, ...extra }),
+        body: JSON.stringify({ template_id: templateId, site_name: siteName, property_profile: propertyProfile, style_prompt: stylePrompt, page_prompt: pagePrompt, current_step: nextStep, ...extra }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Salvataggio non riuscito")
