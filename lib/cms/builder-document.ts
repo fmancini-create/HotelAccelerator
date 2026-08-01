@@ -104,7 +104,10 @@ export const BuilderSectionSchema = z.object({
 export const BuilderPageSchema = z.object({
   id: IdSchema,
   title: z.string().min(1).max(200),
-  slug: z.string().min(1).max(240).regex(/^\/?[a-z0-9]+(?:[\/-][a-z0-9]+)*$/, "Slug non valido"),
+  slug: z.string().min(1).max(240).refine(
+    (value) => value === "/" || /^\/?[a-z0-9]+(?:[\/-][a-z0-9]+)*$/.test(value),
+    "Slug non valido",
+  ),
   language: z.string().min(2).max(10).default("it"),
   seo: z.object({
     title: z.string().max(70).default(""),
