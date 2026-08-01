@@ -53,12 +53,20 @@ export function TemplateGallery({
   templates: StudioTemplate[]
   selectedId: string
   onSelect: (id: string) => void
-  profile: string
-  onProfileChange: (profile: string) => void
+  profile?: string
+  onProfileChange?: (profile: string) => void
 }) {
   const [category, setCategory] = useState("all")
   const [query, setQuery] = useState("")
+  const [localProfile, setLocalProfile] = useState("")
   const [recommendedIds, setRecommendedIds] = useState<string[]>([])
+  const profileValue = profile ?? localProfile
+
+  function updateProfile(value: string) {
+    const normalized = value.slice(0, 5000)
+    if (onProfileChange) onProfileChange(normalized)
+    else setLocalProfile(normalized)
+  }
 
   const categories = useMemo(() => ["all", ...Array.from(new Set(templates.map((template) => template.category)))], [templates])
   const visible = useMemo(() => {
@@ -78,7 +86,7 @@ export function TemplateGallery({
 
   function recommend() {
     const ranked = templates
-      .map((template) => ({ id: template.id, score: recommendationScore(template, profile) }))
+      .map((template) => ({ id: template.id, score: recommendationScore(template, profileValue) }))
       .sort((a, b) => b.score - a.score)
       .filter((item) => item.score > 0)
       .slice(0, 4)
@@ -92,10 +100,10 @@ export function TemplateGallery({
         <div className="space-y-2">
           <p className="text-sm font-medium">Descrivi la tua struttura</p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Input value={profile} onChange={(event) => onProfileChange(event.target.value.slice(0, 5000))} placeholder="Es. Hotel 4 stelle con spa, 28 camere, Lago di Garda, stile elegante" />
-            <Button type="button" onClick={recommend} disabled={!profile.trim()}><Sparkles className="mr-2 h-4 w-4" />Consigliami</Button>
+            <Input value={profileValue} onChange={(event) => updateProfile(event.target.value)} placeholder="Es. Hotel 4 stelle con spa, 28 camere, Lago di Garda, stile elegante" />
+            <Button type="button" onClick={recommend} disabled={!profileValue.trim()}><Sparkles className="mr-2 h-4 w-4" />Consigliami</Button>
           </div>
-          <p className="text-xs text-muted-foreground">La descrizione servirà anche a generare pagine, menu e priorità iniziali quando applichi il template.</p>
+          <p className="text-xs text-muted-foreground">Il layout applicato genera già pagine e priorità coerenti con la propria collezione. La personalizzazione completa usa anche le indicazioni degli step successivi.</p>
         </div>
         <div className="relative min-w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="Cerca template" /></div>
       </div>
