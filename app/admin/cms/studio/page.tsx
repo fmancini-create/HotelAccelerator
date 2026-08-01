@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { createBrowserSpeechRecognition, type SpeechRecognitionLike } from "@/lib/cms/browser-speech"
-import { TemplatePreview, type StudioTemplate } from "./template-preview"
+import type { StudioTemplate } from "./template-preview"
+import { TemplateGallery } from "./template-gallery"
 
 const steps = [
   { id: 1, label: "Template", icon: LayoutTemplate },
@@ -24,7 +25,7 @@ type SaveState = "idle" | "saving" | "saved" | "error"
 export default function CMSStudioPage() {
   const [step, setStep] = useState(1)
   const [templates, setTemplates] = useState<StudioTemplate[]>([])
-  const [templateId, setTemplateId] = useState("luxury")
+  const [templateId, setTemplateId] = useState("luxury-editorial")
   const [stylePrompt, setStylePrompt] = useState("")
   const [siteName, setSiteName] = useState("")
   const [pagePrompt, setPagePrompt] = useState("")
@@ -39,10 +40,7 @@ export default function CMSStudioPage() {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const speechBaseRef = useRef("")
 
-  const selectedTemplate = useMemo(
-    () => templates.find((template) => template.id === templateId) ?? templates[0],
-    [templates, templateId],
-  )
+  const selectedTemplate = useMemo(() => templates.find((template) => template.id === templateId) ?? templates[0], [templates, templateId])
 
   useEffect(() => {
     const recognition = createBrowserSpeechRecognition()
@@ -61,15 +59,17 @@ export default function CMSStudioPage() {
         const [projectData, templatesData] = await Promise.all([projectResponse.json(), templatesResponse.json()])
         if (!projectResponse.ok) throw new Error(projectData.error || "Impossibile caricare il progetto")
         if (!templatesResponse.ok) throw new Error(templatesData.error || "Impossibile caricare i template")
-        setTemplates(templatesData.templates || [])
+        const loadedTemplates = templatesData.templates || []
+        setTemplates(loadedTemplates)
         if (projectData.project) {
-          setTemplateId(projectData.project.template_id || "luxury")
+          const savedTemplateId = projectData.project.template_id
+          setTemplateId(loadedTemplates.some((template: StudioTemplate) => template.id === savedTemplateId) ? savedTemplateId : loadedTemplates[0]?.id || "luxury-editorial")
           setSiteName(projectData.project.site_name || "")
           setStylePrompt(projectData.project.style_prompt || "")
           setPagePrompt(projectData.project.page_prompt || "")
           setStep(projectData.project.current_step || 1)
           setUpdatedAt(projectData.project.updated_at || null)
-        }
+        } else if (loadedTemplates[0]) setTemplateId(loadedTemplates[0].id)
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Errore di caricamento")
       } finally {
@@ -177,7 +177,7 @@ export default function CMSStudioPage() {
 
       <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background">
         <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
-          <div><div className="mb-2 flex items-center gap-2"><Badge variant="secondary">Progetto persistente</Badge><Badge variant="outline">Codice</Badge></div><h2 className="text-xl font-semibold">Scegli, personalizza e costruisci il sito.</h2><p className="mt-1 text-sm text-muted-foreground">I template ora generano strutture reali e modificabili nel visual builder.</p></div>
+          <div><div className="mb-2 flex items-center gap-2"><Badge variant="secondary">Progetto persistente</Badge><Badge variant="outline">Codice</Badge></div><h2 className="text-xl font-semibold">Scegli, personalizza e costruisci il sito.</h2><p className="mt-1 text-sm text-muted-foreground">Esplora le collezioni o descrivi la struttura per ricevere suggerimenti trasparenti.</p></div>
           <div className="flex flex-wrap gap-2"><Button variant={isListening ? "destructive" : "outline"} onClick={isListening ? stopSpeech : startSpeech}>{isListening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{isListening ? "Ferma" : "Parla"}</Button><Button variant="outline" onClick={() => saveProject()} disabled={saveState === "saving"}>{saveState === "saving" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{saveState === "saved" ? "Salvato" : "Salva bozza"}</Button></div>
         </CardContent>
       </Card>
@@ -189,7 +189,7 @@ export default function CMSStudioPage() {
 
       <div className="grid gap-3 md:grid-cols-3">{steps.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => goToStep(id)} className={`rounded-lg border p-4 text-left transition-colors ${id === step ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}><div className="flex items-center gap-3"><div className={`flex h-9 w-9 items-center justify-center rounded-full ${id < step ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{id < step ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}</div><div><p className="text-xs text-muted-foreground">Step {id}</p><p className="font-medium">{label}</p></div></div></button>)}</div>
 
-      {step === 1 && <Card><CardHeader><CardTitle>1. Scegli il template reale</CardTitle><CardDescription>Ogni scelta contiene palette, tipografia, sezioni e contenuti iniziali differenti.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">{templates.map((template) => <button key={template.id} type="button" onClick={() => { setTemplateId(template.id); setSaveState("idle") }} className={`rounded-xl text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${templateId === template.id ? "ring-2 ring-primary ring-offset-2" : ""}`}><TemplatePreview template={template} selected={templateId === template.id} /></button>)}</div><div className="flex justify-end"><Button onClick={applyTemplate} disabled={!templateId || applyingTemplate}>{applyingTemplate ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Applica al builder</Button></div></CardContent></Card>}
+      {step === 1 && <Card><CardHeader><CardTitle>1. Trova il layout giusto</CardTitle><CardDescription>Filtra le collezioni, cerca per esigenza o descrivi la struttura per ricevere fino a quattro suggerimenti.</CardDescription></CardHeader><CardContent className="space-y-6"><TemplateGallery templates={templates} selectedId={templateId} onSelect={(id) => { setTemplateId(id); setSaveState("idle") }} /><div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border bg-background/95 p-4 shadow-xl backdrop-blur"><div><p className="text-xs text-muted-foreground">Template selezionato</p><p className="font-medium">{selectedTemplate?.name || "Nessuno"}</p></div><Button onClick={applyTemplate} disabled={!templateId || applyingTemplate}>{applyingTemplate ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Applica al builder</Button></div></CardContent></Card>}
 
       {step === 2 && <Card><CardHeader><CardTitle>2. Personalizza con parole semplici</CardTitle><CardDescription>Descrivi atmosfera, colori, fotografie e priorità commerciali.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="space-y-2"><Label htmlFor="site-name">Nome della struttura</Label><Input id="site-name" value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="Es. Villa I Barronci Resort & Spa" maxLength={160} /></div><div className="space-y-2"><Label htmlFor="style-prompt">Come deve apparire il sito?</Label><Textarea id="style-prompt" value={stylePrompt} onChange={(event) => setStylePrompt(event.target.value)} placeholder="Es. Elegante ma caldo, verde degli ulivi, piscina e spa in evidenza." className="min-h-40" maxLength={5000} /></div></CardContent></Card>}
 
