@@ -43,10 +43,21 @@ function recommendationScore(template: StudioTemplate, profile: string) {
   return score
 }
 
-export function TemplateGallery({ templates, selectedId, onSelect }: { templates: StudioTemplate[]; selectedId: string; onSelect: (id: string) => void }) {
+export function TemplateGallery({
+  templates,
+  selectedId,
+  onSelect,
+  profile,
+  onProfileChange,
+}: {
+  templates: StudioTemplate[]
+  selectedId: string
+  onSelect: (id: string) => void
+  profile: string
+  onProfileChange: (profile: string) => void
+}) {
   const [category, setCategory] = useState("all")
   const [query, setQuery] = useState("")
-  const [profile, setProfile] = useState("")
   const [recommendedIds, setRecommendedIds] = useState<string[]>([])
 
   const categories = useMemo(() => ["all", ...Array.from(new Set(templates.map((template) => template.category)))], [templates])
@@ -81,10 +92,10 @@ export function TemplateGallery({ templates, selectedId, onSelect }: { templates
         <div className="space-y-2">
           <p className="text-sm font-medium">Descrivi la tua struttura</p>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Input value={profile} onChange={(event) => setProfile(event.target.value)} placeholder="Es. Hotel 4 stelle con spa, 28 camere, Lago di Garda, stile elegante" />
+            <Input value={profile} onChange={(event) => onProfileChange(event.target.value.slice(0, 5000))} placeholder="Es. Hotel 4 stelle con spa, 28 camere, Lago di Garda, stile elegante" />
             <Button type="button" onClick={recommend} disabled={!profile.trim()}><Sparkles className="mr-2 h-4 w-4" />Consigliami</Button>
           </div>
-          <p className="text-xs text-muted-foreground">Il consiglio è deterministico e spiega solo affinità tra descrizione e caratteristiche del catalogo.</p>
+          <p className="text-xs text-muted-foreground">La descrizione servirà anche a generare pagine, menu e priorità iniziali quando applichi il template.</p>
         </div>
         <div className="relative min-w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="Cerca template" /></div>
       </div>
