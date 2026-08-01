@@ -16,8 +16,13 @@ function createVariantDocument(templateId: string) {
   const template = getCMSStudioTemplate(templateId)
   if (!template) return null
 
-  const document = createDocumentFromTemplate(template.baseTemplateId)
-  document.templateId = template.id
+  const baseDocument = createDocumentFromTemplate(template.baseTemplateId)
+  baseDocument.templateId = template.id
+  const propertyProfile = `${template.name}. ${template.description}. ${template.idealFor.join(" ")}. ${template.features.join(" ")}.`
+  const document = personalizeBuilderDocument(baseDocument, {
+    siteName: template.name,
+    propertyProfile,
+  })
   document.pages[0].seo.title = template.name
   document.pages[0].seo.description = template.description
   return { template, document }
@@ -40,6 +45,10 @@ export async function GET(request: NextRequest) {
     schema_version: 2,
     template: result.template,
     document: result.document,
+    personalization: {
+      mode: "collection-profile-v1",
+      pages: result.document.pages.map((page) => ({ title: page.title, slug: page.slug })),
+    },
   })
 }
 
