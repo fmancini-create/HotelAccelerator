@@ -6,8 +6,9 @@ import {
   CMSBuilderDocumentSchema,
   createEmptyBuilderDocument,
 } from "@/lib/cms/builder-document"
+import { CMS_STUDIO_TEMPLATES } from "@/lib/cms/template-variants"
 
-const TEMPLATE_IDS = new Set(["luxury", "boutique", "wellness", "family", "business", "agriturismo"])
+const TEMPLATE_IDS = new Set(CMS_STUDIO_TEMPLATES.map((template) => template.id))
 const PROJECT_SELECT = "id, template_id, site_name, style_prompt, page_prompt, current_step, status, project_version, builder_schema_version, builder_document, updated_at"
 
 function text(value: unknown, max: number): string | undefined {
@@ -25,7 +26,7 @@ function errorStatus(message: string): number {
 
 function serializeProject(project: Record<string, unknown> | null) {
   if (!project) return null
-  const templateId = typeof project.template_id === "string" ? project.template_id : "luxury"
+  const templateId = typeof project.template_id === "string" ? project.template_id : CMS_STUDIO_TEMPLATES[0]?.id || "luxury-editorial"
   return {
     ...project,
     builder_schema_version: project.builder_schema_version ?? CMS_BUILDER_SCHEMA_VERSION,
@@ -58,9 +59,7 @@ export async function PUT(request: NextRequest) {
     const payload: Record<string, unknown> = { property_id: propertyId }
 
     if (body.template_id !== undefined) {
-      if (typeof body.template_id !== "string" || !TEMPLATE_IDS.has(body.template_id)) {
-        throw new Error("Template non valido")
-      }
+      if (typeof body.template_id !== "string" || !TEMPLATE_IDS.has(body.template_id)) throw new Error("Template non valido")
       payload.template_id = body.template_id
     }
 
@@ -80,10 +79,7 @@ export async function PUT(request: NextRequest) {
     if (body.builder_document !== undefined) {
       const validation = CMSBuilderDocumentSchema.safeParse(body.builder_document)
       if (!validation.success) {
-        return NextResponse.json(
-          { error: "Documento CMS non valido", details: validation.error.flatten() },
-          { status: 400 },
-        )
+        return NextResponse.json({ error: "Documento CMS non valido", details: validation.error.flatten() }, { status: 400 })
       }
       payload.builder_schema_version = CMS_BUILDER_SCHEMA_VERSION
       payload.builder_document = validation.data
