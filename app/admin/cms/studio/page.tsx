@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, Check, FileText, LayoutTemplate, Loader2, Mic, Palette, Save, Sparkles } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, FileText, LayoutTemplate, Loader2, Mic, MicOff, Palette, Save, Sparkles } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { createBrowserSpeechRecognition, type SpeechRecognitionLike } from "@/lib/cms/browser-speech"
 
 const templates = [
   { id: "luxury", name: "Luxury Resort", description: "Elegante, fotografico e orientato alle esperienze." },
@@ -38,11 +39,24 @@ export default function CMSStudioPage() {
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [error, setError] = useState<string | null>(null)
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+  const [speechSupported, setSpeechSupported] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const [liveTranscript, setLiveTranscript] = useState("")
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const speechBaseRef = useRef("")
 
   const selectedTemplate = useMemo(
     () => templates.find((template) => template.id === templateId) ?? templates[0],
     [templateId],
   )
+
+  useEffect(() => {
+    const recognition = createBrowserSpeechRecognition()
+    recognitionRef.current = recognition
+    setSpeechSupported(Boolean(recognition))
+
+    return () => recognition?.abort()
+  }, [])
 
   useEffect(() => {
     async function loadProject() {
@@ -66,6 +80,59 @@ export default function CMSStudioPage() {
     }
     loadProject()
   }, [])
+
+  function stopSpeech() {
+    recognitionRef.current?.stop()
+    setIsListening(false)
+  }
+
+  function startSpeech() {
+    setError(null)
+    setLiveTranscript("")
+
+    if (step === 1) {
+      setError("La dettatura è disponibile negli step Personalizzazione e Pagine.")
+      return
+    }
+
+    const recognition = recognitionRef.current
+    if (!recognition) {
+      setError("Il riconoscimento vocale non è supportato da questo browser. Usa Chrome o Edge aggiornato e consenti l’accesso al microfono.")
+      return
+    }
+
+    speechBaseRef.current = step === 2 ? stylePrompt.trim() : pagePrompt.trim()
+    recognition.onresult = (event) => {
+      let transcript = ""
+      for (let index = 0; index < event.results.length; index += 1) {
+        transcript += event.results[index][0]?.transcript ?? ""
+      }
+      const normalized = transcript.trim()
+      setLiveTranscript(normalized)
+      const nextValue = [speechBaseRef.current, normalized].filter(Boolean).join(" ")
+      if (step === 2) setStylePrompt(nextValue.slice(0, 5000))
+      if (step === 3) setPagePrompt(nextValue.slice(0, 10000))
+      setSaveState("idle")
+    }
+    recognition.onerror = (event) => {
+      const message = event.error === "not-allowed"
+        ? "Accesso al microfono negato. Abilitalo dalle impostazioni del browser."
+        : event.error === "no-speech"
+          ? "Non ho rilevato la voce. Premi Parla e riprova."
+          : `Riconoscimento vocale non riuscito: ${event.error}`
+      setError(message)
+      setIsListening(false)
+    }
+    recognition.onend = () => setIsListening(false)
+
+    try {
+      recognition.start()
+      setIsListening(true)
+    } catch {
+      setError("Il microfono è già in uso oppure il riconoscimento vocale non può essere avviato.")
+      setIsListening(false)
+    }
+  }
 
   async function saveProject(nextStep = step) {
     setSaveState("saving")
@@ -96,6 +163,7 @@ export default function CMSStudioPage() {
   }
 
   async function goToStep(nextStep: number) {
+    if (isListening) stopSpeech()
     const safeStep = Math.max(1, Math.min(3, nextStep))
     const saved = await saveProject(safeStep)
     if (saved) setStep(safeStep)
@@ -120,10 +188,17 @@ export default function CMSStudioPage() {
           <div>
             <div className="mb-2 flex items-center gap-2"><Badge variant="secondary">Progetto persistente</Badge><Badge variant="outline">Codice</Badge></div>
             <h2 className="text-xl font-semibold">Descrivi il sito. HotelAccelerator conserva il progetto del tenant.</h2>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Template e istruzioni sono salvati separatamente per struttura. Generazione AI, voce e pubblicazione restano disabilitate finché non saranno presenti proposta, conferma, versioni e rollback.</p>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">Template e istruzioni sono salvati separatamente per struttura. La voce compila i campi dello step corrente; pubblicazione e generazione automatica restano soggette a conferma.</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" disabled><Mic className="mr-2 h-4 w-4" />Parla</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={isListening ? "destructive" : "outline"}
+              onClick={isListening ? stopSpeech : startSpeech}
+              title={!speechSupported ? "Riconoscimento vocale non supportato dal browser" : undefined}
+            >
+              {isListening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}
+              {isListening ? "Ferma" : "Parla"}
+            </Button>
             <Button variant="outline" onClick={() => saveProject()} disabled={saveState === "saving"}>
               {saveState === "saving" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {saveState === "saved" ? "Salvato" : "Salva bozza"}
@@ -132,6 +207,8 @@ export default function CMSStudioPage() {
         </CardContent>
       </Card>
 
+      {isListening && <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm"><span className="font-medium">Sto ascoltando…</span>{liveTranscript && <span className="ml-2 text-muted-foreground">{liveTranscript}</span>}</div>}
+      {!speechSupported && <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800">Il browser non espone il riconoscimento vocale. La funzione resta utilizzabile con testo; per la voce prova Chrome o Edge aggiornato.</div>}
       {error && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{error}</div>}
       {updatedAt && <p className="text-right text-xs text-muted-foreground">Ultimo salvataggio: {new Date(updatedAt).toLocaleString("it-IT")}</p>}
 
@@ -145,9 +222,9 @@ export default function CMSStudioPage() {
 
       {step === 1 && <Card><CardHeader><CardTitle>1. Scegli lo stile di partenza</CardTitle><CardDescription>Il template definisce struttura e linguaggio visivo.</CardDescription></CardHeader><CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{templates.map((template) => <button key={template.id} type="button" onClick={() => { setTemplateId(template.id); setSaveState("idle") }} className={`rounded-xl border p-5 text-left transition-all hover:shadow-sm ${templateId === template.id ? "border-primary ring-2 ring-primary/15" : ""}`}><div className="mb-5 aspect-[16/9] rounded-lg bg-gradient-to-br from-muted to-muted/40 p-4"><div className="h-3 w-2/3 rounded bg-background/90" /><div className="mt-3 h-16 rounded bg-background/70" /></div><div className="flex justify-between gap-3"><div><h3 className="font-semibold">{template.name}</h3><p className="mt-1 text-sm text-muted-foreground">{template.description}</p></div>{templateId === template.id && <Check className="h-5 w-5 text-primary" />}</div></button>)}</CardContent></Card>}
 
-      {step === 2 && <Card><CardHeader><CardTitle>2. Personalizza con parole semplici</CardTitle><CardDescription>Descrivi atmosfera, colori, fotografie e priorità commerciali.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="space-y-2"><Label htmlFor="site-name">Nome della struttura</Label><Input id="site-name" value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="Es. Villa I Barronci Resort & Spa" maxLength={160} /></div><div className="space-y-2"><Label htmlFor="style-prompt">Come deve apparire il sito?</Label><Textarea id="style-prompt" value={stylePrompt} onChange={(event) => setStylePrompt(event.target.value)} placeholder="Es. Elegante ma caldo, verde degli ulivi, piscina e spa in evidenza." className="min-h-40" maxLength={5000} /><p className="text-xs text-muted-foreground">{stylePrompt.length}/5000 caratteri</p></div></CardContent></Card>}
+      {step === 2 && <Card><CardHeader><CardTitle>2. Personalizza con parole semplici</CardTitle><CardDescription>Descrivi atmosfera, colori, fotografie e priorità commerciali. Puoi anche premere Parla.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="space-y-2"><Label htmlFor="site-name">Nome della struttura</Label><Input id="site-name" value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="Es. Villa I Barronci Resort & Spa" maxLength={160} /></div><div className="space-y-2"><Label htmlFor="style-prompt">Come deve apparire il sito?</Label><Textarea id="style-prompt" value={stylePrompt} onChange={(event) => setStylePrompt(event.target.value)} placeholder="Es. Elegante ma caldo, verde degli ulivi, piscina e spa in evidenza." className="min-h-40" maxLength={5000} /><p className="text-xs text-muted-foreground">{stylePrompt.length}/5000 caratteri</p></div></CardContent></Card>}
 
-      {step === 3 && <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]"><Card><CardHeader><CardTitle>3. Descrivi pagine, menu e contenuti</CardTitle><CardDescription>La richiesta sarà convertita in una proposta strutturata nel prossimo incremento.</CardDescription></CardHeader><CardContent><Textarea value={pagePrompt} onChange={(event) => setPagePrompt(event.target.value)} placeholder="Es. Crea Home, Camere, Spa, Ristorante, Esperienze e Contatti..." className="min-h-64" maxLength={10000} /><p className="mt-2 text-xs text-muted-foreground">{pagePrompt.length}/10000 caratteri</p></CardContent></Card><Card><CardHeader><CardTitle>Riepilogo progetto</CardTitle><CardDescription>Nessuna modifica viene pubblicata.</CardDescription></CardHeader><CardContent className="space-y-4 text-sm"><div><p className="text-muted-foreground">Template</p><p className="font-medium">{selectedTemplate.name}</p></div><div><p className="text-muted-foreground">Struttura</p><p className="font-medium">{siteName || "Non indicata"}</p></div><div><p className="text-muted-foreground">Personalizzazione</p><p className="line-clamp-4">{stylePrompt || "Non descritta"}</p></div><div><p className="text-muted-foreground">Pagine</p><p className="line-clamp-6">{pagePrompt || "Da definire"}</p></div><Button className="w-full" disabled><Sparkles className="mr-2 h-4 w-4" />Genera proposta</Button></CardContent></Card></div>}
+      {step === 3 && <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]"><Card><CardHeader><CardTitle>3. Descrivi pagine, menu e contenuti</CardTitle><CardDescription>Scrivi oppure usa Parla; poi apri l’editor visuale per comporre le sezioni.</CardDescription></CardHeader><CardContent><Textarea value={pagePrompt} onChange={(event) => setPagePrompt(event.target.value)} placeholder="Es. Crea Home, Camere, Spa, Ristorante, Esperienze e Contatti..." className="min-h-64" maxLength={10000} /><p className="mt-2 text-xs text-muted-foreground">{pagePrompt.length}/10000 caratteri</p></CardContent></Card><Card><CardHeader><CardTitle>Riepilogo progetto</CardTitle><CardDescription>Nessuna modifica viene pubblicata.</CardDescription></CardHeader><CardContent className="space-y-4 text-sm"><div><p className="text-muted-foreground">Template</p><p className="font-medium">{selectedTemplate.name}</p></div><div><p className="text-muted-foreground">Struttura</p><p className="font-medium">{siteName || "Non indicata"}</p></div><div><p className="text-muted-foreground">Personalizzazione</p><p className="line-clamp-4">{stylePrompt || "Non descritta"}</p></div><div><p className="text-muted-foreground">Pagine</p><p className="line-clamp-6">{pagePrompt || "Da definire"}</p></div><Button className="w-full" asChild><Link href="/admin/cms/studio/builder"><Sparkles className="mr-2 h-4 w-4" />Apri editor visuale</Link></Button></CardContent></Card></div>}
 
       <div className="flex items-center justify-between border-t pt-5"><Button variant="outline" onClick={() => goToStep(step - 1)} disabled={step === 1 || saveState === "saving"}><ArrowLeft className="mr-2 h-4 w-4" />Indietro</Button>{step < 3 ? <Button onClick={() => goToStep(step + 1)} disabled={!canContinue || saveState === "saving"}>Continua<ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={() => saveProject()} disabled={saveState === "saving"}><Save className="mr-2 h-4 w-4" />Salva progetto</Button>}</div>
     </div>
