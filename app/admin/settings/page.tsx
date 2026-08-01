@@ -13,11 +13,8 @@ interface SettingsItem {
   icon: React.ReactNode
   href: string
   color: string
-  /** Only show if the admin has this permission */
   requiresPermission?: "can_manage_users"
-  /** Only show to super admins */
   superAdminOnly?: boolean
-  /** Only show to tenant admins / super admins (hidden from regular members) */
   adminOnly?: boolean
 }
 
@@ -32,8 +29,6 @@ const settingsItems: SettingsItem[] = [
     adminOnly: true,
   },
   {
-    // Visible to everyone: a member uses this to connect/configure THEIR own
-    // mailbox. Admin-only channel config is gated on the channel pages.
     id: "channels",
     title: "Canali",
     description: "Email, WhatsApp, Telegram, Chat e Telefono IP",
@@ -71,10 +66,10 @@ const settingsItems: SettingsItem[] = [
   },
   {
     id: "cms",
-    title: "Contenuti CMS",
-    description: "Gestisci pagine, blocchi e SEO del sito",
+    title: "CMS AI-first",
+    description: "Crea il sito con template, chat guidata e gestione pagine",
     icon: <FileText className="w-6 h-6" />,
-    href: "/admin/cms",
+    href: "/admin/cms/studio",
     color: "bg-green-500",
     adminOnly: true,
   },
@@ -88,7 +83,6 @@ const settingsItems: SettingsItem[] = [
     adminOnly: true,
   },
   {
-    // Visible to everyone: change own password and view own permissions.
     id: "profile",
     title: "Il Mio Profilo",
     description: "Modifica la tua password e visualizza i permessi",
@@ -111,7 +105,6 @@ export default function AdminSettingsPage() {
   }
 
   const isSuperAdmin = adminUser?.role === "super_admin"
-  // A tenant admin has role "admin"; regular members are "editor".
   const isAdmin = isSuperAdmin || adminUser?.role === "admin"
 
   const visibleItems = settingsItems.filter((item) => {
