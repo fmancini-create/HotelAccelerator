@@ -1,8 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { createClient } from "@/lib/supabase/server"
+import {
+  CMS_BUILDER_SCHEMA_VERSION,
+  CMSBuilderDocumentSchema,
+  createEmptyBuilderDocument,
+} from "@/lib/cms/builder-document"
 
 const TEMPLATE_IDS = new Set(["luxury", "boutique", "wellness", "family", "business", "agriturismo"])
+const PROJECT_SELECT = "id, template_id, site_name, style_prompt, page_prompt, current_step, status, project_version, builder_schema_version, builder_document, updated_at"
 
 function text(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined
@@ -13,8 +19,18 @@ function text(value: unknown, max: number): string | undefined {
 
 function errorStatus(message: string): number {
   if (message.includes("Non autenticato")) return 401
-  if (message.includes("troppo lungo") || message.includes("non valido")) return 400
+  if (message.includes("troppo lungo") || message.includes("non valido") || message.includes("Documento CMS")) return 400
   return 500
+}
+
+function serializeProject(project: Record<string, unknown> | null) {
+  if (!project) return null
+  const templateId = typeof project.template_id === "string" ? project.template_id : "luxury"
+  return {
+    ...project,
+    builder_schema_version: project.builder_schema_version ?? CMS_BUILDER_SCHEMA_VERSION,
+    builder_document: project.builder_document ?? createEmptyBuilderDocument(templateId),
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -23,12 +39,12 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("cms_ai_projects")
-      .select("id, template_id, site_name, style_prompt, page_prompt, current_step, status, project_version, updated_at")
+      .select(PROJECT_SELECT)
       .eq("property_id", propertyId)
       .maybeSingle()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ project: data })
+    return NextResponse.json({ project: serializeProject(data) })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     return NextResponse.json({ error: message }, { status: errorStatus(message) })
@@ -61,15 +77,28 @@ export async function PUT(request: NextRequest) {
       payload.current_step = step
     }
 
+    if (body.builder_document !== undefined) {
+      const validation = CMSBuilderDocumentSchema.safeParse(body.builder_document)
+      if (!validation.success) {
+        return NextResponse.json(
+          { error: "Documento CMS non valido", details: validation.error.flatten() },
+          { status: 400 },
+        )
+      }
+      payload.builder_schema_version = CMS_BUILDER_SCHEMA_VERSION
+      payload.builder_document = validation.data
+      payload.template_id = validation.data.templateId
+    }
+
     const supabase = await createClient()
     const { data, error } = await supabase
       .from("cms_ai_projects")
       .upsert(payload, { onConflict: "property_id" })
-      .select("id, template_id, site_name, style_prompt, page_prompt, current_step, status, project_version, updated_at")
+      .select(PROJECT_SELECT)
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ project: data })
+    return NextResponse.json({ project: serializeProject(data) })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     return NextResponse.json({ error: message }, { status: errorStatus(message) })
