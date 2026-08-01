@@ -74,7 +74,7 @@ export const SpacerElementSchema = BaseElementSchema.extend({
   }),
 })
 
-export const BuilderElementSchema = z.discriminatedUnion("type", [
+export const BuilderElementSchema = z.union([
   HeadingElementSchema,
   TextElementSchema,
   ImageElementSchema,
