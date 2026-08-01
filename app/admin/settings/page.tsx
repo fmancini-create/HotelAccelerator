@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAdminAuth } from "@/lib/admin-hooks"
-import { Globe, Users, Radio, Lock, Boxes, BarChart3, FileText, Activity, ChevronRight } from "lucide-react"
+import { Globe, Users, Radio, Lock, Boxes, BarChart3, Sparkles, Activity, ChevronRight } from "lucide-react"
 
 interface SettingsItem {
   id: string
@@ -63,10 +63,10 @@ const settingsItems: SettingsItem[] = [
   },
   {
     id: "cms",
-    title: "Contenuti CMS",
-    description: "Gestisci pagine, blocchi e SEO del sito",
-    icon: <FileText className="w-6 h-6" />,
-    href: "/admin/cms",
+    title: "CMS AI-first",
+    description: "Crea template, stile e pagine con il nuovo percorso guidato",
+    icon: <Sparkles className="w-6 h-6" />,
+    href: "/admin/cms/studio",
     color: "bg-green-500",
   },
   {
