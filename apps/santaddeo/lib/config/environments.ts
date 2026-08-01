@@ -1,26 +1,29 @@
 /**
  * SANTADDEO - Configurazione Ambienti
  *
- * PRODUZIONE: Supabase (aeynirkfixurikshxfov.supabase.co)
- * SVILUPPO: Neon per DB + Supabase per Auth
- * BACKUP: Supabase personale (dshdmkmhhbjractpvojp.supabase.co)
+ * 01/08/2026 — VALORI RIMOSSI DOPO UN AVVISO DI SICUREZZA NEON.
  *
- * Le variabili d'ambiente da impostare:
+ * Questo commento elencava le variabili d'ambiente CON I LORO VALORI, fra cui
+ * una `DATABASE_URL` Neon completa (host, utente, password, database): una
+ * credenziale utilizzabile cosi' com'era. Questo repository e' PUBBLICO, quindi
+ * era leggibile da chiunque; Neon l'ha rilevata e ha inviato l'avviso.
+ *
+ * REGOLA: qui vanno solo i NOMI delle variabili, mai i valori. I valori stanno
+ * nelle variabili d'ambiente del progetto (Vercel / .env.development.local) e
+ * non devono mai entrare nel codice, nemmeno dentro un commento: un commento
+ * finisce in git e su GitHub esattamente come il codice eseguibile.
  *
  * === PRODUZIONE (Vercel) ===
- * NEXT_PUBLIC_SUPABASE_URL=https://aeynirkfixurikshxfov.supabase.co
- * NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0
- * SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...ikeYL6vWDIBqimfIbISke15Gc1PQ8W3VpmrGDgKrUP0
+ * NEXT_PUBLIC_SUPABASE_URL
+ * NEXT_PUBLIC_SUPABASE_ANON_KEY      (chiave pubblica: protetta da RLS)
+ * SUPABASE_SERVICE_ROLE_KEY          (SEGRETA: scavalca la RLS)
  *
- * === SVILUPPO (v0/localhost) ===
- * DATABASE_URL=postgresql://neondb_owner:npg_0EimLhr5xRKb@ep-shiny-mud-ahqt79y0-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
- * NEXT_PUBLIC_SUPABASE_URL=https://aeynirkfixurikshxfov.supabase.co
- * NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0
- * SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...ikeYL6vWDIBqimfIbISke15Gc1PQ8W3VpmrGDgKrUP0
+ * === SVILUPPO ===
+ * NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY,
+ * SUPABASE_SERVICE_ROLE_KEY
  *
- * === BACKUP (opzionale) ===
- * BACKUP_SUPABASE_URL=https://dshdmkmhhbjractpvojp.supabase.co
- * BACKUP_SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...AGhJ7XELzaR8sHOM5OAMEjKSe-GCfJ6t83m6G2v_vF4
+ * Nota: `DATABASE_URL` (Neon) non e' usata da nessun modulo di questa app —
+ * Santaddeo legge un solo database, Supabase di produzione.
  */
 
 export type Environment = "development" | "production" | "backup"
