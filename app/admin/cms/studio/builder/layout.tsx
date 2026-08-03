@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ExternalLink, Eye } from "lucide-react"
+import { ExternalLink, Eye, Images } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export default function CMSBuilderLayout({ children }: { children: React.ReactNode }) {
@@ -15,12 +15,20 @@ export default function CMSBuilderLayout({ children }: { children: React.ReactNo
             Mostra l’ultima bozza salvata con il renderer finale. Non pubblica e non modifica il sito online.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/admin/cms/studio/preview" target="_blank" rel="noopener noreferrer">
-            Apri anteprima reale
-            <ExternalLink className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button variant="outline" asChild>
+            <Link href="/admin/cms/studio/media">
+              <Images className="mr-2 h-4 w-4" />
+              Libreria media
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/admin/cms/studio/preview" target="_blank" rel="noopener noreferrer">
+              Apri anteprima reale
+              <ExternalLink className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
       </div>
       {children}
     </div>
