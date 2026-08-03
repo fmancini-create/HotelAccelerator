@@ -9,7 +9,7 @@ import {
 import { CMS_STUDIO_TEMPLATES } from "@/lib/cms/template-variants"
 
 const TEMPLATE_IDS = new Set(CMS_STUDIO_TEMPLATES.map((template) => template.id))
-const PROJECT_SELECT = "id, template_id, site_name, style_prompt, page_prompt, current_step, status, project_version, builder_schema_version, builder_document, updated_at"
+const PROJECT_SELECT = "id, template_id, site_name, property_profile, style_prompt, page_prompt, current_step, status, project_version, builder_schema_version, builder_document, updated_at"
 
 function text(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined
@@ -64,9 +64,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const siteName = text(body.site_name, 160)
+    const propertyProfile = text(body.property_profile, 5000)
     const stylePrompt = text(body.style_prompt, 5000)
     const pagePrompt = text(body.page_prompt, 10000)
     if (siteName !== undefined) payload.site_name = siteName
+    if (propertyProfile !== undefined) payload.property_profile = propertyProfile
     if (stylePrompt !== undefined) payload.style_prompt = stylePrompt
     if (pagePrompt !== undefined) payload.page_prompt = pagePrompt
 
