@@ -21,7 +21,17 @@ const steps = [
 ]
 
 type SaveState = "idle" | "saving" | "saved" | "error"
-type GeneratedSummary = { pages: string[]; warnings: string[] }
+type GeneratedSummary = {
+  pages: string[]
+  warnings: string[]
+  sections: string[]
+  explanation?: {
+    promise: string
+    prioritizes: string
+    tradeoff: string
+    result: string
+  }
+}
 
 export default function CMSStudioPage() {
   const [step, setStep] = useState(1)
@@ -171,9 +181,22 @@ export default function CMSStudioPage() {
       const data = await generateDocument()
       const pages = (data.document?.pages || []).map((page: { title?: string }) => page.title).filter(Boolean)
       const warnings = (data.document?.warnings || []).map((warning: { message?: string }) => warning.message).filter(Boolean)
-      setGeneratedSummary({ pages, warnings })
-      const confirmed = window.confirm(`Il builder creerà ${pages.length} pagine: ${pages.join(", ")}. La bozza visuale attuale verrà sostituita; il sito pubblico non cambia. Procedere?`)
-      if (!confirmed) return
+      const sections = (data.personalization?.sectionPlan || []).map((section: { label?: string }) => section.label).filter(Boolean)
+      const explanation = data.personalization?.explanation
+      setGeneratedSummary({ pages, warnings, sections, explanation })
+
+      const confirmation = [
+        `Stai applicando: ${data.template?.name || templateId}.`,
+        explanation?.result ? `Risultato: ${explanation.result}` : "",
+        explanation?.prioritizes ? `Privilegia: ${explanation.prioritizes}` : "",
+        explanation?.tradeoff ? `Da sapere: ${explanation.tradeoff}` : "",
+        sections.length ? `Homepage: ${sections.join(", ")}.` : "",
+        `Pagine create (${pages.length}): ${pages.join(", ")}.`,
+        "La bozza visuale attuale verrà sostituita. Il sito pubblico non cambia.",
+        "Procedere?",
+      ].filter(Boolean).join("\n\n")
+
+      if (!window.confirm(confirmation)) return
       const saved = await saveProject(step, { builder_document: data.document })
       if (saved) window.location.href = "/admin/cms/studio/builder"
     } catch (applyError) {
@@ -206,7 +229,7 @@ export default function CMSStudioPage() {
 
       <div className="grid gap-3 md:grid-cols-3">{steps.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => goToStep(id)} className={`rounded-lg border p-4 text-left transition-colors ${id === step ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}><div className="flex items-center gap-3"><div className={`flex h-9 w-9 items-center justify-center rounded-full ${id < step ? "bg-primary text-primary-foreground" : "bg-muted"}`}>{id < step ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}</div><div><p className="text-xs text-muted-foreground">Step {id}</p><p className="font-medium">{label}</p></div></div></button>)}</div>
 
-      {step === 1 && <Card><CardHeader><CardTitle>1. Trova il layout giusto</CardTitle><CardDescription>Descrivi anche vocalmente la struttura: il profilo sarà usato sia per il consiglio sia per generare il sito.</CardDescription></CardHeader><CardContent className="space-y-6"><TemplateGallery templates={templates} selectedId={templateId} profile={propertyProfile} onProfileChange={(value) => { setPropertyProfile(value); setSaveState("idle") }} onSelect={(id) => { setTemplateId(id); setSaveState("idle") }} /><div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border bg-background/95 p-4 shadow-xl backdrop-blur"><div><p className="text-xs text-muted-foreground">Template selezionato</p><p className="font-medium">{selectedTemplate?.name || "Nessuno"}</p>{propertyProfile && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">Profilo: {propertyProfile}</p>}</div><Button onClick={applyTemplate} disabled={!templateId || applyingTemplate}>{applyingTemplate ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Genera e applica</Button></div>{generatedSummary && <div className="rounded-xl border bg-muted/20 p-4 text-sm"><p className="font-medium">Ultima generazione</p><p className="mt-1 text-muted-foreground">Pagine: {generatedSummary.pages.join(", ")}</p></div>}</CardContent></Card>}
+      {step === 1 && <Card><CardHeader><CardTitle>1. Trova il layout giusto</CardTitle><CardDescription>Descrivi anche vocalmente la struttura: il profilo sarà usato sia per il consiglio sia per generare il sito.</CardDescription></CardHeader><CardContent className="space-y-6"><TemplateGallery templates={templates} selectedId={templateId} profile={propertyProfile} onProfileChange={(value) => { setPropertyProfile(value); setSaveState("idle") }} onSelect={(id) => { setTemplateId(id); setSaveState("idle") }} /><div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-xl border bg-background/95 p-4 shadow-xl backdrop-blur"><div><p className="text-xs text-muted-foreground">Template selezionato</p><p className="font-medium">{selectedTemplate?.name || "Nessuno"}</p>{propertyProfile && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">Profilo: {propertyProfile}</p>}</div><Button onClick={applyTemplate} disabled={!templateId || applyingTemplate}>{applyingTemplate ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}Genera e applica</Button></div>{generatedSummary && <div className="rounded-xl border bg-muted/20 p-5 text-sm"><p className="font-semibold">Cosa verrà creato</p>{generatedSummary.explanation && <div className="mt-3 grid gap-3 md:grid-cols-3"><div><p className="text-xs font-semibold">Privilegia</p><p className="mt-1 text-muted-foreground">{generatedSummary.explanation.prioritizes}</p></div><div><p className="text-xs font-semibold">Da sapere</p><p className="mt-1 text-muted-foreground">{generatedSummary.explanation.tradeoff}</p></div><div><p className="text-xs font-semibold">Risultato</p><p className="mt-1 text-muted-foreground">{generatedSummary.explanation.result}</p></div></div>}<p className="mt-4 text-muted-foreground"><strong className="text-foreground">Homepage:</strong> {generatedSummary.sections.join(", ")}</p><p className="mt-2 text-muted-foreground"><strong className="text-foreground">Pagine:</strong> {generatedSummary.pages.join(", ")}</p><p className="mt-3 text-xs text-muted-foreground">Questa operazione sostituisce la bozza visuale, non il sito pubblico.</p></div>}</CardContent></Card>}
 
       {step === 2 && <Card><CardHeader><CardTitle>2. Personalizza con parole semplici</CardTitle><CardDescription>Descrivi atmosfera, colori, fotografie e priorità commerciali.</CardDescription></CardHeader><CardContent className="space-y-5"><div className="space-y-2"><Label htmlFor="site-name">Nome della struttura</Label><Input id="site-name" value={siteName} onChange={(event) => setSiteName(event.target.value)} placeholder="Es. Villa I Barronci Resort & Spa" maxLength={160} /></div><div className="space-y-2"><Label htmlFor="style-prompt">Come deve apparire il sito?</Label><Textarea id="style-prompt" value={stylePrompt} onChange={(event) => setStylePrompt(event.target.value)} placeholder="Es. Elegante ma caldo, verde degli ulivi, piscina e spa in evidenza." className="min-h-40" maxLength={5000} /></div></CardContent></Card>}
 
