@@ -1,10 +1,20 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, Sparkles } from "lucide-react"
+import { Info, Search, Sparkles, Target } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TemplatePreview, type StudioTemplate } from "./template-preview"
+
+type GuidedTemplate = StudioTemplate & {
+  designObjective?: "brand" | "storytelling" | "conversion" | "services" | "catalog"
+  guidance?: {
+    promise: string
+    prioritizes: string
+    tradeoff: string
+    result: string
+  }
+}
 
 const categoryLabels: Record<string, string> = {
   all: "Tutte",
@@ -14,9 +24,17 @@ const categoryLabels: Record<string, string> = {
   family: "Family",
   business: "Business",
   country: "Country",
-  bnb: "B&B",
+  "bed-breakfast": "B&B",
   mountain: "Montagna",
-  holiday_home: "Case vacanze",
+  "holiday-home": "Case vacanze",
+}
+
+const objectiveLabels: Record<string, string> = {
+  brand: "Immagine e posizionamento",
+  storytelling: "Racconto ed emozione",
+  conversion: "Prenotazione diretta",
+  services: "Servizi e chiarezza",
+  catalog: "Ricerca e confronto alloggi",
 }
 
 const keywordCategoryMap: Array<{ terms: string[]; category: string }> = [
@@ -26,13 +44,13 @@ const keywordCategoryMap: Array<{ terms: string[]; category: string }> = [
   { terms: ["famiglia", "family", "bambini", "villaggio"], category: "family" },
   { terms: ["business", "meeting", "aeroporto", "city hotel"], category: "business" },
   { terms: ["agriturismo", "country", "vino", "wine resort", "campagna"], category: "country" },
-  { terms: ["b&b", "bed and breakfast", "guest house", "affittacamere"], category: "bnb" },
+  { terms: ["b&b", "bed and breakfast", "guest house", "affittacamere"], category: "bed-breakfast" },
   { terms: ["montagna", "chalet", "ski", "alpine", "dolomiti"], category: "mountain" },
-  { terms: ["casa vacanze", "appartamento", "residence", "villa in affitto"], category: "holiday_home" },
+  { terms: ["casa vacanze", "appartamento", "residence", "villa in affitto"], category: "holiday-home" },
 ]
 
-function recommendationScore(template: StudioTemplate, profile: string) {
-  const source = `${template.name} ${template.collection} ${template.description} ${template.idealFor.join(" ")} ${template.features.join(" ")}`.toLowerCase()
+function recommendationScore(template: GuidedTemplate, profile: string) {
+  const source = `${template.name} ${template.collection} ${template.description} ${template.idealFor.join(" ")} ${template.features.join(" ")} ${template.guidance?.prioritizes || ""}`.toLowerCase()
   const normalized = profile.toLowerCase()
   let score = 0
   for (const token of normalized.split(/\W+/).filter((value) => value.length > 2)) if (source.includes(token)) score += 2
@@ -40,6 +58,7 @@ function recommendationScore(template: StudioTemplate, profile: string) {
   if (normalized.includes("moderno") && ["minimal", "conversion"].includes(template.layout)) score += 4
   if ((normalized.includes("elegante") || normalized.includes("classico")) && ["classic", "editorial"].includes(template.layout)) score += 4
   if ((normalized.includes("fotografie") || normalized.includes("immagini grandi")) && ["immersive", "editorial"].includes(template.layout)) score += 4
+  if ((normalized.includes("prenotazione") || normalized.includes("conversione") || normalized.includes("ota")) && template.designObjective === "conversion") score += 8
   return score
 }
 
@@ -50,7 +69,7 @@ export function TemplateGallery({
   profile,
   onProfileChange,
 }: {
-  templates: StudioTemplate[]
+  templates: GuidedTemplate[]
   selectedId: string
   onSelect: (id: string) => void
   profile?: string
@@ -74,12 +93,12 @@ export function TemplateGallery({
     return templates.filter((template) => {
       if (category !== "all" && template.category !== category) return false
       if (!normalized) return true
-      return `${template.name} ${template.collection} ${template.description} ${template.idealFor.join(" ")} ${template.features.join(" ")}`.toLowerCase().includes(normalized)
+      return `${template.name} ${template.collection} ${template.description} ${template.idealFor.join(" ")} ${template.features.join(" ")} ${template.guidance?.prioritizes || ""}`.toLowerCase().includes(normalized)
     })
   }, [templates, category, query])
 
   const grouped = useMemo(() => {
-    const groups = new Map<string, StudioTemplate[]>()
+    const groups = new Map<string, GuidedTemplate[]>()
     for (const template of visible) groups.set(template.collection, [...(groups.get(template.collection) || []), template])
     return Array.from(groups.entries())
   }, [visible])
@@ -96,6 +115,16 @@ export function TemplateGallery({
 
   return (
     <div className="space-y-7">
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+        <div className="flex gap-3">
+          <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+          <div>
+            <p className="font-semibold">Non stai scegliendo soltanto colori e fotografie.</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">Ogni modello determina come il sito presenta la struttura, quali contenuti mostra per primi e quanto spinge la prenotazione. Leggi obiettivo e compromesso prima di scegliere.</p>
+          </div>
+        </div>
+      </div>
+
       <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 lg:grid-cols-[1fr_auto] lg:items-end">
         <div className="space-y-2">
           <p className="text-sm font-medium">Descrivi la tua struttura</p>
@@ -103,7 +132,7 @@ export function TemplateGallery({
             <Input value={profileValue} onChange={(event) => updateProfile(event.target.value)} placeholder="Es. Hotel 4 stelle con spa, 28 camere, Lago di Garda, stile elegante" />
             <Button type="button" onClick={recommend} disabled={!profileValue.trim()}><Sparkles className="mr-2 h-4 w-4" />Consigliami</Button>
           </div>
-          <p className="text-xs text-muted-foreground">Il layout applicato genera già pagine e priorità coerenti con la propria collezione. La personalizzazione completa usa anche le indicazioni degli step successivi.</p>
+          <p className="text-xs text-muted-foreground">Il consiglio considera tipologia, stile e priorità commerciali. La scelta resta sempre modificabile.</p>
         </div>
         <div className="relative min-w-64"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} className="pl-9" placeholder="Cerca template" /></div>
       </div>
@@ -116,10 +145,22 @@ export function TemplateGallery({
         <section key={collection} className="space-y-4">
           <div className="flex items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[.2em] text-muted-foreground">Collection</p><h3 className="font-serif text-3xl">{collection}</h3></div><p className="text-sm text-muted-foreground">{items.length} layout</p></div>
           <div className="grid gap-6 xl:grid-cols-2">
-            {items.map((template) => <button key={template.id} type="button" onClick={() => onSelect(template.id)} className="relative text-left">
-              {recommendedIds.includes(template.id) && <span className="absolute right-3 top-3 z-20 rounded-full bg-black px-3 py-1 text-[10px] font-semibold uppercase tracking-[.15em] text-white">Consigliato</span>}
-              <TemplatePreview template={template} selected={selectedId === template.id} />
-            </button>)}
+            {items.map((template) => (
+              <button key={template.id} type="button" onClick={() => onSelect(template.id)} className="relative overflow-hidden rounded-xl text-left transition hover:-translate-y-0.5">
+                {recommendedIds.includes(template.id) && <span className="absolute right-3 top-3 z-20 rounded-full bg-black px-3 py-1 text-[10px] font-semibold uppercase tracking-[.15em] text-white">Consigliato</span>}
+                <TemplatePreview template={template} selected={selectedId === template.id} />
+                {template.guidance && (
+                  <div className={`border border-t-0 p-5 ${selectedId === template.id ? "border-primary bg-primary/5" : "border-border bg-background"}`}>
+                    <div className="mb-4 flex items-center gap-2 text-sm font-semibold"><Target className="h-4 w-4 text-primary" />{objectiveLabels[template.designObjective || ""] || "Impostazione del sito"}</div>
+                    <div className="grid gap-4 text-xs leading-5 sm:grid-cols-3">
+                      <div><p className="font-semibold text-foreground">Privilegia</p><p className="mt-1 text-muted-foreground">{template.guidance.prioritizes}</p></div>
+                      <div><p className="font-semibold text-foreground">Da sapere</p><p className="mt-1 text-muted-foreground">{template.guidance.tradeoff}</p></div>
+                      <div><p className="font-semibold text-foreground">Risultato</p><p className="mt-1 text-muted-foreground">{template.guidance.result}</p></div>
+                    </div>
+                  </div>
+                )}
+              </button>
+            ))}
           </div>
         </section>
       ))}
