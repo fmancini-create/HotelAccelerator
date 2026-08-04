@@ -107,11 +107,9 @@ function resolveTenant(
   if (subdomain) {
     requestHeaders.set("x-tenant-identifier", subdomain)
     requestHeaders.set("x-tenant-type", "subdomain")
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    })
+    const url = request.nextUrl.clone()
+    url.pathname = `/site${pathname === "/" ? "" : pathname}`
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
   }
 
   // Verifica custom domain (non localhost, non piattaforma base)
@@ -119,11 +117,9 @@ function resolveTenant(
   if (customDomain) {
     requestHeaders.set("x-tenant-identifier", customDomain)
     requestHeaders.set("x-tenant-type", "custom_domain")
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    })
+    const url = request.nextUrl.clone()
+    url.pathname = `/site${pathname === "/" ? "" : pathname}`
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
   }
 
   return NextResponse.next()
