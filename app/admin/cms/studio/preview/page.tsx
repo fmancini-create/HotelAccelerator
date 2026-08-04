@@ -5,7 +5,7 @@ import Link from "next/link"
 import { ArrowLeft, Loader2, Monitor, Smartphone, Tablet } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Button } from "@/components/ui/button"
-import { BuilderLiveRenderer } from "@/components/cms/builder-live-renderer"
+import { BuilderPreviewNavigator } from "@/components/cms/builder-preview-navigator"
 import { CMSBuilderDocumentSchema, type CMSBuilderDocument } from "@/lib/cms/builder-document"
 
 type Breakpoint = "desktop" | "tablet" | "mobile"
@@ -57,9 +57,13 @@ export default function CMSStudioPreviewPage() {
         </div>
       </div>
 
+      <div className="rounded-lg border border-emerald-600/25 bg-emerald-600/5 p-3 text-sm text-emerald-900">
+        I collegamenti del menu navigano ora tra le pagine della bozza senza uscire dall’anteprima e senza generare errori 404.
+      </div>
+
       <div className="overflow-x-auto rounded-xl border bg-muted/40 p-3 md:p-6">
         <div className="mx-auto overflow-hidden rounded-lg border bg-background shadow-2xl transition-all duration-300" style={{ width, maxWidth: "100%" }}>
-          <BuilderLiveRenderer document={document} pageId={pageId} breakpoint={breakpoint} />
+          <BuilderPreviewNavigator document={document} pageId={pageId} breakpoint={breakpoint} onPageChange={setPageId} />
         </div>
       </div>
 
