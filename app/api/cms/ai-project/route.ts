@@ -6,6 +6,7 @@ import {
   CMSBuilderDocumentSchema,
   createEmptyBuilderDocument,
 } from "@/lib/cms/builder-document"
+import { normalizeBuilderNavigation } from "@/lib/cms/normalize-builder-navigation"
 import { CMS_STUDIO_TEMPLATES } from "@/lib/cms/template-variants"
 
 const TEMPLATE_IDS = new Set(CMS_STUDIO_TEMPLATES.map((template) => template.id))
@@ -27,10 +28,12 @@ function errorStatus(message: string): number {
 function serializeProject(project: Record<string, unknown> | null) {
   if (!project) return null
   const templateId = typeof project.template_id === "string" ? project.template_id : CMS_STUDIO_TEMPLATES[0]?.id || "luxury-editorial"
+  const candidate = project.builder_document ?? createEmptyBuilderDocument(templateId)
+  const validation = CMSBuilderDocumentSchema.safeParse(candidate)
   return {
     ...project,
     builder_schema_version: project.builder_schema_version ?? CMS_BUILDER_SCHEMA_VERSION,
-    builder_document: project.builder_document ?? createEmptyBuilderDocument(templateId),
+    builder_document: validation.success ? normalizeBuilderNavigation(validation.data) : createEmptyBuilderDocument(templateId),
   }
 }
 
@@ -83,9 +86,10 @@ export async function PUT(request: NextRequest) {
       if (!validation.success) {
         return NextResponse.json({ error: "Documento CMS non valido", details: validation.error.flatten() }, { status: 400 })
       }
+      const normalizedDocument = normalizeBuilderNavigation(validation.data)
       payload.builder_schema_version = CMS_BUILDER_SCHEMA_VERSION
-      payload.builder_document = validation.data
-      payload.template_id = validation.data.templateId
+      payload.builder_document = normalizedDocument
+      payload.template_id = normalizedDocument.templateId
     }
 
     const supabase = await createClient()
