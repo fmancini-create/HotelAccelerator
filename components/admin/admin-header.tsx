@@ -24,7 +24,7 @@ export interface AdminHeaderProps {
 const pathMap: Record<string, { label: string; parent?: string }> = {
   "/admin/dashboard": { label: "Dashboard" },
   "/admin/photos": { label: "Gestione Foto", parent: "/admin/dashboard" },
-  "/admin/cms": { label: "Pagine CMS", parent: "/admin/dashboard" },
+  "/admin/cms": { label: "CMS precedente", parent: "/admin/dashboard" },
   "/admin/channels": { label: "Canali", parent: "/admin/dashboard" },
   "/admin/channels/email": { label: "Email", parent: "/admin/channels" },
   "/admin/channels/chat": { label: "Chat Widget", parent: "/admin/channels" },

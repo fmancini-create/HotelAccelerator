@@ -91,7 +91,7 @@ const PRIMARY_NAV: NavItem[] = [
     area: "crm",
   },
   {
-    href: "/admin/cms",
+    href: "/admin/cms/studio",
     label: "CMS",
     icon: FileText,
     match: (p) => p.startsWith("/admin/cms"),
@@ -171,7 +171,7 @@ const NAV_ACCENT_DOT: Record<string, string> = {
   "/admin/crm": "bg-ha-module-crm",
   "/admin/channels/email": "bg-ha-module-crm",
   "/admin/message-rules": "bg-ha-module-crm",
-  "/admin/cms": "bg-ha-module-marketing",
+  "/admin/cms/studio": "bg-ha-module-marketing",
   "/admin/marketing": "bg-ha-module-marketing",
   "/admin/tracking": "bg-ha-module-automation",
 }

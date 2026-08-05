@@ -261,7 +261,7 @@ function Footer({ template, preset }: { template: StudioTemplate; preset: Varian
   return <div className="grid h-[120px] grid-cols-[.7fr_1.3fr] bg-white"><img src={p.secondaryImage} alt="" className="h-full w-full object-cover" /><div className="flex items-center px-7"><Booking accent={p.accent} mode="inline" /></div></div>
 }
 
-function RealisticHomepage({ template }: PreviewProps) {
+function RealisticHomepage({ template }: { template: StudioTemplate }) {
   const preset = PRESETS[template.id] ?? PRESETS["luxury-editorial"]
   return (
     <div className="overflow-hidden rounded-t-xl border border-b-0 bg-white shadow-[0_24px_70px_-38px_rgba(0,0,0,.65)]">

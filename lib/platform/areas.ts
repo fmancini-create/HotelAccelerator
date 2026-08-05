@@ -55,7 +55,7 @@ export const PLATFORM_AREAS: PlatformArea[] = [
   { key: "marketing", label: "Marketing", group: "operative", href: "/admin/marketing" },
 
   // --- Content / config areas (grantable to members) ---
-  { key: "cms", label: "CMS", group: "config", href: "/admin/cms" },
+  { key: "cms", label: "CMS", group: "config", href: "/admin/cms/studio" },
   { key: "embed-scripts", label: "Embed scripts", group: "config", href: "/admin/embed-scripts" },
   { key: "tracking", label: "Tracking", group: "config", href: "/admin/tracking" },
   { key: "monitoring", label: "Monitoring", group: "config", href: "/admin/monitoring" },

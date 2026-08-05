@@ -13,9 +13,6 @@ export function StudioModernNavigation({ children }: { children: React.ReactNode
     <div className={isStudioHome ? "cms-studio-home space-y-4" : "space-y-4"}>
       {isStudioHome && (
         <>
-          <style>{`
-            .cms-studio-home a[href="/admin/cms"] { display: none !important; }
-          `}</style>
           <div className="flex flex-col gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-medium">Gestisci le pagine nel nuovo editor</p>
