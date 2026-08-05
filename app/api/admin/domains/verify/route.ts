@@ -1,10 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
-import dns from "dns"
-import { promisify } from "util"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
-
-const resolveTxt = promisify(dns.resolveTxt)
+import { verifyProjectDomain } from "@/lib/vercel/project-domains"
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,22 +20,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
-    if (!property.custom_domain || !property.domain_verification_token) {
+    if (!property.custom_domain) {
       return NextResponse.json({ error: "No domain to verify" }, { status: 400 })
     }
 
-    // Verifica record TXT
-    const records = await resolveTxt(property.custom_domain)
-    const flatRecords = records.flat()
-
-    const isVerified = flatRecords.some((record) => record === property.domain_verification_token)
+    const result = await verifyProjectDomain(property.custom_domain)
+    const isVerified = result.verified
 
     if (isVerified) {
       // Aggiorna stato a verified
       const { error: updateError } = await supabase
         .from("properties")
         .update({
-          domain_status: "verified",
+          domain_status: "active",
           domain_verified_at: new Date().toISOString(),
         })
         .eq("id", propertyId)
@@ -55,15 +49,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         verified: false,
         message: "Record TXT non trovato. Assicurati di aver aggiunto il record DNS.",
-        expected: property.domain_verification_token,
-        found: flatRecords,
+        expected: result.verification ?? property.domain_verification_token,
       })
     }
-  } catch (dnsError: unknown) {
-    const errorMessage = dnsError instanceof Error ? dnsError.message : "Unknown DNS error"
+  } catch (verificationError: unknown) {
+    const errorMessage = verificationError instanceof Error ? verificationError.message : "Unknown verification error"
     return NextResponse.json({
       verified: false,
-      message: `Errore DNS: ${errorMessage}. Verifica che il dominio sia valido.`,
+      message: `Verifica Vercel non riuscita: ${errorMessage}. Controlla i record DNS richiesti.`,
     })
   }
 }

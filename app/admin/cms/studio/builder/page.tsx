@@ -1,5 +1,6 @@
 import { MousePointerClick } from "lucide-react"
 import { CMSMultipageVisualBuilder } from "@/components/cms/multipage-visual-builder"
+import { CMSPublicationControls } from "@/components/cms/publication-controls"
 
 export default function CMSVisualBuilderPage() {
   return (
@@ -24,6 +25,7 @@ export default function CMSVisualBuilderPage() {
         </div>
       </div>
 
+      <CMSPublicationControls />
       <CMSMultipageVisualBuilder />
     </div>
   )
