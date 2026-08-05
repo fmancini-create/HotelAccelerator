@@ -52,7 +52,7 @@ const dashboardModules: DashboardModule[] = [
     title: "Pagine CMS",
     description: "Crea e gestisci pagine libere del sito",
     icon: <Layers className="w-5 h-5" />,
-    href: "/admin/cms",
+    href: "/admin/cms/studio",
   },
   {
     id: "channels",

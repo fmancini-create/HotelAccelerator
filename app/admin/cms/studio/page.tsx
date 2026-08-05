@@ -218,7 +218,7 @@ export default function CMSStudioPage() {
 
   return (
     <div className="space-y-6">
-      <AdminHeader title="CMS AI-first" subtitle="Crea il sito con un percorso guidato in tre passaggi" actions={<Button variant="outline" asChild><Link href="/admin/cms"><ArrowLeft className="mr-2 h-4 w-4" />Gestione pagine</Link></Button>} />
+      <AdminHeader title="CMS AI-first" subtitle="Crea il sito con un percorso guidato in tre passaggi" actions={<Button variant="outline" asChild><Link href="/admin/cms"><ArrowLeft className="mr-2 h-4 w-4" />CMS precedente</Link></Button>} />
 
       <Card className="border-primary/20 bg-gradient-to-br from-primary/5 via-background to-background"><CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between"><div><div className="mb-2 flex items-center gap-2"><Badge variant="secondary">Progetto persistente</Badge><Badge variant="outline">Codice</Badge></div><h2 className="text-xl font-semibold">Scegli, personalizza e costruisci il sito.</h2><p className="mt-1 text-sm text-muted-foreground">Profilo, stile e pagine guidano ora la generazione concreta del documento.</p></div><div className="flex flex-wrap gap-2"><Button variant={isListening ? "destructive" : "outline"} onClick={isListening ? stopSpeech : startSpeech}>{isListening ? <MicOff className="mr-2 h-4 w-4" /> : <Mic className="mr-2 h-4 w-4" />}{isListening ? "Ferma" : "Parla"}</Button><Button variant="outline" onClick={() => saveProject()} disabled={saveState === "saving"}>{saveState === "saving" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{saveState === "saved" ? "Salvato" : "Salva bozza"}</Button></div></CardContent></Card>
 

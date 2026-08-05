@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { CMS_BUILDER_SCHEMA_VERSION, CMSBuilderDocumentSchema } from "@/lib/cms/builder-document"
 import { normalizeBuilderNavigation } from "@/lib/cms/normalize-builder-navigation"
+import { tenantSubdomainHost } from "@/lib/domains/domain-names"
 import { createClient, createServiceClient } from "@/lib/supabase/server"
+import { inspectProjectDomain } from "@/lib/vercel/project-domains"
 
 function statusFor(message: string) {
   return message.includes("Non autenticato") ? 401 : 500
@@ -17,17 +19,25 @@ type PublicSiteProperty = {
   subdomain: string | null
 }
 
-function publicSiteUrl(property: PublicSiteProperty | null) {
-  if (!property?.active_cms_publication_id || !property.frontend_enabled) return null
-  if (
-    property.active_domain_type === "custom_domain"
-    && property.custom_domain
-    && (property.domain_status === "active" || property.domain_status === "verified")
-  ) {
-    return `https://${property.custom_domain}`
+async function publicSiteState(property: PublicSiteProperty | null) {
+  if (!property?.active_cms_publication_id) {
+    return { url: null, ready: false, status: "not_published", message: "Nessuna versione pubblicata" }
   }
-  if (property.subdomain) return `https://${property.subdomain}.hotelaccelerator.com`
-  return null
+  if (!property.frontend_enabled) {
+    return { url: null, ready: false, status: "disabled", message: "Sito pubblico disattivato" }
+  }
+  const hostname = property.active_domain_type === "custom_domain"
+    ? property.custom_domain
+    : property.subdomain
+      ? tenantSubdomainHost(property.subdomain)
+      : null
+  const readiness = await inspectProjectDomain(hostname)
+  return {
+    url: readiness.ready && readiness.name ? `https://${readiness.name}` : null,
+    ready: readiness.ready,
+    status: readiness.status,
+    message: readiness.message,
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -43,10 +53,12 @@ export async function GET(request: NextRequest) {
         .eq("id", propertyId).single(),
     ])
     if (error || propertyError) return NextResponse.json({ error: error?.message || propertyError?.message }, { status: 500 })
+    const publicSite = await publicSiteState(property)
     return NextResponse.json({
       publications: versions ?? [],
       activeId: property?.active_cms_publication_id ?? null,
-      publicUrl: publicSiteUrl(property),
+      publicUrl: publicSite.url,
+      publicSite,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
