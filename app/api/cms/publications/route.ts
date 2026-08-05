@@ -8,18 +8,46 @@ function statusFor(message: string) {
   return message.includes("Non autenticato") ? 401 : 500
 }
 
+type PublicSiteProperty = {
+  active_cms_publication_id: string | null
+  active_domain_type: string | null
+  custom_domain: string | null
+  domain_status: string | null
+  frontend_enabled: boolean | null
+  subdomain: string | null
+}
+
+function publicSiteUrl(property: PublicSiteProperty | null) {
+  if (!property?.active_cms_publication_id || !property.frontend_enabled) return null
+  if (
+    property.active_domain_type === "custom_domain"
+    && property.custom_domain
+    && (property.domain_status === "active" || property.domain_status === "verified")
+  ) {
+    return `https://${property.custom_domain}`
+  }
+  if (property.subdomain) return `https://${property.subdomain}.hotelaccelerator.com`
+  return null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
     const db = createServiceClient()
-    const [{ data: versions, error }, { data: property }] = await Promise.all([
+    const [{ data: versions, error }, { data: property, error: propertyError }] = await Promise.all([
       db.from("cms_publication_versions")
         .select("id, version, source_version_id, published_at, published_by")
         .eq("property_id", propertyId).order("version", { ascending: false }).limit(50),
-      db.from("properties").select("active_cms_publication_id").eq("id", propertyId).single(),
+      db.from("properties")
+        .select("active_cms_publication_id, active_domain_type, custom_domain, domain_status, frontend_enabled, subdomain")
+        .eq("id", propertyId).single(),
     ])
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ publications: versions ?? [], activeId: property?.active_cms_publication_id ?? null })
+    if (error || propertyError) return NextResponse.json({ error: error?.message || propertyError?.message }, { status: 500 })
+    return NextResponse.json({
+      publications: versions ?? [],
+      activeId: property?.active_cms_publication_id ?? null,
+      publicUrl: publicSiteUrl(property),
+    })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     return NextResponse.json({ error: message }, { status: statusFor(message) })
