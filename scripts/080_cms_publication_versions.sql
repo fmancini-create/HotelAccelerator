@@ -14,9 +14,18 @@ create table if not exists public.cms_publication_versions (
 create index if not exists cms_publication_versions_property_idx
   on public.cms_publication_versions(property_id, version desc);
 
+create index if not exists cms_publication_versions_source_idx
+  on public.cms_publication_versions(source_version_id);
+
+create index if not exists cms_publication_versions_published_by_idx
+  on public.cms_publication_versions(published_by);
+
 alter table public.properties
   add column if not exists active_cms_publication_id uuid
     references public.cms_publication_versions(id) on delete set null;
+
+create index if not exists properties_active_cms_publication_idx
+  on public.properties(active_cms_publication_id);
 
 alter table public.cms_publication_versions enable row level security;
 
