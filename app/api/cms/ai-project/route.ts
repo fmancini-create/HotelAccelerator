@@ -27,11 +27,13 @@ function errorStatus(message: string): number {
 
 function serializeProject(project: Record<string, unknown> | null) {
   if (!project) return null
+  const hasBuilderDraft = project.builder_document !== null && project.builder_document !== undefined
   const templateId = typeof project.template_id === "string" ? project.template_id : CMS_STUDIO_TEMPLATES[0]?.id || "luxury-editorial"
   const candidate = project.builder_document ?? createEmptyBuilderDocument(templateId)
   const validation = CMSBuilderDocumentSchema.safeParse(candidate)
   return {
     ...project,
+    has_builder_draft: hasBuilderDraft,
     builder_schema_version: project.builder_schema_version ?? CMS_BUILDER_SCHEMA_VERSION,
     builder_document: validation.success ? normalizeBuilderNavigation(validation.data) : createEmptyBuilderDocument(templateId),
   }
