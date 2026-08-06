@@ -92,6 +92,8 @@ export function CMSMultipageVisualBuilder() {
   const [message, setMessage] = useState<string | null>(null)
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestDocument = useRef(history.present)
+  const dirtyRef = useRef(false)
+  const editVersion = useRef(0)
 
   const document = history.present
   const page = document.pages.find((item) => item.id === activePageId) ?? document.pages[0]
@@ -99,7 +101,42 @@ export function CMSMultipageVisualBuilder() {
   const selectedElement: any = selectedSection?.elements.find((item) => item.id === selectedElementId) ?? null
 
   useEffect(() => { latestDocument.current = history.present }, [history.present])
-  useEffect(() => () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current) }, [])
+
+  useEffect(() => {
+    function flushPendingAutosave() {
+      if (!dirtyRef.current) return
+      if (autosaveTimer.current) {
+        clearTimeout(autosaveTimer.current)
+        autosaveTimer.current = null
+      }
+
+      try {
+        const validated = CMSBuilderDocumentSchema.parse(latestDocument.current)
+        void fetch("/api/cms/ai-project", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ template_id: validated.templateId, builder_document: validated, current_step: 3 }),
+          credentials: "same-origin",
+          keepalive: true,
+        }).catch(() => undefined)
+      } catch {
+        // The normal save flow reports validation errors while the editor is open.
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (globalThis.document.visibilityState === "hidden") flushPendingAutosave()
+    }
+
+    window.addEventListener("pagehide", flushPendingAutosave)
+    globalThis.document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener("pagehide", flushPendingAutosave)
+      globalThis.document.removeEventListener("visibilitychange", handleVisibilityChange)
+      flushPendingAutosave()
+    }
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -122,6 +159,7 @@ export function CMSMultipageVisualBuilder() {
   }, [])
 
   async function persist(value: CMSBuilderDocument, silent = false) {
+    const savedVersion = editVersion.current
     setSaving(true)
     try {
       const validated = CMSBuilderDocumentSchema.parse(value)
@@ -132,8 +170,11 @@ export function CMSMultipageVisualBuilder() {
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Salvataggio non riuscito")
-      setDirty(false)
-      setMessage(silent ? "Bozza salvata automaticamente" : "Progetto salvato")
+      if (savedVersion === editVersion.current) {
+        dirtyRef.current = false
+        setDirty(false)
+        setMessage(silent ? "Bozza salvata automaticamente" : "Progetto salvato")
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Errore di salvataggio")
     } finally {
@@ -143,7 +184,10 @@ export function CMSMultipageVisualBuilder() {
 
   function scheduleAutosave() {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
-    autosaveTimer.current = setTimeout(() => persist(latestDocument.current, true), 2500)
+    autosaveTimer.current = setTimeout(() => {
+      autosaveTimer.current = null
+      void persist(latestDocument.current, true)
+    }, 2500)
   }
 
   function commit(mutator: (draft: CMSBuilderDocument) => void) {
@@ -153,6 +197,8 @@ export function CMSMultipageVisualBuilder() {
       latestDocument.current = next
       return { past: [...current.past, current.present].slice(-40), present: next, future: [] }
     })
+    editVersion.current += 1
+    dirtyRef.current = true
     setDirty(true)
     scheduleAutosave()
   }
