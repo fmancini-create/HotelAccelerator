@@ -12,6 +12,8 @@ documenti JSON versionati e pubblicazioni immutabili.
 - personalizzazione testuale;
 - descrizione pagine e menu;
 - salvataggio e recupero della bozza per tenant;
+- riapertura automatica dell'editor quando il tenant possiede già un documento builder salvato;
+- accesso esplicito alla configurazione iniziale tramite `/admin/cms/studio?setup=1`, senza cancellare la bozza;
 - API server-side `/api/cms/ai-project`;
 - migrazione `scripts/076_cms_ai_projects.sql` con RLS;
 - contratto `lib/cms/builder-document.ts` versione 1;
