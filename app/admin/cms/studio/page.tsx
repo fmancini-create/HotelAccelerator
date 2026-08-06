@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { createBrowserSpeechRecognition, type SpeechRecognitionLike } from "@/lib/cms/browser-speech"
+import { shouldResumeBuilder } from "@/lib/cms/studio-entry"
 import type { StudioTemplate } from "./template-preview"
 import { TemplateGallery } from "./template-gallery"
 
@@ -73,6 +74,10 @@ export default function CMSStudioPage() {
         if (!projectResponse.ok) throw new Error(projectData.error || "Impossibile caricare il progetto")
         if (!templatesResponse.ok) throw new Error(templatesData.error || "Impossibile caricare i template")
         const loadedTemplates: StudioTemplate[] = templatesData.templates || []
+        if (shouldResumeBuilder(projectData.project, window.location.search)) {
+          window.location.replace("/admin/cms/studio/builder")
+          return
+        }
         setTemplates(loadedTemplates)
         if (projectData.project) {
           const savedTemplateId = projectData.project.template_id
