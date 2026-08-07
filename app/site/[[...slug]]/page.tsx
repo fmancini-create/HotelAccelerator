@@ -59,7 +59,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function PublishedTenantPage({ params }: Props) {
   const [{ slug }, release] = await Promise.all([params, publicationForCurrentTenant()])
-  if (!release) return <main className="flex min-h-screen flex-col items-center justify-center gap-12 px-5"><div className="text-center"><h1 className="text-2xl font-semibold">Sito temporaneamente non disponibile</h1><p className="mt-2 text-muted-foreground">La struttura sta aggiornando il proprio sito.</p></div><FourBidCredit /></main>
+  if (!release) return <main className="flex min-h-screen flex-col items-center justify-center gap-12 px-5"><div className="text-center"><h1 className="text-2xl font-semibold">Sito temporaneamente non disponibile</h1><p className="mt-2 text-muted-foreground">La struttura sta aggiornando il proprio sito.</p></div><FourBidCredit label="Sito e marketing in fase di realizzazione by" /></main>
   const path = requestedPath(slug)
   if (path === "/privacy-policy" || path === "/cookie-policy") return <TenantPolicyPage kind={path === "/privacy-policy" ? "privacy" : "cookie"} settings={release.siteSettings} />
   const page = release.document.pages.find((item) => item.slug === path)
