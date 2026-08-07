@@ -1,5 +1,5 @@
 import { headers } from "next/headers"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export interface CurrentTenant {
   id: string
@@ -31,7 +31,10 @@ export async function getCurrentTenant(): Promise<CurrentTenant | null> {
     return null
   }
 
-  const supabase = await createClient()
+  // Resolve public tenant metadata only on the server. This deliberately uses
+  // the service client so public_properties does not need anon/authenticated
+  // Data API grants.
+  const supabase = createServiceClient()
 
   // Cerca per subdomain o custom_domain
   const column = tenantType === "custom_domain" ? "custom_domain" : "subdomain"
