@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function POST(request: NextRequest) {
   try {
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
     const { photo_id, category_ids } = await request.json()
 
@@ -10,7 +12,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Photo ID required" }, { status: 400 })
     }
 
-    // Delete existing category assignments
+    if (!Array.isArray(category_ids) || category_ids.some((id) => typeof id !== "string")) {
+      return NextResponse.json({ error: "Category IDs must be an array" }, { status: 400 })
+    }
+
+    const { data: photo, error: photoError } = await supabase
+      .from("photos")
+      .select("id")
+      .eq("id", photo_id)
+      .eq("property_id", propertyId)
+      .maybeSingle()
+    if (photoError) return NextResponse.json({ error: photoError.message }, { status: 500 })
+    if (!photo) return NextResponse.json({ error: "Photo not found" }, { status: 404 })
+
+    const uniqueCategoryIds = [...new Set<string>(category_ids)]
+    if (uniqueCategoryIds.length > 0) {
+      const { data: ownedCategories, error: categoryError } = await supabase
+        .from("categories")
+        .select("id")
+        .eq("property_id", propertyId)
+        .in("id", uniqueCategoryIds)
+      if (categoryError) return NextResponse.json({ error: categoryError.message }, { status: 500 })
+      if ((ownedCategories?.length ?? 0) !== uniqueCategoryIds.length) {
+        return NextResponse.json({ error: "One or more categories are not available" }, { status: 403 })
+      }
+    }
+
+    // Delete existing assignments only after ownership has been verified.
     const { error: deleteError } = await supabase.from("photo_category").delete().eq("photo_id", photo_id)
 
     if (deleteError) {
@@ -24,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert new category assignments
-    const inserts = category_ids.map((category_id: string) => ({
+    const inserts = uniqueCategoryIds.map((category_id: string) => ({
       photo_id,
       category_id,
     }))

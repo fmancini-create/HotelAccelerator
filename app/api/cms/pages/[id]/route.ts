@@ -7,12 +7,18 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    const propertyId = await getAuthenticatedPropertyId()
     const supabase = createServiceClient()
-    const { data: page, error } = await supabase.from("cms_pages").select("*").eq("id", id).single()
+    const { data: page, error } = await supabase
+      .from("cms_pages")
+      .select("*")
+      .eq("id", id)
+      .eq("property_id", propertyId)
+      .maybeSingle()
     if (error) {
-      if (error.code === "PGRST116") return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+    if (!page) return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
     return NextResponse.json({ page })
   } catch (error: any) {
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })

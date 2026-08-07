@@ -93,7 +93,7 @@ export async function getAuthenticatedPropertyId(request?: NextRequest): Promise
   const { data: adminUser, error: adminError } = await supabase
     .from("admin_users")
     .select("property_id")
-    .eq("email", user.email)
+    .eq("id", user.id)
     .maybeSingle()
 
   if (adminError) {
@@ -135,7 +135,7 @@ export async function getAuthenticatedUser(request?: NextRequest) {
   const { data: adminUser, error: adminError } = await supabase
     .from("admin_users")
     .select("id, property_id, role, name")
-    .eq("email", user.email)
+    .eq("id", user.id)
     .maybeSingle()
 
   if (adminError || !adminUser) {
@@ -213,7 +213,7 @@ export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request?:
   const { data: adminUser, error: adminError } = await supabase
     .from("admin_users")
     .select("property_id")
-    .eq("email", user.email)
+    .eq("id", user.id)
     .maybeSingle()
 
   if (adminError) {
