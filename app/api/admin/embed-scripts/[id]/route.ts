@@ -1,21 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { EmbedScriptRepository } from "@/lib/platform-repositories"
 import { EmbedScriptService } from "@/lib/platform-services"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId()
     const { id } = params
     const supabase = createServiceClient()
 
-    const repository = new EmbedScriptRepository(supabase)
-    const service = new EmbedScriptService(repository)
+    const service = new EmbedScriptService(supabase)
 
     const script = await service.getScriptById(id)
 
-    if (!script) {
+    if (!script || script.property_id !== propertyId) {
       return NextResponse.json({ error: "Script non trovato" }, { status: 404 })
     }
 
@@ -28,15 +26,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId()
     const { id } = params
     const supabase = createServiceClient()
     const body = await request.json()
 
-    const repository = new EmbedScriptRepository(supabase)
-    const service = new EmbedScriptService(repository)
+    const service = new EmbedScriptService(supabase)
 
-    const script = await service.updateScript(id, body)
+    const script = await service.updateScript(id, propertyId, body)
 
     return NextResponse.json({ script })
   } catch (error: any) {
@@ -47,14 +44,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId()
     const { id } = params
     const supabase = createServiceClient()
 
-    const repository = new EmbedScriptRepository(supabase)
-    const service = new EmbedScriptService(repository)
+    const service = new EmbedScriptService(supabase)
 
-    await service.deleteScript(id)
+    await service.deleteScript(id, propertyId)
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
