@@ -25,4 +25,13 @@ describe("public database surface", () => {
 
     expect(browserClient).not.toContain("public_properties")
   })
+
+  it("reads public CMS publications with a server-only client scoped to the tenant", () => {
+    const file = source("app/site/[[...slug]]/page.tsx")
+
+    expect(file).toContain("createServiceClient")
+    expect(file).not.toContain("createClient()")
+    expect(file).toContain('.from("public_cms_publications")')
+    expect(file).toContain('.eq("property_id", tenant.id)')
+  })
 })

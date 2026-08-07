@@ -3,18 +3,28 @@ import { notFound } from "next/navigation"
 import { BuilderLiveRenderer } from "@/components/cms/builder-live-renderer"
 import { CMSBuilderDocumentSchema } from "@/lib/cms/builder-document"
 import { getCurrentTenant } from "@/lib/get-tenant"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 
 type Props = { params: Promise<{ slug?: string[] }> }
 
 async function publicationForCurrentTenant() {
   const tenant = await getCurrentTenant()
   if (!tenant) return null
-  const db = await createClient()
+  // The public route runs exclusively on the server. Use the service client so
+  // publication reads keep working without exposing database grants to anon.
+  const db = createServiceClient()
   const { data, error } = await db.from("public_cms_publications")
     .select("id, version, document, published_at")
     .eq("property_id", tenant.id).maybeSingle()
-  if (error || !data) return null
+  if (error) {
+    console.error("[cms-publication] Failed to load published site", {
+      propertyId: tenant.id,
+      code: error.code,
+      message: error.message,
+    })
+    return null
+  }
+  if (!data) return null
   const parsed = CMSBuilderDocumentSchema.safeParse(data.document)
   return parsed.success ? { tenant, publication: data, document: parsed.data } : null
 }
