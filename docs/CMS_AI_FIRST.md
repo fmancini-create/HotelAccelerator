@@ -1,5 +1,18 @@
 # CMS AI-first
 
+## Dati legali, policy e attribuzione 4BID
+
+Il sito pubblico compone il footer dai dati legali del tenant salvati in
+`properties`. Privacy Policy e Cookie Policy hanno un testo iniziale sicuro,
+modificabile da **Impostazioni → Dati legali e policy**. Il banner mantiene
+disattivati analytics e marketing fino al consenso e pubblica l'evento browser
+`hotelaccelerator:cookie-consent` per le integrazioni di tracking.
+
+La firma “Sito e marketing by 4BID” è applicata dal renderer pubblico e non dal
+documento CMS. Può essere rimossa soltanto attivando l'add-on a pagamento
+`white_label` in `tenant_modules`; non esiste un interruttore tenant libero.
+Anche lo stato sospeso/non pubblicato mantiene l'attribuzione 4BID.
+
 ## Stato
 
 Il CMS principale è disponibile in `/admin/cms/studio`; `/admin/cms` resta accessibile come

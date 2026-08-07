@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAdminAuth } from "@/lib/admin-hooks"
-import { Globe, Users, Radio, Lock, Boxes, BarChart3, FileText, Activity, ChevronRight } from "lucide-react"
+import { Globe, Users, Radio, Lock, Boxes, BarChart3, FileText, Activity, ChevronRight, Scale } from "lucide-react"
 
 interface SettingsItem {
   id: string
@@ -19,6 +19,15 @@ interface SettingsItem {
 }
 
 const settingsItems: SettingsItem[] = [
+  {
+    id: "site-legal",
+    title: "Dati legali e policy",
+    description: "Footer societario, Privacy Policy, Cookie Policy e White Label",
+    icon: <Scale className="w-6 h-6" />,
+    href: "/admin/settings/site-legal",
+    color: "bg-stone-700",
+    adminOnly: true,
+  },
   {
     id: "domains",
     title: "Domini",
