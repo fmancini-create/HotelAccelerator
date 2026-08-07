@@ -40,7 +40,9 @@ describe("public database surface", () => {
   it("keeps 4BID attribution in both published and unpublished tenant rendering", () => {
     const route = source("app/site/[[...slug]]/page.tsx")
     const renderer = source("components/cms/builder-live-renderer.tsx")
-    expect(route).toContain("<FourBidCredit />")
+    const credit = source("components/cms/four-bid-credit.tsx")
+    expect(route).toContain('<FourBidCredit label="Sito e marketing in fase di realizzazione by" />')
+    expect(credit).toContain('label = "Sito e marketing by"')
     expect(renderer).toContain("!siteSettings.whiteLabel")
     expect(renderer).toContain("<FourBidCredit inverse />")
   })
