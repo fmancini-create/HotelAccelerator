@@ -1,26 +1,24 @@
 /**
  * SANTADDEO - Configurazione Ambienti
  *
- * PRODUZIONE: Supabase (aeynirkfixurikshxfov.supabase.co)
- * SVILUPPO: Neon per DB + Supabase per Auth
- * BACKUP: Supabase personale (dshdmkmhhbjractpvojp.supabase.co)
- *
- * Le variabili d'ambiente da impostare:
+ * Non inserire mai valori in questo file: il repository e' pubblico.
+ * Conservare credenziali e URL negli environment scope del relativo deploy.
  *
  * === PRODUZIONE (Vercel) ===
- * NEXT_PUBLIC_SUPABASE_URL=https://aeynirkfixurikshxfov.supabase.co
- * NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0
- * SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...ikeYL6vWDIBqimfIbISke15Gc1PQ8W3VpmrGDgKrUP0
+ * NEXT_PUBLIC_SUPABASE_URL
+ * NEXT_PUBLIC_SUPABASE_ANON_KEY
+ * SUPABASE_SERVICE_ROLE_KEY
  *
- * === SVILUPPO (v0/localhost) ===
- * DATABASE_URL=postgresql://neondb_owner:npg_0EimLhr5xRKb@ep-shiny-mud-ahqt79y0-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require
- * NEXT_PUBLIC_SUPABASE_URL=https://aeynirkfixurikshxfov.supabase.co
- * NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0
- * SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...ikeYL6vWDIBqimfIbISke15Gc1PQ8W3VpmrGDgKrUP0
+ * === SVILUPPO / SCRIPT DI MIGRAZIONE ===
+ * DATABASE_URL
+ * DATABASE_URL_UNPOOLED
+ * NEXT_PUBLIC_SUPABASE_URL
+ * NEXT_PUBLIC_SUPABASE_ANON_KEY
+ * SUPABASE_SERVICE_ROLE_KEY
  *
  * === BACKUP (opzionale) ===
- * BACKUP_SUPABASE_URL=https://dshdmkmhhbjractpvojp.supabase.co
- * BACKUP_SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...AGhJ7XELzaR8sHOM5OAMEjKSe-GCfJ6t83m6G2v_vF4
+ * BACKUP_SUPABASE_URL
+ * BACKUP_SUPABASE_SERVICE_ROLE_KEY
  */
 
 export type Environment = "development" | "production" | "backup"
