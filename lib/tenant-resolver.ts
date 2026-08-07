@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export interface TenantInfo {
   id: string
@@ -28,7 +28,9 @@ export async function resolveTenantFromHost(hostname: string): Promise<TenantInf
     return cached.tenant
   }
 
-  const supabase = await createClient()
+  // Public tenant resolution is server-only. Keep the underlying properties
+  // table and its public projection out of the Data API surface.
+  const supabase = createServiceClient()
   let tenant: TenantInfo | null = null
 
   // 1. Prova custom domain esatto
