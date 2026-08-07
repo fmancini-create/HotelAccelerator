@@ -1,4 +1,4 @@
-import { createServerClient } from "@/lib/supabase/server"
+import { createServerClient, createServiceClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import { SectionRenderer } from "@/components/cms/section-renderer"
 import type { Metadata } from "next"
@@ -21,7 +21,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   const effectivePropertySlug = propertySlug || DEFAULT_PROPERTY_SLUG
 
-  const { data: property } = await supabase
+  const propertyDb = createServiceClient()
+  const { data: property } = await propertyDb
     .from("public_properties")
     .select("id")
     .or(`slug.eq.${effectivePropertySlug},subdomain.eq.${effectivePropertySlug}`)
@@ -65,7 +66,8 @@ export default async function CMSPage({ params, searchParams }: Props) {
   const effectivePropertySlug = propertySlug || DEFAULT_PROPERTY_SLUG
   console.log("[v0] CMS Page - effectivePropertySlug:", effectivePropertySlug)
 
-  const { data: property, error: propertyError } = await supabase
+  const propertyDb = createServiceClient()
+  const { data: property, error: propertyError } = await propertyDb
     .from("public_properties")
     .select("id, slug, subdomain")
     .or(`slug.eq.${effectivePropertySlug},subdomain.eq.${effectivePropertySlug}`)
