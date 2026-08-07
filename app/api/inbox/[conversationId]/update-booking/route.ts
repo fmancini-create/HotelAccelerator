@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
-import { InboxWriteRepository } from "@/lib/platform-repositories"
 import { InboxWriteService } from "@/lib/platform-services"
 
 export async function POST(request: Request, { params }: { params: { conversationId: string } }) {
@@ -17,8 +16,7 @@ export async function POST(request: Request, { params }: { params: { conversatio
     }
 
     const supabase = await createClient()
-    const repository = new InboxWriteRepository(supabase)
-    const service = new InboxWriteService(repository)
+    const service = new InboxWriteService(supabase)
 
     const conversation = await service.updateBookingData({
       conversationId,
