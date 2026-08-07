@@ -33,5 +33,15 @@ describe("public database surface", () => {
     expect(file).not.toContain("createClient()")
     expect(file).toContain('.from("public_cms_publications")')
     expect(file).toContain('.eq("property_id", tenant.id)')
+    expect(file).toContain('isModuleActive(db, tenant.id, "white_label")')
+    expect(file).toContain("siteSettings={release.siteSettings}")
+  })
+
+  it("keeps 4BID attribution in both published and unpublished tenant rendering", () => {
+    const route = source("app/site/[[...slug]]/page.tsx")
+    const renderer = source("components/cms/builder-live-renderer.tsx")
+    expect(route).toContain("<FourBidCredit />")
+    expect(renderer).toContain("!siteSettings.whiteLabel")
+    expect(renderer).toContain("<FourBidCredit inverse />")
   })
 })

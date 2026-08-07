@@ -2,6 +2,9 @@
 
 import type { CSSProperties, ReactNode } from "react"
 import type { CMSBuilderDocument } from "@/lib/cms/builder-document"
+import { CookieConsentBanner, CookiePreferencesButton } from "@/components/cms/cookie-consent-banner"
+import { FourBidCredit } from "@/components/cms/four-bid-credit"
+import { EMPTY_TENANT_SITE_SETTINGS, legalDetails, type TenantSiteSettings } from "@/lib/cms/tenant-site-settings"
 
 type Breakpoint = "desktop" | "tablet" | "mobile"
 type Page = CMSBuilderDocument["pages"][number]
@@ -116,7 +119,7 @@ function SectionRenderer({ section, document, breakpoint, index }: { section: Se
   return <section className={`${spacing} px-5 md:px-10`} style={sectionStyle}><div className={`mx-auto grid max-w-6xl grid-cols-12 gap-6 ${layout === "center" ? "text-center" : ""}`}>{elements.map((element) => <RenderElement key={element.id} element={element} document={document} breakpoint={breakpoint} />)}</div></section>
 }
 
-export function BuilderLiveRenderer({ document, pageId, breakpoint = "desktop" }: { document: CMSBuilderDocument; pageId?: string; breakpoint?: Breakpoint }) {
+export function BuilderLiveRenderer({ document, pageId, breakpoint = "desktop", siteSettings = EMPTY_TENANT_SITE_SETTINGS }: { document: CMSBuilderDocument; pageId?: string; breakpoint?: Breakpoint; siteSettings?: TenantSiteSettings }) {
   const page = document.pages.find((item) => item.id === pageId) || document.pages[0]
   const { colors, typography } = document.designTokens
   const visibleNavigation = [...document.navigation].sort((a, b) => a.order - b.order).slice(0, 7)
@@ -124,6 +127,7 @@ export function BuilderLiveRenderer({ document, pageId, breakpoint = "desktop" }
   return <div className="min-h-screen overflow-hidden" style={{ backgroundColor: colors.background, color: colors.foreground, fontFamily: typography.bodyFamily, fontSize: typography.baseSize }}>
     <header className="sticky top-0 z-40 border-b backdrop-blur-xl" style={{ borderColor: `${colors.secondary}44`, backgroundColor: `${colors.background}E8` }}><div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-10"><div className="font-semibold tracking-wide" style={{ fontFamily: typography.headingFamily }}>{page.seo.title || "Hotel"}</div><nav className="hidden gap-6 text-sm md:flex">{visibleNavigation.map((item) => <a key={item.id} href={item.href} className="opacity-75 hover:opacity-100">{item.label}</a>)}</nav><a href="#booking" className={`${radiusClass(document.designTokens.radius)} px-4 py-2 text-sm font-semibold text-white`} style={{ backgroundColor: colors.primary }}>Prenota</a></div></header>
     <main>{page.sections.map((section, index) => <SectionRenderer key={section.id} section={section} document={document} breakpoint={breakpoint} index={index} />)}</main>
-    <footer className="px-5 py-12 md:px-10" style={{ backgroundColor: colors.foreground, color: colors.background }}><div className="mx-auto flex max-w-7xl flex-col justify-between gap-5 md:flex-row"><div><div className="text-2xl" style={{ fontFamily: typography.headingFamily }}>{page.seo.title || "Hotel"}</div><p className="mt-2 max-w-xl text-sm opacity-70">Anteprima generata dalla bozza CMS. Dati, immagini e collegamenti devono essere verificati prima della pubblicazione.</p></div><div className="text-sm opacity-60">HotelAccelerator CMS</div></div></footer>
+    <footer className="px-5 py-12 md:px-10" style={{ backgroundColor: colors.foreground, color: colors.background }}><div className="mx-auto grid max-w-7xl gap-8 md:grid-cols-[1fr_auto]"><div><div className="text-2xl" style={{ fontFamily: typography.headingFamily }}>{siteSettings.companyName || page.seo.title || "Hotel"}</div><div className="mt-3 flex max-w-3xl flex-wrap gap-x-3 gap-y-1 text-xs opacity-70">{legalDetails(siteSettings).map((item) => <span key={item}>{item}</span>)}</div><div className="mt-4 flex flex-wrap gap-4 text-xs"><a className="underline underline-offset-4" href="/privacy-policy">Privacy Policy</a><a className="underline underline-offset-4" href="/cookie-policy">Cookie Policy</a><CookiePreferencesButton /></div></div>{!siteSettings.whiteLabel && <div className="md:text-right"><FourBidCredit inverse /></div>}</div></footer>
+    <CookieConsentBanner />
   </div>
 }
