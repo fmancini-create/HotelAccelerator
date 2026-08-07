@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { EmbedScriptRepository } from "@/lib/platform-repositories"
 import { EmbedScriptService } from "@/lib/platform-services"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
@@ -9,8 +8,7 @@ export async function GET(request: NextRequest) {
     const propertyId = await getAuthenticatedPropertyId()
     const supabase = createServiceClient()
 
-    const repository = new EmbedScriptRepository(supabase)
-    const service = new EmbedScriptService(repository)
+    const service = new EmbedScriptService(supabase)
 
     const scripts = await service.getScriptsByProperty(propertyId)
 
@@ -27,8 +25,7 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient()
     const body = await request.json()
 
-    const repository = new EmbedScriptRepository(supabase)
-    const service = new EmbedScriptService(repository)
+    const service = new EmbedScriptService(supabase)
 
     const script = await service.createScript(propertyId, body)
 
