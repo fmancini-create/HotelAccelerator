@@ -113,12 +113,13 @@ export default async function CMSPage({ params, searchParams }: Props) {
     )
   }
 
+  const renderedSections = await Promise.all(
+    sections.map((section) => SectionRenderer({ section: section as any })),
+  )
+
   return (
     <main className="min-h-screen">
-      {sections.map((section) => {
-        console.log("[v0] CMS Page - Rendering section:", section.type, section.id)
-        return <SectionRenderer key={section.id} section={section as any} />
-      })}
+      {renderedSections}
     </main>
   )
 }

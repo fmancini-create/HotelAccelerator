@@ -143,7 +143,7 @@ const colorClasses = {
   pink: brandIcon,
 }
 
-function PlatformLanding() {
+async function PlatformLanding() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Navigation */}
@@ -440,7 +440,7 @@ function PlatformLanding() {
       </section>
 
       {/* Dev/Preview Buttons - Only visible in dev/preview */}
-      <DevButtons />
+      {await DevButtons()}
 
       {/* Footer with semantic HTML */}
       <PlatformFooter />

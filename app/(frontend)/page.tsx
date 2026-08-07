@@ -7,7 +7,7 @@ export default async function HomePage() {
 
   // Se siamo sul dominio piattaforma, mostra landing HotelAccelerator
   if (isPlatform) {
-    return <PlatformLanding />
+    return PlatformLanding()
   }
 
   // Altrimenti mostra il sito del tenant

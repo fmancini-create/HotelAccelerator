@@ -42,6 +42,7 @@ import {
   Link2,
   Smile,
   BookText,
+  Database,
   Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -437,11 +438,11 @@ export default function InboxPage() {
   const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
 
   // ── Gmail State ──
-  const [gmailThreads, setGmailThreads] = useState<any[]>([])
+  const [gmailThreads, setGmailThreads] = useState<GmailThread[]>([])
   const [gmailLoading, setGmailLoading] = useState(false)
   const [gmailMessages, setGmailMessages] = useState<any[]>([])
   const [gmailThreadLoading, setGmailThreadLoading] = useState(false)
-  const [selectedGmailThread, setSelectedGmailThread] = useState<any>(null)
+  const [selectedGmailThread, setSelectedGmailThread] = useState<GmailThread | null>(null)
   const [gmailLabelId, setGmailLabelId] = useState("INBOX")
   const [gmailSearchQuery, setGmailSearchQuery] = useState("")
   const [gmailNextPageToken, setGmailNextPageToken] = useState<string | null>(null)
@@ -1359,19 +1360,19 @@ export default function InboxPage() {
 
       const messagesChannel = supabase
         .channel("smart-inbox-messages")
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (_payload: unknown) => {
           // Reload conversations to show new message
           loadConversations()
         })
-        .subscribe((status) => {
+        .subscribe((_status: string) => {
         })
 
       const conversationsChannel = supabase
         .channel("smart-inbox-conversations")
-        .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (payload) => {
+        .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (_payload: unknown) => {
           loadConversations()
         })
-        .subscribe((status) => {
+        .subscribe((_status: string) => {
           // Realtime subscription status
         })
 
@@ -2882,7 +2883,7 @@ export default function InboxPage() {
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
                       className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
-                        selectedGmailThread?.id === thread.id
+                        (selectedGmailThread as GmailThread | null)?.id === thread.id
                           ? "bg-[#d3e3fd]"
                           : thread.isUnread
                             ? "bg-white hover:bg-[#f2f6fc]"
@@ -2935,7 +2936,7 @@ export default function InboxPage() {
                       key={conv.id}
                       onClick={() => handleSelectConversation(conv)}
                       className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
-                        selectedConversation?.id === conv.id
+                        (selectedConversation as Conversation | null)?.id === conv.id
                           ? "bg-[#d3e3fd]"
                           : conv.unread_count > 0
                             ? "bg-white hover:bg-[#f2f6fc]"

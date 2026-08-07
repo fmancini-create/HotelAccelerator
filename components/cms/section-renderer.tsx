@@ -52,7 +52,7 @@ export async function SectionRenderer({ section }: { section: Section }) {
     case "villa_hero_slider":
       return <VillaHeroSliderSection data={section.data} />
     case "villa_hero_gallery":
-      return <VillaHeroGallerySection data={section.data} />
+      return VillaHeroGallerySection({ data: section.data })
     case "villa_about":
       return <VillaAboutSection data={section.data} />
     case "villa_pool":
@@ -68,7 +68,7 @@ export async function SectionRenderer({ section }: { section: Section }) {
     case "villa_cantina":
       return <VillaCantinaSection data={section.data} />
     case "villa_room_gallery":
-      return <VillaRoomGallerySection data={section.data} />
+      return VillaRoomGallerySection({ data: section.data })
     case "villa_room_intro":
       return <VillaRoomIntroSection data={section.data} />
     default:
@@ -88,9 +88,7 @@ function VillaHeroSliderSection({ data }: { data: Record<string, unknown> }) {
     ctaText?: string
     ctaLink?: string
   }
-  return (
-    <HeroSlider title={title || ""} subtitle={subtitle} description={description} ctaText={ctaText} ctaLink={ctaLink} />
-  )
+  return <HeroSlider />
 }
 
 async function VillaHeroGallerySection({ data }: { data: Record<string, unknown> }) {
@@ -135,7 +133,7 @@ function VillaAboutSection({ data }: { data: Record<string, unknown> }) {
     description?: string
     content?: string
   }
-  return <AboutSection title={title || ""} subtitle={subtitle} description={description} content={content || ""} />
+  return <AboutSection />
 }
 
 function VillaPoolSection({ data }: { data: Record<string, unknown> }) {
@@ -145,7 +143,7 @@ function VillaPoolSection({ data }: { data: Record<string, unknown> }) {
     ctaText?: string
     ctaLink?: string
   }
-  return <PoolSection title={title || ""} description={description} ctaText={ctaText} ctaLink={ctaLink} />
+  return <PoolSection />
 }
 
 function VillaRestaurantSection({ data }: { data: Record<string, unknown> }) {
@@ -155,7 +153,7 @@ function VillaRestaurantSection({ data }: { data: Record<string, unknown> }) {
     ctaText?: string
     ctaLink?: string
   }
-  return <RestaurantSection title={title || ""} description={description} ctaText={ctaText} ctaLink={ctaLink} />
+  return <RestaurantSection />
 }
 
 function VillaFlorenceSection({ data }: { data: Record<string, unknown> }) {
@@ -164,17 +162,17 @@ function VillaFlorenceSection({ data }: { data: Record<string, unknown> }) {
 
 function VillaThreeFeaturesSection({ data }: { data: Record<string, unknown> }) {
   const { lang = "it" } = data as { lang?: string }
-  return <ThreeFeaturesSection lang={lang} />
+  return <ThreeFeaturesSection />
 }
 
 function VillaCTAIconsSection({ data }: { data: Record<string, unknown> }) {
   const { lang = "it" } = data as { lang?: string }
-  return <CTAIconsSection lang={lang} />
+  return <CTAIconsSection />
 }
 
 function VillaCantinaSection({ data }: { data: Record<string, unknown> }) {
   const { lang = "it" } = data as { lang?: string }
-  return <CantinaAntinoriSection lang={lang} />
+  return <CantinaAntinoriSection />
 }
 
 async function VillaRoomGallerySection({ data }: { data: Record<string, unknown> }) {

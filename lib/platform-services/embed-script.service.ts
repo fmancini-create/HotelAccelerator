@@ -35,9 +35,9 @@ export class EmbedScriptService {
     return this.repository.create(propertyId, input)
   }
 
-  async updateScript(id: string, input: UpdateEmbedScriptInput): Promise<EmbedScript> {
+  async updateScript(id: string, propertyId: string, input: UpdateEmbedScriptInput): Promise<EmbedScript> {
     const script = await this.repository.findById(id)
-    if (!script) {
+    if (!script || script.property_id !== propertyId) {
       throw new Error("Script non trovato")
     }
     if (input.destination_url) {

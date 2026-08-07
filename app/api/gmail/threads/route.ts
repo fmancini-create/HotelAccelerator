@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
       `[GMAIL-THREAD-VERIFY] threads.list response: count=${threadsListData.threads?.length || 0}, nextPageToken=${threadsListData.nextPageToken ? "present" : "none"}`,
     )
 
-    const threadIds = threadsListData.threads?.map((t: any) => t.id) || []
+    const threadIds: string[] = threadsListData.threads?.map((t: any) => String(t.id)) || []
 
     const BATCH_SIZE = 3
     const threadChunks = chunkArray(threadIds, BATCH_SIZE)
