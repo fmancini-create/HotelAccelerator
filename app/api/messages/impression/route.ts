@@ -33,15 +33,14 @@ export async function POST(request: NextRequest) {
     // Aggiorna contatori sulla regola
     const counterField = impression_type === "click" ? "clicks_count" : "impressions_count"
 
-    await supabase
-      .rpc("increment_counter", {
+    const { error: counterError } = await supabase.rpc("increment_counter", {
         table_name: "message_rules",
         column_name: counterField,
         row_id: rule_id,
       })
-      .catch(() => {
-        // Se la funzione RPC non esiste, ignora
-      })
+    if (counterError) {
+      console.warn("Counter RPC unavailable:", counterError.message)
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {
