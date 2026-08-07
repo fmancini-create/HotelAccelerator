@@ -92,14 +92,57 @@ export async function PUT(request: NextRequest) {
       payload.builder_schema_version = CMS_BUILDER_SCHEMA_VERSION
       payload.builder_document = normalizedDocument
       payload.template_id = normalizedDocument.templateId
+
+      const incomingVersion = Number(body.project_version)
+      if (!Number.isSafeInteger(incomingVersion) || incomingVersion < 1) {
+        return NextResponse.json({ error: "Versione bozza non valida" }, { status: 400 })
+      }
+      payload.project_version = incomingVersion
     }
 
     const supabase = await createClient()
-    const { data, error } = await supabase
-      .from("cms_ai_projects")
-      .upsert(payload, { onConflict: "property_id" })
-      .select(PROJECT_SELECT)
-      .single()
+    let data
+    let error
+
+    if (body.builder_document !== undefined) {
+      const updateResult = await supabase
+        .from("cms_ai_projects")
+        .update(payload)
+        .eq("property_id", propertyId)
+        .lt("project_version", payload.project_version as number)
+        .select(PROJECT_SELECT)
+        .maybeSingle()
+      data = updateResult.data
+      error = updateResult.error
+
+      if (!error && !data) {
+        const existingResult = await supabase
+          .from("cms_ai_projects")
+          .select("project_version")
+          .eq("property_id", propertyId)
+          .maybeSingle()
+        if (existingResult.error) return NextResponse.json({ error: existingResult.error.message }, { status: 500 })
+        if (existingResult.data) {
+          return NextResponse.json({ error: "È già stata salvata una versione più recente della bozza" }, { status: 409 })
+        }
+
+        const insertResult = await supabase
+          .from("cms_ai_projects")
+          .insert(payload)
+          .select(PROJECT_SELECT)
+          .single()
+        data = insertResult.data
+        error = insertResult.error
+      }
+    } else {
+      const upsertResult = await supabase
+        .from("cms_ai_projects")
+        .upsert(payload, { onConflict: "property_id" })
+        .select(PROJECT_SELECT)
+        .single()
+      data = upsertResult.data
+      error = upsertResult.error
+    }
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ project: serializeProject(data) })

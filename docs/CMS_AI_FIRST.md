@@ -97,7 +97,13 @@ Mouse, testo e voce dovranno produrre gli stessi comandi validati. Non devono mo
 
 - Il client non invia né sceglie `property_id`.
 - Il tenant deriva da `getAuthenticatedPropertyId`.
+- Le API amministrative che usano il client service-role verificano prima autenticazione e
+  appartenenza della risorsa al tenant; gli identificativi di risorse esterne al tenant non
+  producono dati leggibili.
 - Ogni documento ricevuto dall'API viene validato con Zod.
+- Ogni modifica del builder porta un `project_version` monotono: il server rifiuta con `409`
+  qualsiasi salvataggio più vecchio della versione già persistita, evitando sovrascritture
+  dovute a richieste concorrenti o arrivate fuori ordine.
 - Link eseguibili come `javascript:` non sono consentiti.
 - Nessuna modifica automatica a `cms_pages`: il nuovo builder usa release immutabili dedicate.
 - Nessuna pubblicazione senza conferma, versioni e rollback.

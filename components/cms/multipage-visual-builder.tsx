@@ -93,7 +93,7 @@ export function CMSMultipageVisualBuilder() {
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestDocument = useRef(history.present)
   const dirtyRef = useRef(false)
-  const editVersion = useRef(0)
+  const editVersion = useRef(1)
 
   const document = history.present
   const page = document.pages.find((item) => item.id === activePageId) ?? document.pages[0]
@@ -115,7 +115,12 @@ export function CMSMultipageVisualBuilder() {
         void fetch("/api/cms/ai-project", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ template_id: validated.templateId, builder_document: validated, current_step: 3 }),
+          body: JSON.stringify({
+            template_id: validated.templateId,
+            builder_document: validated,
+            current_step: 3,
+            project_version: editVersion.current,
+          }),
           credentials: "same-origin",
           keepalive: true,
         }).catch(() => undefined)
@@ -146,6 +151,7 @@ export function CMSMultipageVisualBuilder() {
         if (!response.ok) throw new Error(data.error || "Impossibile caricare il progetto")
         const loaded = data.project?.builder_document || starterDocument()
         const parsed = CMSBuilderDocumentSchema.parse(loaded)
+        editVersion.current = Math.max(1, Number(data.project?.project_version) || 1)
         setHistory({ past: [], present: parsed, future: [] })
         setActivePageId(parsed.pages[0].id)
         setSelectedSectionId(parsed.pages[0].sections[0]?.id ?? null)
@@ -166,7 +172,12 @@ export function CMSMultipageVisualBuilder() {
       const response = await fetch("/api/cms/ai-project", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ template_id: validated.templateId, builder_document: validated, current_step: 3 }),
+        body: JSON.stringify({
+          template_id: validated.templateId,
+          builder_document: validated,
+          current_step: 3,
+          project_version: savedVersion,
+        }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Salvataggio non riuscito")
@@ -217,7 +228,9 @@ export function CMSMultipageVisualBuilder() {
       draft.pages.push(next)
       draft.navigation.push({ id: uniqueId("nav"), label: next.title, href: next.slug, order: draft.navigation.length })
     })
-    selectPage(next.id)
+    setActivePageId(next.id)
+    setSelectedSectionId(next.sections[0]?.id ?? null)
+    setSelectedElementId(null)
   }
 
   function duplicatePage() {
@@ -225,7 +238,7 @@ export function CMSMultipageVisualBuilder() {
     const copy = structuredClone(page)
     copy.id = uniqueId("page")
     copy.title = `${page.title} copia`
-    copy.slug = slugify(copy.title)
+    copy.slug = emptyPage(copy.title, document.pages).slug
     copy.sections.forEach((section) => {
       section.id = uniqueId("section")
       section.elements.forEach((element) => { element.id = uniqueId(element.type) })

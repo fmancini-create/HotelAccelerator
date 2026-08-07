@@ -149,10 +149,15 @@ export default function UnifiedLoginForm() {
     }
 
     setGoogleLoading(true)
+    const currentHost = window.location.hostname.toLowerCase()
+    const callbackOrigin =
+      currentHost === "hotelaccelerator.com" || currentHost === "www.hotelaccelerator.com"
+        ? "https://www.hotelaccelerator.com"
+        : window.location.origin
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${callbackOrigin}/auth/callback`,
       },
     })
 
