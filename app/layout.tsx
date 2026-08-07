@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from "next"
 import { Geist } from "next/font/google"
 import "./globals.css"
 import RootClientLayout from "./RootClientLayout"
+import { headers } from "next/headers"
 
 // Typography aligned to Santaddeo (master grafico): Geist everywhere.
 // Kept the RootClientLayout props shape (inter/playfair) to avoid touching
@@ -101,13 +102,15 @@ export const metadata: Metadata = {
     generator: 'v0.app'
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const requestHeaders = await headers()
+  const isTenantSite = Boolean(requestHeaders.get("x-tenant-identifier"))
   return (
-    <RootClientLayout inter={geist} playfair={geist}>
+    <RootClientLayout inter={geist} playfair={geist} isTenantSite={isTenantSite}>
       {children}
     </RootClientLayout>
   )

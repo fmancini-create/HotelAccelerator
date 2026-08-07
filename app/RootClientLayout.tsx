@@ -4,21 +4,23 @@ import type React from "react"
 import Script from "next/script"
 import { Analytics } from "@vercel/analytics/next"
 import { LanguageProvider } from "@/lib/language-context"
+import { ConsentAwareAnalytics } from "@/components/cms/consent-aware-analytics"
 
 interface RootClientLayoutProps {
   children: React.ReactNode
   inter: { className: string; style: { fontFamily: string } }
   playfair: { style: { fontFamily: string } }
+  isTenantSite: boolean
 }
 
 const GA_MEASUREMENT_ID = "G-DT2601Q58K"
 const YANDEX_METRICA_ID = "106059423"
 
-export default function RootClientLayout({ children, inter, playfair }: RootClientLayoutProps) {
+export default function RootClientLayout({ children, inter, playfair, isTenantSite }: RootClientLayoutProps) {
   return (
     <html lang="it" className="bg-background">
       <head>
-        {/* Google Analytics (gtag.js) */}
+        {!isTenantSite && <>{/* Platform analytics; tenant analytics is consent-gated below. */}
         <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
         <Script id="google-analytics" strategy="afterInteractive">
           {`
@@ -56,7 +58,7 @@ export default function RootClientLayout({ children, inter, playfair }: RootClie
             />
           </div>
         </noscript>
-        {/* /Yandex.Metrika counter */}
+        {/* /Yandex.Metrika counter */}</>}
       </head>
       <body
         className={`${inter.className} antialiased safe-area-top safe-area-bottom`}
@@ -69,7 +71,7 @@ export default function RootClientLayout({ children, inter, playfair }: RootClie
         `}</style>
 
         <LanguageProvider>{children}</LanguageProvider>
-        <Analytics />
+        {isTenantSite ? <ConsentAwareAnalytics /> : <Analytics />}
       </body>
     </html>
   )

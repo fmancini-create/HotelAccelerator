@@ -44,4 +44,13 @@ describe("public database surface", () => {
     expect(renderer).toContain("!siteSettings.whiteLabel")
     expect(renderer).toContain("<FourBidCredit inverse />")
   })
+
+  it("does not load tenant analytics before cookie consent", () => {
+    const root = source("app/RootClientLayout.tsx")
+    const analytics = source("components/cms/consent-aware-analytics.tsx")
+    expect(root).toContain("isTenantSite ? <ConsentAwareAnalytics /> : <Analytics />")
+    expect(root).toContain("!isTenantSite")
+    expect(analytics).toContain("if (!enabled) return null")
+    expect(analytics).toContain("hotelaccelerator:cookie-consent")
+  })
 })
