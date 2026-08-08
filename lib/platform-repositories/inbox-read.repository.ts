@@ -25,6 +25,26 @@ function handleSupabaseError(error: any): never {
   throw error
 }
 
+/**
+ * Normalise the embedded contact into the shape the UI expects.
+ *
+ * Conversations from automated senders have no CRM contact on purpose. Their
+ * sender lives in the denormalised `contact_email` / `contact_name` columns, so
+ * a synthetic contact (with a null id, which marks it as "not in the CRM") is
+ * returned instead of leaving the row without a sender to display.
+ */
+function resolveContact(conv: any) {
+  const embedded = Array.isArray(conv.contact) ? conv.contact[0] : conv.contact
+  if (embedded) return embedded
+  if (!conv.contact_email && !conv.contact_name) return null
+  return {
+    id: null,
+    email: conv.contact_email ?? null,
+    name: conv.contact_name ?? conv.contact_email ?? null,
+    phone: null,
+  }
+}
+
 export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
 
@@ -70,7 +90,9 @@ export class InboxReadRepository {
         channel_id,
         gmail_thread_id,
         gmail_labels,
-        contact:contacts!inner(id, email, name, phone),
+        contact_email,
+        contact_name,
+        contact:contacts(id, email, name, phone),
         assigned:admin_users(id, name, email)
       `,
       )
@@ -118,11 +140,13 @@ export class InboxReadRepository {
     } else if (effectiveSort === "date_asc") {
       query = query.order("last_message_at", { ascending: true, nullsFirst: false })
     } else if (effectiveSort === "sender_asc") {
-      // Sort by contact email asc, then date desc as tiebreaker
-      query = query.order("email", { referencedTable: "contacts", ascending: true, nullsFirst: false })
+      // Sort on the denormalised sender, not on the embedded contact: ordering
+      // by a left-joined table would drop contactless conversations out of
+      // position (and, before the join was relaxed, out of the list entirely).
+      query = query.order("contact_email", { ascending: true, nullsFirst: false })
       query = query.order("last_message_at", { ascending: false })
     } else if (effectiveSort === "sender_desc") {
-      query = query.order("email", { referencedTable: "contacts", ascending: false, nullsFirst: false })
+      query = query.order("contact_email", { ascending: false, nullsFirst: false })
       query = query.order("last_message_at", { ascending: false })
     }
 
@@ -131,7 +155,34 @@ export class InboxReadRepository {
     }
 
     if (search) {
-      query = query.or(`subject.ilike.%${search}%,contact.name.ilike.%${search}%,contact.email.ilike.%${search}%`)
+      // The sender is matched on the conversation's own columns. Referencing
+      // the embedded `contact.*` inside a top-level OR only works while the
+      // join is inner, and an inner join hides every conversation without a
+      // CRM contact (all automated senders).
+      const term = search.replace(/[,()"]/g, " ").trim()
+      if (term) {
+        const orParts = [
+          `subject.ilike.%${term}%`,
+          `contact_email.ilike.%${term}%`,
+          `contact_name.ilike.%${term}%`,
+        ]
+
+        // A contact renamed in the CRM after the conversation was created no
+        // longer matches the denormalised copy, so resolve matching contacts
+        // separately and search by id as well.
+        const { data: matchingContacts } = await this.supabase
+          .from("contacts")
+          .select("id")
+          .eq("property_id", propertyId)
+          .or(`name.ilike.%${term}%,email.ilike.%${term}%`)
+          .limit(200)
+
+        if (matchingContacts && matchingContacts.length > 0) {
+          orParts.push(`contact_id.in.(${matchingContacts.map((c) => c.id).join(",")})`)
+        }
+
+        query = query.or(orParts.join(","))
+      }
     }
 
     // Apply per-user channel restriction (ANDed with any other filters above).
@@ -229,7 +280,7 @@ export class InboxReadRepository {
     return (data || []).map((conv) => ({
       ...conv,
       is_starred: conv.is_starred ?? false,
-      contact: Array.isArray(conv.contact) ? conv.contact[0] : conv.contact,
+      contact: resolveContact(conv),
       assigned: Array.isArray(conv.assigned) ? conv.assigned[0] : conv.assigned,
       last_message: lastMessageMap.get(conv.id) || null,
       intelligence_summary: conv.metadata?.intelligence_summary || null,
@@ -258,6 +309,8 @@ export class InboxReadRepository {
         booking_data,
         gmail_thread_id,
         gmail_labels,
+        contact_email,
+        contact_name,
         contact:contacts(id, email, name, phone),
         assigned:admin_users(id, name, email)
       `,
@@ -282,7 +335,7 @@ export class InboxReadRepository {
     return {
       ...conversation,
       is_starred: conversation.is_starred ?? false,
-      contact: Array.isArray(conversation.contact) ? conversation.contact[0] : conversation.contact,
+      contact: resolveContact(conversation),
       assigned: Array.isArray(conversation.assigned) ? conversation.assigned[0] : conversation.assigned,
       messages: (messages || []) as MessageItem[],
       priority: "normal",

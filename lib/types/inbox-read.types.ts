@@ -5,7 +5,13 @@
 
 // Base types
 export interface ConversationContact {
-  id: string
+  /**
+   * Null when the sender has no CRM contact (automated senders such as
+   * noreply@ or notifications@). The conversation is still shown; the sender is
+   * read from the conversation's denormalised columns. Callers that link to the
+   * CRM must check this before building a contact URL.
+   */
+  id: string | null
   email: string
   name: string | null
   phone: string | null

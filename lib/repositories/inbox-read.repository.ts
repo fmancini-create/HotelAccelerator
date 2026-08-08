@@ -35,7 +35,9 @@ export class InboxReadRepository {
         unread_count,
         booking_data,
         metadata,
-        contact:contacts!inner(id, email, name, phone),
+        contact_email,
+        contact_name,
+        contact:contacts(id, email, name, phone),
         assigned:admin_users(id, name, email)
       `,
       )
@@ -52,7 +54,11 @@ export class InboxReadRepository {
     }
 
     if (search) {
-      query = query.or(`subject.ilike.%${search}%,contact.name.ilike.%${search}%,contact.email.ilike.%${search}%`)
+      // Match the sender on the conversation's own columns: an OR on the
+      // embedded contact would silently require an inner join and hide every
+      // conversation without a CRM contact.
+      const term = search.replace(/[,()"]/g, " ").trim()
+      query = query.or(`subject.ilike.%${term}%,contact_email.ilike.%${term}%,contact_name.ilike.%${term}%`)
     }
 
     const { data, error } = await query
@@ -84,7 +90,11 @@ export class InboxReadRepository {
     return (data || []).map((conv) => ({
       ...conv,
       is_starred: conv.is_starred ?? false,
-      contact: Array.isArray(conv.contact) ? conv.contact[0] : conv.contact,
+      contact:
+        (Array.isArray(conv.contact) ? conv.contact[0] : conv.contact) ??
+        (conv.contact_email || conv.contact_name
+          ? { id: null, email: conv.contact_email ?? null, name: conv.contact_name ?? conv.contact_email, phone: null }
+          : null),
       assigned: Array.isArray(conv.assigned) ? conv.assigned[0] : conv.assigned,
       last_message: lastMessageMap.get(conv.id) || null,
       intelligence_summary: conv.metadata?.intelligence_summary || null,

@@ -115,11 +115,20 @@ export class EmailProcessor {
       const senderEmail = this.extractEmail(email.from)
       const senderName = email.fromName || this.extractName(email.from) || senderEmail.split("@")[0]
 
-      // Find or create contact
-      const contact = await this.findOrCreateContact(propertyId, senderEmail, senderName)
+      // Find or create contact. Automated senders (noreply@, notifications@,
+      // ...) deliberately resolve to null: their mail still lands in the Inbox,
+      // but they are not people and must not pollute the CRM.
+      const contactId = await this.resolveContactId(propertyId, senderEmail, senderName)
 
       // TASK 3: Internal threading - find or create conversation
-      const conversation = await this.findOrCreateConversation(propertyId, channelId, contact.id, email)
+      const conversation = await this.findOrCreateConversation(
+        propertyId,
+        channelId,
+        contactId,
+        senderEmail,
+        senderName,
+        email,
+      )
 
       const isUnread = isUnreadFromGmailLabels(email.labelIds)
       const receivedAtIso = email.receivedAt.toISOString()
@@ -131,7 +140,8 @@ export class EmailProcessor {
           property_id: propertyId,
           conversation_id: conversation.id,
           sender_type: "customer",
-          sender_id: contact.id,
+          // Nullable on purpose: machine senders have no contact row.
+          sender_id: contactId,
           content: email.body,
           content_type: email.contentType,
           external_message_id: email.externalId, // TASK 1: Unique identifier
@@ -211,7 +221,9 @@ export class EmailProcessor {
   private async findOrCreateConversation(
     propertyId: string,
     channelId: string,
-    contactId: string,
+    contactId: string | null,
+    senderEmail: string,
+    senderName: string,
     email: InboundEmail,
   ) {
     // Try 1: Match by Gmail threadId
@@ -283,16 +295,24 @@ export class EmailProcessor {
       }
     }
 
-    // Try 4: Match by normalized subject + contact (fallback)
+    // Try 4: Match by normalized subject + sender (fallback).
+    // Machine senders have no contact_id, so the sender is matched on the
+    // denormalised address instead. Filtering on `contact_id = null` would
+    // otherwise collapse every contactless thread of the tenant into one.
     const normalizedSubject = this.normalizeSubject(email.subject)
     if (normalizedSubject) {
-      const { data: bySubject } = await this.supabase
+      let bySubjectQuery = this.supabase
         .from("conversations")
         .select("id, unread_count, internal_thread_id, last_message_at, status")
         .eq("property_id", propertyId)
-        .eq("contact_id", contactId)
         .eq("normalized_subject", normalizedSubject)
         .eq("channel", "email")
+
+      bySubjectQuery = contactId
+        ? bySubjectQuery.eq("contact_id", contactId)
+        : bySubjectQuery.is("contact_id", null).eq("contact_email", senderEmail)
+
+      const { data: bySubject } = await bySubjectQuery
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -306,6 +326,10 @@ export class EmailProcessor {
       .insert({
         property_id: propertyId,
         contact_id: contactId,
+        // Denormalised sender: the only way to render and reply to a
+        // conversation whose sender is not a CRM contact.
+        contact_email: senderEmail,
+        contact_name: senderName,
         channel_id: channelId,
         channel: "email",
         subject: email.subject || "(Nessun oggetto)",
@@ -323,11 +347,14 @@ export class EmailProcessor {
     return newConv
   }
 
-  private async findOrCreateContact(propertyId: string, email: string, name: string) {
+  private async resolveContactId(propertyId: string, email: string, name: string): Promise<string | null> {
     // Delegate to the central CRM auto-capture policy so tenant toggles,
-    // blacklists, and tagging are applied consistently across inbound channels.
-    // Inbound always guarantees a contact (even a minimal one) because the
-    // conversation record requires a valid contact_id for thread-linking.
+    // blacklists, machine-sender detection and tagging are applied consistently
+    // across inbound channels.
+    //
+    // A null result is a valid outcome, not a failure: machine senders are
+    // skipped on purpose. The conversation keeps the address in contact_email,
+    // so nothing is dropped from the Inbox.
     const result = await autoCaptureContact({
       supabase: this.supabase,
       propertyId,
@@ -336,20 +363,7 @@ export class EmailProcessor {
       direction: "inbound",
     })
 
-    if (result.contactId) {
-      return { id: result.contactId }
-    }
-
-    // Fallback: the policy layer failed unexpectedly. Insert a minimal
-    // contact so the inbound pipeline never drops a conversation.
-    const { data: fallback, error } = await this.supabase
-      .from("contacts")
-      .insert({ property_id: propertyId, email, name, source: "system" })
-      .select("id")
-      .single()
-
-    if (error) throw error
-    return fallback
+    return result.contactId
   }
 
   private normalizeSubject(subject: string): string | null {
