@@ -12,9 +12,9 @@
  *   DEV_SUPABASE_SERVICE_KEY
  */
 
-const PROD_URL = process.env.SUPABASE_URL || 'https://aeynirkfixurikshxfov.supabase.co';
+const PROD_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL);
 const PROD_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const DEV_URL = process.env.DEV_SUPABASE_URL || 'https://dshdmkmhhbjractpvojp.supabase.co';
+const DEV_URL = (process.env.DEV_SUPABASE_URL || process.env.NEXT_PUBLIC_DEV_SUPABASE_URL);
 const DEV_KEY = process.env.DEV_SUPABASE_ANON_KEY;
 
 const BATCH_SIZE = 500;

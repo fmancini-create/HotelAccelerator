@@ -3,6 +3,7 @@
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
+import { getPublicSupabaseConfig } from "@/lib/supabase/config"
 export async function loginAction(formData: FormData) {
   const email = formData.get("email") as string
   const password = formData.get("password") as string
@@ -14,10 +15,7 @@ export async function loginAction(formData: FormData) {
   let redirectPath = "/dashboard"
 
   try {
-    const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
-    const PROD_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFleW5pcmtmaXh1cmlrc2h4Zm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MTQyMDMsImV4cCI6MjA3Njk5MDIwM30.NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0"
-    const supabaseUrl = process.env.SUPABASE_URL || PROD_URL
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || PROD_ANON_KEY
+    const { url: supabaseUrl, publishableKey: supabaseKey } = getPublicSupabaseConfig()
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://www.santaddeo.com"
 
     const https = await import("https")

@@ -1,8 +1,9 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { isDevAuthAsync } from "@/lib/env/dev-auth"
 
-const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
+const PROD_URL = getSupabaseUrl()
 
 function getServiceKey(): string {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SANTADDEO_SUPABASE_SERVICE_ROLE_KEY

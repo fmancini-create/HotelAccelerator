@@ -1,3 +1,4 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 /**
  * Bookings Service
  * Extracts revenue and cancellation logic used by /api/dati/production.
@@ -5,7 +6,7 @@
  * Caching and auth remain in the route.
  */
 
-const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
+const PROD_URL = getSupabaseUrl()
 
 function getServiceKey(): string {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SANTADDEO_SUPABASE_SERVICE_ROLE_KEY

@@ -15,6 +15,7 @@ Il limite attuale non è la mancanza di idee, ma l'assenza di una fotografia tec
 - [ ] Identificare mock, codice morto e funzioni duplicate.
 - [ ] Registrare owner e unico esecutore di ogni automazione.
 - [ ] Portare a zero i 358 errori del typecheck autonomo Santaddeo; il Core è verde al 2026-08-07.
+- [x] Centralizzare la configurazione Supabase Santaddeo e rimuovere fallback hardcoded e redirect impliciti tra ambienti.
 
 Uscita: registro attendibile, rischi P0/P1 e architettura as-is documentata.
 

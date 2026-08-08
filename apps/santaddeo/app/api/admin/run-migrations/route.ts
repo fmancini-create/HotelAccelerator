@@ -37,7 +37,7 @@ export async function POST(request: Request) {
 
   // DEV - same env var names as lib/supabase/server.ts
   if (target === "dev" || target === "both") {
-    const url = process.env.DEV_SUPABASE_URL || "https://dshdmkmhhbjractpvojp.supabase.co"
+    const url = process.env.DEV_SUPABASE_URL
     const key = process.env.DEV_SUPABASE_SERVICE_ROLE_KEY
     if (url && key) {
       results.dev = await applyMigrations(url, key, "DEV")

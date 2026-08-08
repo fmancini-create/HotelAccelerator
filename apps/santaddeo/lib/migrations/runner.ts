@@ -142,7 +142,7 @@ export async function runMigrationsOnBothDatabases() {
   }
 
   // DEV - use same env var names as lib/supabase/server.ts
-  const devUrl = process.env.DEV_SUPABASE_URL || "https://dshdmkmhhbjractpvojp.supabase.co"
+  const devUrl = process.env.DEV_SUPABASE_URL
   const devKey = process.env.DEV_SUPABASE_SERVICE_ROLE_KEY
   if (!devKey) {
     throw new Error(

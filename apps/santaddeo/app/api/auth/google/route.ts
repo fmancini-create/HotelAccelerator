@@ -2,9 +2,8 @@ import { NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 
-// Hardcoded PROD credentials as fallback
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://aeynirkfixurikshxfov.supabase.co"
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFleW5pcmtmaXh1cmlrc2h4Zm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MTQyMDMsImV4cCI6MjA3Njk5MDIwM30.NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0"
+import { getPublicSupabaseConfig } from "@/lib/supabase/config"
+const { url: SUPABASE_URL, publishableKey: SUPABASE_ANON_KEY } = getPublicSupabaseConfig()
 
 // Handle both GET and POST for Google OAuth initiation
 async function handleGoogleAuth(req: Request) {

@@ -2,7 +2,7 @@
 // Usage: node --env-file=/vercel/share/.env.project scripts/run-onboarding-schema.mjs
 import { readFileSync } from "node:fs"
 
-const URL_PROD = "https://aeynirkfixurikshxfov.supabase.co"
+const URL_PROD = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!KEY) {
   console.error("Missing SUPABASE_SERVICE_ROLE_KEY")

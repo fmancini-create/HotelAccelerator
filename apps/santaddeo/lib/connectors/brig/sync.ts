@@ -1,3 +1,4 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 import "server-only"
 import { createClient } from "@supabase/supabase-js"
 import { BrigClient, BrigError, isBrigDailyQuotaExceeded } from "./client"
@@ -527,7 +528,7 @@ export async function syncBrigForHotel(
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     // Stesso fallback usato da lib/supabase/server.ts (PROD_URL): in alcuni
     // ambienti (es. cron/job) NEXT_PUBLIC_SUPABASE_URL non e' iniettata.
-    "https://aeynirkfixurikshxfov.supabase.co"
+    getSupabaseUrl()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceKey) {
     throw new Error(
@@ -1443,7 +1444,7 @@ export async function reconcileBrigStaleCancellations(
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     // Stesso fallback usato da lib/supabase/server.ts (PROD_URL): in alcuni
     // ambienti (es. cron/job) NEXT_PUBLIC_SUPABASE_URL non e' iniettata.
-    "https://aeynirkfixurikshxfov.supabase.co"
+    getSupabaseUrl()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const base: BrigStaleReconcileResult = {
     ok: false,

@@ -4,7 +4,7 @@
 // canonica; da domani il cron pace-snapshot aggiunge lo snapshot giornaliero.
 import { createClient } from "@supabase/supabase-js"
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://aeynirkfixurikshxfov.supabase.co"
+const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const sb = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 
 const HORIZON_DAYS = 365

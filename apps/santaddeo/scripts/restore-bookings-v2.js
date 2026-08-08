@@ -1,4 +1,4 @@
-const SUPABASE_URL = "https://aeynirkfixurikshxfov.supabase.co"
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("SUPABASE_SERVICE_ROLE_KEY non configurata")
 }

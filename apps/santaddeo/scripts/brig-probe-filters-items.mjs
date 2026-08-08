@@ -18,7 +18,7 @@
 import { createClient } from "@supabase/supabase-js"
 
 const BASE = "https://brig-service-dot-brig-400706.ew.r.appspot.com"
-const SUPA_URL = process.env.SUPABASE_URL || "https://aeynirkfixurikshxfov.supabase.co"
+const SUPA_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const HOTEL_ID = "bb880163-3973-451b-89a0-6c965b07712b"
 
 // Finestra di prova: una settimana d'agosto dove SAPPIAMO di sottostimare.

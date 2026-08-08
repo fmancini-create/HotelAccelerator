@@ -1,3 +1,4 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 /**
  * Pricing Service
  * Extracts channel-production grid logic from /api/accelerator/channel-production.
@@ -15,7 +16,7 @@ export { triggerPriceRecalculation as triggerRecalculation } from "@/lib/pricing
 // Raw Supabase REST query helper
 // ──────────────────────────────────────────────────
 
-const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
+const PROD_URL = getSupabaseUrl()
 
 function getServiceKey(): string {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SANTADDEO_SUPABASE_SERVICE_ROLE_KEY

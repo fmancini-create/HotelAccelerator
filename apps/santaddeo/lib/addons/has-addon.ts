@@ -1,9 +1,10 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { isDevAuthAsync } from "@/lib/env/dev-auth"
 import { getAuthUserOrDev } from "@/lib/auth/getAuthUserOrDev"
 import type { AddonId } from "@/lib/products"
 
-const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
+const PROD_URL = getSupabaseUrl()
 
 function serviceKey(): string {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SANTADDEO_SUPABASE_SERVICE_ROLE_KEY
