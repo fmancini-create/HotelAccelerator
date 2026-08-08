@@ -1,21 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
-import { getValidGmailToken } from "@/lib/gmail-client"
+import { getValidGmailToken, gmailFetchWithToken } from "@/lib/gmail-client"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
+import { parseGmailMessage } from "@/lib/email/gmail-parse"
 import type { OAuthProvider } from "@/lib/oauth-config"
 import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
 const API_VERSION = "v779-base64url-fix"
-
-function decodeBase64UrlToString(input: string): string {
-  if (!input) return ""
-  // Gmail uses base64url (RFC 4648 URL-safe): replace - with +, _ with /
-  let b64 = input.replace(/-/g, "+").replace(/_/g, "/")
-  // Pad to multiple of 4
-  const pad = b64.length % 4
-  if (pad) b64 += "=".repeat(4 - pad)
-  return Buffer.from(b64, "base64").toString("utf-8")
-}
 
 export async function POST(request: NextRequest) {
   console.log(`[SMART-SYNC] ========== BUILD ${API_VERSION} ==========`)
@@ -62,12 +53,18 @@ export async function POST(request: NextRequest) {
 
     if (provider === "gmail") {
       console.log("[SMART-SYNC] Fetching Gmail messages...")
-      const { token, error: tokenError } = await getValidGmailToken(channel_id)
-      if (!token) {
-        console.error("[SMART-SYNC] Token error:", tokenError)
-        return NextResponse.json({ error: tokenError || "Token non valido" }, { status: 401 })
+      const tokenResult = await getValidGmailToken(channel_id, supabase)
+      if (!tokenResult.token) {
+        console.error("[SMART-SYNC] Token error:", tokenResult.error)
+        return NextResponse.json(
+          {
+            error: tokenResult.error || "Token non valido",
+            code: tokenResult.reconnectRequired ? "GMAIL_RECONNECT_REQUIRED" : "GMAIL_TEMPORARILY_UNAVAILABLE",
+          },
+          { status: tokenResult.reconnectRequired ? 401 : tokenResult.status === 429 ? 429 : 503 },
+        )
       }
-      emails = await fetchGmailMessages(token)
+      emails = await fetchGmailMessages(tokenResult.token)
       console.log(`[SMART-SYNC] Fetched ${emails.length} Gmail messages`)
     } else if (provider === "outlook") {
       emails = await fetchOutlookMessages(channel.oauth_access_token)
@@ -90,6 +87,8 @@ export async function POST(request: NextRequest) {
             imported++
             console.log(`[SMART-SYNC] Imported: ${email.subject?.substring(0, 50)}...`)
           }
+        } else {
+          errors++
         }
       } catch (err) {
         errors++
@@ -97,14 +96,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update last sync time
-    await supabase
-      .from("email_channels")
-      .update({
-        last_sync_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", channel_id)
+    // This endpoint intentionally samples only the most recent messages for an
+    // interactive refresh. It must never advance the durable polling watermark;
+    // only the fully paginated cron may do that.
 
     const result = {
       success: true,
@@ -126,19 +120,18 @@ export async function POST(request: NextRequest) {
 
 async function fetchGmailMessages(accessToken: string): Promise<InboundEmail[]> {
   try {
-    const listResponse = await fetch(
-      "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&q=in:inbox",
-      { headers: { Authorization: `Bearer ${accessToken}` } },
+    const { data: listData, error: listError, status: listStatus } = await gmailFetchWithToken(
+      accessToken,
+      "messages?maxResults=50&q=in%3Ainbox",
     )
 
-    if (!listResponse.ok) {
-      if (listResponse.status === 429) {
+    if (listError || !listData) {
+      if (listStatus === 429) {
         throw new Error("Gmail rate limit exceeded. Riprova tra qualche minuto.")
       }
-      return []
+      throw new Error(listError || `Gmail list HTTP ${listStatus}`)
     }
 
-    const listData = await listResponse.json()
     if (!listData.messages) return []
 
     const messages: InboundEmail[] = []
@@ -146,17 +139,16 @@ async function fetchGmailMessages(accessToken: string): Promise<InboundEmail[]> 
 
     for (const msg of messagesToFetch) {
       try {
-        const msgResponse = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=full`,
-          { headers: { Authorization: `Bearer ${accessToken}` } },
+        const { data: msgData, error: messageError, status: messageStatus } = await gmailFetchWithToken(
+          accessToken,
+          `messages/${msg.id}?format=full`,
         )
 
-        if (msgResponse.status === 429) break
-
-        if (msgResponse.ok) {
-          const msgData = await msgResponse.json()
-          messages.push(parseGmailMessage(msgData))
+        if (messageStatus === 429) {
+          throw new Error("Gmail rate limit exceeded. Riprova tra qualche minuto.")
         }
+        if (messageError || !msgData) throw new Error(messageError || `Gmail message HTTP ${messageStatus}`)
+        messages.push(parseGmailMessage(msgData))
 
         await new Promise((resolve) => setTimeout(resolve, 100))
       } catch (error) {
@@ -168,61 +160,6 @@ async function fetchGmailMessages(accessToken: string): Promise<InboundEmail[]> 
   } catch (error) {
     console.error("Gmail fetch error:", error)
     throw error
-  }
-}
-
-function parseGmailMessage(msg: any): InboundEmail {
-  const headers = msg.payload?.headers || []
-  const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || ""
-
-  let body = ""
-  let contentType: "text" | "html" = "text"
-
-  const decodeContent = (data: string) => {
-    return decodeBase64UrlToString(data)
-  }
-
-  const findPart = (parts: any[], mimeType: string): any => {
-    for (const part of parts) {
-      if (part.mimeType === mimeType && part.body?.data) return part
-      if (part.parts) {
-        const found = findPart(part.parts, mimeType)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  if (msg.payload?.body?.data) {
-    body = decodeContent(msg.payload.body.data)
-    contentType = msg.payload.mimeType?.includes("html") ? "html" : "text"
-  } else if (msg.payload?.parts) {
-    const htmlPart = findPart(msg.payload.parts, "text/html")
-    const textPart = findPart(msg.payload.parts, "text/plain")
-
-    if (htmlPart?.body?.data) {
-      body = decodeContent(htmlPart.body.data)
-      contentType = "html"
-    } else if (textPart?.body?.data) {
-      body = decodeContent(textPart.body.data)
-      contentType = "text"
-    }
-  }
-
-  const dateStr = getHeader("Date")
-
-  return {
-    externalId: msg.id,
-    threadId: msg.threadId,
-    from: getHeader("From"),
-    to: getHeader("To"),
-    subject: getHeader("Subject"),
-    body: body || msg.snippet || "",
-    contentType,
-    receivedAt: dateStr ? new Date(dateStr) : new Date(),
-    inReplyTo: getHeader("In-Reply-To"),
-    references: getHeader("References"),
-    labelIds: msg.labelIds || [],
   }
 }
 

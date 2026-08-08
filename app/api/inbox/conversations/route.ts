@@ -59,8 +59,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ conversations })
   } catch (error) {
     console.error("[v0] Inbox conversations error:", error)
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -118,7 +117,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ conversation })
   } catch (error) {
     console.error("[v0] Inbox conversations POST error:", error)
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }

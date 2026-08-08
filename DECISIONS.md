@@ -76,6 +76,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: Vitest esegue esclusivamente i test unitari sotto `apps/santaddeo/__tests__`; Playwright resta l'unico runner dei test sotto `apps/santaddeo/e2e`.
 - Conseguenza: la pipeline non interpreta più gli E2E come suite unitari; entrambe le famiglie devono essere eseguite e riportate separatamente.
 
+## ADR-013 — Cursor Gmail durevole e guasti transitori distinti da OAuth
+
+- Stato: accettata
+- Decisione: il webhook Pub/Sub usa un client server service-role, avanza `gmail_history_id` solo dopo l'elaborazione completa della pagina e restituisce un errore retryable sui guasti transitori. Il poll periodico resta il fallback indipendente; pagina integralmente il backlog prima di avanzare il watermark e riconcilia in modo completo gli stati `UNREAD`, spam e cestino senza scansionare inutilmente tutta la Inbox. Un HTTP 5xx di Gmail/Supabase non viene presentato come revoca OAuth.
+- Conseguenza: nessuna notifica viene confermata dopo un'elaborazione parziale; i cursor scaduti richiedono una sincronizzazione storica che ristabilisce anche il cursor. La riconnessione viene proposta solo per errori di credenziale reali. Prima dello stato `Production-ready` restano obbligatori autenticazione del webhook, recovery drill e osservabilità.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

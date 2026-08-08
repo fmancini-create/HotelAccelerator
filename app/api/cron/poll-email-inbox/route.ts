@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
     const { data: channels, error } = await supabase
       .from("email_channels")
       .select(
-        "id, property_id, provider, email_address, oauth_access_token, oauth_refresh_token, oauth_expiry",
+        "id, property_id, provider, email_address, oauth_access_token, oauth_refresh_token, oauth_expiry, created_at, last_sync_at, gmail_state_reconciled_at",
       )
       .eq("provider", "gmail")
       .eq("is_active", true)
@@ -48,16 +48,30 @@ export async function GET(request: NextRequest) {
     const results = []
     let totalImported = 0
     for (const channel of list) {
-      const res = await syncChannelIncremental(supabase, channel)
-      totalImported += res.imported
-      if (res.error) {
-        console.error(`[v0][poll-email] ${res.email}: ${res.error}`)
-      } else {
-        console.log(
-          `[v0][poll-email] ${res.email}: scanned=${res.scanned} imported=${res.imported} dup=${res.duplicates} err=${res.errors} stars+${res.starsAdded ?? 0}/-${res.starsRemoved ?? 0} spam=${res.spamSynced ?? 0} trash=${res.trashSynced ?? 0} restored=${res.restored ?? 0} read=${res.readSynced ?? 0}`,
-        )
+      try {
+        const res = await syncChannelIncremental(supabase, channel)
+        totalImported += res.imported
+        if (res.error) {
+          console.error(`[v0][poll-email] ${res.email}: ${res.error}`)
+        } else {
+          console.log(
+            `[v0][poll-email] ${res.email}: scanned=${res.scanned} imported=${res.imported} dup=${res.duplicates} err=${res.errors} stars+${res.starsAdded ?? 0}/-${res.starsRemoved ?? 0} spam=${res.spamSynced ?? 0} trash=${res.trashSynced ?? 0} restored=${res.restored ?? 0} read=${res.readSynced ?? 0}`,
+          )
+        }
+        results.push(res)
+      } catch (channelError) {
+        const message = channelError instanceof Error ? channelError.message : String(channelError)
+        console.error(`[v0][poll-email] channel ${channel.id} failed: ${message}`)
+        results.push({
+          channelId: channel.id,
+          email: channel.email_address,
+          imported: 0,
+          duplicates: 0,
+          errors: 1,
+          scanned: 0,
+          error: message,
+        })
       }
-      results.push(res)
     }
 
     return NextResponse.json({

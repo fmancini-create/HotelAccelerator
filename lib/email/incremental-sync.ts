@@ -8,16 +8,21 @@
 // real-time push pipeline is down. EmailProcessor deduplicates by external id,
 // so running this alongside the webhook is safe (idempotent).
 
-import { OAUTH_PROVIDERS, type OAuthProvider } from "@/lib/oauth-config"
 import { EmailProcessor, type InboundEmail } from "@/lib/email/email-processor"
 import { parseGmailMessage } from "@/lib/email/gmail-parse"
-import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
-import { encryptSecret } from "@/lib/crypto/secrets"
+import { getValidGmailToken } from "@/lib/gmail-client"
 
-// How many recent INBOX messages to look at per run, per channel.
-// 25 comfortably covers any realistic gap between runs while staying fast.
-const MAX_MESSAGES_PER_RUN = 25
+// Keep a one-hour overlap with the last completed poll. The processor is
+// idempotent, so overlap is cheap and protects against clock skew / transient
+// failures without repeatedly scanning the whole mailbox.
+const MAX_MESSAGES_PER_RUN = 500
+const GMAIL_LIST_PAGE_SIZE = 100
+const POLL_OVERLAP_SECONDS = 60 * 60
+const INITIAL_POLL_LOOKBACK_MS = 24 * 60 * 60 * 1000
 const PER_MESSAGE_DELAY_MS = 60
+const GOOGLE_REQUEST_TIMEOUT_MS = 12_000
+const FULL_STATE_RECONCILE_INTERVAL_MS = 60 * 60 * 1000
+const DATABASE_UPDATE_CHUNK = 150
 
 export interface SyncableChannel {
   id: string
@@ -27,6 +32,9 @@ export interface SyncableChannel {
   oauth_access_token: string | null
   oauth_refresh_token: string | null
   oauth_expiry: string | null
+  created_at?: string | null
+  last_sync_at?: string | null
+  gmail_state_reconciled_at?: string | null
 }
 
 export interface ChannelSyncResult {
@@ -44,71 +52,64 @@ export interface ChannelSyncResult {
   trashSynced?: number
   restored?: number
   readSynced?: number
+  stateReconciled?: boolean
   error?: string
 }
 
-/**
- * Ensures the channel has a non-expired Gmail access token, refreshing it
- * in-process with the service client when needed. Returns the valid token.
- */
-async function ensureGmailToken(
-  supabase: any,
-  rawChannel: SyncableChannel,
-): Promise<{ token: string | null; error?: string }> {
-  // DUAL-READ: il channel arriva dal caller (cron/route) che lo legge dal DB.
-  // Tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
-  const channel = decryptChannelSecrets(rawChannel)
+export async function listRecentInboxMessageIds(
+  token: string,
+  query: string,
+  hardCap = MAX_MESSAGES_PER_RUN,
+): Promise<{ ids: Array<{ id: string }>; complete: boolean; error?: string }> {
+  const ids: Array<{ id: string }> = []
+  const seen = new Set<string>()
+  let pageToken: string | null = null
+  let listedCount = 0
 
-  // 5 minute safety buffer
-  const isExpired = channel.oauth_expiry
-    ? new Date(channel.oauth_expiry).getTime() < Date.now() + 5 * 60 * 1000
-    : true
+  try {
+    do {
+      const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages")
+      listUrl.searchParams.set("maxResults", String(Math.min(GMAIL_LIST_PAGE_SIZE, hardCap - listedCount)))
+      listUrl.searchParams.set("q", query)
+      if (pageToken) listUrl.searchParams.set("pageToken", pageToken)
 
-  if (!isExpired && channel.oauth_access_token) {
-    return { token: channel.oauth_access_token }
+      const listRes = await fetch(listUrl.toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+      })
+      if (!listRes.ok) {
+        return { ids: [], complete: false, error: `Gmail list HTTP ${listRes.status}` }
+      }
+
+      const listData = await listRes.json()
+      const page: Array<{ id?: string }> = listData.messages || []
+      listedCount += page.length
+      for (const message of page) {
+        if (message.id && !seen.has(message.id)) {
+          seen.add(message.id)
+          ids.push({ id: message.id })
+        }
+      }
+
+      pageToken = listData.nextPageToken || null
+      if (pageToken && listedCount >= hardCap) {
+        return {
+          ids: [],
+          complete: false,
+          error: `Backlog Gmail superiore al limite sicuro di ${hardCap} messaggi; avviare la sincronizzazione storica`,
+        }
+      }
+    } while (pageToken)
+
+    return { ids, complete: true }
+  } catch (error) {
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+    return {
+      ids: [],
+      complete: false,
+      error: timedOut ? "Timeout temporaneo durante la lettura del backlog Gmail" : "Errore di rete Gmail",
+    }
   }
-
-  if (!channel.oauth_refresh_token) {
-    return { token: null, error: "Refresh token mancante. Ricollegare l'account." }
-  }
-
-  const config = OAUTH_PROVIDERS[(channel.provider as OAuthProvider) || "gmail"]
-  const clientId = process.env.GOOGLE_CLIENT_ID
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET
-  if (!clientId || !clientSecret) {
-    return { token: null, error: "Configurazione OAuth Google mancante" }
-  }
-
-  const res = await fetch(config.tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: channel.oauth_refresh_token,
-      grant_type: "refresh_token",
-    }),
-  })
-
-  if (!res.ok) {
-    return { token: null, error: "Refresh token fallito. Ricollegare l'account." }
-  }
-
-  const tokens = await res.json()
-  const oauth_expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-
-  await supabase
-    .from("email_channels")
-    .update({
-      // WRITE-ENCRYPT: cifra i token prima del salvataggio.
-      oauth_access_token: encryptSecret(tokens.access_token),
-      oauth_expiry,
-      ...(tokens.refresh_token && { oauth_refresh_token: encryptSecret(tokens.refresh_token) }),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", channel.id)
-
-  return { token: tokens.access_token }
 }
 
 /**
@@ -133,29 +134,36 @@ export async function syncChannelIncremental(
     return out
   }
 
-  const { token, error: tokenError } = await ensureGmailToken(supabase, channel)
-  if (!token) {
-    out.error = tokenError || "Token non disponibile"
+  const tokenResult = await getValidGmailToken(channel.id, supabase)
+  if (!tokenResult.token) {
+    out.error = tokenResult.error || "Token non disponibile"
+    return out
+  }
+  const token = tokenResult.token
+
+  // List the complete bounded backlog before advancing the watermark. A
+  // truncated Gmail page is never treated as a completed poll.
+  const lastCompletedSync = channel.last_sync_at ? new Date(channel.last_sync_at).getTime() : Number.NaN
+  const channelCreatedAt = channel.created_at ? new Date(channel.created_at).getTime() : Number.NaN
+  const initialAnchor = Math.max(
+    Number.isFinite(channelCreatedAt) ? channelCreatedAt : 0,
+    Date.now() - INITIAL_POLL_LOOKBACK_MS,
+  )
+  const syncAnchor = Number.isFinite(lastCompletedSync) ? lastCompletedSync : initialAnchor
+  const afterEpoch = Math.max(0, Math.floor(syncAnchor / 1000) - POLL_OVERLAP_SECONDS)
+  const query = `in:inbox after:${afterEpoch}`
+  const listed = await listRecentInboxMessageIds(token, query)
+
+  if (!listed.complete) {
+    out.error = listed.error || `Backlog Gmail superiore al limite sicuro di ${MAX_MESSAGES_PER_RUN}`
     return out
   }
 
-  // List recent INBOX messages (newest first).
-  const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages")
-  listUrl.searchParams.set("maxResults", String(MAX_MESSAGES_PER_RUN))
-  listUrl.searchParams.set("q", "in:inbox")
-
-  const listRes = await fetch(listUrl.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!listRes.ok) {
-    out.error = `Gmail list HTTP ${listRes.status}`
+  const ids = listed.ids
+  if (ids.length === 0) {
+    await markPollCompleted(supabase, channel.id)
     return out
   }
-
-  const listData = await listRes.json()
-  const ids: Array<{ id: string }> = listData.messages || []
-  if (ids.length === 0) return out
 
   const processor = new EmailProcessor(supabase)
 
@@ -167,9 +175,15 @@ export async function syncChannelIncremental(
     try {
       const msgRes = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`,
-        { headers: { Authorization: `Bearer ${token}` } },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+        },
       )
-      if (msgRes.status === 429) break // rate limited, stop early; next run resumes
+      if (msgRes.status === 429) {
+        out.error = "Limite temporaneo Gmail raggiunto"
+        break // next run retains the previous successful watermark
+      }
       if (!msgRes.ok) {
         out.errors++
         out.scanned++
@@ -210,22 +224,32 @@ export async function syncChannelIncremental(
     console.error("[v0][incremental-sync] star reconcile error:", e)
   }
 
-  // Bidirectional state sync (Gmail -> app): spam, trash, restore-to-inbox and
-  // read state. Gmail is the source of truth. Best-effort, never fails the sync.
+  // A mailbox-wide pass repairs historical drift (including the legacy import
+  // that marked every message unread). Between full passes, only reconcile the
+  // recent threads whose labels were observed during this poll.
   try {
-    const states = await reconcileChannelStates(supabase, channel, token, scannedThreadRead)
+    const lastFullStateSync = channel.gmail_state_reconciled_at
+      ? new Date(channel.gmail_state_reconciled_at).getTime()
+      : Number.NaN
+    const fullStateDue =
+      !Number.isFinite(lastFullStateSync) || Date.now() - lastFullStateSync >= FULL_STATE_RECONCILE_INTERVAL_MS
+    const states = fullStateDue
+      ? await reconcileMailboxState(supabase, channel, token)
+      : await reconcileChannelStates(supabase, channel, token, scannedThreadRead)
     out.spamSynced = states.spam
     out.trashSynced = states.trash
     out.restored = states.restored
     out.readSynced = states.read
+    out.stateReconciled = fullStateDue
   } catch (e) {
     console.error("[v0][incremental-sync] state reconcile error:", e)
   }
 
-  await supabase
-    .from("email_channels")
-    .update({ last_sync_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("id", channel.id)
+  // Never move the polling watermark past a partially failed batch. The next
+  // run will repeat the overlap and recover the missing message.
+  if (!out.error && out.errors === 0) {
+    await markPollCompleted(supabase, channel.id)
+  }
 
   return out
 }
@@ -247,21 +271,7 @@ export async function reconcileChannelStars(
   const result = { added: 0, removed: 0 }
 
   // 1) Collect the set of currently-starred Gmail thread IDs (small set).
-  const starredThreadIds = new Set<string>()
-  const listUrl = new URL("https://gmail.googleapis.com/gmail/v1/users/me/threads")
-  listUrl.searchParams.set("q", "is:starred")
-  listUrl.searchParams.set("maxResults", "200")
-
-  const listRes = await fetch(listUrl.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!listRes.ok) {
-    throw new Error(`Gmail threads(is:starred) HTTP ${listRes.status}`)
-  }
-  const listData = await listRes.json()
-  for (const t of listData.threads || []) {
-    if (t?.id) starredThreadIds.add(t.id)
-  }
+  const starredThreadIds = await listAllThreadIds(token, "is:starred")
 
   // 2) Star conversations whose thread is starred in Gmail but not in the app.
   if (starredThreadIds.size > 0) {
@@ -312,11 +322,184 @@ async function listThreadIds(token: string, q: string, cap = 200): Promise<Set<s
   const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/threads")
   url.searchParams.set("q", q)
   url.searchParams.set("maxResults", String(cap))
-  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${token}` } })
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+  })
   if (!res.ok) throw new Error(`Gmail threads(${q}) HTTP ${res.status}`)
   const data = await res.json()
   for (const t of data.threads || []) if (t?.id) ids.add(t.id)
   return ids
+}
+
+/** Lists every matching Gmail thread before making any negative reconciliation. */
+async function listAllThreadIds(token: string, q: string, hardCap = 20_000): Promise<Set<string>> {
+  const ids = new Set<string>()
+  let pageToken: string | null = null
+
+  do {
+    const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/threads")
+    url.searchParams.set("q", q)
+    url.searchParams.set("maxResults", "500")
+    if (pageToken) url.searchParams.set("pageToken", pageToken)
+
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(GOOGLE_REQUEST_TIMEOUT_MS),
+    })
+    if (!res.ok) throw new Error(`Gmail threads(${q}) HTTP ${res.status}`)
+
+    const data = await res.json()
+    for (const thread of data.threads || []) {
+      if (thread?.id) ids.add(thread.id)
+    }
+    pageToken = data.nextPageToken || null
+    if (pageToken && ids.size >= hardCap) {
+      // Absence is only authoritative after complete pagination. Abort instead
+      // of clearing valid state from threads beyond an arbitrary cap.
+      throw new Error(`Gmail threads(${q}) supera il limite sicuro di ${hardCap}`)
+    }
+  } while (pageToken)
+
+  return ids
+}
+
+/**
+ * Repairs the complete Gmail-derived conversation state.
+ *
+ * The heavy negative reconciliation is deliberately limited to UNREAD, SPAM
+ * and TRASH. Listing every INBOX thread on a mature mailbox can require hundreds
+ * of Gmail calls and repeatedly time out the five-minute cron. A complete unread
+ * listing is enough to repair the false KPI values that triggered this incident;
+ * current folder changes continue to be handled by message labels and the light
+ * five-minute pass.
+ */
+export async function reconcileMailboxState(
+  supabase: any,
+  channel: SyncableChannel,
+  token: string,
+): Promise<{ spam: number; trash: number; restored: number; read: number }> {
+  const cutoff = new Date().toISOString()
+  const [unreadSet, spamSet, trashSet] = await Promise.all([
+    listAllThreadIds(token, "is:unread in:inbox"),
+    listAllThreadIds(token, "in:spam"),
+    listAllThreadIds(token, "in:trash"),
+  ])
+
+  const result = { spam: 0, trash: 0, restored: 0, read: 0 }
+  result.spam = await applyGmailStatus(supabase, channel, spamSet, "spam", cutoff)
+  result.trash = await applyGmailStatus(supabase, channel, trashSet, "deleted", cutoff)
+
+  const { data: parked, error: parkedError } = await supabase
+    .from("conversations")
+    .select("id, gmail_thread_id")
+    .eq("property_id", channel.property_id)
+    .eq("channel_id", channel.id)
+    .in("status", ["spam", "deleted"])
+    .lte("updated_at", cutoff)
+  if (parkedError) throw new Error(`Gmail parked-state read failed: ${parkedError.message}`)
+
+  const restoredIds = (parked || [])
+    .filter(
+      (conversation: any) =>
+        conversation.gmail_thread_id &&
+        !spamSet.has(conversation.gmail_thread_id) &&
+        !trashSet.has(conversation.gmail_thread_id),
+    )
+    .map((conversation: any) => conversation.id)
+  for (let index = 0; index < restoredIds.length; index += DATABASE_UPDATE_CHUNK) {
+    const { error } = await supabase
+      .from("conversations")
+      .update({ status: "open" })
+      .in("id", restoredIds.slice(index, index + DATABASE_UPDATE_CHUNK))
+      .lte("updated_at", cutoff)
+    if (error) throw new Error(`Gmail restore reconciliation failed: ${error.message}`)
+  }
+  result.restored = restoredIds.length
+
+  // Clear stale unread flags in one server-side update, protected by the
+  // reconciliation cutoff so a message arriving concurrently is not erased.
+  const { count: staleUnreadCount, error: countError } = await supabase
+    .from("conversations")
+    .select("id", { count: "exact", head: true })
+    .eq("property_id", channel.property_id)
+    .eq("channel_id", channel.id)
+    .gt("unread_count", 0)
+    .lte("updated_at", cutoff)
+  if (countError) throw new Error(`Gmail unread reconciliation count failed: ${countError.message}`)
+
+  const { error: clearError } = await supabase
+    .from("conversations")
+    .update({ unread_count: 0 })
+    .eq("property_id", channel.property_id)
+    .eq("channel_id", channel.id)
+    .gt("unread_count", 0)
+    .lte("updated_at", cutoff)
+  if (clearError) throw new Error(`Gmail unread reconciliation clear failed: ${clearError.message}`)
+  result.read = staleUnreadCount || 0
+
+  const unreadThreadIds = Array.from(unreadSet)
+  for (let index = 0; index < unreadThreadIds.length; index += DATABASE_UPDATE_CHUNK) {
+    const threadChunk = unreadThreadIds.slice(index, index + DATABASE_UPDATE_CHUNK)
+    const { data: toUnread, error: unreadReadError } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("property_id", channel.property_id)
+      .eq("channel_id", channel.id)
+      .in("gmail_thread_id", threadChunk)
+      .lte("updated_at", cutoff)
+    if (unreadReadError) throw new Error(`Gmail unread thread lookup failed: ${unreadReadError.message}`)
+
+    const ids = (toUnread || []).map((conversation: any) => conversation.id)
+    if (ids.length === 0) continue
+    const { error: unreadUpdateError } = await supabase
+      .from("conversations")
+      .update({ unread_count: 1 })
+      .in("id", ids)
+      .lte("updated_at", cutoff)
+    if (unreadUpdateError) throw new Error(`Gmail unread thread update failed: ${unreadUpdateError.message}`)
+  }
+
+  const { error: watermarkError } = await supabase
+    .from("email_channels")
+    .update({ gmail_state_reconciled_at: new Date().toISOString() })
+    .eq("id", channel.id)
+  if (watermarkError) throw new Error(`Reconciliation watermark failed: ${watermarkError.message}`)
+
+  return result
+}
+
+async function applyGmailStatus(
+  supabase: any,
+  channel: SyncableChannel,
+  threadIds: Set<string>,
+  status: "spam" | "deleted",
+  cutoff: string,
+): Promise<number> {
+  let updated = 0
+  const allThreadIds = Array.from(threadIds)
+  for (let index = 0; index < allThreadIds.length; index += DATABASE_UPDATE_CHUNK) {
+    const { data, error: readError } = await supabase
+      .from("conversations")
+      .select("id")
+      .eq("property_id", channel.property_id)
+      .eq("channel_id", channel.id)
+      .neq("status", status)
+      .in("gmail_thread_id", allThreadIds.slice(index, index + DATABASE_UPDATE_CHUNK))
+      .lte("updated_at", cutoff)
+    if (readError) throw new Error(`Gmail ${status} reconciliation read failed: ${readError.message}`)
+
+    const ids = (data || []).map((conversation: any) => conversation.id)
+    if (ids.length === 0) continue
+    const { error: updateError } = await supabase
+      .from("conversations")
+      .update({ status })
+      .in("id", ids)
+      .lte("updated_at", cutoff)
+    if (updateError) throw new Error(`Gmail ${status} reconciliation update failed: ${updateError.message}`)
+    updated += ids.length
+  }
+  return updated
 }
 
 /**
@@ -377,24 +560,11 @@ export async function reconcileChannelStates(
     }
   }
 
-  // 3) Restore: app says spam/deleted but Gmail no longer has it there -> 'open'.
-  //    Bounded by the app's own spam/deleted set for this channel.
-  const { data: parked } = await supabase
-    .from("conversations")
-    .select("id, gmail_thread_id, status")
-    .eq("property_id", channel.property_id)
-    .eq("channel_id", channel.id)
-    .in("status", ["spam", "deleted"])
-  const toRestore = (parked || [])
-    .filter((c: any) => c.gmail_thread_id && !spamSet.has(c.gmail_thread_id) && !trashSet.has(c.gmail_thread_id))
-    .map((c: any) => c.id)
-  if (toRestore.length > 0) {
-    await supabase.from("conversations").update({ status: "open", updated_at: now }).in("id", toRestore)
-    result.restored = toRestore.length
-  }
+  // Do not infer a negative state from these capped result sets. Restores and
+  // archive detection are handled by the hourly fully-paginated pass.
 
-  // 4) Read state.
-  // 4a) Positive "unread" signal from a capped is:unread query: any of these
+  // 3) Read state.
+  // 3a) Positive "unread" signal from a capped is:unread query: any of these
   //     threads marked read in the app should become unread. Always safe.
   const unreadSet = await listThreadIds(token, "is:unread in:inbox", 500)
   if (unreadSet.size > 0) {
@@ -412,7 +582,7 @@ export async function reconcileChannelStates(
     }
   }
 
-  // 4b) Authoritative read-state for threads we actually scanned this run.
+  // 3b) Authoritative read-state for threads we actually scanned this run.
   //     Safe to mark BOTH read and unread because we observed the real labels.
   const scannedReadThreadIds = [...scannedThreadRead.entries()].filter(([, u]) => !u).map(([t]) => t)
   if (scannedReadThreadIds.length > 0) {
@@ -438,4 +608,13 @@ export async function reconcileChannelStates(
   }
 
   return result
+}
+
+async function markPollCompleted(supabase: any, channelId: string) {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from("email_channels")
+    .update({ last_sync_at: now, updated_at: now })
+    .eq("id", channelId)
+  if (error) throw new Error(`Poll watermark update failed: ${error.message}`)
 }

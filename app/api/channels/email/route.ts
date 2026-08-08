@@ -54,8 +54,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ channels: (channels || []).map(serializeEmailChannel) })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -89,7 +88,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ channel: serializeEmailChannel(channel) })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }

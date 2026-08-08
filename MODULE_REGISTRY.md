@@ -1,6 +1,6 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-08-07
+Ultimo aggiornamento: 2026-08-08
 
 ## Avvertenza
 
@@ -16,6 +16,7 @@ Questa prima versione consolida requisiti emersi nelle conversazioni. Non è anc
 |---|---|---|---|
 | Core e tenant | Strutture, utenti, ruoli, permessi, catalogo moduli, dashboard, super-admin | Da verificare | Audit auth, RLS, server authorization e tenant isolation |
 | Accesso suite | Login unico, SSO, tenant context, accesso per ruolo/modulo/abbonamento | Specifica | Verificare flussi e contratti tra prodotti |
+| Inbox email Gmail | OAuth, lettura diretta, import incrementale, Pub/Sub, poll di fallback, label e riconciliazione stato | Tenant reale | Villa I Barronci verificata; completare test di recovery, autenticazione webhook, osservabilità e modello Sent/KPI prima di promuovere lo stato |
 | Inbox omnicanale | Gmail, Outlook, IMAP/SMTP, WhatsApp, Telegram, Instagram, Facebook, sito, booking, OTA, 3CX | Specifica | Inventariare connettori reali e mock |
 | Gestione conversazioni | Assegnazione, stati, priorità, tag, note, SLA, template, allegati, ricerca, traduzione | Specifica | Audit UI, schema, API e permessi |
 | AI inbox | Intenti, estrazione dati, riassunti, risposte, escalation, sentiment, upselling, knowledge base | Specifica | Definire provider, valutazioni, privacy e human-in-the-loop |

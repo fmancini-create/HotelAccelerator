@@ -7,8 +7,7 @@ export async function GET(request: NextRequest) {
     const rules = await MessageRuleService.listRules(request)
     return NextResponse.json({ rules })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -18,7 +17,6 @@ export async function POST(request: NextRequest) {
     const rule = await MessageRuleService.createRule(request, body)
     return NextResponse.json({ rule }, { status: 201 })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }

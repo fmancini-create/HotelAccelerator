@@ -1,14 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Mail, Clock, AlertTriangle, Timer } from "lucide-react"
+import { Mail, Clock } from "lucide-react"
 
 interface EmailKpi {
-  unread_count: number
-  read_unreplied_count: number
-  overdue_count: number
+  unread_count: number | null
+  read_unreplied_count: number | null
+  overdue_count: number | null
   avg_response_time_minutes: number | null
-  overdue_threshold_minutes: number
+  overdue_threshold_minutes: number | null
+  metrics_status: "gmail_state_ready" | "reconciling"
 }
 
 export function EmailKpiBar() {
@@ -52,38 +53,17 @@ export function EmailKpiBar() {
       <div className="flex items-center gap-2">
         <Mail className="h-4 w-4 text-blue-600" />
         <span className="text-muted-foreground">Non lette:</span>
-        <span className={`font-semibold ${kpi.unread_count > 0 ? "text-blue-600" : "text-muted-foreground"}`}>
-          {kpi.unread_count}
+        <span className={`font-semibold ${(kpi.unread_count || 0) > 0 ? "text-blue-600" : "text-muted-foreground"}`}>
+          {kpi.unread_count === null ? "Ricalcolo…" : kpi.unread_count}
         </span>
       </div>
 
-      {/* Lette ma non risposte */}
-      <div className="flex items-center gap-2">
-        <Clock className="h-4 w-4 text-amber-600" />
-        <span className="text-muted-foreground">Da rispondere:</span>
-        <span className={`font-semibold ${kpi.read_unreplied_count > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
-          {kpi.read_unreplied_count}
-        </span>
-      </div>
-
-      {/* Scadute (oltre soglia) */}
-      <div className="flex items-center gap-2">
-        <AlertTriangle className={`h-4 w-4 ${kpi.overdue_count > 0 ? "text-red-600" : "text-muted-foreground"}`} />
-        <span className="text-muted-foreground">
-          Urgenti ({">"}
-          {kpi.overdue_threshold_minutes}min):
-        </span>
-        <span className={`font-semibold ${kpi.overdue_count > 0 ? "text-red-600" : "text-muted-foreground"}`}>
-          {kpi.overdue_count}
-        </span>
-      </div>
-
-      {/* Tempo medio risposta */}
-      <div className="flex items-center gap-2 ml-auto">
-        <Timer className="h-4 w-4 text-muted-foreground" />
-        <span className="text-muted-foreground">Tempo medio:</span>
-        <span className="font-semibold">
-          {kpi.avg_response_time_minutes !== null ? `${kpi.avg_response_time_minutes} min` : "N/D"}
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Clock className="h-4 w-4" />
+        <span>
+          {kpi.metrics_status === "reconciling"
+            ? "Allineamento stato Gmail in corso"
+            : "KPI di risposta temporaneamente non pubblicati"}
         </span>
       </div>
     </div>

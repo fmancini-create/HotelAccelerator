@@ -3,15 +3,35 @@ import { createClient } from "@/lib/supabase/server"
 import { getGmailLabelsWithCounts } from "@/lib/gmail-client"
 import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 
+export const runtime = "nodejs"
+export const dynamic = "force-dynamic"
+export const maxDuration = 30
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser()
 
+    if (authError) {
+      return NextResponse.json(
+        {
+          labels: [],
+          systemLabels: [],
+          error: "Autenticazione temporaneamente non verificabile",
+          code: "GMAIL_TEMPORARILY_UNAVAILABLE",
+        },
+        { status: 503, headers: { "Retry-After": "15" } },
+      )
+    }
+
     if (!user) {
-      return NextResponse.json({ labels: [], systemLabels: [] }, { status: 401 })
+      return NextResponse.json(
+        { labels: [], systemLabels: [], error: "Sessione scaduta", code: "APP_AUTH_REQUIRED" },
+        { status: 401 },
+      )
     }
 
     const requestedChannelId = request.nextUrl.searchParams.get("channelId")
@@ -38,14 +58,21 @@ export async function GET(request: NextRequest) {
         }
       : null
 
-    const { labels, error } = await getGmailLabelsWithCounts(channelId)
+    const { labels, error, status, reconnectRequired } = await getGmailLabelsWithCounts(channelId, supabase)
 
     if (error) {
       console.error("[Gmail] Error fetching labels:", error)
-      const isAuthError = /token|oauth|riconnett|unauthorized/i.test(error)
       return NextResponse.json(
-        { labels: [], systemLabels: [], error },
-        { status: isAuthError ? 401 : 500 },
+        {
+          labels: [],
+          systemLabels: [],
+          error,
+          code: reconnectRequired ? "GMAIL_RECONNECT_REQUIRED" : "GMAIL_TEMPORARILY_UNAVAILABLE",
+        },
+        {
+          status: reconnectRequired ? 401 : status === 429 ? 429 : 503,
+          headers: reconnectRequired ? undefined : { "Retry-After": "15" },
+        },
       )
     }
 
@@ -82,6 +109,14 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("[Gmail] Labels error:", error)
-    return NextResponse.json({ labels: [], systemLabels: [] })
+    return NextResponse.json(
+      {
+        labels: [],
+        systemLabels: [],
+        error: "Servizio Gmail temporaneamente non disponibile",
+        code: "GMAIL_TEMPORARILY_UNAVAILABLE",
+      },
+      { status: 503, headers: { "Retry-After": "15" } },
+    )
   }
 }

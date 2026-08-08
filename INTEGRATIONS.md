@@ -1,6 +1,6 @@
 # HotelAccelerator — Integrations Registry
 
-Ultimo aggiornamento: 2026-08-07
+Ultimo aggiornamento: 2026-08-08
 
 ## Regola
 
@@ -12,7 +12,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Dati/auth | Supabase | Database, Auth, RLS, storage | Da verificare | Audit progetti, policy, migrazioni e service role |
 | Codice | GitHub | Repository e CI | Presente | Definire branch policy, CI e documenti mancanti |
 | PMS | Scidoo | Camere, disponibilità, tariffe, produzione, push prezzi | Da verificare | Test mapping, retry, idempotenza e tenant reale |
-| Email | Gmail | Inbox email | Da verificare | OAuth, token lifecycle, sync e permessi |
+| Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, watch Pub/Sub, cursor history, poll di fallback e riconciliazione label. Restano da provare recovery con cursor scaduto, verifica autenticità webhook, alert/SLO e modello storico Sent/response KPI prima di `Production-ready` |
 | Email | Outlook | Inbox email | Specifica | Definire Microsoft Graph adapter |
 | Email | IMAP/SMTP | Caselle generiche | Specifica | Sicurezza credenziali e limiti provider |
 | Messaggistica | WhatsApp | Inbox e automazioni | Da verificare | Provider, template, consenso e webhook |
