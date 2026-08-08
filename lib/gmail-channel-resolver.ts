@@ -20,11 +20,12 @@ export async function listAccessibleGmailChannels(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<AccessibleGmailChannel[]> {
-  const { data: adminUser } = await supabase
+  const { data: adminUser, error: adminError } = await supabase
     .from("admin_users")
     .select("role, property_id, is_tenant_admin")
     .eq("id", userId)
     .maybeSingle()
+  if (adminError) throw new Error(`Gmail channel authorization unavailable: ${adminError.code || "database"}`)
 
   const mapRows = (rows: any[] | null | undefined): AccessibleGmailChannel[] =>
     (rows ?? []).map((r) => ({
@@ -35,24 +36,26 @@ export async function listAccessibleGmailChannels(
 
   // 1. Super admin: every active Gmail channel
   if (adminUser?.role === "super_admin") {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("email_channels")
       .select("id, email_address, name, display_name")
       .eq("provider", "gmail")
       .eq("is_active", true)
       .order("email_address")
+    if (error) throw new Error(`Gmail channel list unavailable: ${error.code || "database"}`)
     return mapRows(data)
   }
 
   // 2. Tenant admin: every active Gmail channel of their property
   if (adminUser?.is_tenant_admin && adminUser.property_id) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("email_channels")
       .select("id, email_address, name, display_name")
       .eq("provider", "gmail")
       .eq("is_active", true)
       .eq("property_id", adminUser.property_id)
       .order("email_address")
+    if (error) throw new Error(`Gmail tenant channel list unavailable: ${error.code || "database"}`)
     const rows = mapRows(data)
     if (rows.length > 0) return rows
   }
@@ -60,7 +63,7 @@ export async function listAccessibleGmailChannels(
   // 3. Explicit per-user grants. Primary source is the generic
   //    `channel_user_assignments` (channel_type='email'); legacy tables are kept
   //    as fallback so nothing breaks before/while backfilling.
-  const [{ data: generic }, { data: perms }, { data: assigns }] = await Promise.all([
+  const [genericResult, permsResult, assignsResult] = await Promise.all([
     supabase
       .from("channel_user_assignments")
       .select("channel_id")
@@ -69,6 +72,13 @@ export async function listAccessibleGmailChannels(
     supabase.from("user_channel_permissions").select("channel_id").eq("user_id", userId),
     supabase.from("email_channel_assignments").select("channel_id").eq("user_id", userId),
   ])
+  const permissionError = genericResult.error || permsResult.error || assignsResult.error
+  if (permissionError) {
+    throw new Error(`Gmail channel permissions unavailable: ${permissionError.code || "database"}`)
+  }
+  const generic = genericResult.data
+  const perms = permsResult.data
+  const assigns = assignsResult.data
 
   const grantedIds = Array.from(
     new Set(
@@ -80,13 +90,14 @@ export async function listAccessibleGmailChannels(
 
   if (grantedIds.length === 0) return []
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("email_channels")
     .select("id, email_address, name, display_name")
     .in("id", grantedIds)
     .eq("provider", "gmail")
     .eq("is_active", true)
     .order("email_address")
+  if (error) throw new Error(`Gmail assigned channel list unavailable: ${error.code || "database"}`)
 
   return mapRows(data)
 }

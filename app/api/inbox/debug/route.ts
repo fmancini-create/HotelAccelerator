@@ -87,7 +87,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("[Debug API] Error:", error)
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }

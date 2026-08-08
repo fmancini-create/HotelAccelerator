@@ -80,7 +80,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ updated: updatedIds.length, gmailFailed })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }

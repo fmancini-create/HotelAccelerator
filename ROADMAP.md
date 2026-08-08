@@ -38,6 +38,10 @@ Uscita: fondazioni almeno `Multi-tenant` per i flussi prioritari.
 2. HotelProfitAI: registrazione manuale + proposta AI controllata delle fatture.
 3. ManuBot: ticket completo con un solo owner per cron/webhook e collegamento controllato ai costi.
 4. Core Inbox: un canale email reale completo prima di moltiplicare i canali.
+   - [x] Gmail su tenant Villa I Barronci: OAuth, Pub/Sub, cursor durevole, poll di fallback e riconciliazione label.
+   - [ ] Recovery drill con cursor Gmail scaduto e outage Supabase/Google.
+   - [ ] Verifica autenticità Pub/Sub, alert, SLO e runbook.
+   - [ ] Modellare Sent/risposte prima di riattivare KPI di risposta storici.
 
 Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 

@@ -544,6 +544,11 @@ export default function InboxPage() {
 
   // ── Gmail connection error state (e.g. OAuth token revoked / channel not configured) ──
   const [gmailAuthError, setGmailAuthError] = useState<string | null>(null)
+  const [gmailSyncWarnings, setGmailSyncWarnings] = useState<{
+    threads?: string
+    labels?: string
+  }>({})
+  const gmailSyncWarning = gmailSyncWarnings.threads || gmailSyncWarnings.labels || null
 
   // ── Client-side sort for Gmail mode (Gmail API returns date-desc by default) ──
   const sortedGmailThreads = React.useMemo(() => {
@@ -596,6 +601,7 @@ export default function InboxPage() {
         setGmailDebugInfo(data.debug || null)
         setGmailApiVersion(data.apiVersion || null)
         setGmailAuthError(null)
+        setGmailSyncWarnings((current) => ({ ...current, threads: undefined }))
         if (!isPageChange) {
           setGmailCurrentPage(1)
           setGmailPrevPageTokens([])
@@ -603,15 +609,25 @@ export default function InboxPage() {
       } else {
         const errorData = await res.json().catch(() => ({}))
         const msg = errorData?.error || `HTTP ${res.status}`
-        // 401/404 typically mean: token expired/revoked OR no Gmail channel configured
-        if (res.status === 401 || res.status === 404) {
+        // Only an explicit Gmail OAuth code (or a genuinely missing channel)
+        // warrants reconnection. App-session and infrastructure failures do not.
+        if (errorData?.code === "GMAIL_RECONNECT_REQUIRED" || res.status === 404) {
           setGmailAuthError(msg)
+          setGmailSyncWarnings((current) => ({ ...current, threads: undefined }))
+        } else {
+          setGmailSyncWarnings((current) => ({
+            ...current,
+            threads: `${msg}. I messaggi visualizzati potrebbero essere temporaneamente incompleti.`,
+          }))
         }
-        setGmailThreads([])
         console.error("[v0] loadGmailThreads error:", res.status, msg)
       }
     } catch (err) {
       console.error("[v0] Error loading Gmail threads:", err)
+      setGmailSyncWarnings((current) => ({
+        ...current,
+        threads: "Gmail non è raggiungibile in questo momento. I messaggi già caricati restano visibili.",
+      }))
     } finally {
       setGmailLoading(false)
     }
@@ -632,17 +648,31 @@ export default function InboxPage() {
         setGmailSystemLabels(systemLabels)
         setGmailLabelCounts(data.labelCounts || {})
         if (data.account) setGmailAccount(data.account)
-        // If labels endpoint returns empty arrays, channel is likely broken
         if (userLabels.length === 0 && systemLabels.length === 0) {
-          setGmailAuthError("Nessuna etichetta ricevuta da Gmail. Il canale potrebbe essere disconnesso.")
+          setGmailSyncWarnings((current) => ({
+            ...current,
+            labels: "Gmail non ha restituito le etichette. Verrà effettuato un nuovo tentativo.",
+          }))
         } else {
           setGmailAuthError(null)
+          setGmailSyncWarnings((current) => ({ ...current, labels: undefined }))
         }
       } else {
-        setGmailAuthError(`Errore caricamento etichette Gmail (HTTP ${res.status})`)
+        const errorData = await res.json().catch(() => ({}))
+        const msg = errorData?.error || `Errore caricamento etichette Gmail (HTTP ${res.status})`
+        if (res.status === 404 || errorData?.code === "GMAIL_RECONNECT_REQUIRED") {
+          setGmailAuthError(msg)
+          setGmailSyncWarnings((current) => ({ ...current, labels: undefined }))
+        } else {
+          setGmailSyncWarnings((current) => ({ ...current, labels: msg }))
+        }
       }
     } catch (err) {
       console.error("[v0] Error loading Gmail labels:", err)
+      setGmailSyncWarnings((current) => ({
+        ...current,
+        labels: "Etichette Gmail temporaneamente non disponibili.",
+      }))
     }
   }, [])
 
@@ -2147,7 +2177,7 @@ export default function InboxPage() {
               Gmail non sincronizzato
             </div>
             <div className="text-xs text-amber-800 truncate">
-              {gmailAuthError} — Le email non verranno aggiornate finche il canale non viene riconnesso.
+              {gmailAuthError} — Per riprendere la sincronizzazione è necessario riconnettere il canale.
             </div>
           </div>
           <Button
@@ -2157,6 +2187,32 @@ export default function InboxPage() {
             onClick={() => router.push("/admin/channels/email")}
           >
             Riconnetti Gmail
+          </Button>
+        </div>
+      )}
+
+      {/* A transient API/DB outage is not an OAuth failure. Keep stale data on
+          screen and offer a retry instead of telling the user to reconnect. */}
+      {!gmailAuthError && gmailSyncWarning && (
+        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
+          <AlertCircle className="h-[18px] w-[18px] text-amber-700" aria-hidden="true" />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-amber-900">Sincronizzazione Gmail rallentata</div>
+            <div className="text-xs text-amber-800 truncate">
+              {gmailSyncWarning} Nessuna riconnessione è necessaria.
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="bg-white hover:bg-amber-100 border-amber-300 text-amber-900"
+            onClick={() => {
+              loadGmailLabels()
+              loadGmailThreads(gmailLabelId)
+            }}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Riprova ora
           </Button>
         </div>
       )}

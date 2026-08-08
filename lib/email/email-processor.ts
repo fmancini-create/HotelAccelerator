@@ -24,6 +24,58 @@ export interface ProcessingResult {
   isDuplicate?: boolean
 }
 
+export function isUnreadFromGmailLabels(labelIds?: string[]): boolean {
+  // Non-Gmail providers may not supply labels; preserve the inbound default.
+  return !labelIds || labelIds.includes("UNREAD")
+}
+
+export function statusFromGmailLabels(labelIds: string[]): "open" | "resolved" | "spam" | "deleted" {
+  if (labelIds.includes("SPAM") || labelIds.includes("CATEGORY_SPAM")) return "spam"
+  if (labelIds.includes("TRASH")) return "deleted"
+  if (labelIds.includes("INBOX")) return "open"
+  return "resolved"
+}
+
+type ConversationState = {
+  unread_count?: number | null
+  last_message_at?: string | null
+  status?: string | null
+}
+
+export function deriveInboundConversationState(
+  conversation: ConversationState,
+  receivedAtIso: string,
+  isUnread: boolean,
+  labelIds?: string[],
+): Record<string, unknown> {
+  const isLatestMessage =
+    !conversation.last_message_at ||
+    new Date(receivedAtIso).getTime() >= new Date(conversation.last_message_at).getTime()
+  const update: Record<string, unknown> = {
+    unread_count: (conversation.unread_count || 0) + (isUnread ? 1 : 0),
+    // The DB trigger temporarily writes the insert timestamp. Explicitly
+    // restore the provider timestamp so a historical backfill cannot make an
+    // old conversation look new.
+    last_message_at: isLatestMessage ? receivedAtIso : conversation.last_message_at || receivedAtIso,
+  }
+
+  if (!isLatestMessage) return update
+
+  if (labelIds) {
+    update.gmail_labels = labelIds
+    const desiredStatus = statusFromGmailLabels(labelIds)
+    const hasWorkflowStatus =
+      Boolean(conversation.status) && !["open", "resolved", "spam", "deleted"].includes(conversation.status || "")
+    if (!hasWorkflowStatus || desiredStatus === "spam" || desiredStatus === "deleted") {
+      update.status = desiredStatus
+    }
+  } else if (["resolved", "spam", "deleted"].includes(conversation.status || "")) {
+    update.status = "open"
+  }
+
+  return update
+}
+
 /**
  * Centralized email processor that handles:
  * - Idempotency via external_message_id UNIQUE constraint
@@ -47,10 +99,10 @@ export class EmailProcessor {
         .maybeSingle()
 
       if (existing) {
-        await this.logEvent(propertyId, email.externalId, "email", "duplicate_ignored", {
-          existing_message_id: existing.id,
-          existing_conversation_id: existing.conversation_id,
-        })
+        // Polling is intentionally idempotent and sees the same recent Gmail
+        // messages repeatedly. Writing one audit row per duplicate created
+        // thousands of useless inserts every few hours and amplified database
+        // incidents. Aggregate duplicate counters are emitted by the sync job.
         return {
           success: true,
           isDuplicate: true,
@@ -69,6 +121,9 @@ export class EmailProcessor {
       // TASK 3: Internal threading - find or create conversation
       const conversation = await this.findOrCreateConversation(propertyId, channelId, contact.id, email)
 
+      const isUnread = isUnreadFromGmailLabels(email.labelIds)
+      const receivedAtIso = email.receivedAt.toISOString()
+
       // TASK 1 & 4 & 5: Insert message with all required fields
       const { data: message, error: msgError } = await this.supabase
         .from("messages")
@@ -81,15 +136,18 @@ export class EmailProcessor {
           content_type: email.contentType,
           external_message_id: email.externalId, // TASK 1: Unique identifier
           gmail_id: email.externalId, // Backwards compatibility
-          received_at: email.receivedAt.toISOString(), // TASK 4: Channel timestamp
+          received_at: receivedAtIso, // TASK 4: Channel timestamp
           stored_at: new Date().toISOString(), // TASK 4: DB timestamp
-          status: "received", // TASK 5: Explicit status
+          status: isUnread ? "received" : "read", // Gmail UNREAD is the source of truth
           in_reply_to: email.inReplyTo,
           email_references: email.references,
           metadata: {
             from: email.from,
             to: email.to,
             subject: email.subject,
+            // Preserve Gmail's source-of-truth state so historical data can be
+            // reconciled without re-downloading message bodies.
+            gmail_labels: email.labelIds || [],
           },
         })
         .select("id")
@@ -106,26 +164,15 @@ export class EmailProcessor {
         throw msgError
       }
 
-      // Update conversation
-      await this.supabase
-        .from("conversations")
-        .update({
-          last_message_at: email.receivedAt.toISOString(),
-          unread_count: conversation.unread_count + 1,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", conversation.id)
+      // Historical sync runs newest-first. Never let an older message move the
+      // conversation timestamp/state backwards. Unread count still includes
+      // every unread message in the thread.
+      const conversationUpdate: Record<string, unknown> = {
+        ...deriveInboundConversationState(conversation, receivedAtIso, isUnread, email.labelIds),
+        updated_at: new Date().toISOString(),
+      }
 
-      // Reopen the conversation if it was archived/spam/deleted. A new inbound
-      // customer message means it needs attention again — this mirrors Gmail,
-      // where a new reply moves an archived thread back into the INBOX. Without
-      // this, replies to resolved threads stay hidden from the active inbox view
-      // ("Da fare" filters status='open') and look like "new mail not arriving".
-      await this.supabase
-        .from("conversations")
-        .update({ status: "open", updated_at: new Date().toISOString() })
-        .eq("id", conversation.id)
-        .in("status", ["resolved", "spam", "deleted"])
+      await this.supabase.from("conversations").update(conversationUpdate).eq("id", conversation.id)
 
       // TASK 7: Log success
       await this.logEvent(propertyId, email.externalId, "email", "processed", {
@@ -171,7 +218,7 @@ export class EmailProcessor {
     if (email.threadId) {
       const { data: byThread } = await this.supabase
         .from("conversations")
-        .select("id, unread_count, internal_thread_id")
+        .select("id, unread_count, internal_thread_id, last_message_at, status")
         .eq("property_id", propertyId)
         .eq("gmail_thread_id", email.threadId)
         .maybeSingle()
@@ -183,7 +230,7 @@ export class EmailProcessor {
     if (email.inReplyTo) {
       const { data: byReplyTo } = await this.supabase
         .from("messages")
-        .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id)")
+        .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id, last_message_at, status)")
         .eq("external_message_id", email.inReplyTo)
         .eq("property_id", propertyId)
         .maybeSingle()
@@ -200,7 +247,7 @@ export class EmailProcessor {
         // Check last 3 references
         const { data: byRef } = await this.supabase
           .from("messages")
-          .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id)")
+          .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id, last_message_at, status)")
           .eq("external_message_id", refId)
           .eq("property_id", propertyId)
           .maybeSingle()
@@ -216,7 +263,7 @@ export class EmailProcessor {
     if (normalizedSubject) {
       const { data: bySubject } = await this.supabase
         .from("conversations")
-        .select("id, unread_count, internal_thread_id")
+        .select("id, unread_count, internal_thread_id, last_message_at, status")
         .eq("property_id", propertyId)
         .eq("contact_id", contactId)
         .eq("normalized_subject", normalizedSubject)
@@ -244,7 +291,7 @@ export class EmailProcessor {
         unread_count: 0,
         last_message_at: email.receivedAt.toISOString(),
       })
-      .select("id, unread_count, internal_thread_id")
+      .select("id, unread_count, internal_thread_id, last_message_at, status")
       .single()
 
     if (error) throw error

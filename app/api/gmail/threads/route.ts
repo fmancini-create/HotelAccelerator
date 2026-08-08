@@ -97,11 +97,26 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
+
+  if (authError) {
+    return NextResponse.json(
+      {
+        error: "Autenticazione temporaneamente non verificabile",
+        code: "GMAIL_TEMPORARILY_UNAVAILABLE",
+        debugVersion: API_VERSION,
+      },
+      { status: 503, headers: { "Retry-After": "15" } },
+    )
+  }
 
   if (!user) {
     console.log(`[GMAIL-THREAD-VERIFY] No user found`)
-    return NextResponse.json({ error: "Non autenticato", debugVersion: API_VERSION }, { status: 401 })
+    return NextResponse.json(
+      { error: "Sessione scaduta", code: "APP_AUTH_REQUIRED", debugVersion: API_VERSION },
+      { status: 401 },
+    )
   }
 
   const requestedChannelId = request.nextUrl.searchParams.get("channelId")
@@ -112,14 +127,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Canale Gmail non configurato", debugVersion: API_VERSION }, { status: 404 })
   }
 
-  const { token, error: tokenError } = await getValidGmailToken(channelId)
-  if (!token) {
-    console.log(`[GMAIL-THREAD-VERIFY] Token error: ${tokenError}`)
+  const tokenResult = await getValidGmailToken(channelId, supabase)
+  if (!tokenResult.token) {
+    console.log(`[GMAIL-THREAD-VERIFY] Token error: ${tokenResult.error}`)
     return NextResponse.json(
-      { error: tokenError || "Token non disponibile", debugVersion: API_VERSION },
-      { status: 401 },
+      {
+        error: tokenResult.error || "Token non disponibile",
+        code: tokenResult.reconnectRequired ? "GMAIL_RECONNECT_REQUIRED" : "GMAIL_TEMPORARILY_UNAVAILABLE",
+        debugVersion: API_VERSION,
+      },
+      {
+        status: tokenResult.reconnectRequired ? 401 : tokenResult.status === 429 ? 429 : 503,
+        headers: tokenResult.reconnectRequired ? undefined : { "Retry-After": "15" },
+      },
     )
   }
+  const token = tokenResult.token
 
   const searchParams = request.nextUrl.searchParams
   const labelId = searchParams.get("labelId") || "INBOX"

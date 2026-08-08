@@ -8,8 +8,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const rule = await MessageRuleService.getRule(request, id)
     return NextResponse.json({ rule })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -20,8 +19,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const rule = await MessageRuleService.updateRule(request, id, body)
     return NextResponse.json({ rule })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -38,8 +36,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const rule = await MessageRuleService.toggleRuleActive(request, id, is_active)
     return NextResponse.json({ rule })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -49,7 +46,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     await MessageRuleService.deleteRule(request, id)
     return NextResponse.json({ success: true })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }

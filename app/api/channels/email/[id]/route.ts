@@ -52,8 +52,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ channel: serializeEmailChannel(channel) })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -87,8 +86,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ channel: serializeEmailChannel(channel) })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -107,8 +105,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
 
@@ -127,7 +124,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
     return NextResponse.json({ channel: serializeEmailChannel(channel) })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }

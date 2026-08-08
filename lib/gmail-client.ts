@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS } from "@/lib/oauth-config"
 import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 import { encryptSecret } from "@/lib/crypto/secrets"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 interface EmailChannel {
   id: string
@@ -14,11 +15,31 @@ interface EmailChannel {
   display_name?: string
 }
 
+const GOOGLE_TOKEN_TIMEOUT_MS = 10_000
+const GMAIL_API_TIMEOUT_MS = 12_000
+
+export interface GmailTokenResult {
+  token: string | null
+  error: string | null
+  status: number
+  reconnectRequired: boolean
+}
+
+function timeoutSignal(signal?: AbortSignal | null, timeoutMs = GMAIL_API_TIMEOUT_MS): AbortSignal {
+  if (signal) return signal
+  return AbortSignal.timeout(timeoutMs)
+}
+
 /**
  * Gets a valid Gmail access token for the channel, refreshing if expired
  */
-export async function getValidGmailToken(channelId: string): Promise<{ token: string | null; error: string | null }> {
-  const supabase = await createClient()
+export async function getValidGmailToken(
+  channelId: string,
+  supabaseClient?: SupabaseClient,
+): Promise<GmailTokenResult> {
+  // Authenticated routes pass their request-scoped client. Webhooks and cron
+  // must pass a dedicated service client because they do not have user cookies.
+  const supabase = supabaseClient ?? (await createClient())
 
   // Get channel with OAuth tokens
   const { data: rawChannel, error } = await supabase
@@ -29,31 +50,56 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
     .eq("id", channelId)
     .single()
 
-  if (error || !rawChannel) {
-    return { token: null, error: "Canale non trovato" }
+  if (error) {
+    console.error("[v0] Gmail channel lookup failed:", { code: error.code })
+    return {
+      token: null,
+      error: "Database temporaneamente non disponibile",
+      status: 503,
+      reconnectRequired: false,
+    }
+  }
+
+  if (!rawChannel) {
+    return { token: null, error: "Canale non trovato", status: 404, reconnectRequired: false }
   }
 
   // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
   const channel = decryptChannelSecrets(rawChannel)
 
   if (channel.provider !== "gmail") {
-    return { token: null, error: "Il canale non è configurato con Gmail" }
+    return {
+      token: null,
+      error: "Il canale non è configurato con Gmail",
+      status: 400,
+      reconnectRequired: false,
+    }
   }
 
   if (!channel.oauth_access_token) {
-    return { token: null, error: "Token OAuth mancante. Riconnetti l'account Gmail." }
+    return {
+      token: null,
+      error: "Token OAuth mancante. Riconnetti l'account Gmail.",
+      status: 401,
+      reconnectRequired: true,
+    }
   }
 
   // Check if token is expired (with 5 min buffer)
   const isExpired = channel.oauth_expiry ? new Date(channel.oauth_expiry).getTime() < Date.now() + 5 * 60 * 1000 : true
 
   if (!isExpired) {
-    return { token: channel.oauth_access_token, error: null }
+    return { token: channel.oauth_access_token, error: null, status: 200, reconnectRequired: false }
   }
 
   // Token expired - try to refresh
   if (!channel.oauth_refresh_token) {
-    return { token: null, error: "Refresh token mancante. Riconnetti l'account Gmail." }
+    return {
+      token: null,
+      error: "Refresh token mancante. Riconnetti l'account Gmail.",
+      status: 401,
+      reconnectRequired: true,
+    }
   }
 
   console.log("[v0] Gmail token expired, refreshing...")
@@ -63,13 +109,19 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET
 
   if (!clientId || !clientSecret) {
-    return { token: null, error: "Configurazione OAuth mancante" }
+    return {
+      token: null,
+      error: "Configurazione OAuth Gmail temporaneamente non disponibile",
+      status: 503,
+      reconnectRequired: false,
+    }
   }
 
   try {
     const tokenResponse = await fetch(config.tokenUrl, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      signal: AbortSignal.timeout(GOOGLE_TOKEN_TIMEOUT_MS),
       body: new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
@@ -80,8 +132,22 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
 
     if (!tokenResponse.ok) {
       const errorData = await tokenResponse.json().catch(() => ({}))
-      console.error("[v0] Gmail token refresh failed:", errorData)
-      return { token: null, error: "Token scaduto. Riconnetti l'account Gmail." }
+      const oauthError = typeof errorData?.error === "string" ? errorData.error : ""
+      const reconnectRequired = oauthError === "invalid_grant"
+      console.error("[v0] Gmail token refresh failed:", {
+        status: tokenResponse.status,
+        oauthError: oauthError || "unknown",
+      })
+      return {
+        token: null,
+        error: reconnectRequired
+          ? "Autorizzazione Gmail revocata. Riconnetti l'account Gmail."
+          : tokenResponse.status === 429
+            ? "Limite temporaneo Gmail raggiunto"
+            : "Servizio OAuth Gmail temporaneamente non disponibile",
+        status: reconnectRequired ? 401 : tokenResponse.status === 429 ? 429 : 503,
+        reconnectRequired,
+      }
     }
 
     const tokens = await tokenResponse.json()
@@ -105,10 +171,68 @@ export async function getValidGmailToken(channelId: string): Promise<{ token: st
     }
 
     console.log("[v0] Gmail token refreshed successfully")
-    return { token: tokens.access_token, error: null }
+    return { token: tokens.access_token, error: null, status: 200, reconnectRequired: false }
   } catch (err) {
     console.error("[v0] Gmail token refresh error:", err)
-    return { token: null, error: "Errore durante il refresh del token" }
+    const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")
+    return {
+      token: null,
+      error: timedOut ? "Timeout temporaneo OAuth Gmail" : "Errore temporaneo durante il refresh Gmail",
+      status: timedOut ? 504 : 503,
+      reconnectRequired: false,
+    }
+  }
+}
+
+/**
+ * Calls Gmail with an already-resolved access token.
+ *
+ * Keeping this separate from `gmailFetch` prevents endpoints that fan out
+ * (labels, history sync) from reading/refreshing the OAuth token once per
+ * Gmail request. Every request is bounded so a transient Google/Supabase
+ * incident cannot occupy a Vercel function for several minutes.
+ */
+export async function gmailFetchWithToken(
+  token: string,
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<{ data: any | null; error: string | null; status: number }> {
+  const url = endpoint.startsWith("http") ? endpoint : `https://gmail.googleapis.com/gmail/v1/users/me/${endpoint}`
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: timeoutSignal(options.signal),
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "")
+      console.error(`[v0] Gmail API error (${response.status}):`, errorBody.slice(0, 500))
+      return {
+        data: null,
+        error:
+          response.status === 401
+            ? "Token non valido. Riconnetti Gmail."
+            : response.status === 429
+              ? "Limite temporaneo Gmail raggiunto"
+              : `Errore API Gmail (HTTP ${response.status})`,
+        status: response.status,
+      }
+    }
+
+    const data = await response.json()
+    return { data, error: null, status: response.status }
+  } catch (error) {
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")
+    return {
+      data: null,
+      error: timedOut ? "Timeout temporaneo API Gmail" : "Errore di rete API Gmail",
+      status: timedOut ? 504 : 503,
+    }
   }
 }
 
@@ -119,35 +243,18 @@ export async function gmailFetch(
   channelId: string,
   endpoint: string,
   options: RequestInit = {},
+  supabaseClient?: SupabaseClient,
 ): Promise<{ data: any | null; error: string | null; status: number }> {
-  const { token, error } = await getValidGmailToken(channelId)
+  const tokenResult = await getValidGmailToken(channelId, supabaseClient)
 
-  if (!token) {
-    return { data: null, error: error || "Token non disponibile", status: 401 }
-  }
-
-  const url = endpoint.startsWith("http") ? endpoint : `https://gmail.googleapis.com/gmail/v1/users/me/${endpoint}`
-
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...options.headers,
-      Authorization: `Bearer ${token}`,
-    },
-  })
-
-  if (!response.ok) {
-    const errorBody = await response.text()
-    console.error(`[v0] Gmail API error (${response.status}):`, errorBody)
+  if (!tokenResult.token) {
     return {
       data: null,
-      error: response.status === 401 ? "Token non valido. Riconnetti Gmail." : "Errore API Gmail",
-      status: response.status,
+      error: tokenResult.error || "Token non disponibile",
+      status: tokenResult.status,
     }
   }
-
-  const data = await response.json()
-  return { data, error: null, status: response.status }
+  return gmailFetchWithToken(tokenResult.token, endpoint, options)
 }
 
 /**
@@ -622,7 +729,10 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 /**
  * Gets Gmail labels with unread counts - OPTIMIZED to avoid rate limiting
  */
-export async function getGmailLabelsWithCounts(channelId: string): Promise<{
+export async function getGmailLabelsWithCounts(
+  channelId: string,
+  supabaseClient?: SupabaseClient,
+): Promise<{
   labels: Array<{
     id: string
     name: string
@@ -634,11 +744,29 @@ export async function getGmailLabelsWithCounts(channelId: string): Promise<{
     color?: { backgroundColor?: string; textColor?: string }
   }>
   error?: string
+  status?: number
+  reconnectRequired?: boolean
 }> {
-  const { data, error } = await gmailFetch(channelId, "labels")
+  const tokenResult = await getValidGmailToken(channelId, supabaseClient)
+  if (!tokenResult.token) {
+    return {
+      labels: [],
+      error: tokenResult.error || "Token non disponibile",
+      status: tokenResult.status,
+      reconnectRequired: tokenResult.reconnectRequired,
+    }
+  }
+  const token = tokenResult.token
+
+  const { data, error, status } = await gmailFetchWithToken(token, "labels")
 
   if (error || !data?.labels) {
-    return { labels: [], error: error || "Errore caricamento etichette" }
+    return {
+      labels: [],
+      error: error || "Errore caricamento etichette",
+      status,
+      reconnectRequired: status === 401,
+    }
   }
 
   const essentialSystemLabelIds = ["INBOX", "SENT", "DRAFT", "SPAM", "TRASH", "STARRED", "UNREAD"]
@@ -653,6 +781,7 @@ export async function getGmailLabelsWithCounts(channelId: string): Promise<{
   ]
 
   const labelsWithCounts: any[] = []
+  let labelDetailFailure: { error: string; status: number } | null = null
 
   const BATCH_SIZE = 3
   const labelChunks = chunkArray(labelsToFetchDetails, BATCH_SIZE)
@@ -662,7 +791,18 @@ export async function getGmailLabelsWithCounts(channelId: string): Promise<{
 
     const chunkResults = await Promise.all(
       chunk.map(async (label: any) => {
-        const { data: labelData } = await gmailFetch(channelId, `labels/${label.id}`)
+        const { data: labelData, error: labelError, status: labelStatus } = await gmailFetchWithToken(
+          token,
+          `labels/${label.id}`,
+        )
+        if (labelError || !labelData) {
+          return {
+            detailFailure: {
+              error: labelError || `Etichetta Gmail ${label.id} non disponibile`,
+              status: labelStatus,
+            },
+          }
+        }
         return {
           id: label.id,
           name: label.name,
@@ -676,11 +816,28 @@ export async function getGmailLabelsWithCounts(channelId: string): Promise<{
       }),
     )
 
-    labelsWithCounts.push(...chunkResults)
+    for (const result of chunkResults) {
+      if ("detailFailure" in result && result.detailFailure) {
+        labelDetailFailure ||= result.detailFailure
+      } else {
+        labelsWithCounts.push(result)
+      }
+    }
+
+    if (labelDetailFailure) break
 
     // Add delay between batches to avoid rate limiting
     if (i < labelChunks.length - 1) {
       await delay(200)
+    }
+  }
+
+  if (labelDetailFailure) {
+    return {
+      labels: [],
+      error: labelDetailFailure.error,
+      status: labelDetailFailure.status,
+      reconnectRequired: labelDetailFailure.status === 401,
     }
   }
 

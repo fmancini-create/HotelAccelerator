@@ -19,7 +19,6 @@ export async function POST(request: Request, { params }: { params: { conversatio
 
     return NextResponse.json({ conversation })
   } catch (error) {
-    const { status, json } = handleServiceError(error)
-    return NextResponse.json(json, { status })
+    return handleServiceError(error)
   }
 }
