@@ -33,7 +33,7 @@ async function main() {
 
   console.log("[v0] 3) VERIFICA dati scritti...")
   const supabase = createClient(
-    process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://aeynirkfixurikshxfov.supabase.co",
+    (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL),
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } },
   )

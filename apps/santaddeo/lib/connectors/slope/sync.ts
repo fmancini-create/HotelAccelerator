@@ -1,3 +1,4 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 import "server-only"
 import { createClient } from "@supabase/supabase-js"
 import { SlopeClient, SlopeError, SLOPE_PROD_BASE_URL } from "./client"
@@ -65,7 +66,7 @@ function serviceClient() {
   const supabaseUrl =
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    "https://aeynirkfixurikshxfov.supabase.co"
+    getSupabaseUrl()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey) {
     throw new Error("syncSlopeForHotel: SUPABASE_SERVICE_ROLE_KEY e' richiesta")

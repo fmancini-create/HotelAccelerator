@@ -1,9 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 
-const SUPABASE_URL = "https://aeynirkfixurikshxfov.supabase.co"
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFleW5pcmtmaXh1cmlrc2h4Zm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MTQyMDMsImV4cCI6MjA3Njk5MDIwM30.NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0"
+import { getPublicSupabaseConfig } from "@/lib/supabase/config"
+const { url: SUPABASE_URL, publishableKey: SUPABASE_ANON_KEY } = getPublicSupabaseConfig()
 
 /**
  * Handles a form POST login and returns a 302 redirect to /dashboard.

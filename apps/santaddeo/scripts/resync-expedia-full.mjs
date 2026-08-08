@@ -17,7 +17,7 @@ const APIFY_API_TOKEN = process.env.APIFY_API_TOKEN
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
   process.env.SUPABASE_URL ||
-  "https://aeynirkfixurikshxfov.supabase.co"
+  (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const hotelId = process.argv[2]

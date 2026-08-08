@@ -1,3 +1,4 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 /**
  * Forgot password endpoint.
  *
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
     // ============================================================
     // 4. Genera magic link recovery via Supabase Admin API
     // ============================================================
-    const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
+    const PROD_URL = getSupabaseUrl()
     const serviceRoleKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SANTADDEO_SUPABASE_SERVICE_ROLE_KEY
     if (!serviceRoleKey) {

@@ -11,7 +11,7 @@
 // DDL via RPC exec_sql (param `query`, NON `sql`; vedi memory).
 import { createClient } from "@supabase/supabase-js"
 
-const url = process.env.SUPABASE_URL || "https://aeynirkfixurikshxfov.supabase.co"
+const url = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!key) {
   console.error("manca SUPABASE_SERVICE_ROLE_KEY")

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 
-const URL = "https://aeynirkfixurikshxfov.supabase.co"
+const URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const HOTEL = "8dd3f8c1-284a-43f1-b24f-e6a9d428edca" // Villa I Barronci
 // CLI: node scripts/fiscal-july-recon.mjs 2026-06-01 2026-06-30

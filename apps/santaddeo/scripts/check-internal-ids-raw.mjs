@@ -9,7 +9,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = 'https://aeynirkfixurikshxfov.supabase.co'
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const supabase = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
 
 const HOTEL_ID = '8dd3f8c1-284a-43f1-b24f-e6a9d428edca'

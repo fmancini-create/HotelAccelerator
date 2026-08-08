@@ -1,3 +1,4 @@
+import { getSupabaseUrl } from "@/lib/supabase/config"
 /**
  * Resend verification email.
  * Chiamato da components/auth/verify-email-content.tsx quando l'utente clicca
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
+    const PROD_URL = getSupabaseUrl()
     const serviceRoleKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SANTADDEO_SUPABASE_SERVICE_ROLE_KEY
     if (!serviceRoleKey) {

@@ -1,25 +1,4 @@
-// FORCE RECOMPILE v3 - Fixed DEV/PROD separation
-// ============================================================================
-// CONFIGURAZIONE DATABASE SANTADDEO - SEPARAZIONE DEV/PROD
-// ============================================================================
-// PRODUZIONE (project: aeynirkfixurikshxfov):
-//   - NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
-//
-// DEV/PREVIEW (project: dshdmkmhhbjractpvojp):
-//   - NEXT_PUBLIC_DEV_SUPABASE_URL, NEXT_PUBLIC_DEV_SUPABASE_ANON_KEY
-// ============================================================================
-
-// Always use PRODUCTION database - DEV database eliminated to avoid sync issues
-function getSupabaseCredentials() {
-  return {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL || "https://aeynirkfixurikshxfov.supabase.co",
-    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFleW5pcmtmaXh1cmlrc2h4Zm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MTQyMDMsImV4cCI6MjA3Njk5MDIwM30.NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0",
-  }
-}
-
-const credentials = getSupabaseCredentials()
-const SUPABASE_URL = credentials.url
-const SUPABASE_ANON_KEY = credentials.anonKey
+import { getPublicSupabaseConfig } from "@/lib/supabase/config"
 
 // Minimal type definition to avoid importing @supabase/supabase-js
 // which causes the v0 bundler to load the module and trigger _getUser()
@@ -199,7 +178,8 @@ async function initProductionClient(): Promise<SupabaseBrowserClient> {
   
   // Standard dynamic import - bundled correctly by Next.js/Turbopack for production
   const { createBrowserClient } = await import("@supabase/ssr")
-  const client = createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  const { url, publishableKey } = getPublicSupabaseConfig()
+  const client = createBrowserClient(url, publishableKey, {
     auth: {
       autoRefreshToken: true,
       detectSessionInUrl: true,

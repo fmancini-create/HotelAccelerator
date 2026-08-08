@@ -12,7 +12,7 @@
  */
 
 const SUPABASE_URL =
-  process.env.NEXT_PUBLIC_SUPABASE_URL || "https://aeynirkfixurikshxfov.supabase.co"
+  (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 if (!KEY) {

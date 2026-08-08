@@ -3,56 +3,13 @@
  * Always connects to PROD Supabase with SSR cookie handling.
  */
 import { cookies } from "next/headers"
+import {
+  getPublicSupabaseConfig,
+  getSupabaseSecretKey,
+  getSupabaseUrl,
+} from "@/lib/supabase/config"
 
-const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
-
-function getServiceKey(): string {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SANTADDEO_SUPABASE_SERVICE_ROLE_KEY
-  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY non configurata")
-  return key
-}
-
-// L'anon key e' pubblica per design: la stessa appare nel bundle browser
-// ed e' protetta solo dalle RLS lato Supabase. La teniamo qui hardcoded
-// perche' alcune API route (login, session-handler) potrebbero girare
-// in contesti dove gli env NEXT_PUBLIC_* non sono propagati (v0 sandbox,
-// edge runtime). Esportiamo un helper per centralizzare l'accesso.
-const PROD_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFleW5pcmtmaXh1cmlrc2h4Zm92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE0MTQyMDMsImV4cCI6MjA3Njk5MDIwM30.NhCFYvT7fvsuEwvhP7em7vDKifRa6RmnfdVYwUvKWp0"
-
-/**
- * Public Supabase config (URL + anon key). Da usare invece di duplicare
- * l'hardcode nei singoli route handler.
- */
-export function getPublicSupabaseConfig(): { url: string; anonKey: string } {
-  return {
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL || PROD_URL,
-    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || PROD_ANON_KEY,
-  }
-}
-
-// Global fetch interceptor - installed once
-;(function installFetchInterceptor() {
-  const g = globalThis as any
-  if (g.__santaddeo_fetch_interceptor_installed__) return
-  const originalFetch = g.fetch.bind(g)
-  g.fetch = async function patchedFetch(input: RequestInfo | URL, init?: RequestInit) {
-    const url = typeof input === "string" ? input
-      : input instanceof URL ? input.toString()
-      : (input as Request).url
-    // Redirect dev requests to prod
-    if (url.includes("dshdmkmhhbjractpvojp")) {
-      const prodUrl = url.replace("dshdmkmhhbjractpvojp", "aeynirkfixurikshxfov")
-      const headers = new Headers(init?.headers || {})
-      const sk = getServiceKey()
-      headers.set("apikey", sk)
-      headers.set("Authorization", `Bearer ${sk}`)
-      return originalFetch(prodUrl, { ...init, headers })
-    }
-    return originalFetch(input, init)
-  }
-  g.__santaddeo_fetch_interceptor_installed__ = true
-})()
+export { getPublicSupabaseConfig } from "@/lib/supabase/config"
 
 // Safe fetch that strips CR/LF from headers
 function makeSafeFetch(baseFetch: typeof fetch): typeof fetch {
@@ -82,7 +39,7 @@ function makeSafeFetch(baseFetch: typeof fetch): typeof fetch {
 export async function createServiceRoleClient() {
   const safeFetch = makeSafeFetch(globalThis.fetch.bind(globalThis))
   const { createClient } = await import("@supabase/supabase-js")
-  return createClient(PROD_URL, getServiceKey(), {
+  return createClient(getSupabaseUrl(), getSupabaseSecretKey(), {
     global: { fetch: safeFetch as typeof fetch },
     auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
     db: { schema: "public" },
@@ -97,7 +54,8 @@ export async function createClient() {
   const cookieStore = await cookies()
   const safeFetch = makeSafeFetch(globalThis.fetch.bind(globalThis))
   const { createServerClient } = await import("@supabase/ssr")
-  return createServerClient(PROD_URL, PROD_ANON_KEY, {
+  const { url, publishableKey } = getPublicSupabaseConfig()
+  return createServerClient(url, publishableKey, {
     cookies: {
       getAll() { return cookieStore.getAll() },
       setAll(cookiesToSet) {
@@ -114,7 +72,6 @@ export async function createClient() {
       detectSessionInUrl: false,
       persistSession: true,
       // Must match the cookie name set by /api/auth/login: sb-{projectRef}-auth-token
-      storageKey: "sb-aeynirkfixurikshxfov-auth-token",
     },
   })
 }

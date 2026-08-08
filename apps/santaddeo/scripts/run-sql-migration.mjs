@@ -23,7 +23,7 @@
 import { readFileSync } from "node:fs"
 import { argv, exit } from "node:process"
 
-const PROD_URL = "https://aeynirkfixurikshxfov.supabase.co"
+const PROD_URL = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL)
 const file = argv[2]
 if (!file) {
   console.error("Usage: node scripts/run-sql-migration.mjs <file.sql>")

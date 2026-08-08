@@ -64,6 +64,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: HotelAccelerator Core e Santaddeo usano confini TypeScript separati; il `tsconfig` del Core esclude `apps/santaddeo`, che viene verificata con il proprio `tsconfig`.
 - Conseguenza: gli alias e gli errori di un'app non contaminano l'altra; `typecheck:all` resta il controllo aggregato e fallisce finché entrambi i moduli non sono verdi.
 
+## ADR-011 — Configurazione Supabase Santaddeo solo da environment
+
+- Stato: accettata
+- Decisione: URL e chiavi Supabase di Santaddeo sono risolti da un unico modulo di configurazione; non sono ammessi fallback hardcoded né riscritture silenziose DEV→PROD.
+- Conseguenza: ogni ambiente deve dichiarare esplicitamente le proprie variabili. L'app fallisce in modo visibile se mancano, invece di collegarsi accidentalmente al database di produzione. Le nuove chiavi `publishable`/`secret` sono preferite, mantenendo compatibilità temporanea con `anon`/`service_role`.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

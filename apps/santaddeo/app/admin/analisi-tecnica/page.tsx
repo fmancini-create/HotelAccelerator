@@ -55,14 +55,14 @@ export default function AnalisiTecnicaPage() {
 {`PRODUZIONE (santaddeo.com)
 ├── Vercel: VERCEL_ENV="production"
 ├── Supabase Project: aeynirkfixurikshxfov
-├── URL: https://aeynirkfixurikshxfov.supabase.co
+├── URL: configurato tramite NEXT_PUBLIC_SUPABASE_URL
 ├── Schema "connectors" ESPOSTO via PostgREST
 └── Variabili: SUPABASE_URL, SUPABASE_ANON_KEY, etc.
 
 DEV/PREVIEW (v0 preview, localhost, Vercel preview)
 ├── Vercel: VERCEL_ENV="preview" o "development"
 ├── Supabase Project: dshdmkmhhbjractpvojp
-├── URL: https://dshdmkmhhbjractpvojp.supabase.co
+├── URL: configurato tramite DEV_SUPABASE_URL
 ├── Schema "connectors" NON ESPOSTO (causa PGRST106)
 └── Variabili: DEV_SUPABASE_URL, DEV_SUPABASE_ANON_KEY`}
           </div>
