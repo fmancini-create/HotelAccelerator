@@ -176,4 +176,16 @@ describe("email synchronization regressions", () => {
       /useEffect\(\(\) => \{\s*if \(inboxMode === ["']smart["']\) \{\s*performInitialSmartSync\(\)/,
     )
   })
+
+  it("contains legacy duplicate contacts and Gmail threads instead of multiplying them", () => {
+    const autoCapture = source("lib/crm/auto-capture.ts")
+    const processor = source("lib/email/email-processor.ts")
+
+    expect(
+      autoCapture.match(/\.order\("created_at", \{ ascending: true \}\)\s*\.limit\(1\)/g),
+    ).toHaveLength(2)
+    expect(processor).toContain("byThreadCandidates")
+    expect(processor).toContain('.in("conversation_id", candidateIds)')
+    expect(processor).toContain("linkedConversation?.conversation_id")
+  })
 })
