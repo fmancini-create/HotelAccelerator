@@ -61,6 +61,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatDistanceToNow, format } from "date-fns"
 import { it } from "date-fns/locale"
+import { formatInboxTimestamp, formatInboxTimestampFull, formatWaitingSince } from "@/lib/inbox/format-list-date"
 import { EmailKpiBar } from "@/components/admin/email-kpi-bar"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
@@ -148,7 +149,17 @@ interface Conversation {
   unread_count: number
   is_starred: boolean
   contact: Contact | null
-  lastMessage: {
+  /** Sender denormalised on the conversation, for mail with no CRM contact. */
+  contact_email?: string | null
+  contact_name?: string | null
+  /**
+   * The API passes the repository payload straight through, so this is
+   * `last_message`. It used to be declared as `lastMessage` here, which type-
+   * checked fine and silently resolved to undefined: the preview text below
+   * never rendered once.
+   */
+  last_message: {
+    id?: string
     content: string
     sender_type: string
     created_at: string
@@ -3079,15 +3090,32 @@ export default function InboxPage() {
                         <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
                           {conv.subject || "(nessun oggetto)"}
                         </span>
-                        {conv.lastMessage?.content && (
-                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" �� "}{conv.lastMessage.content}</span>
+                        {conv.last_message?.content && (
+                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" - "}{conv.last_message.content}</span>
                         )}
                       </div>
                       {conv.unread_count > 0 && (
                         <span className="text-[11px] font-bold text-[#202124] flex-shrink-0">{conv.unread_count}</span>
                       )}
-                      <span className="text-[11px] text-gray-500 flex-shrink-0 min-w-[42px] text-right">
-                        {formatDistanceToNow(new Date(conv.last_message_at), { addSuffix: false, locale: it })}
+                      <span
+                        className="flex-shrink-0 min-w-[58px] flex flex-col items-end leading-tight"
+                        title={formatInboxTimestampFull(conv.last_message_at)}
+                      >
+                        <span className={`text-[11px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-gray-500"}`}>
+                          {formatInboxTimestamp(conv.last_message_at)}
+                        </span>
+                        {(() => {
+                          const waiting = formatWaitingSince(
+                            conv.last_message,
+                            undefined,
+                            conv.contact?.email ?? conv.contact_email,
+                          )
+                          return waiting ? (
+                            <span className="text-[10px] text-amber-600" title={`In attesa di risposta da ${waiting}`}>
+                              {waiting}
+                            </span>
+                          ) : null
+                        })()}
                       </span>
                     </div>
                   ))}
