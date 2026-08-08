@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { isMachineSender } from "@/lib/crm/machine-sender"
 
 /**
  * Auto-capture CRM settings. Per-tenant policy that decides whether email
@@ -7,12 +8,18 @@ import type { SupabaseClient } from "@supabase/supabase-js"
  *
  * Contract:
  *  - Existing contacts are NEVER modified (immutable policy).
+ *  - Machine senders (noreply@, notifications@, ...) are never captured, in
+ *    either direction. They are not people and must stay out of the CRM.
  *  - Disabled toggles or blacklist matches downgrade the capture to "minimal":
- *    - inbound: the contact is still created so the conversation has a valid
- *      contact_id (thread-linking requirement), but with a neutral source.
+ *    - inbound: a contact is still created with a neutral source, so tenants
+ *      that opted out keep a browsable thread owner.
  *    - outbound: capture is fully skipped (no conversation dependency).
  *  - All failures are swallowed: signature wiring and send flows must never
  *    break because of CRM auto-capture side effects.
+ *
+ * Callers must tolerate `contactId: null`: `conversations.contact_id` and
+ * `messages.sender_id` are both nullable, and the inbound pipeline denormalises
+ * the sender onto the conversation instead.
  */
 
 export interface AutoCaptureSettings {
@@ -104,6 +111,8 @@ export interface AutoCaptureResult {
  * auto-capture policy. Idempotent and safe to call in hot paths.
  *
  * Behaviour matrix:
+ *  any direction:
+ *    - machine sender         -> skip, contactId = null (no row is created)
  *  direction = inbound:
  *    - existing contact       -> return it, never mutated
  *    - no contact + capture   -> create with source='email_auto', tagged
@@ -139,6 +148,13 @@ export async function autoCaptureContact(input: AutoCaptureInput): Promise<AutoC
     if (existingError) throw existingError
     if (existing) {
       return { contactId: existing.id, created: false, skipped: false, reason: "existing" }
+    }
+
+    // Automated senders never become contacts, whatever the tenant policy
+    // says. This runs after the "existing contact wins" lookup so a row a human
+    // deliberately created (or that predates this rule) is still returned.
+    if (isMachineSender(email)) {
+      return { contactId: null, created: false, skipped: true, reason: "machine_sender" }
     }
 
     const settings = input.settings ?? (await getAutoCaptureSettings(supabase, propertyId))
