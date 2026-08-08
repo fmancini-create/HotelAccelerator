@@ -4,6 +4,7 @@
 const FRONTEND_BUILD = "v790-final-parsing-fix"
 
 import React, { useState, useEffect, useRef, useCallback, memo } from "react"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 import { useRouter } from "next/navigation"
 import { useAdminAuth } from "@/lib/admin-hooks"
 import { createClient } from "@/lib/supabase/client"
@@ -540,6 +541,7 @@ export default function InboxPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const conversationsLoadInFlightRef = useRef(false)
   const markedAsReadRef = useRef<Set<string>>(new Set())
 
   // ── Gmail connection error state (e.g. OAuth token revoked / channel not configured) ──
@@ -1147,6 +1149,11 @@ export default function InboxPage() {
   // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
   const loadConversations = useCallback(async () => {
+    // Realtime, polling and user actions can all request a refresh. Never let
+    // them fan out into concurrent copies of this relatively expensive query.
+    if (conversationsLoadInFlightRef.current) return
+    conversationsLoadInFlightRef.current = true
+
     try {
       const queryParams = new URLSearchParams()
       if (statusFilter) queryParams.set("status", statusFilter)
@@ -1165,11 +1172,13 @@ export default function InboxPage() {
     } catch (error) {
       console.error("Error loading conversations:", error)
     } finally {
+      conversationsLoadInFlightRef.current = false
       setIsLoading(false)
     }
   }, [statusFilter, searchQuery, inboxSort, channelFilter])
 
-  // Database is the single source of truth, updated only by webhook
+  // Database is the UI source of truth; Gmail ingestion is owned by server
+  // webhook/cron jobs, with an explicit manual sync available to the operator.
 
   const loadSmartDebugInfo = useCallback(async () => {
     try {
@@ -1359,65 +1368,79 @@ export default function InboxPage() {
   }
 
   useEffect(() => {
-    if (inboxMode === "smart") {
-      performInitialSmartSync()
-    }
-  }, [inboxMode])
-
-  useEffect(() => {
     if (inboxMode === "smart" && !authLoading && adminUser) {
       // Load conversations from DB
       loadConversations()
-
-      // Load debug info
-      loadSmartDebugInfo()
 
       // Fast poll: reload conversations from DB every 30s (catches webhook-imported messages)
       pollIntervalRef.current = setInterval(() => {
         loadConversations()
       }, 30000)
 
-      // Slow poll: trigger a fresh Gmail->DB sync every 2 minutes
-      // This covers the case when Gmail Pub/Sub webhook is down, expired, or not configured.
-      const syncInterval = setInterval(() => {
-        performInitialSmartSync()
-      }, 120000)
-
-      // Debug info refresh every 60 seconds
-      const debugInterval = setInterval(loadSmartDebugInfo, 60000)
-
       const supabase = createClient()
+      const realtimeChannels: RealtimeChannel[] = []
+      let realtimeReloadTimer: ReturnType<typeof setTimeout> | null = null
 
-      const messagesChannel = supabase
-        .channel("smart-inbox-messages")
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (_payload: unknown) => {
-          // Reload conversations to show new message
+      // Collapse a burst of row-level events into one list refresh. The
+      // in-flight guard above also prevents overlap with the 30s fallback poll.
+      const scheduleRealtimeReload = () => {
+        if (realtimeReloadTimer) return
+        realtimeReloadTimer = setTimeout(() => {
+          realtimeReloadTimer = null
           loadConversations()
-        })
-        .subscribe((_status: string) => {
-        })
+        }, 1000)
+      }
 
-      const conversationsChannel = supabase
-        .channel("smart-inbox-conversations")
-        .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, (_payload: unknown) => {
-          loadConversations()
-        })
-        .subscribe((_status: string) => {
-          // Realtime subscription status
-        })
+      // Never subscribe to cross-tenant changes. Platform users without a
+      // concrete property keep the safe 30s DB poll instead of an unfiltered
+      // Realtime feed.
+      if (adminUser.property_id) {
+        const tenantFilter = `property_id=eq.${adminUser.property_id}`
+
+        realtimeChannels.push(
+          supabase
+            .channel(`smart-inbox-messages-${adminUser.property_id}`)
+            .on(
+              "postgres_changes",
+              { event: "INSERT", schema: "public", table: "messages", filter: tenantFilter },
+              scheduleRealtimeReload,
+            )
+            .subscribe(),
+        )
+
+        realtimeChannels.push(
+          supabase
+            .channel(`smart-inbox-conversations-${adminUser.property_id}`)
+            .on(
+              "postgres_changes",
+              { event: "*", schema: "public", table: "conversations", filter: tenantFilter },
+              scheduleRealtimeReload,
+            )
+            .subscribe(),
+        )
+      }
 
       return () => {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
-        clearInterval(syncInterval)
-        clearInterval(debugInterval)
-        supabase.removeChannel(messagesChannel)
-        supabase.removeChannel(conversationsChannel)
+        if (realtimeReloadTimer) clearTimeout(realtimeReloadTimer)
+        realtimeChannels.forEach((channel) => {
+          supabase.removeChannel(channel)
+        })
       }
     }
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
     }
-  }, [inboxMode, authLoading, adminUser, loadConversations, loadSmartDebugInfo])
+  }, [inboxMode, authLoading, adminUser, loadConversations])
+
+  useEffect(() => {
+    if (inboxMode !== "smart" || authLoading || !adminUser || !showDebugPanel) return
+
+    loadSmartDebugInfo()
+    const debugInterval = setInterval(loadSmartDebugInfo, 60000)
+
+    return () => clearInterval(debugInterval)
+  }, [inboxMode, authLoading, adminUser, showDebugPanel, loadSmartDebugInfo])
 
   useEffect(() => {
     if (inboxMode === "smart" && selectedConversationId) {

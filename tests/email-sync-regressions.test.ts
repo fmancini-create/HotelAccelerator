@@ -164,4 +164,16 @@ describe("email synchronization regressions", () => {
     expect(debugRoute).toContain("messageSubject(lastMessage?.metadata)")
     expect(debugRoute).not.toMatch(/select\(["']id,\s*subject/)
   })
+
+  it("keeps automatic Smart Inbox refresh tenant-scoped and backpressured", () => {
+    const inbox = source("app/admin/inbox/page.tsx")
+
+    expect(inbox).toContain("conversationsLoadInFlightRef")
+    expect(inbox).toContain("scheduleRealtimeReload")
+    expect(inbox).toContain("filter: tenantFilter")
+    expect(inbox).not.toContain("const syncInterval = setInterval")
+    expect(inbox).not.toMatch(
+      /useEffect\(\(\) => \{\s*if \(inboxMode === ["']smart["']\) \{\s*performInitialSmartSync\(\)/,
+    )
+  })
 })
