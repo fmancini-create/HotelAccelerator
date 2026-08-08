@@ -124,13 +124,19 @@ export async function autoCaptureContact(input: AutoCaptureInput): Promise<AutoC
 
   try {
     // Immutable policy: any existing contact wins, regardless of settings.
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from("contacts")
       .select("id")
       .eq("property_id", propertyId)
       .eq("email", email)
+      // Legacy races left some tenants with duplicate contact rows. Limit the
+      // lookup to one stable canonical row so maybeSingle() does not turn that
+      // ambiguity into another insert on every inbound message.
+      .order("created_at", { ascending: true })
+      .limit(1)
       .maybeSingle()
 
+    if (existingError) throw existingError
     if (existing) {
       return { contactId: existing.id, created: false, skipped: false, reason: "existing" }
     }
@@ -176,6 +182,8 @@ export async function autoCaptureContact(input: AutoCaptureInput): Promise<AutoC
           .select("id")
           .eq("property_id", propertyId)
           .eq("email", email)
+          .order("created_at", { ascending: true })
+          .limit(1)
           .maybeSingle()
         if (again) return { contactId: again.id, created: false, skipped: false, reason: "race_existing" }
       }

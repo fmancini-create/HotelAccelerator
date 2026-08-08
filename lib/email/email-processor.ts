@@ -216,14 +216,39 @@ export class EmailProcessor {
   ) {
     // Try 1: Match by Gmail threadId
     if (email.threadId) {
-      const { data: byThread } = await this.supabase
+      const { data: byThreadCandidates, error: byThreadError } = await this.supabase
         .from("conversations")
         .select("id, unread_count, internal_thread_id, last_message_at, status")
         .eq("property_id", propertyId)
         .eq("gmail_thread_id", email.threadId)
-        .maybeSingle()
+        .order("created_at", { ascending: true })
+        .limit(25)
 
-      if (byThread) return byThread
+      if (byThreadError) throw byThreadError
+      if (byThreadCandidates?.length === 1) return byThreadCandidates[0]
+
+      if (byThreadCandidates && byThreadCandidates.length > 1) {
+        // A historical race could create several rows for one Gmail thread
+        // before the message-level UNIQUE constraint stopped the losers. Reuse
+        // the candidate that already owns messages; otherwise fall back to the
+        // oldest row. This contains the legacy ambiguity without deleting data.
+        const candidateIds = byThreadCandidates.map((candidate) => candidate.id)
+        const { data: linkedConversation, error: linkedConversationError } = await this.supabase
+          .from("messages")
+          .select("conversation_id")
+          .in("conversation_id", candidateIds)
+          .order("received_at", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (linkedConversationError) throw linkedConversationError
+
+        return (
+          byThreadCandidates.find(
+            (candidate) => candidate.id === linkedConversation?.conversation_id,
+          ) || byThreadCandidates[0]
+        )
+      }
     }
 
     // Try 2: Match by In-Reply-To
