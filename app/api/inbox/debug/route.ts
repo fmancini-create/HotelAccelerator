@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { handleServiceError } from "@/lib/errors"
 
+function messageSubject(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
+  const subject = (metadata as Record<string, unknown>).subject
+  return typeof subject === "string" && subject.trim() ? subject : null
+}
+
 // Debug endpoint for Smart mode - shows sync status
 export async function GET(request: NextRequest) {
   try {
@@ -35,7 +41,7 @@ export async function GET(request: NextRequest) {
     // Get last message received for this tenant
     const { data: lastMessage } = await supabase
       .from("messages")
-      .select("id, subject, received_at, created_at")
+      .select("id, metadata, received_at, created_at")
       .eq("property_id", propertyId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -44,7 +50,7 @@ export async function GET(request: NextRequest) {
     // Get last 5 messages for timeline for this tenant
     const { data: recentMessages } = await supabase
       .from("messages")
-      .select("id, subject, sender_email, received_at, created_at")
+      .select("id, metadata, sender_email, received_at, created_at")
       .eq("property_id", propertyId)
       .order("created_at", { ascending: false })
       .limit(5)
@@ -74,12 +80,12 @@ export async function GET(request: NextRequest) {
         messagesCount,
         conversationsCount,
         lastMessageAt: lastMessage?.created_at || null,
-        lastMessageSubject: lastMessage?.subject || null,
+        lastMessageSubject: messageSubject(lastMessage?.metadata),
       },
       recentMessages:
         recentMessages?.map((m) => ({
           id: m.id,
-          subject: m.subject?.substring(0, 40),
+          subject: messageSubject(m.metadata)?.substring(0, 40) || null,
           from: m.sender_email,
           createdAt: m.created_at,
         })) || [],

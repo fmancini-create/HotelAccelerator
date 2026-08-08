@@ -155,4 +155,13 @@ describe("email synchronization regressions", () => {
     expect(inbox).toContain("Nessuna riconnessione è necessaria")
     expect(inbox).toContain('errorData?.code === "GMAIL_RECONNECT_REQUIRED"')
   })
+
+  it("reads debug message subjects from metadata instead of a missing column", () => {
+    const debugRoute = source("app/api/inbox/debug/route.ts")
+
+    expect(debugRoute).toContain('select("id, metadata, received_at, created_at")')
+    expect(debugRoute).toContain('select("id, metadata, sender_email, received_at, created_at")')
+    expect(debugRoute).toContain("messageSubject(lastMessage?.metadata)")
+    expect(debugRoute).not.toMatch(/select\(["']id,\s*subject/)
+  })
 })
