@@ -208,7 +208,7 @@ export default function PlatformCollaboratorsPage() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <Users className="w-6 h-6 text-ha-brand-soft-foreground" />
-              <h1 className="text-xl font-serif text-muted-foreground">Platform Collaborators</h1>
+              <h1 className="text-xl font-semibold text-muted-foreground">Platform Collaborators</h1>
             </div>
             <Button onClick={handleOpenAddModal} className="bg-ha-brand hover:bg-ha-brand/90 text-white">
               <UserPlus className="w-4 h-4 mr-2" />

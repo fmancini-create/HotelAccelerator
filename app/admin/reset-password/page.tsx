@@ -114,7 +114,7 @@ export default function ResetPasswordPage() {
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
-            <h1 className="text-2xl font-serif text-stone-800 mb-2">Password reimpostata!</h1>
+            <h1 className="text-2xl font-semibold text-stone-800 mb-2">Password reimpostata!</h1>
             <p className="text-stone-600">
               La tua password è stata aggiornata con successo. Verrai reindirizzato tra pochi istanti...
             </p>
@@ -132,7 +132,7 @@ export default function ResetPasswordPage() {
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-amber-700" />
             </div>
-            <h1 className="text-2xl font-serif text-stone-800 mb-2">Link non valido</h1>
+            <h1 className="text-2xl font-semibold text-stone-800 mb-2">Link non valido</h1>
             <p className="text-stone-600 mb-6">
               Il link di recupero è scaduto o non è valido. Richiedine uno nuovo dalla pagina di accesso.
             </p>
@@ -158,7 +158,7 @@ export default function ResetPasswordPage() {
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8 text-amber-700" />
             </div>
-            <h1 className="text-2xl font-serif text-stone-800">Reimposta Password</h1>
+            <h1 className="text-2xl font-semibold text-stone-800">Reimposta Password</h1>
             <p className="text-stone-600 mt-2">Inserisci la tua nuova password</p>
           </div>
 

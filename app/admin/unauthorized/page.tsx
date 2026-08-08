@@ -9,7 +9,7 @@ export default function UnauthorizedPage() {
         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
           <ShieldX className="w-8 h-8 text-red-500" />
         </div>
-        <h1 className="text-2xl font-serif text-muted-foreground mb-2">Accesso Non Autorizzato</h1>
+        <h1 className="text-2xl font-semibold text-muted-foreground mb-2">Accesso Non Autorizzato</h1>
         <p className="text-muted-foreground mb-6">
           Il tuo account non ha i permessi per accedere all area admin. Contatta un Super Admin per richiedere laccesso.
         </p>

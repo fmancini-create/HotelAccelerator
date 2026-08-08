@@ -89,7 +89,7 @@ export default function AdminSetupPage() {
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8 text-amber-700" />
             </div>
-            <h1 className="text-2xl font-serif text-stone-800">Setup Iniziale</h1>
+            <h1 className="text-2xl font-semibold text-stone-800">Setup Iniziale</h1>
             <p className="text-stone-600 mt-2">Crea il Super Admin</p>
           </div>
 
