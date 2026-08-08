@@ -1958,7 +1958,7 @@ export default function InboxPage() {
   if (authLoading) {
     return (
       <div className="flex items-center justify-center h-full bg-[#f6f8fc]">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -2014,7 +2014,7 @@ export default function InboxPage() {
           <div>
             <div className="font-semibold text-yellow-400">Recent Messages (DB)</div>
             {smartDebugInfo.recentMessages.slice(0, 3).map((m, i) => (
-              <div key={i} className="text-gray-400 truncate">
+              <div key={i} className="text-muted-foreground truncate">
                 {m.subject?.substring(0, 25) || "No subject"} - {m.from?.split("@")[0]}
               </div>
             ))}
@@ -2116,11 +2116,11 @@ export default function InboxPage() {
                         onClick={() => handleSelectChannel(c.id)}
                         className="flex items-center gap-2 cursor-pointer"
                       >
-                        <Mail className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        <Mail className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <div className="flex flex-col min-w-0 flex-1">
                           <span className="truncate text-sm">{c.email || c.name || c.id}</span>
                           {c.name && c.name !== c.email && (
-                            <span className="truncate text-xs text-gray-400">{c.name}</span>
+                            <span className="truncate text-xs text-muted-foreground">{c.name}</span>
                           )}
                         </div>
                         {c.id === selectedChannelId && (
@@ -2194,7 +2194,7 @@ export default function InboxPage() {
                   <div className="text-xs text-gray-500 truncate">{adminUser.email}</div>
                 )}
                 {gmailAccount?.email && (
-                  <div className="text-xs text-gray-400 truncate mt-1">
+                  <div className="text-xs text-muted-foreground truncate mt-1">
                     Casella attiva: {gmailAccount.email}
                   </div>
                 )}
@@ -2359,7 +2359,7 @@ export default function InboxPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={performInitialSmartSync} title="Sincronizza nuovi messaggi">
                     <RefreshCw className={`h-4 w-4 text-[#444746] ${isLoading ? "animate-spin" : ""}`} />
                   </Button>
-                  {lastSyncStatus && <span className="text-xs text-gray-400 truncate">{lastSyncStatus}</span>}
+                  {lastSyncStatus && <span className="text-xs text-muted-foreground truncate">{lastSyncStatus}</span>}
                 </div>
               </>
             )}
@@ -2470,7 +2470,7 @@ export default function InboxPage() {
                   <span className="tabular-nums">
                     {fullSyncProgress?.processed ?? 0} importati
                   </span>
-                  <span className="text-gray-400">Stop</span>
+                  <span className="text-muted-foreground">Stop</span>
                 </Button>
               ) : (
                 <Button
@@ -2654,11 +2654,11 @@ export default function InboxPage() {
                 <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 w-full">
                   {gmailThreadLoading || (inboxMode === "smart" && isLoading) ? (
                     <div className="flex items-center justify-center py-12">
-                      <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
                   ) : (inboxMode === "gmail" ? gmailMessages : messages).length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                      <Mail className="h-12 w-12 mb-3 text-gray-300" />
+                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                      <Mail className="h-12 w-12 mb-3 text-muted-foreground" />
                       <p>Nessun messaggio</p>
                     </div>
                   ) : (
@@ -2684,7 +2684,7 @@ export default function InboxPage() {
                                   {format(new Date(message.gmail_internal_date || message.received_at || message.created_at), "EEe d MMM, HH:mm", { locale: it })}
                                 </span>
                                 <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
-                                  <Star className="h-4 w-4 text-gray-400" />
+                                  <Star className="h-4 w-4 text-muted-foreground" />
                                 </Button>
                               </div>
                             </div>
@@ -2719,7 +2719,7 @@ export default function InboxPage() {
                             value={replyTo}
                             onChange={(e) => setReplyTo(e.target.value)}
                             placeholder="Destinatari (separati da virgola)"
-                            className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                            className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
                           />
                           <div className="flex items-center gap-1 text-xs">
                             {!showCcField && (
@@ -2753,7 +2753,7 @@ export default function InboxPage() {
                               value={replyCc}
                               onChange={(e) => setReplyCc(e.target.value)}
                               placeholder="Cc (separati da virgola)"
-                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
                             />
                             <button
                               type="button"
@@ -2761,7 +2761,7 @@ export default function InboxPage() {
                                 setShowCcField(false)
                                 setReplyCc("")
                               }}
-                              className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                              className="text-muted-foreground hover:text-gray-600 text-xs px-1"
                               aria-label="Rimuovi Cc"
                             >
                               ×
@@ -2779,7 +2779,7 @@ export default function InboxPage() {
                               value={replyBcc}
                               onChange={(e) => setReplyBcc(e.target.value)}
                               placeholder="Ccn (separati da virgola)"
-                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
                             />
                             <button
                               type="button"
@@ -2787,7 +2787,7 @@ export default function InboxPage() {
                                 setShowBccField(false)
                                 setReplyBcc("")
                               }}
-                              className="text-gray-400 hover:text-gray-600 text-xs px-1"
+                              className="text-muted-foreground hover:text-gray-600 text-xs px-1"
                               aria-label="Rimuovi Ccn"
                             >
                               ×
@@ -2805,7 +2805,7 @@ export default function InboxPage() {
                               value={forwardSubject}
                               onChange={(e) => setForwardSubject(e.target.value)}
                               placeholder="Oggetto"
-                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-400"
+                              className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
                             />
                           </div>
                         )}
@@ -2863,9 +2863,9 @@ export default function InboxPage() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72 max-h-80 overflow-y-auto">
         {cannedLoading ? (
-          <div className="px-3 py-4 text-center text-sm text-gray-400">Caricamento…</div>
+          <div className="px-3 py-4 text-center text-sm text-muted-foreground">Caricamento…</div>
         ) : cannedResponses.length === 0 ? (
-          <div className="px-3 py-4 text-center text-sm text-gray-400">Nessuna risposta salvata</div>
+          <div className="px-3 py-4 text-center text-sm text-muted-foreground">Nessuna risposta salvata</div>
         ) : (
           cannedResponses.map((r) => (
             <div key={r.id} className="group flex items-start gap-1 px-2 py-1.5 hover:bg-gray-50 rounded-sm">
@@ -2885,7 +2885,7 @@ export default function InboxPage() {
               {r.is_owner && (
                 <button
                   type="button"
-                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-600"
+                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-600"
                   title="Elimina"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -2971,10 +2971,10 @@ export default function InboxPage() {
             ) : (
               inboxMode === "gmail" ? (
                 gmailLoading ? (
-                  <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                  <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
                 ) : gmailThreads.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                    <Inbox className="h-10 w-10 mb-3 text-gray-300" />
+                  <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                    <Inbox className="h-10 w-10 mb-3 text-muted-foreground" />
                     <p className="text-sm">Nessun messaggio</p>
                   </div>
                 ) : (
@@ -2998,7 +2998,7 @@ export default function InboxPage() {
                         className="h-7 w-7 [&_svg]:size-5 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
                       />
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
-                        <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
+                        <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-muted-foreground"}`} />
                       </button>
                       <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[160px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
                         {thread.from.name || thread.from.email.split("@")[0]}
@@ -3009,7 +3009,7 @@ export default function InboxPage() {
                           {thread.subject || "(nessun oggetto)"}
                         </span>
                         {thread.snippet && (
-                          <span className="text-gray-400">{" \u2014 "}{thread.snippet}</span>
+                          <span className="text-muted-foreground">{" \u2014 "}{thread.snippet}</span>
                         )}
                       </span>
                       {thread.messagesCount > 1 && (
@@ -3024,10 +3024,10 @@ export default function InboxPage() {
               )
             ) : (
               isLoading ? (
-                <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+                <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : conversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-gray-400">
-                  <Inbox className="h-10 w-10 mb-3 text-gray-300" />
+                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                  <Inbox className="h-10 w-10 mb-3 text-muted-foreground" />
                   <p className="text-sm">Nessun messaggio da gestire</p>
                 </div>
               ) : (
@@ -3051,7 +3051,7 @@ export default function InboxPage() {
                         className="h-7 w-7 [&_svg]:size-5 flex-shrink-0"
                       />
                       <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
-                        <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-gray-300 group-hover:text-gray-400"}`} />
+                        <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-muted-foreground"}`} />
                       </button>
                       {(() => {
                         const cfg = channelConfig[conv.channel as keyof typeof channelConfig] || channelConfig.email
@@ -3111,7 +3111,7 @@ export default function InboxPage() {
                           {conv.subject || "(nessun oggetto)"}
                         </span>
                         {conv.last_message?.preview && (
-                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">
+                          <span className="text-[13px] text-muted-foreground truncate hidden sm:block">
                             {" - "}
                             {conv.last_message.preview}
                           </span>

@@ -50,7 +50,7 @@ interface Todo {
 }
 
 const STATUS_CONFIG: Record<TodoStatus, { label: string; icon: typeof Circle; color: string }> = {
-  open:        { label: "Da fare",     icon: Circle,       color: "text-gray-400"  },
+  open:        { label: "Da fare",     icon: Circle,       color: "text-muted-foreground"  },
   in_progress: { label: "In corso",   icon: Clock,        color: "text-blue-500"  },
   done:        { label: "Completato", icon: CheckCircle2, color: "text-green-500" },
   cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-red-400"   },
@@ -333,7 +333,7 @@ export default function TodosPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="unassigned">
-                      <span className="flex items-center gap-2 text-gray-400">
+                      <span className="flex items-center gap-2 text-muted-foreground">
                         <User className="w-3.5 h-3.5" />
                         Non assegnato
                       </span>
@@ -382,7 +382,7 @@ export default function TodosPage() {
                   <span className="flex items-center gap-1.5 text-sm text-gray-700 font-medium group-hover:text-gray-900">
                     <Wrench className="w-3.5 h-3.5 text-ha-brand" />
                     Invia a Manubot
-                    <span className="text-xs text-gray-400 font-normal">(crea intervento di manutenzione)</span>
+                    <span className="text-xs text-muted-foreground font-normal">(crea intervento di manutenzione)</span>
                   </span>
                 </label>
 
@@ -403,7 +403,7 @@ export default function TodosPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">
-                            <span className="text-gray-400">Nessun tecnico</span>
+                            <span className="text-muted-foreground">Nessun tecnico</span>
                           </SelectItem>
                           {manubotTeam.map(m => (
                             <SelectItem key={m.id} value={m.id}>
@@ -431,13 +431,13 @@ export default function TodosPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">
-                            <span className="text-gray-400">Nessun impianto</span>
+                            <span className="text-muted-foreground">Nessun impianto</span>
                           </SelectItem>
                           {manubotAssets.map(a => (
                             <SelectItem key={a.id} value={a.id}>
                               <span className="flex flex-col">
                                 <span>{a.name}</span>
-                                {a.location && <span className="text-xs text-gray-400">{a.location}</span>}
+                                {a.location && <span className="text-xs text-muted-foreground">{a.location}</span>}
                               </span>
                             </SelectItem>
                           ))}
@@ -470,7 +470,7 @@ export default function TodosPage() {
         {/* Filter bar */}
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
             {(["all", "open", "in_progress", "done", "cancelled"] as const).map(s => (
               <button
                 key={s}
@@ -487,7 +487,7 @@ export default function TodosPage() {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-gray-400" />
+              <Users className="w-4 h-4 text-muted-foreground" />
               <Select value={filterAssignee} onValueChange={setFilterAssignee}>
                 <SelectTrigger className="h-7 text-xs border-gray-200 w-36">
                   <SelectValue placeholder="Tutti" />
@@ -502,7 +502,7 @@ export default function TodosPage() {
             </div>
             <button
               onClick={loadTodos}
-              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-gray-600 transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             </button>
@@ -517,7 +517,7 @@ export default function TodosPage() {
         ) : todos.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-16 text-center">
             <CheckCircle2 className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-muted-foreground">
               {filterStatus === "all" && filterAssignee === "all"
                 ? "Nessun task. Crea il primo."
                 : "Nessun task con questo filtro."}
@@ -551,7 +551,7 @@ export default function TodosPage() {
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <button
                         onClick={() => openEdit(todo)}
-                        className={`text-sm font-medium text-left hover:text-ha-brand transition-colors ${isDone ? "line-through text-gray-400" : "text-gray-800"}`}
+                        className={`text-sm font-medium text-left hover:text-ha-brand transition-colors ${isDone ? "line-through text-muted-foreground" : "text-gray-800"}`}
                       >
                         {todo.title}
                       </button>
@@ -560,7 +560,7 @@ export default function TodosPage() {
                       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         {todo.external_url && (
                           <a href={todo.external_url} target="_blank" rel="noopener noreferrer"
-                            className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                            className="p-1.5 hover:bg-gray-100 rounded text-muted-foreground hover:text-gray-600"
                             title="Apri in Manubot"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -568,14 +568,14 @@ export default function TodosPage() {
                         )}
                         <button
                           onClick={() => openEdit(todo)}
-                          className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600"
+                          className="p-1.5 hover:bg-gray-100 rounded text-muted-foreground hover:text-gray-600"
                           title="Modifica"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => deleteTodo(todo.id)}
-                          className="p-1.5 hover:bg-red-50 rounded text-gray-400 hover:text-red-500"
+                          className="p-1.5 hover:bg-red-50 rounded text-muted-foreground hover:text-red-500"
                           title="Elimina"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -584,7 +584,7 @@ export default function TodosPage() {
                     </div>
 
                     {todo.description && (
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">{todo.description}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{todo.description}</p>
                     )}
 
                     {/* Footer row */}
@@ -602,7 +602,7 @@ export default function TodosPage() {
                           value={todo.status}
                           onValueChange={(v) => updateStatus(todo, v as TodoStatus)}
                         >
-                          <SelectTrigger className="h-5 text-xs border-0 shadow-none p-0 w-auto gap-1 text-gray-400 hover:text-gray-600 focus:ring-0">
+                          <SelectTrigger className="h-5 text-xs border-0 shadow-none p-0 w-auto gap-1 text-muted-foreground hover:text-gray-600 focus:ring-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -621,7 +621,7 @@ export default function TodosPage() {
                           {assigneeName}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-gray-300">
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                           <User className="w-3 h-3" />
                           Non assegnato
                         </span>

@@ -316,7 +316,7 @@ export default function AdminPhotosPage() {
               </div>
               <div className="p-3 bg-white space-y-2">
                 <p className="text-sm font-medium text-gray-900 truncate" title={photo.alt || "Senza titolo"}>
-                  {photo.alt || <span className="text-gray-400 italic">Senza titolo</span>}
+                  {photo.alt || <span className="text-muted-foreground italic">Senza titolo</span>}
                 </p>
                 {photo.categories && photo.categories.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
@@ -330,7 +330,7 @@ export default function AdminPhotosPage() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 italic">Nessuna categoria</p>
+                  <p className="text-xs text-muted-foreground italic">Nessuna categoria</p>
                 )}
               </div>
             </Card>
@@ -339,7 +339,7 @@ export default function AdminPhotosPage() {
 
         {photos.length === 0 && (
           <div className="text-center py-12">
-            <ImageIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+            <ImageIcon className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
             <p className="text-gray-600 mb-4">Nessuna foto trovata</p>
             <Button onClick={() => router.push("/admin/gallery")} variant="default">
               Carica Prima Foto

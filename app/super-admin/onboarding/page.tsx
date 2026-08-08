@@ -356,7 +356,7 @@ export default function OnboardingPage() {
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Globe className="w-5 h-5 text-neutral-400" />
+                    <Globe className="w-5 h-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">CMS</p>
                       <p className="text-sm text-neutral-500">Gestione pagine e contenuti</p>
@@ -370,7 +370,7 @@ export default function OnboardingPage() {
 
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Mail className="w-5 h-5 text-neutral-400" />
+                    <Mail className="w-5 h-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">Inbox Omnichannel</p>
                       <p className="text-sm text-neutral-500">Email, WhatsApp, Chat, Telegram</p>
@@ -384,7 +384,7 @@ export default function OnboardingPage() {
 
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-3">
-                    <Zap className="w-5 h-5 text-neutral-400" />
+                    <Zap className="w-5 h-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">AI Assistant</p>
                       <p className="text-sm text-neutral-500">Risposte automatiche e suggerimenti</p>
@@ -400,15 +400,15 @@ export default function OnboardingPage() {
                 <div className="mt-6 p-4 bg-neutral-900 text-white rounded-lg">
                   <h4 className="font-semibold mb-3">Riepilogo</h4>
                   <dl className="grid grid-cols-2 gap-2 text-sm">
-                    <dt className="text-neutral-400">Nome:</dt>
+                    <dt className="text-muted-foreground">Nome:</dt>
                     <dd>{form.name}</dd>
-                    <dt className="text-neutral-400">Slug:</dt>
+                    <dt className="text-muted-foreground">Slug:</dt>
                     <dd>{form.slug}</dd>
-                    <dt className="text-neutral-400">Piano:</dt>
+                    <dt className="text-muted-foreground">Piano:</dt>
                     <dd className="capitalize">{form.plan}</dd>
-                    <dt className="text-neutral-400">Trial:</dt>
+                    <dt className="text-muted-foreground">Trial:</dt>
                     <dd>{form.trialDays} giorni</dd>
-                    <dt className="text-neutral-400">Admin:</dt>
+                    <dt className="text-muted-foreground">Admin:</dt>
                     <dd>{form.adminEmail}</dd>
                   </dl>
                 </div>

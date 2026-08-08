@@ -450,7 +450,7 @@ export default function ChatChannelPage() {
                         }}
                         className="data-[state=checked]:bg-green-500 scale-125"
                       />
-                      <span className={`text-lg font-medium ${config?.is_active ? "text-green-600" : "text-gray-400"}`}>
+                      <span className={`text-lg font-medium ${config?.is_active ? "text-green-600" : "text-muted-foreground"}`}>
                         {config?.is_active ? "ATTIVO" : "SPENTO"}
                       </span>
                     </div>
