@@ -36,6 +36,42 @@ export function isMachineSender(email: string | null | undefined): boolean {
 }
 
 /**
+ * Additional local parts that are not worth chasing for a reply.
+ *
+ * DELIBERATELY SEPARATE from `MACHINE_LOCAL_PART_PATTERN`, and used ONLY by the
+ * Inbox "waiting for a reply" badge — never by CRM capture.
+ *
+ * The reason is measured, not assumed: adding these tokens to the CRM pattern
+ * reclassified 91 of 832 existing contacts as machines, among them
+ * `support@bokun.io` ("The Bókun Team") and `marketing@mintsd.com` — real
+ * people at supplier companies who would have stopped being contacts. Losing
+ * a CRM contact is far worse than an extra badge, so the two questions are kept
+ * apart: "may this become a contact?" and "is someone waiting for us?".
+ *
+ * Being on this list only suppresses a timer. The conversation, the sender and
+ * the contact are all unaffected.
+ */
+const NO_REPLY_EXPECTED_PATTERN =
+  "(^|[._+-])(reservation|reservations|prenotazioni|conferma-?ordine|conferma-?ordini|conferme|ordini|delivery|spedizione|spedizioni|tracking|receipt|ricevuta|billing|invoice|invoices|fatturazione)([._+-]|$)"
+
+const NO_REPLY_EXPECTED_REGEX = new RegExp(NO_REPLY_EXPECTED_PATTERN)
+
+/**
+ * True when nobody is realistically waiting for us to answer this address:
+ * either a machine sender, or a transactional mailbox (order confirmations,
+ * booking receipts, shipping notices).
+ *
+ * Used for display only.
+ */
+export function isNoReplyExpected(email: string | null | undefined): boolean {
+  if (isMachineSender(email)) return true
+  const normalized = (email || "").trim().toLowerCase()
+  const at = normalized.indexOf("@")
+  if (at < 1 || at === normalized.length - 1) return false
+  return NO_REPLY_EXPECTED_REGEX.test(normalized.slice(0, at))
+}
+
+/**
  * Display label for a conversation whose sender has no CRM contact.
  * Falls back to the address, then to the local part, then to a neutral string,
  * so the Inbox never renders an empty row.

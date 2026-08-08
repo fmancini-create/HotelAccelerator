@@ -168,6 +168,12 @@ interface Conversation {
     preview: string
     sender_type: string
     created_at: string
+    /**
+     * From address of the message, resolved server-side. Must be declared here
+     * or it silently reads as undefined - the same trap that kept `preview`
+     * from ever rendering when this type said `lastMessage`.
+     */
+    from_address?: string | null
   } | null
   origin?: {
     type: string
@@ -3125,7 +3131,12 @@ export default function InboxPage() {
                           const waiting = formatWaitingSince(
                             conv.last_message,
                             undefined,
-                            conv.contact?.email ?? conv.contact_email,
+                            // `from_address` last: a few conversations carry no
+                            // contact email at all (3 of 6876 here, Scidoo's
+                            // booking mail among them), and there the machine-
+                            // sender check had nothing to judge, so the badge
+                            // appeared on reservation@scidoo.com.
+                            conv.contact?.email ?? conv.contact_email ?? conv.last_message?.from_address,
                           )
                           return waiting ? (
                             <span className="text-[10px] text-amber-600" title={`In attesa di risposta da ${waiting}`}>

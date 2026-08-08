@@ -1,5 +1,58 @@
 import { describe, it, expect } from "vitest"
-import { htmlToPreview } from "../html-to-preview"
+import { buildPreview, htmlToPreview } from "../html-to-preview"
+
+describe("buildPreview", () => {
+  it("drops a leading Subject: header carried inside the body", () => {
+    // Shape of a real Scidoo booking mail. The row read `Morin Deborah this is
+    // your booking confirmation - Subject: ✅ Your booking is confirmed – Villa
+    // I Barronci…`, repeating a subject the list already prints in its own
+    // column.
+    const body =
+      "<div>Subject: ✅ Your booking is confirmed – Villa I Barronci<br>Dear Deborah, your stay is set.</div>"
+    expect(buildPreview(body, "Morin Deborah this is your booking confirmation")).toBe(
+      "Dear Deborah, your stay is set.",
+    )
+  })
+
+  it("does not touch a Subject: that appears mid-sentence", () => {
+    const body = "<p>Ho riletto la mail. Subject: era sbagliato, lo correggo.</p>"
+    expect(buildPreview(body, "Domanda")).toBe("Ho riletto la mail. Subject: era sbagliato, lo correggo.")
+  })
+
+  it("removes a subject the body repeats, keeping what comes after", () => {
+    // Amazon: subject and first body line are identical, so the row printed the
+    // same sentence twice and said nothing new.
+    const subject = "Ordinato: “Mastro Lindo Gomma Magica,...”"
+    const body = `<p>${subject} I tuoi ordini Grazie per l’ordine.</p>`
+    expect(buildPreview(body, subject)).toBe("I tuoi ordini Grazie per l’ordine.")
+  })
+
+  it("matches the subject through curly quotes and loose spacing", () => {
+    expect(buildPreview("<p>Ordinato:  “Cosa”   —  dettagli</p>", 'Ordinato: "Cosa"')).toBe("dettagli")
+  })
+
+  it("returns nothing when the body only repeats the subject", () => {
+    // An empty preview is honest; a duplicated one is noise.
+    expect(buildPreview("<p>Verifica del pagamento richiesta</p>", "Verifica del pagamento richiesta")).toBe("")
+  })
+
+  it("keeps a subject quoted further down, which is usually real prose", () => {
+    const body = "<p>Come da accordi, ti confermo: Ordine spedito. Buona giornata.</p>"
+    expect(buildPreview(body, "Ordine spedito")).toBe("Come da accordi, ti confermo: Ordine spedito. Buona giornata.")
+  })
+
+  it("caps AFTER removing the repeated subject, not before", () => {
+    // Capping first would leave almost nothing once the subject was stripped.
+    const subject = "A".repeat(30)
+    const body = `<p>${subject} ${"b".repeat(60)}</p>`
+    expect(buildPreview(body, subject, 40)).toBe("b".repeat(40))
+  })
+
+  it("survives a missing subject or body", () => {
+    expect(buildPreview("<p>Ciao</p>", null)).toBe("Ciao")
+    expect(buildPreview(null, "Oggetto")).toBe("")
+  })
+})
 
 describe("htmlToPreview", () => {
   it("removes the exact markup that leaked into the list", () => {

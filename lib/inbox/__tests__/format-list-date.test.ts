@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { formatInboxTimestamp, formatInboxTimestampFull, formatWaitingSince } from "../format-list-date"
+import { isMachineSender } from "../../crm/machine-sender"
 
 // The reference is the Gmail screenshot taken at 23:13 on 08/08/2026, side by
 // side with our Inbox. Every expected value below is what Gmail itself printed
@@ -110,13 +111,31 @@ describe("formatWaitingSince", () => {
     expect(formatWaitingSince(inbound, NOW, "noreply@santaddeo.com")).toBeNull()
   })
 
-  it("documents the senders the shared rule does NOT cover", () => {
-    // `conferma-ordine@amazon.it` is plainly automated, but the CRM rule is
-    // deliberately narrow and does not match it, so the wait still shows.
-    // Widening the rule from here would silently change who gets captured as a
-    // contact in production, which is not this change's business.
+  it("silences transactional mailboxes without touching who becomes a contact", () => {
+    // These two were still showing a red timer on screen: `conferma-ordine@`
+    // and `reservation@` are plainly automated but are NOT machine senders by
+    // the CRM rule, and Scidoo's conversation carries no contact email at all.
+    //
+    // Folding these tokens into the CRM rule was tried and reverted: it
+    // reclassified 91 of 832 existing contacts as machines, including real
+    // people such as support@bokun.io. The badge now uses its own, wider rule.
     const inbound = { sender_type: "customer", created_at: "2026-08-08T20:13:00+02:00" }
-    expect(formatWaitingSince(inbound, NOW, "conferma-ordine@amazon.it")).toBe("3 ore")
+    expect(formatWaitingSince(inbound, NOW, "conferma-ordine@amazon.it")).toBeNull()
+    expect(formatWaitingSince(inbound, NOW, "reservation@scidoo.com")).toBeNull()
+
+    // The CRM side must be unchanged: these addresses stay eligible contacts.
+    expect(isMachineSender("conferma-ordine@amazon.it")).toBe(false)
+    expect(isMachineSender("reservation@scidoo.com")).toBe(false)
+    expect(isMachineSender("support@bokun.io")).toBe(false)
+    expect(isMachineSender("marketing@mintsd.com")).toBe(false)
+  })
+
+  it("matches whole tokens only, never a substring of someone's name", () => {
+    const inbound = { sender_type: "customer", created_at: "2026-08-08T20:13:00+02:00" }
+    expect(formatWaitingSince(inbound, NOW, "preservation-society@example.com")).toBe("3 ore")
+    expect(formatWaitingSince(inbound, NOW, "mariabooking@gmail.com")).toBe("3 ore")
+    // A supplier's support desk is a person and must keep its timer.
+    expect(formatWaitingSince(inbound, NOW, "support@bokun.io")).toBe("3 ore")
   })
 
   it("still reports the wait for a real person", () => {

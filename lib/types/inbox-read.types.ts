@@ -33,6 +33,11 @@ export interface MessageSummary {
   preview: string
   sender_type: "customer" | "agent" | "staff" | "system"
   created_at: string
+  /**
+   * Address the message came from, read from its From header. A fallback for
+   * the few conversations whose denormalised `contact_email` is null.
+   */
+  from_address?: string | null
 }
 
 export interface IntelligenceSummary {

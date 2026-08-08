@@ -1,6 +1,6 @@
 import { format, formatDistanceStrict, isSameDay, isSameYear } from "date-fns"
 import { it } from "date-fns/locale"
-import { isMachineSender } from "../crm/machine-sender"
+import { isNoReplyExpected } from "../crm/machine-sender"
 
 /** Gmail keeps showing a clock time for a full 24 hours, not until midnight. */
 const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000
@@ -65,7 +65,11 @@ export function formatWaitingSince(
 ): string | null {
   if (!lastMessage?.created_at) return null
   if (lastMessage.sender_type !== "customer") return null
-  if (isMachineSender(senderEmail)) return null
+  // Wider than the CRM rule on purpose. Adding transactional mailboxes such as
+  // reservation@scidoo.com to `isMachineSender` would have reclassified 91 of
+  // 832 existing CRM contacts (measured), including real people at supplier
+  // companies. `isNoReplyExpected` only suppresses this badge.
+  if (isNoReplyExpected(senderEmail)) return null
 
   const date = new Date(lastMessage.created_at)
   if (Number.isNaN(date.getTime())) return null
