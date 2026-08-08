@@ -2988,7 +2988,7 @@ export default function InboxPage() {
                           ? "bg-[#d3e3fd]"
                           : thread.isUnread
                             ? "bg-white hover:bg-[#f2f6fc]"
-                            : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
+                            : "bg-muted hover:bg-border"
                       }`}
                     >
                       <Checkbox
@@ -3041,7 +3041,7 @@ export default function InboxPage() {
                           ? "bg-[#d3e3fd]"
                           : conv.unread_count > 0
                             ? "bg-white hover:bg-[#f2f6fc]"
-                            : "bg-[#f2f2f2] hover:bg-[#e8eaed]"
+                            : "bg-muted hover:bg-border"
                       }`}
                     >
                       <Checkbox

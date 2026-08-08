@@ -126,14 +126,14 @@ export default function CategoriesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8f5f0]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#8a7355]"></div>
+      <div className="min-h-screen flex items-center justify-center bg-muted">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title="Categorie"
@@ -150,11 +150,11 @@ export default function CategoriesPage() {
         <main>
           {/* Actions */}
           <div className="flex justify-between items-center mb-6">
-            <p className="text-[#6b6b6b]">{categories.length} categorie configurate</p>
+            <p className="text-muted-foreground">{categories.length} categorie configurate</p>
           </div>
 
           {/* Categories Table */}
-          <div className="bg-white rounded-lg border border-[#e5e0d8] overflow-hidden">
+          <div className="bg-white rounded-lg border border-border overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -170,19 +170,19 @@ export default function CategoriesPage() {
                   <TableRow key={category.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        <FolderPlus className="h-4 w-4 text-[#8a7355]" />
+                        <FolderPlus className="h-4 w-4 text-ha-brand" />
                         {category.label}
                         {category.isCustom && (
-                          <span className="text-xs bg-[#8a7355]/10 text-[#8a7355] px-2 py-0.5 rounded">Custom</span>
+                          <span className="text-xs bg-ha-brand/10 text-ha-brand px-2 py-0.5 rounded">Custom</span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-[#6b6b6b] font-mono text-sm">{category.value}</TableCell>
-                    <TableCell className="text-[#6b6b6b] font-mono text-sm">{category.path}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-sm">{category.value}</TableCell>
+                    <TableCell className="text-muted-foreground font-mono text-sm">{category.path}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {category.pages.map((page) => (
-                          <span key={page} className="text-xs bg-[#f8f5f0] text-[#6b6b6b] px-2 py-0.5 rounded">
+                          <span key={page} className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
                             {SITE_PAGES.find((p) => p.value === page)?.label || page}
                           </span>
                         ))}
@@ -212,9 +212,9 @@ export default function CategoriesPage() {
           </div>
 
           {/* Info Box */}
-          <div className="mt-6 p-4 bg-[#8a7355]/10 rounded-lg">
-            <h3 className="font-medium text-[#2c2c2c] mb-2">Come funziona</h3>
-            <ul className="text-sm text-[#6b6b6b] space-y-1">
+          <div className="mt-6 p-4 bg-ha-brand/10 rounded-lg">
+            <h3 className="font-medium text-foreground mb-2">Come funziona</h3>
+            <ul className="text-sm text-muted-foreground space-y-1">
               <li>- Le categorie definiscono come le foto sono organizzate nel sito</li>
               <li>- Il "Path" indica la cartella dove vengono salvate le foto</li>
               <li>- Le "Pagine" determinano in quali sezioni del sito verranno mostrate le foto</li>
@@ -295,7 +295,7 @@ export default function CategoriesPage() {
               <Button
                 onClick={handleAddCategory}
                 disabled={!newLabel || !newValue}
-                className="bg-[#8a7355] hover:bg-[#6b5a43]"
+                className="bg-ha-brand hover:bg-ha-brand/90"
               >
                 Crea Categoria
               </Button>
@@ -321,7 +321,7 @@ export default function CategoriesPage() {
                 <Label>Slug (identificativo)</Label>
                 <Input value={newValue} disabled={!selectedCategory?.isCustom} className="font-mono bg-gray-50" />
                 {!selectedCategory?.isCustom && (
-                  <p className="text-xs text-[#6b6b6b]">
+                  <p className="text-xs text-muted-foreground">
                     Lo slug delle categorie predefinite non può essere modificato
                   </p>
                 )}
@@ -358,7 +358,7 @@ export default function CategoriesPage() {
               >
                 Annulla
               </Button>
-              <Button onClick={handleEditCategory} disabled={!newLabel} className="bg-[#8a7355] hover:bg-[#6b5a43]">
+              <Button onClick={handleEditCategory} disabled={!newLabel} className="bg-ha-brand hover:bg-ha-brand/90">
                 Salva Modifiche
               </Button>
             </DialogFooter>

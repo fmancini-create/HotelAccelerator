@@ -86,7 +86,7 @@ function Avatar({ name, size = "sm" }: { name?: string; size?: "sm" | "md" }) {
   if (!name) return null
   const s = size === "sm" ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"
   return (
-    <span className={`${s} rounded-full bg-[#e8ddd0] text-[#8b7355] flex items-center justify-center font-semibold flex-shrink-0`}>
+    <span className={`${s} rounded-full bg-border text-ha-brand flex items-center justify-center font-semibold flex-shrink-0`}>
       {name.charAt(0).toUpperCase()}
     </span>
   )
@@ -240,8 +240,8 @@ export default function TodosPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#8b7355]" />
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ha-brand" />
       </div>
     )
   }
@@ -255,14 +255,14 @@ export default function TodosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       <AdminHeader
         title="Task & To-Do"
         subtitle="Gestisci attività e deleghe al team"
         actions={
           <Button
             onClick={() => { resetForm(); setShowForm(true) }}
-            className="bg-[#8b7355] hover:bg-[#7a6548] text-white h-8 px-3 text-sm gap-1.5"
+            className="bg-ha-brand hover:bg-ha-brand/90 text-white h-8 px-3 text-sm gap-1.5"
           >
             <Plus className="w-4 h-4" />
             Nuovo task
@@ -372,7 +372,7 @@ export default function TodosPage() {
                   <div
                     onClick={() => setForm(f => ({ ...f, send_to_manubot: !f.send_to_manubot }))}
                     className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${
-                      form.send_to_manubot ? "bg-[#8b7355]" : "bg-gray-200"
+                      form.send_to_manubot ? "bg-ha-brand" : "bg-gray-200"
                     }`}
                   >
                     <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
@@ -380,7 +380,7 @@ export default function TodosPage() {
                     }`} />
                   </div>
                   <span className="flex items-center gap-1.5 text-sm text-gray-700 font-medium group-hover:text-gray-900">
-                    <Wrench className="w-3.5 h-3.5 text-[#8b7355]" />
+                    <Wrench className="w-3.5 h-3.5 text-ha-brand" />
                     Invia a Manubot
                     <span className="text-xs text-gray-400 font-normal">(crea intervento di manutenzione)</span>
                   </span>
@@ -458,7 +458,7 @@ export default function TodosPage() {
                   type="submit"
                   size="sm"
                   disabled={submitting}
-                  className="bg-[#8b7355] hover:bg-[#7a6548] text-white"
+                  className="bg-ha-brand hover:bg-ha-brand/90 text-white"
                 >
                   {submitting ? "Salvataggio..." : editingTodo ? "Salva modifiche" : form.send_to_manubot ? "Crea e invia a Manubot" : "Crea task"}
                 </Button>
@@ -477,8 +477,8 @@ export default function TodosPage() {
                 onClick={() => setFilterStatus(s)}
                 className={`text-xs px-3 py-1 rounded-full transition-colors ${
                   filterStatus === s
-                    ? "bg-[#8b7355] text-white"
-                    : "bg-white text-gray-500 border border-gray-200 hover:border-[#8b7355] hover:text-[#8b7355]"
+                    ? "bg-ha-brand text-white"
+                    : "bg-white text-gray-500 border border-gray-200 hover:border-ha-brand hover:text-ha-brand"
                 }`}
               >
                 {s === "all" ? "Tutti" : STATUS_CONFIG[s].label}
@@ -512,7 +512,7 @@ export default function TodosPage() {
         {/* Todo list */}
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#8b7355]" />
+            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ha-brand" />
           </div>
         ) : todos.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-16 text-center">
@@ -535,7 +535,7 @@ export default function TodosPage() {
               return (
                 <div
                   key={todo.id}
-                  className={`bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-start gap-3 group hover:border-[#c8b99a] transition-all ${isDone ? "opacity-55" : ""}`}
+                  className={`bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-start gap-3 group hover:border-ha-brand/40 transition-all ${isDone ? "opacity-55" : ""}`}
                 >
                   {/* Status toggle */}
                   <button
@@ -551,7 +551,7 @@ export default function TodosPage() {
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <button
                         onClick={() => openEdit(todo)}
-                        className={`text-sm font-medium text-left hover:text-[#8b7355] transition-colors ${isDone ? "line-through text-gray-400" : "text-gray-800"}`}
+                        className={`text-sm font-medium text-left hover:text-ha-brand transition-colors ${isDone ? "line-through text-gray-400" : "text-gray-800"}`}
                       >
                         {todo.title}
                       </button>

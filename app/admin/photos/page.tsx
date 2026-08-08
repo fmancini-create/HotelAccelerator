@@ -264,7 +264,7 @@ export default function AdminPhotosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" multiple className="hidden" />
 
       <AdminHeader
@@ -272,7 +272,7 @@ export default function AdminPhotosPage() {
         subtitle="Carica, elimina e organizza le foto"
         actions={
           <Button
-            className="bg-[#8b7355] hover:bg-[#6d5a43] text-white"
+            className="bg-ha-brand hover:bg-ha-brand/90 text-white"
             onClick={handleUploadClick}
             disabled={isUploading || !adminUser?.can_upload}
           >

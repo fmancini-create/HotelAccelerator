@@ -183,15 +183,15 @@ export default function PlatformCollaboratorsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
-        <p className="text-[#8b8b8b]">Loading collaborators...</p>
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <p className="text-muted-foreground">Loading collaborators...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error}</p>
           <Button onClick={fetchCollaborators}>Retry</Button>
@@ -201,16 +201,16 @@ export default function PlatformCollaboratorsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       {/* Header */}
-      <header className="bg-white border-b border-[#e5e5e5]">
+      <header className="bg-white border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <Users className="w-6 h-6 text-[#8b7355]" />
-              <h1 className="text-xl font-serif text-[#5c5c5c]">Platform Collaborators</h1>
+              <Users className="w-6 h-6 text-ha-brand" />
+              <h1 className="text-xl font-serif text-muted-foreground">Platform Collaborators</h1>
             </div>
-            <Button onClick={handleOpenAddModal} className="bg-[#8b7355] hover:bg-[#6d5940] text-white">
+            <Button onClick={handleOpenAddModal} className="bg-ha-brand hover:bg-ha-brand/90 text-white">
               <UserPlus className="w-4 h-4 mr-2" />
               Add Collaborator
             </Button>
@@ -221,39 +221,39 @@ export default function PlatformCollaboratorsPage() {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Table */}
-        <div className="bg-white rounded-xl border border-[#e5e5e5] overflow-hidden">
+        <div className="bg-white rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-[#f8f7f4] border-b border-[#e5e5e5]">
+              <thead className="bg-muted border-b border-border">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Email
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Role
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Last Login
                   </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-[#e5e5e5]">
+              <tbody className="bg-white divide-y divide-border">
                 {collaborators.map((collaborator) => (
                   <tr key={collaborator.id} className={collaborator.status === "suspended" ? "opacity-50" : ""}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-[#5c5c5c]">{collaborator.name}</div>
+                      <div className="text-sm font-medium text-muted-foreground">{collaborator.name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-[#8b8b8b]">{collaborator.email}</div>
+                      <div className="text-sm text-muted-foreground">{collaborator.email}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge variant={getRoleBadgeVariant(collaborator.role)}>{collaborator.role}</Badge>
@@ -261,7 +261,7 @@ export default function PlatformCollaboratorsPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge variant={getStatusBadgeVariant(collaborator.status)}>{collaborator.status}</Badge>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-[#8b8b8b]">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                       {formatDate(collaborator.last_login)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -360,7 +360,7 @@ export default function PlatformCollaboratorsPage() {
             <Button variant="outline" onClick={handleCloseModal} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} className="bg-[#8b7355] hover:bg-[#6d5940]" disabled={saving}>
+            <Button onClick={handleSave} className="bg-ha-brand hover:bg-ha-brand/90" disabled={saving}>
               {saving ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>

@@ -303,13 +303,13 @@ export function PlatformHeader() {
   // no authenticated navigation, tenant switcher or user menu are exposed.
   if (onAuthPage) {
     return (
-      <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">
+      <header className="flex-shrink-0 h-14 border-b border-border bg-white z-30">
         <div className="h-full flex items-center px-3 sm:px-4">
           <Link href="/admin" className="flex items-center gap-2" aria-label="HotelAccelerator">
             <div className="w-8 h-8 rounded-md bg-ha-brand flex items-center justify-center text-ha-brand-foreground font-semibold text-sm">
               HA
             </div>
-            <span className="font-semibold text-[#111827] text-sm">HotelAccelerator</span>
+            <span className="font-semibold text-foreground text-sm">HotelAccelerator</span>
           </Link>
         </div>
       </header>
@@ -317,18 +317,18 @@ export function PlatformHeader() {
   }
 
   return (
-    <header className="flex-shrink-0 h-14 border-b border-[#e5e7eb] bg-white z-30">
+    <header className="flex-shrink-0 h-14 border-b border-border bg-white z-30">
       <div className="h-full flex items-center gap-2 px-3 sm:px-4">
         {/* Logo / brand */}
         <Link
           href="/admin/dashboard"
-          className="flex items-center gap-2 flex-shrink-0 pr-2 sm:pr-4 border-r border-[#e5e7eb] h-full"
+          className="flex items-center gap-2 flex-shrink-0 pr-2 sm:pr-4 border-r border-border h-full"
           aria-label="Torna alla dashboard"
         >
           <div className="w-8 h-8 rounded-md bg-ha-brand flex items-center justify-center text-ha-brand-foreground font-semibold text-sm">
             HA
           </div>
-          <span className="hidden md:block font-semibold text-[#111827] text-sm">
+          <span className="hidden md:block font-semibold text-foreground text-sm">
             HotelAccelerator
           </span>
         </Link>
@@ -347,7 +347,7 @@ export function PlatformHeader() {
                   "flex items-center gap-1.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors",
                   active
                     ? "bg-ha-brand-soft text-ha-brand-soft-foreground"
-                    : "text-[#374151] hover:bg-[#f3f4f6]",
+                    : "text-foreground hover:bg-muted",
                 ].join(" ")}
               >
                 {dot && (
@@ -371,7 +371,7 @@ export function PlatformHeader() {
               size="sm"
               className={[
                 "h-9 text-[13px] font-medium gap-1",
-                moreHasActive ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-[#374151]",
+                moreHasActive ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-foreground",
               ].join(" ")}
               aria-label="Altre sezioni"
             >
@@ -383,7 +383,7 @@ export function PlatformHeader() {
           <DropdownMenuContent align="start" className="w-60">
             {/* On mobile, show primary nav items as well */}
             <div className="lg:hidden">
-              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-[#6b7280] font-medium">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
                 Principali
               </DropdownMenuLabel>
               {primaryNav.map((item) => {
@@ -415,7 +415,7 @@ export function PlatformHeader() {
               })}
               <DropdownMenuSeparator />
             </div>
-            <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-[#6b7280] font-medium">
+            <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
               Strumenti
             </DropdownMenuLabel>
             {moreNav.map((item) => {
@@ -458,13 +458,13 @@ export function PlatformHeader() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
-              className="flex items-center gap-2 h-9 px-1.5 rounded-md hover:bg-[#f3f4f6] transition-colors"
+              className="flex items-center gap-2 h-9 px-1.5 rounded-md hover:bg-muted transition-colors"
               aria-label="Menu utente"
             >
               <div className="w-7 h-7 rounded-full bg-ha-brand flex items-center justify-center text-ha-brand-foreground text-[11px] font-semibold">
                 {userInitials || "?"}
               </div>
-              <ChevronDown className="h-3 w-3 text-[#6b7280]" />
+              <ChevronDown className="h-3 w-3 text-muted-foreground" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
@@ -472,9 +472,9 @@ export function PlatformHeader() {
               <>
                 <div className="px-2 py-1.5">
                   {me.name && (
-                    <div className="text-sm font-medium text-[#111827] truncate">{me.name}</div>
+                    <div className="text-sm font-medium text-foreground truncate">{me.name}</div>
                   )}
-                  <div className="text-xs text-[#6b7280] truncate">{me.email}</div>
+                  <div className="text-xs text-muted-foreground truncate">{me.email}</div>
                   {me.role === "super_admin" && (
                     <div className="mt-1 inline-block px-1.5 py-0.5 rounded bg-ha-brand-soft text-ha-brand-soft-foreground text-[10px] font-medium">
                       Super Admin
@@ -499,7 +499,7 @@ export function PlatformHeader() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleSignOut}
-              className="flex items-center gap-2 cursor-pointer text-[#dc2626] focus:text-[#dc2626]"
+              className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
               disabled={signingOut}
             >
               <LogOut className="h-4 w-4" aria-hidden />

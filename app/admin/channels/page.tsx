@@ -292,8 +292,8 @@ export default function ChannelsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
-        <div className="animate-pulse text-[#8b7355]">Caricamento canali...</div>
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <div className="animate-pulse text-ha-brand">Caricamento canali...</div>
       </div>
     )
   }
@@ -303,7 +303,7 @@ export default function ChannelsPage() {
   const comingSoonCount = ALL_CHANNELS.filter((c) => c.comingSoon).length
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       {/* Admin Header */}
       <AdminHeader
         title="Canali di Comunicazione"
@@ -313,22 +313,22 @@ export default function ChannelsPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <Card className="bg-white border-[#e8e0d8]">
+          <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
-              <div className="text-3xl font-bold text-[#5c4a3a]">{activeCount}</div>
-              <div className="text-sm text-[#8b7355]">Canali Attivi</div>
+              <div className="text-3xl font-bold text-foreground">{activeCount}</div>
+              <div className="text-sm text-ha-brand">Canali Attivi</div>
             </CardContent>
           </Card>
-          <Card className="bg-white border-[#e8e0d8]">
+          <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
-              <div className="text-3xl font-bold text-[#5c4a3a]">{totalConnections}</div>
-              <div className="text-sm text-[#8b7355]">Connessioni Totali</div>
+              <div className="text-3xl font-bold text-foreground">{totalConnections}</div>
+              <div className="text-sm text-ha-brand">Connessioni Totali</div>
             </CardContent>
           </Card>
-          <Card className="bg-white border-[#e8e0d8]">
+          <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
-              <div className="text-3xl font-bold text-[#5c4a3a]">{comingSoonCount}</div>
-              <div className="text-sm text-[#8b7355]">In Arrivo</div>
+              <div className="text-3xl font-bold text-foreground">{comingSoonCount}</div>
+              <div className="text-sm text-ha-brand">In Arrivo</div>
             </CardContent>
           </Card>
         </div>
@@ -337,8 +337,8 @@ export default function ChannelsPage() {
         {CHANNEL_CATEGORIES.map((category) => (
           <div key={category.id} className="mb-8">
             <div className="mb-4">
-              <h2 className="text-xl font-medium text-[#5c4a3a]">{category.name}</h2>
-              <p className="text-sm text-[#8b7355]">{category.description}</p>
+              <h2 className="text-xl font-medium text-foreground">{category.name}</h2>
+              <p className="text-sm text-ha-brand">{category.description}</p>
             </div>
 
             <div className="space-y-3">
@@ -351,8 +351,8 @@ export default function ChannelsPage() {
                 return (
                   <Card
                     key={channel.id}
-                    className={`bg-white border-[#e8e0d8] transition-all duration-200 ${
-                      channel.comingSoon ? "opacity-60" : "hover:shadow-md hover:border-[#c9b99a]"
+                    className={`bg-white border-border transition-all duration-200 ${
+                      channel.comingSoon ? "opacity-60" : "hover:shadow-md hover:border-ha-brand/40"
                     }`}
                   >
                     <CardContent className="p-0">
@@ -367,10 +367,10 @@ export default function ChannelsPage() {
                         {/* Info */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3 mb-1">
-                            <h3 className="text-base font-medium text-[#5c4a3a]">{channel.name}</h3>
+                            <h3 className="text-base font-medium text-foreground">{channel.name}</h3>
                             {getStatusBadge(channel)}
                           </div>
-                          <p className="text-sm text-[#8b7355]">{channel.description}</p>
+                          <p className="text-sm text-ha-brand">{channel.description}</p>
                         </div>
 
                         {/* Actions */}
@@ -379,7 +379,7 @@ export default function ChannelsPage() {
                             <>
                               {isConfigured && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-[#8b7355]">{isEnabled ? "Attivo" : "Spento"}</span>
+                                  <span className="text-xs text-ha-brand">{isEnabled ? "Attivo" : "Spento"}</span>
                                   <Switch
                                     checked={isEnabled}
                                     disabled={!isConfigured}
@@ -391,7 +391,7 @@ export default function ChannelsPage() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="border-[#c9b99a] text-[#5c4a3a] hover:bg-[#f5f0eb] bg-transparent"
+                                  className="border-border text-foreground hover:bg-muted bg-transparent"
                                 >
                                   {isConfigured ? (
                                     <>
@@ -413,7 +413,7 @@ export default function ChannelsPage() {
                               variant="outline"
                               size="sm"
                               disabled
-                              className="border-[#e8e0d8] text-[#b5a48a] bg-transparent"
+                              className="border-border text-muted-foreground bg-transparent"
                             >
                               Notificami
                             </Button>
@@ -429,7 +429,7 @@ export default function ChannelsPage() {
         ))}
 
         {/* Help Section */}
-        <Card className="bg-gradient-to-r from-[#5c4a3a] to-[#8b7355] border-0">
+        <Card className="bg-gradient-to-r from-primary to-ha-brand border-0">
           <CardContent className="p-6 text-white">
             <div className="flex items-start gap-4">
               <div className="bg-white/20 rounded-lg p-3">
@@ -441,7 +441,7 @@ export default function ChannelsPage() {
                   Il nostro team è disponibile per aiutarti a configurare i tuoi canali e ottimizzare la comunicazione
                   con i clienti.
                 </p>
-                <Button variant="secondary" size="sm" className="bg-white text-[#5c4a3a] hover:bg-white/90">
+                <Button variant="secondary" size="sm" className="bg-white text-foreground hover:bg-white/90">
                   Contatta il supporto
                 </Button>
               </div>

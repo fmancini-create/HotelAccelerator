@@ -55,8 +55,8 @@ export default function EmbedScriptsPage() {
 
   if (isLoading || loading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#8b7355]"></div>
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
   }
@@ -80,18 +80,18 @@ export default function EmbedScriptsPage() {
         }
       />
 
-      <main className="min-h-screen bg-[#f8f7f4]">
+      <main className="min-h-screen bg-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
             {scripts.length === 0 ? (
-              <Card className="p-12 text-center bg-white border-[#e5e5e5]">
-                <Code className="w-12 h-12 mx-auto text-[#8b8b8b] mb-4" />
-                <h3 className="text-lg font-semibold text-[#5c5c5c] mb-2">Nessuno script creato</h3>
-                <p className="text-[#8b8b8b] mb-6">
+              <Card className="p-12 text-center bg-white border-border">
+                <Code className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold text-muted-foreground mb-2">Nessuno script creato</h3>
+                <p className="text-muted-foreground mb-6">
                   Crea il tuo primo script embed per integrare widget sul tuo sito web
                 </p>
                 <Link href="/admin/embed-scripts/new">
-                  <Button className="bg-[#8b7355] hover:bg-[#6d5a43]">
+                  <Button className="bg-ha-brand hover:bg-ha-brand/90">
                     <Plus className="w-4 h-4 mr-2" />
                     Crea Primo Script
                   </Button>
@@ -102,16 +102,16 @@ export default function EmbedScriptsPage() {
                 {scripts.map((script) => (
                   <Card
                     key={script.id}
-                    className="p-6 bg-white border-[#e5e5e5] hover:border-[#8b7355] transition-colors"
+                    className="p-6 bg-white border-border hover:border-ha-brand transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-[#5c5c5c]">{script.name}</h3>
+                          <h3 className="text-lg font-semibold text-muted-foreground">{script.name}</h3>
                           {getStatusBadge(script.status)}
                         </div>
-                        {script.description && <p className="text-[#8b8b8b] text-sm mb-3">{script.description}</p>}
-                        <div className="flex items-center gap-4 text-sm text-[#8b8b8b]">
+                        {script.description && <p className="text-muted-foreground text-sm mb-3">{script.description}</p>}
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <span>Destinazione: {script.destination_url}</span>
                           <span>•</span>
                           <span>{script.views_count || 0} visualizzazioni</span>

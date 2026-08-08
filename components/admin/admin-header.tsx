@@ -109,13 +109,6 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
               ))}
             </nav>
 
-            {/* Separatore e sottotitolo */}
-            {subtitle && (
-              <>
-                <div className="h-4 w-px bg-border" />
-                <p className="text-xs text-muted-foreground">{subtitle}</p>
-              </>
-            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -123,6 +116,26 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
             {actions}
           </div>
         </div>
+
+        {/*
+         * Page title, in the Santaddeo page-header idiom (title 2xl bold +
+         * muted description underneath).
+         *
+         * This block is new: `title` was declared in the props, passed by all
+         * 32 admin pages, and never rendered. 16 of those routes are also
+         * absent from `pathMap` above, so their breadcrumb was just a house
+         * icon - the page had no name on screen at all. Nothing errored,
+         * which is why it survived.
+         */}
+        {title && (
+          <div className="pb-4 pt-1">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground text-balance">{title}</h1>
+            {subtitle && <p className="mt-1 text-sm text-muted-foreground text-pretty">{subtitle}</p>}
+          </div>
+        )}
+
+        {/* No title: keep the subtitle visible rather than dropping it. */}
+        {!title && subtitle && <p className="pb-3 text-sm text-muted-foreground">{subtitle}</p>}
       </div>
     </header>
   )
