@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-08-07
+Ultimo aggiornamento: 2026-08-08
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -69,6 +69,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata
 - Decisione: URL e chiavi Supabase di Santaddeo sono risolti da un unico modulo di configurazione; non sono ammessi fallback hardcoded né riscritture silenziose DEV→PROD.
 - Conseguenza: ogni ambiente deve dichiarare esplicitamente le proprie variabili. L'app fallisce in modo visibile se mancano, invece di collegarsi accidentalmente al database di produzione. Le nuove chiavi `publishable`/`secret` sono preferite, mantenendo compatibilità temporanea con `anon`/`service_role`.
+
+## ADR-012 — Runner separati per test unitari ed E2E Santaddeo
+
+- Stato: accettata
+- Decisione: Vitest esegue esclusivamente i test unitari sotto `apps/santaddeo/__tests__`; Playwright resta l'unico runner dei test sotto `apps/santaddeo/e2e`.
+- Conseguenza: la pipeline non interpreta più gli E2E come suite unitari; entrambe le famiglie devono essere eseguite e riportate separatamente.
 
 ## Decisioni aperte
 
