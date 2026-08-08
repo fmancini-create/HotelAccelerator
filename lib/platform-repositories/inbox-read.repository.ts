@@ -6,6 +6,7 @@ import type {
   MessageItem,
 } from "@/lib/types/inbox-read.types"
 import { RateLimitError } from "@/lib/errors"
+import { buildPreview } from "@/lib/inbox/html-to-preview"
 
 function handleSupabaseError(error: any): never {
   if (error && typeof error === "object") {
@@ -23,6 +24,20 @@ function handleSupabaseError(error: any): never {
     throw new RateLimitError()
   }
   throw error
+}
+
+/**
+ * Pull the bare address out of a From header.
+ *
+ * Headers arrive as `"Villa I Barronci Resort & Spa" <reservation@scidoo.com>`,
+ * and the display name must not be matched against: a hotel-branded name on an
+ * automated address would read like a human sender.
+ */
+function extractAddress(from: unknown): string | null {
+  if (typeof from !== "string" || !from) return null
+  const angled = from.match(/<([^>]+)>/)
+  const candidate = (angled ? angled[1] : from).trim().toLowerCase()
+  return candidate.includes("@") ? candidate : null
 }
 
 /**
@@ -202,21 +217,33 @@ export class InboxReadRepository {
 
     const { data: lastMessages, error: msgError } = await this.supabase
       .from("messages")
-      .select("id, content, sender_type, created_at, conversation_id")
+      .select("id, content, sender_type, created_at, conversation_id, metadata")
       .in("conversation_id", conversationIds)
       .eq("property_id", propertyId)
       .order("created_at", { ascending: false })
 
     if (msgError) handleSupabaseError(msgError)
 
+    const subjectById = new Map<string, string | null>((data || []).map((c) => [c.id as string, c.subject as string]))
+
     const lastMessageMap = new Map()
     lastMessages?.forEach((msg) => {
       if (!lastMessageMap.has(msg.conversation_id)) {
         lastMessageMap.set(msg.conversation_id, {
           id: msg.id,
-          content: msg.content,
+          // The list only ever needs one line of readable text. `content` is
+          // the raw mail body - typically a full HTML document tens of KB long
+          // - and shipping one per row meant megabytes of markup crossing the
+          // wire for a page that shows 50 rows. It went unnoticed while the
+          // field was never rendered.
+          preview: buildPreview(msg.content, subjectById.get(msg.conversation_id)),
           sender_type: msg.sender_type,
           created_at: msg.created_at,
+          // Address the message actually came from. `conversations.contact_email`
+          // is null on a few rows (3 of 6876 here, but Scidoo's booking mails
+          // are among them), and there the "waiting for a reply" badge had no
+          // address to judge and appeared on an automated sender.
+          from_address: extractAddress((msg.metadata as any)?.from),
         })
       }
     })

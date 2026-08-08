@@ -1,23 +1,39 @@
-import { format, formatDistanceToNowStrict, isSameDay, isSameYear } from "date-fns"
+import { format, formatDistanceStrict, isSameDay, isSameYear } from "date-fns"
 import { it } from "date-fns/locale"
-import { isMachineSender } from "../crm/machine-sender"
+import { isNoReplyExpected } from "../crm/machine-sender"
+
+/** Gmail keeps showing a clock time for a full 24 hours, not until midnight. */
+const RECENT_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /**
  * Gmail-style timestamp for the conversation list.
  *
  * Gmail shows an absolute value, and only widens the unit as the message ages:
- *  - today            -> "23:11"
- *  - earlier this year -> "7 ago"
- *  - previous years   -> "12/03/24"
+ *  - within the last 24 hours -> "23:11"
+ *  - earlier this year        -> "7 ago"
+ *  - previous years           -> "12/03/24"
  *
  * A relative label ("circa 2 ore") reads fine for fresh mail but degrades fast:
  * it cannot be compared between two rows, it cannot be matched against what
  * Gmail itself shows, and past a day it stops answering "when did this arrive".
+ *
+ * The window is a ROLLING 24 hours, not the calendar day. This was calendar-day
+ * at first, with a comment claiming that was the deliberate, more correct
+ * choice; two screenshots taken at 00:14 settled it. Gmail showed `13:00`,
+ * `14:03`, `15:11`, `17:08`, `23:46` for mail from the previous calendar day,
+ * while our list collapsed all of it - including a message from 15 minutes
+ * earlier - into a flat "8 ago". Just after midnight the calendar rule throws
+ * away the time on the whole working day just ended, which is exactly the mail
+ * someone reading at that hour cares about.
  */
 export function formatInboxTimestamp(value: string | Date, now: Date = new Date()): string {
   const date = value instanceof Date ? value : new Date(value)
   if (Number.isNaN(date.getTime())) return ""
 
+  const age = now.getTime() - date.getTime()
+  // `age >= 0` guards against a clock skew putting a message in the future,
+  // which would otherwise fall through to the date branches and read as stale.
+  if (age >= 0 && age < RECENT_WINDOW_MS) return format(date, "HH:mm", { locale: it })
   if (isSameDay(date, now)) return format(date, "HH:mm", { locale: it })
   if (isSameYear(date, now)) return format(date, "d MMM", { locale: it })
   return format(date, "dd/MM/yy", { locale: it })
@@ -49,7 +65,11 @@ export function formatWaitingSince(
 ): string | null {
   if (!lastMessage?.created_at) return null
   if (lastMessage.sender_type !== "customer") return null
-  if (isMachineSender(senderEmail)) return null
+  // Wider than the CRM rule on purpose. Adding transactional mailboxes such as
+  // reservation@scidoo.com to `isMachineSender` would have reclassified 91 of
+  // 832 existing CRM contacts (measured), including real people at supplier
+  // companies. `isNoReplyExpected` only suppresses this badge.
+  if (isNoReplyExpected(senderEmail)) return null
 
   const date = new Date(lastMessage.created_at)
   if (Number.isNaN(date.getTime())) return null
@@ -58,5 +78,10 @@ export function formatWaitingSince(
   // number next to it would add noise instead of information.
   if (now.getTime() - date.getTime() < 60 * 60 * 1000) return null
 
-  return formatDistanceToNowStrict(date, { locale: it, addSuffix: false })
+  // `formatDistanceToNowStrict` reads Date.now() internally, so the `now`
+  // argument above was decorative: the function could not be tested at a fixed
+  // instant, and it only appeared to work because the tests happened to run on
+  // the same day they were written. `formatDistanceStrict` compares the two
+  // instants it is given.
+  return formatDistanceStrict(date, now, { locale: it, addSuffix: false })
 }
