@@ -84,7 +84,7 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
           <div className="flex items-center gap-3">
             {/* Breadcrumb compatto */}
             <nav className="flex items-center gap-1.5 text-sm">
-              <Link href="/admin/dashboard" className="text-muted-foreground hover:text-ha-brand transition-colors">
+              <Link href="/admin/dashboard" className="text-muted-foreground hover:text-ha-brand-soft-foreground transition-colors">
                 <Home className="w-4 h-4" />
               </Link>
               {breadcrumbs.map((crumb, index) => (
@@ -101,7 +101,7 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
                       {crumb.label}
                     </span>
                   ) : (
-                    <Link href={crumb.href} className="text-muted-foreground hover:text-ha-brand transition-colors">
+                    <Link href={crumb.href} className="text-muted-foreground hover:text-ha-brand-soft-foreground transition-colors">
                       {crumb.label}
                     </Link>
                   )}

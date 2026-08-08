@@ -12,7 +12,7 @@ export default function EmailChannelsPage() {
 function EmailChannelsLoading() {
   return (
     <div className="min-h-screen bg-muted flex items-center justify-center">
-      <div className="animate-pulse text-ha-brand">Caricamento...</div>
+      <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento...</div>
     </div>
   )
 }

@@ -97,13 +97,13 @@ export default function VisitorsPage() {
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <Link
             href="/admin/tracking/sites"
-            className="text-sm text-foreground hover:text-ha-brand inline-flex items-center gap-1"
+            className="text-sm text-foreground hover:text-ha-brand-soft-foreground inline-flex items-center gap-1"
           >
             <ArrowLeft className="h-4 w-4" /> Siti tracking
           </Link>
           <div className="flex gap-2 flex-1 max-w-md">
             <div className="relative flex-1">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-ha-brand" />
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-ha-brand-soft-foreground" />
               <Input
                 placeholder="Cerca email o session id"
                 value={q}
@@ -128,12 +128,12 @@ export default function VisitorsPage() {
           {/* List */}
           <div className="lg:col-span-2 space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
             {isLoading ? (
-              <div className="flex items-center justify-center py-16 text-ha-brand">
+              <div className="flex items-center justify-center py-16 text-ha-brand-soft-foreground">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Caricamento...
               </div>
             ) : sessions.length === 0 ? (
               <Card className="bg-white border-border">
-                <CardContent className="py-10 text-center text-ha-brand">
+                <CardContent className="py-10 text-center text-ha-brand-soft-foreground">
                   Nessuna sessione ancora. Assicurati di aver installato lo script su un sito attivo.
                 </CardContent>
               </Card>
@@ -155,7 +155,7 @@ export default function VisitorsPage() {
               <SessionDetail key={selectedSession.session_id} session={selectedSession} />
             ) : (
               <Card className="bg-white border-border">
-                <CardContent className="py-16 text-center text-ha-brand">
+                <CardContent className="py-16 text-center text-ha-brand-soft-foreground">
                   Seleziona una sessione per vederne la timeline.
                 </CardContent>
               </Card>
@@ -195,7 +195,7 @@ function SessionRow({ s, active, onClick }: { s: Session; active: boolean; onCli
               {s.event_count} eventi
             </Badge>
           </div>
-          <div className="text-xs text-ha-brand flex items-center gap-3 mt-1 flex-wrap">
+          <div className="text-xs text-ha-brand-soft-foreground flex items-center gap-3 mt-1 flex-wrap">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" /> {relTime(s.last_seen_at)}
             </span>
@@ -210,7 +210,7 @@ function SessionRow({ s, active, onClick }: { s: Session; active: boolean; onCli
               </span>
             )}
           </div>
-          {s.last_page && <div className="text-xs text-ha-brand truncate mt-1">{s.last_page}</div>}
+          {s.last_page && <div className="text-xs text-ha-brand-soft-foreground truncate mt-1">{s.last_page}</div>}
         </div>
       </div>
     </button>
@@ -239,7 +239,7 @@ function SessionDetail({ session }: { session: Session }) {
             </>
           )}
         </CardTitle>
-        <CardDescription className="text-ha-brand">
+        <CardDescription className="text-ha-brand-soft-foreground">
           Session <code className="text-xs">{session.session_id.slice(0, 12)}...</code> · iniziata{" "}
           {relTime(session.first_seen_at)} · ultimo evento {relTime(session.last_seen_at)}
         </CardDescription>
@@ -260,11 +260,11 @@ function SessionDetail({ session }: { session: Session }) {
         <div>
           <h3 className="text-sm font-medium text-foreground mb-2">Timeline</h3>
           {isLoading ? (
-            <div className="py-8 flex items-center justify-center text-ha-brand">
+            <div className="py-8 flex items-center justify-center text-ha-brand-soft-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carico eventi...
             </div>
           ) : events.length === 0 ? (
-            <div className="py-6 text-sm text-ha-brand text-center">Nessun evento ancora.</div>
+            <div className="py-6 text-sm text-ha-brand-soft-foreground text-center">Nessun evento ancora.</div>
           ) : (
             <ol className="relative border-l-2 border-border ml-2 space-y-3">
               {events.map((ev) => (
@@ -277,10 +277,10 @@ function SessionDetail({ session }: { session: Session }) {
                         {ev.event_category}
                       </Badge>
                     )}
-                    <span className="text-xs text-ha-brand">{new Date(ev.created_at).toLocaleString("it-IT")}</span>
+                    <span className="text-xs text-ha-brand-soft-foreground">{new Date(ev.created_at).toLocaleString("it-IT")}</span>
                   </div>
                   {ev.page_url && (
-                    <div className="text-xs text-ha-brand mt-1 flex items-center gap-1">
+                    <div className="text-xs text-ha-brand-soft-foreground mt-1 flex items-center gap-1">
                       <Globe className="h-3 w-3" /> <span className="truncate">{ev.page_url}</span>
                     </div>
                   )}
@@ -308,7 +308,7 @@ function SessionDetail({ session }: { session: Session }) {
 function Meta({ label, value, truncate }: { label: string; value: string | null | undefined; truncate?: boolean }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-ha-brand">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-ha-brand-soft-foreground">{label}</div>
       <div className={`text-sm text-foreground ${truncate ? "truncate" : ""}`}>{value || "—"}</div>
     </div>
   )

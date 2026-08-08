@@ -170,10 +170,10 @@ export default function CategoriesPage() {
                   <TableRow key={category.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        <FolderPlus className="h-4 w-4 text-ha-brand" />
+                        <FolderPlus className="h-4 w-4 text-ha-brand-soft-foreground" />
                         {category.label}
                         {category.isCustom && (
-                          <span className="text-xs bg-ha-brand/10 text-ha-brand px-2 py-0.5 rounded">Custom</span>
+                          <span className="text-xs bg-ha-brand/10 text-ha-brand-soft-foreground px-2 py-0.5 rounded">Custom</span>
                         )}
                       </div>
                     </TableCell>

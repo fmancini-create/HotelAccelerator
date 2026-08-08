@@ -293,7 +293,7 @@ export default function ChannelsPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center">
-        <div className="animate-pulse text-ha-brand">Caricamento canali...</div>
+        <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento canali...</div>
       </div>
     )
   }
@@ -316,19 +316,19 @@ export default function ChannelsPage() {
           <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{activeCount}</div>
-              <div className="text-sm text-ha-brand">Canali Attivi</div>
+              <div className="text-sm text-ha-brand-soft-foreground">Canali Attivi</div>
             </CardContent>
           </Card>
           <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{totalConnections}</div>
-              <div className="text-sm text-ha-brand">Connessioni Totali</div>
+              <div className="text-sm text-ha-brand-soft-foreground">Connessioni Totali</div>
             </CardContent>
           </Card>
           <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{comingSoonCount}</div>
-              <div className="text-sm text-ha-brand">In Arrivo</div>
+              <div className="text-sm text-ha-brand-soft-foreground">In Arrivo</div>
             </CardContent>
           </Card>
         </div>
@@ -338,7 +338,7 @@ export default function ChannelsPage() {
           <div key={category.id} className="mb-8">
             <div className="mb-4">
               <h2 className="text-xl font-medium text-foreground">{category.name}</h2>
-              <p className="text-sm text-ha-brand">{category.description}</p>
+              <p className="text-sm text-muted-foreground">{category.description}</p>
             </div>
 
             <div className="space-y-3">
@@ -370,7 +370,7 @@ export default function ChannelsPage() {
                             <h3 className="text-base font-medium text-foreground">{channel.name}</h3>
                             {getStatusBadge(channel)}
                           </div>
-                          <p className="text-sm text-ha-brand">{channel.description}</p>
+                          <p className="text-sm text-muted-foreground">{channel.description}</p>
                         </div>
 
                         {/* Actions */}
@@ -379,7 +379,7 @@ export default function ChannelsPage() {
                             <>
                               {isConfigured && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-ha-brand">{isEnabled ? "Attivo" : "Spento"}</span>
+                                  <span className="text-xs text-ha-brand-soft-foreground">{isEnabled ? "Attivo" : "Spento"}</span>
                                   <Switch
                                     checked={isEnabled}
                                     disabled={!isConfigured}

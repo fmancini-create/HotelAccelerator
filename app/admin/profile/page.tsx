@@ -122,7 +122,7 @@ export default function AdminProfilePage() {
             <div>
               <h2 className="text-xl font-medium text-muted-foreground">{adminUser.name}</h2>
               <p className="text-sm text-muted-foreground">{adminUser.email}</p>
-              <span className="inline-block mt-1 px-2 py-0.5 bg-ha-brand/10 text-ha-brand text-xs rounded-full">
+              <span className="inline-block mt-1 px-2 py-0.5 bg-ha-brand/10 text-ha-brand-soft-foreground text-xs rounded-full">
                 {getRoleLabel(adminUser.role)}
               </span>
             </div>
@@ -171,7 +171,7 @@ export default function AdminProfilePage() {
         <div className="bg-white rounded-xl border border-border p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-ha-brand/10 rounded-lg flex items-center justify-center">
-              <Lock className="w-5 h-5 text-ha-brand" />
+              <Lock className="w-5 h-5 text-ha-brand-soft-foreground" />
             </div>
             <div>
               <h2 className="text-lg font-medium text-muted-foreground">Cambia Password</h2>

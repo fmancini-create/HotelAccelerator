@@ -57,7 +57,7 @@ export default function TrackingSitesPage() {
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Globe className="h-5 w-5 text-blue-600" /> Come funziona
             </CardTitle>
-            <CardDescription className="text-ha-brand">
+            <CardDescription className="text-ha-brand-soft-foreground">
               Ogni sito riceve una <strong>chiave pubblica</strong> ({`tw_...`}) da incollare nello script embed. Le
               scritture sono accettate solo dagli <strong>Origin autorizzati</strong>. Puoi disattivare un sito senza
               ruotare la chiave per pausarlo immediatamente.
@@ -69,14 +69,14 @@ export default function TrackingSitesPage() {
 
         {isLoading ? (
           <Card className="bg-white border-border">
-            <CardContent className="py-10 flex items-center justify-center text-ha-brand">
+            <CardContent className="py-10 flex items-center justify-center text-ha-brand-soft-foreground">
               <Loader2 className="h-5 w-5 animate-spin mr-2" />
               Caricamento siti...
             </CardContent>
           </Card>
         ) : sites.length === 0 ? (
           <Card className="bg-white border-border">
-            <CardContent className="py-10 text-center text-ha-brand">
+            <CardContent className="py-10 text-center text-ha-brand-soft-foreground">
               Nessun sito configurato. Creane uno per iniziare a tracciare.
             </CardContent>
           </Card>
@@ -131,7 +131,7 @@ function CreateSiteCard() {
     <Card className="bg-white border-border">
       <CardHeader>
         <CardTitle className="text-foreground">Nuovo sito di tracking</CardTitle>
-        <CardDescription className="text-ha-brand">
+        <CardDescription className="text-ha-brand-soft-foreground">
           Specifica il nome (es. {`"Sito ufficiale"`}) e almeno un origin autorizzato. Esempi:{" "}
           <code className="px-1 py-0.5 bg-muted rounded">https://www.villaibarronci.it</code>,{" "}
           <code className="px-1 py-0.5 bg-muted rounded">https://*.villaibarronci.it</code>.
@@ -155,7 +155,7 @@ function CreateSiteCard() {
             placeholder={"https://www.villaibarronci.it\nhttps://villaibarronci.it"}
             className="font-mono text-sm bg-white min-h-24"
           />
-          <p className="text-xs text-ha-brand">Uno per riga. Supporta wildcard come {`"*.example.com"`}.</p>
+          <p className="text-xs text-muted-foreground">Uno per riga. Supporta wildcard come {`"*.example.com"`}.</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={onCreate} disabled={submitting} className="bg-primary hover:bg-ha-brand/90 text-white">
@@ -247,7 +247,7 @@ function SiteCard({ site }: { site: TrackingSite }) {
                 </Badge>
               )}
             </CardTitle>
-            <CardDescription className="text-ha-brand">
+            <CardDescription className="text-ha-brand-soft-foreground">
               ID: <code className="text-xs">{site.id.slice(0, 8)}</code>
             </CardDescription>
           </div>
@@ -336,7 +336,7 @@ function SiteCard({ site }: { site: TrackingSite }) {
               {snippetCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="text-xs text-ha-brand">
+          <p className="text-xs text-muted-foreground">
             Puoi chiamare <code>window.ha.track(&apos;cta_click&apos;, {`{cta:'book_now'}`})</code> o{" "}
             <code>window.ha.identify({`{email:'guest@...'}`})</code> per catturare eventi ed identita&apos;.
           </p>

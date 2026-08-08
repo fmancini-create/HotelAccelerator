@@ -341,7 +341,7 @@ export default function MessageRulesPage() {
                           className="sr-only"
                         />
                         <Icon
-                          className={`w-5 h-5 ${formData.rule_type === key ? "text-ha-brand" : "text-muted-foreground"}`}
+                          className={`w-5 h-5 ${formData.rule_type === key ? "text-ha-brand-soft-foreground" : "text-muted-foreground"}`}
                         />
                         <div>
                           <p className="font-medium text-sm text-muted-foreground">{label}</p>
@@ -535,7 +535,7 @@ export default function MessageRulesPage() {
                               {formData.body || "Il tuo messaggio apparirà qui..."}
                             </p>
                             {formData.cta_text && (
-                              <button className="mt-2 text-xs text-ha-brand font-medium">{formData.cta_text} →</button>
+                              <button className="mt-2 text-xs text-ha-brand-soft-foreground font-medium">{formData.cta_text} →</button>
                             )}
                           </div>
                         </div>
@@ -673,7 +673,7 @@ export default function MessageRulesPage() {
                       <div className="flex-1">
                         <p className="text-sm text-muted-foreground">{previewRule.message_content.body}</p>
                         {previewRule.message_content.cta_text && (
-                          <button className="mt-2 text-xs text-ha-brand font-medium">
+                          <button className="mt-2 text-xs text-ha-brand-soft-foreground font-medium">
                             {previewRule.message_content.cta_text} →
                           </button>
                         )}

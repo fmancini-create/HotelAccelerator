@@ -86,7 +86,7 @@ function Avatar({ name, size = "sm" }: { name?: string; size?: "sm" | "md" }) {
   if (!name) return null
   const s = size === "sm" ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"
   return (
-    <span className={`${s} rounded-full bg-border text-ha-brand flex items-center justify-center font-semibold flex-shrink-0`}>
+    <span className={`${s} rounded-full bg-border text-ha-brand-soft-foreground flex items-center justify-center font-semibold flex-shrink-0`}>
       {name.charAt(0).toUpperCase()}
     </span>
   )
@@ -380,7 +380,7 @@ export default function TodosPage() {
                     }`} />
                   </div>
                   <span className="flex items-center gap-1.5 text-sm text-gray-700 font-medium group-hover:text-gray-900">
-                    <Wrench className="w-3.5 h-3.5 text-ha-brand" />
+                    <Wrench className="w-3.5 h-3.5 text-ha-brand-soft-foreground" />
                     Invia a Manubot
                     <span className="text-xs text-muted-foreground font-normal">(crea intervento di manutenzione)</span>
                   </span>
@@ -478,7 +478,7 @@ export default function TodosPage() {
                 className={`text-xs px-3 py-1 rounded-full transition-colors ${
                   filterStatus === s
                     ? "bg-ha-brand text-white"
-                    : "bg-white text-gray-500 border border-gray-200 hover:border-ha-brand hover:text-ha-brand"
+                    : "bg-white text-gray-500 border border-gray-200 hover:border-ha-brand hover:text-ha-brand-soft-foreground"
                 }`}
               >
                 {s === "all" ? "Tutti" : STATUS_CONFIG[s].label}
@@ -551,7 +551,7 @@ export default function TodosPage() {
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <button
                         onClick={() => openEdit(todo)}
-                        className={`text-sm font-medium text-left hover:text-ha-brand transition-colors ${isDone ? "line-through text-muted-foreground" : "text-gray-800"}`}
+                        className={`text-sm font-medium text-left hover:text-ha-brand-soft-foreground transition-colors ${isDone ? "line-through text-muted-foreground" : "text-gray-800"}`}
                       >
                         {todo.title}
                       </button>

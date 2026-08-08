@@ -168,7 +168,7 @@ export default function ChatChannelPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-muted flex items-center justify-center">
-        <div className="animate-pulse text-ha-brand">Caricamento...</div>
+        <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento...</div>
       </div>
     )
   }
@@ -181,7 +181,7 @@ export default function ChatChannelPage() {
         actions={
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-ha-brand">{config?.is_active ? "Attivo" : "Disattivato"}</span>
+              <span className="text-sm text-ha-brand-soft-foreground">{config?.is_active ? "Attivo" : "Disattivato"}</span>
               <Switch
                 checked={config?.is_active || false}
                 onCheckedChange={(checked) => setConfig(config ? { ...config, is_active: checked } : null)}
@@ -265,7 +265,7 @@ export default function ChatChannelPage() {
                   <div className="flex items-center justify-between pt-2">
                     <div>
                       <Label className="text-foreground">Richiedi email</Label>
-                      <p className="text-xs text-ha-brand">Prima di iniziare la chat</p>
+                      <p className="text-xs text-muted-foreground">Prima di iniziare la chat</p>
                     </div>
                     <Switch
                       checked={config?.config.collectEmail || false}
@@ -409,7 +409,7 @@ export default function ChatChannelPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-8 text-ha-brand">
+                  <div className="text-center py-8 text-ha-brand-soft-foreground">
                     <Bot className="w-12 h-12 mx-auto mb-4 opacity-30" />
                     <p>Attiva l'AI per rispondere automaticamente ai clienti</p>
                   </div>
@@ -456,7 +456,7 @@ export default function ChatChannelPage() {
                     </div>
                   </div>
 
-                  <div className="mt-6 flex items-start gap-3 text-sm text-ha-brand">
+                  <div className="mt-6 flex items-start gap-3 text-sm text-ha-brand-soft-foreground">
                     <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
                       <span className="text-xs font-medium">i</span>
                     </div>
@@ -484,21 +484,21 @@ export default function ChatChannelPage() {
                         1
                       </div>
                       <h4 className="font-medium text-foreground mb-1">Copia il codice</h4>
-                      <p className="text-xs text-ha-brand">Clicca sul pulsante qui sotto</p>
+                      <p className="text-xs text-muted-foreground">Clicca sul pulsante qui sotto</p>
                     </div>
                     <div className="text-center p-4 bg-muted rounded-lg">
                       <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
                         2
                       </div>
                       <h4 className="font-medium text-foreground mb-1">Incolla nel sito</h4>
-                      <p className="text-xs text-ha-brand">Prima di &lt;/body&gt;</p>
+                      <p className="text-xs text-muted-foreground">Prima di &lt;/body&gt;</p>
                     </div>
                     <div className="text-center p-4 bg-muted rounded-lg">
                       <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
                         3
                       </div>
                       <h4 className="font-medium text-foreground mb-1">Pubblica</h4>
-                      <p className="text-xs text-ha-brand">Il widget apparira</p>
+                      <p className="text-xs text-muted-foreground">Il widget apparira</p>
                     </div>
                   </div>
 

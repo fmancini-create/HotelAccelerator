@@ -24,7 +24,7 @@ export default function DemandTrackingPage() {
                   Come funziona
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-ha-brand space-y-2">
+              <CardContent className="text-sm text-ha-brand-soft-foreground space-y-2">
                 <p>
                   Il calendario mostra l&apos;intensità della domanda basata sulle ricerche dei tuoi potenziali ospiti.
                 </p>
@@ -50,7 +50,7 @@ export default function DemandTrackingPage() {
                   Sorgenti Tracciate
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-sm text-ha-brand space-y-1">
+              <CardContent className="text-sm text-ha-brand-soft-foreground space-y-1">
                 <p>• Ricerche sul sito web</p>
                 <p>• Richieste via chat</p>
                 <p>• Email ricevute</p>
