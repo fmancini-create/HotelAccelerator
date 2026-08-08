@@ -153,7 +153,7 @@ async function PlatformLanding() {
           aria-label="Navigazione principale"
         >
           <Link href="/" className="flex items-center gap-2" aria-label="HotelAccelerator Homepage">
-            <Building2 className="h-7 w-7 text-ha-brand-soft-foreground" aria-hidden="true" />
+            <Building2 className="h-7 w-7 text-ha-brand" aria-hidden="true" />
             <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
           </Link>
           <div className="hidden md:flex items-center gap-8">
@@ -186,7 +186,7 @@ async function PlatformLanding() {
       <section className="pt-32 pb-20 px-4" aria-labelledby="hero-title">
         <div className="container mx-auto max-w-5xl text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand-soft-foreground mb-8">
-            <Sparkles className="h-4 w-4 text-ha-brand-soft-foreground" aria-hidden="true" />
+            <Sparkles className="h-4 w-4 text-ha-brand" aria-hidden="true" />
             <span>Piattaforma SaaS per strutture ricettive</span>
           </div>
           <h1 id="hero-title" className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-balance">
@@ -215,19 +215,19 @@ async function PlatformLanding() {
         <div className="container mx-auto px-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-ha-brand-soft-foreground mb-2">+35%</div>
+              <div className="text-3xl md:text-4xl font-bold text-ha-brand mb-2">+35%</div>
               <div className="text-sm text-muted-foreground">Prenotazioni dirette</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-ha-brand-soft-foreground mb-2">-50%</div>
+              <div className="text-3xl md:text-4xl font-bold text-ha-brand mb-2">-50%</div>
               <div className="text-sm text-muted-foreground">Tempo di risposta</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-ha-brand-soft-foreground mb-2">2x</div>
+              <div className="text-3xl md:text-4xl font-bold text-ha-brand mb-2">2x</div>
               <div className="text-sm text-muted-foreground">Engagement email</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-ha-brand-soft-foreground mb-2">150+</div>
+              <div className="text-3xl md:text-4xl font-bold text-ha-brand mb-2">150+</div>
               <div className="text-sm text-muted-foreground">Hotel soddisfatti</div>
             </div>
           </div>
@@ -266,7 +266,7 @@ async function PlatformLanding() {
                     <div className="flex items-center justify-between">
                       <span className={`text-sm font-medium ${colors.text}`}>{feature.stats}</span>
                       <ArrowRight
-                        className="h-4 w-4 text-muted-foreground group-hover:text-ha-brand-soft-foreground group-hover:translate-x-1 transition-all"
+                        className="h-4 w-4 text-muted-foreground group-hover:text-ha-brand group-hover:translate-x-1 transition-all"
                         aria-hidden="true"
                       />
                     </div>
@@ -421,7 +421,7 @@ async function PlatformLanding() {
       <section className="py-24 px-4" aria-labelledby="cta-title">
         <div className="container mx-auto max-w-3xl text-center">
           <div className="p-8 md:p-12 rounded-3xl bg-secondary border border-border">
-            <Zap className="h-12 w-12 text-ha-brand-soft-foreground mx-auto mb-6" aria-hidden="true" />
+            <Zap className="h-12 w-12 text-ha-brand mx-auto mb-6" aria-hidden="true" />
             <h2 id="cta-title" className="text-2xl md:text-3xl font-bold mb-4">
               Pronto a far crescere il tuo hotel?
             </h2>
