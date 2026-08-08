@@ -7,9 +7,17 @@ type SupabaseBrowserClient = {
     signOut: () => Promise<{ error: unknown }>
     getSession: () => Promise<{ data: { session: unknown }; error: unknown }>
     getUser: () => Promise<{ data: { user: unknown }; error: unknown }>
-    signInWithPassword: (params: { email: string; password: string }) => Promise<{ data: { user: unknown; session: unknown }; error: unknown }>
+    signInWithPassword: (params: { email: string; password: string }) => Promise<{
+      data: {
+        user: { id: string } | null
+        session: { access_token: string; user?: { id: string } } | null
+      }
+      error: { message: string; status?: number } | null
+    }>
     signInWithOAuth: (params: unknown) => Promise<{ data: unknown; error: unknown }>
-    onAuthStateChange: (event: string, callback: unknown) => { data: { subscription: { unsubscribe: () => void } } }
+    onAuthStateChange: (
+      callback: (event: string, session: { user?: { id: string } } | null) => void,
+    ) => { data: { subscription: { unsubscribe: () => void } } }
     resetPasswordForEmail: (email: string) => Promise<{ data: unknown; error: unknown }>
     updateUser: (params: unknown) => Promise<{ data: { user: unknown }; error: unknown }>
     exchangeCodeForSession: (code: string) => Promise<{ data: { session: unknown; user: unknown }; error: unknown }>
@@ -100,7 +108,7 @@ function createDevNoOpClient(): SupabaseBrowserClient {
         data: { url: null, provider: null },
         error: { message: "OAuth non disponibile in anteprima v0" },
       }),
-      onAuthStateChange: (_event: string, _callback: unknown) => ({
+      onAuthStateChange: (_callback: (event: string, session: { user?: { id: string } } | null) => void) => ({
         data: { subscription: { unsubscribe: () => {} } },
       }),
       resetPasswordForEmail: async () => ({
@@ -217,11 +225,11 @@ function createProxyClient(): SupabaseBrowserClient {
         const client = await clientInitPromise!
         return client.auth.signInWithOAuth(params as any)
       },
-      onAuthStateChange: (event: string, callback: unknown) => {
+      onAuthStateChange: (callback) => {
         // Set up listener after client is ready
         let subscription = { unsubscribe: () => {} }
         clientInitPromise!.then((client) => {
-          const result = client.auth.onAuthStateChange(event, callback)
+          const result = client.auth.onAuthStateChange(callback)
           subscription = result.data.subscription
         })
         return { data: { subscription } }

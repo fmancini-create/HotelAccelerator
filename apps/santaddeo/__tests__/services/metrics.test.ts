@@ -21,25 +21,16 @@ const { getDashboardMetrics, computeOccupancy, computeADR, computeRevPAR } = awa
 // ── Helpers: build a mock supabase client ──
 function createMockSupabase(overrides: Record<string, any> = {}) {
   const defaultRpcResults: Record<string, any> = {
-    get_bookings_channel_breakdown: {
-      totalRevenue: 50000,
-      directRevenue: 30000,
-      intermediatedRevenue: 20000,
-      channelRevenue: { "Booking.com": 15000, Direct: 30000, Expedia: 5000 },
-      roomNights: 120,
-      bookingsCount: 45,
-    },
-    get_cancellation_aggregates: {
-      cancelledRevenue: 5000,
-      cancelledNights: 10,
-      cancellationsCount: 5,
-      avgCancellationPickup: 12,
-    },
-    get_bookings_channel_breakdown_ly: {
-      totalRevenue: 45000,
-      bookingsCount: 40,
-      cancellationsCount: 4,
-    },
+    get_bookings_channel_breakdown: [
+      { channel: "Direct", channel_revenue: 30000, booking_count: 30, pickup_days_sum: 300, is_ota: false },
+      { channel: "Booking.com", channel_revenue: 15000, booking_count: 10, pickup_days_sum: 100, is_ota: true },
+      { channel: "Expedia", channel_revenue: 5000, booking_count: 5, pickup_days_sum: 50, is_ota: true },
+    ],
+    get_cancellation_aggregates: [
+      { cancelled_revenue: 5000, cancelled_nights: 10, cancellation_count: 5, pickup_days_sum: 60 },
+    ],
+    get_daily_availability_summary: [],
+    get_rms_revenue_summary: [{ total_revenue: 50000, room_nights: 120 }],
     ...overrides,
   }
 
@@ -54,9 +45,11 @@ function createMockSupabase(overrides: Record<string, any> = {}) {
     eq: vi.fn().mockReturnThis(),
     gte: vi.fn().mockReturnThis(),
     lte: vi.fn().mockReturnThis(),
+    gt: vi.fn().mockReturnThis(),
     range: vi.fn().mockReturnThis(),
     order: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
     then: (resolve: (v: any) => void) =>
       resolve({ data: [], error: null, count: 0 }),
   }
@@ -123,25 +116,10 @@ describe("getDashboardMetrics", () => {
   // 3. Non-existent hotel_id returns empty structure without crashing
   it("returns empty structure for non-existent hotel without crashing", async () => {
     const emptyRpc: Record<string, any> = {
-      get_bookings_channel_breakdown: {
-        totalRevenue: 0,
-        directRevenue: 0,
-        intermediatedRevenue: 0,
-        channelRevenue: {},
-        roomNights: 0,
-        bookingsCount: 0,
-      },
-      get_cancellation_aggregates: {
-        cancelledRevenue: 0,
-        cancelledNights: 0,
-        cancellationsCount: 0,
-        avgCancellationPickup: 0,
-      },
-      get_bookings_channel_breakdown_ly: {
-        totalRevenue: 0,
-        bookingsCount: 0,
-        cancellationsCount: 0,
-      },
+      get_bookings_channel_breakdown: [],
+      get_cancellation_aggregates: [],
+      get_daily_availability_summary: [],
+      get_rms_revenue_summary: [],
     }
     const supabase = createMockSupabase(emptyRpc)
 
@@ -163,7 +141,8 @@ describe("getDashboardMetrics", () => {
 
 describe("computeOccupancy", () => {
   it("returns 0 when totalRooms is 0", () => {
-    expect(computeOccupancy(0, 0, 30)).toBe(0)
+    const result = computeOccupancy([], 0, "2025-06-01", "2025-06-30")
+    expect(result.occupancy).toBe(0)
   })
 })
 

@@ -15,6 +15,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 // ── Ensure env var is set so getServiceKey() does not throw ──
 vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://test-project.supabase.co")
 
 // ── Import AFTER mocks are set up ──
 const { validateHotelAccess } = await import("@/lib/auth/validateHotelAccess")
@@ -44,6 +45,7 @@ describe("validateHotelAccess", () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://test-project.supabase.co")
   })
 
   // 1. Utente non autenticato -> 401

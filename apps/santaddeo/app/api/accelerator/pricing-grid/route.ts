@@ -327,10 +327,6 @@ async function handleGET(request: NextRequest) {
       algoParamsError: algoParamsResult.error?.message,
     })
 
-    if (roomTypesResult.error) {
-      console.error("Error fetching room types:", roomTypesResult.error)
-      return NextResponse.json({ error: roomTypesResult.error.message }, { status: 500 })
-    }
     if (pricesResult.error) {
       console.error("Error fetching pricing_grid:", pricesResult.error)
       return NextResponse.json({ error: pricesResult.error.message }, { status: 500 })

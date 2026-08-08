@@ -131,7 +131,20 @@ interface BandGroup {
   id: string
   name: string
   sort_order: number
+  color?: string
   bands: OccupancyBand[]
+}
+
+interface PricingVariable {
+  id: string
+  variable_key: string
+  label: string
+  description: string
+  category: string
+  default_weight: number
+  weight_min: number
+  weight_max: number
+  is_active?: boolean
 }
 
 interface LastMinuteLevel {
@@ -397,7 +410,7 @@ export default function AcceleratorPricingPage() {
   const [bandGroups, setBandGroups] = useState<BandGroup[]>([])
   const [lastMinuteLevels, setLastMinuteLevels] = useState<LastMinuteLevel[]>([])
   const [rateLimits, setRateLimits] = useState<RateLimitData[]>([])
-  const [pricingVariables, setPricingVariables] = useState<{ id: string; variable_key: string; label: string; description: string; category: string; default_weight: number; weight_min: number; weight_max: number }[]>([])
+  const [pricingVariables, setPricingVariables] = useState<PricingVariable[]>([])
   // Override di peso (importanza) delle K variabili per periodo/giorno. Servono
   // per replicare esattamente il calcolo del K del motore server nel client.
   const [weightOverrides, setWeightOverrides] = useState<WeightOverrideRow[]>([])
@@ -548,7 +561,7 @@ export default function AcceleratorPricingPage() {
 
   // Autosave timer
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "pending" | "saving" | "saved">("idle")
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle")
 
   // Table head ref for sticky scroll sync
   const tableHeadRef = useRef<HTMLTableSectionElement>(null)
@@ -1298,9 +1311,9 @@ export default function AcceleratorPricingPage() {
         for (const rate of rates) {
           const occs = getOccupanciesForRate(rate, rt)
           for (const occ of occs) {
-            const key = `${rt.id}|${rate.id}|${occ}|${day.date}`
-            const val = gridPrices[key]
-            if (val !== undefined && val !== null && val !== "") {
+            const key = `${rt.id}_${rate.id}_${occ}`
+            const val = gridPrices[key]?.[day.date]
+            if (val !== undefined && val !== null) {
               avgPrice += Number(val) || 0
               priceCount++
             }
@@ -2043,10 +2056,6 @@ export default function AcceleratorPricingPage() {
   }
 
   // ------- Algo param edit handlers -------
-
-  function getAlgoParam(paramKey: string, dateStr: string): string {
-    return algoParams[paramKey]?.[dateStr] ?? ""
-  }
 
   function openBulkFill(ctx: typeof bulkFillContext, startDate?: string, prefillValue?: string) {
     setBulkFillContext(ctx)
@@ -3483,8 +3492,8 @@ export default function AcceleratorPricingPage() {
                             for (const day of production) {
                               const suggested = calculateSuggestedPrice(rt.id, day.date)
                               if (suggested == null) continue
-                              const gridKey = `${rt.id}_${rateId}_${baseOccupancy}_${day.date}`
-                              const currentPrice = gridPrices[gridKey] ?? 0
+                              const gridKey = `${rt.id}_${rateId}_${baseOccupancy}`
+                              const currentPrice = gridPrices[gridKey]?.[day.date] ?? 0
                               const suggestedRounded = Math.round(suggested)
                               if (Math.abs(suggestedRounded - currentPrice) >= 1) {
                                 changes.push({
@@ -4230,7 +4239,7 @@ export default function AcceleratorPricingPage() {
                                           onDoubleClick={() => openBulkFill({ type: "price", roomTypeId: rt.id, rateId: rate.id, occ }, day.date, displayed)}
                                         >
  <PriceHistoryTooltip
-  hotelId={hotelId}
+  hotelId={hotelId!}
   roomTypeId={rt.id}
   rateId={rate.id}
   occupancy={occ}

@@ -48,6 +48,7 @@ describe("Circuit Breaker", () => {
 
   // 1. Circuit breaker opens after 5 consecutive failures
   it("opens after CIRCUIT_BREAKER_THRESHOLD (5) consecutive failures", async () => {
+    vi.useFakeTimers()
     const client = new ScidooClient({
       apiKey: "test-api-key",
       propertyId: "prop-1",
@@ -62,11 +63,10 @@ describe("Circuit Breaker", () => {
 
     // Make 5 calls, each exhausting 3 retries -> 5 recordFailure calls
     for (let i = 0; i < 5; i++) {
-      try {
-        await client.getAccountInfo()
-      } catch {
-        // expected
-      }
+      const request = client.getAccountInfo()
+      const rejection = expect(request).rejects.toThrow()
+      await vi.runAllTimersAsync()
+      await rejection
     }
 
     // Check Redis for the circuit state
@@ -74,6 +74,7 @@ describe("Circuit Breaker", () => {
     expect(state).toBeDefined()
     expect(state.isOpen).toBe(true)
     expect(state.failures).toBeGreaterThanOrEqual(5)
+    vi.useRealTimers()
   })
 
   // 2. Different endpoints have independent counters

@@ -395,7 +395,7 @@ export async function getPricingGrid(
         desc.includes("addebito libero")
       return isDiscount ? sum + price : sum
     }, 0)
-    const dpTotal = Object.values(dailyPrice).reduce((s, v) => {
+    const dpTotal = Object.values(dailyPrice).reduce<number>((s, v) => {
       const n = Number(v) || 0
       return s + (n > 0 && n !== 999 && n !== 9999 ? n : 0)
     }, 0)
