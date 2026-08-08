@@ -195,7 +195,7 @@ function SessionRow({ s, active, onClick }: { s: Session; active: boolean; onCli
               {s.event_count} eventi
             </Badge>
           </div>
-          <div className="text-xs text-ha-brand-soft-foreground flex items-center gap-3 mt-1 flex-wrap">
+          <div className="text-xs text-muted-foreground flex items-center gap-3 mt-1 flex-wrap">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" /> {relTime(s.last_seen_at)}
             </span>
@@ -210,7 +210,7 @@ function SessionRow({ s, active, onClick }: { s: Session; active: boolean; onCli
               </span>
             )}
           </div>
-          {s.last_page && <div className="text-xs text-ha-brand-soft-foreground truncate mt-1">{s.last_page}</div>}
+          {s.last_page && <div className="text-xs text-muted-foreground truncate mt-1">{s.last_page}</div>}
         </div>
       </div>
     </button>
@@ -277,10 +277,10 @@ function SessionDetail({ session }: { session: Session }) {
                         {ev.event_category}
                       </Badge>
                     )}
-                    <span className="text-xs text-ha-brand-soft-foreground">{new Date(ev.created_at).toLocaleString("it-IT")}</span>
+                    <span className="text-xs text-muted-foreground">{new Date(ev.created_at).toLocaleString("it-IT")}</span>
                   </div>
                   {ev.page_url && (
-                    <div className="text-xs text-ha-brand-soft-foreground mt-1 flex items-center gap-1">
+                    <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       <Globe className="h-3 w-3" /> <span className="truncate">{ev.page_url}</span>
                     </div>
                   )}

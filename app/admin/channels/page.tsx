@@ -316,19 +316,19 @@ export default function ChannelsPage() {
           <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{activeCount}</div>
-              <div className="text-sm text-ha-brand-soft-foreground">Canali Attivi</div>
+              <div className="text-sm text-muted-foreground">Canali Attivi</div>
             </CardContent>
           </Card>
           <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{totalConnections}</div>
-              <div className="text-sm text-ha-brand-soft-foreground">Connessioni Totali</div>
+              <div className="text-sm text-muted-foreground">Connessioni Totali</div>
             </CardContent>
           </Card>
           <Card className="bg-white border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{comingSoonCount}</div>
-              <div className="text-sm text-ha-brand-soft-foreground">In Arrivo</div>
+              <div className="text-sm text-muted-foreground">In Arrivo</div>
             </CardContent>
           </Card>
         </div>
@@ -379,7 +379,7 @@ export default function ChannelsPage() {
                             <>
                               {isConfigured && (
                                 <div className="flex items-center gap-2">
-                                  <span className="text-xs text-ha-brand-soft-foreground">{isEnabled ? "Attivo" : "Spento"}</span>
+                                  <span className="text-xs text-muted-foreground">{isEnabled ? "Attivo" : "Spento"}</span>
                                   <Switch
                                     checked={isEnabled}
                                     disabled={!isConfigured}

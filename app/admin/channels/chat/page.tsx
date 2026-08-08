@@ -181,7 +181,7 @@ export default function ChatChannelPage() {
         actions={
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-ha-brand-soft-foreground">{config?.is_active ? "Attivo" : "Disattivato"}</span>
+              <span className="text-sm text-muted-foreground">{config?.is_active ? "Attivo" : "Disattivato"}</span>
               <Switch
                 checked={config?.is_active || false}
                 onCheckedChange={(checked) => setConfig(config ? { ...config, is_active: checked } : null)}
