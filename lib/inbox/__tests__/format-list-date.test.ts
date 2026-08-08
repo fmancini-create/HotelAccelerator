@@ -32,9 +32,32 @@ describe("formatInboxTimestamp", () => {
     expect(formatInboxTimestamp(at("2025-08-08T23:11:00+02:00"), NOW)).toBe("08/08/25")
   })
 
-  it("distinguishes midnight today from late yesterday", () => {
-    expect(formatInboxTimestamp(at("2026-08-08T00:04:00+02:00"), NOW)).toBe("00:04")
-    expect(formatInboxTimestamp(at("2026-08-07T23:58:00+02:00"), NOW)).toBe("7 ago")
+  it("keeps the clock time across midnight, as Gmail does", () => {
+    // THE CASE THAT WAS WRONG. This used to assert "7 ago" for late-yesterday
+    // mail, encoding a calendar-day rule as if it were the correct one.
+    // Screenshots taken at 00:14 on 09/08 settled it: Gmail printed 23:59,
+    // 23:57, 23:53, 23:50, 23:46, 17:08, 15:11, 14:03, 13:00 for mail from
+    // 08/08, while our list showed a flat "8 ago" - even for a message that
+    // had arrived 15 minutes earlier.
+    const JUST_AFTER_MIDNIGHT = new Date("2026-08-09T00:14:00+02:00")
+    expect(formatInboxTimestamp(at("2026-08-09T00:12:00+02:00"), JUST_AFTER_MIDNIGHT)).toBe("00:12")
+    expect(formatInboxTimestamp(at("2026-08-08T23:59:00+02:00"), JUST_AFTER_MIDNIGHT)).toBe("23:59")
+    expect(formatInboxTimestamp(at("2026-08-08T17:08:00+02:00"), JUST_AFTER_MIDNIGHT)).toBe("17:08")
+    expect(formatInboxTimestamp(at("2026-08-08T13:00:00+02:00"), JUST_AFTER_MIDNIGHT)).toBe("13:00")
+    // Past 24 hours it becomes a date again, exactly like Gmail's "7 ago".
+    expect(formatInboxTimestamp(at("2026-08-07T23:00:00+02:00"), JUST_AFTER_MIDNIGHT)).toBe("7 ago")
+  })
+
+  it("switches to a date at the 24-hour boundary, not before", () => {
+    // One minute either side of the edge, so an off-by-one cannot slip through.
+    expect(formatInboxTimestamp(at("2026-08-07T23:14:00+02:00"), NOW)).toBe("23:14")
+    expect(formatInboxTimestamp(at("2026-08-07T23:12:00+02:00"), NOW)).toBe("7 ago")
+  })
+
+  it("still shows a time for today's mail even when the clock is skewed", () => {
+    // A message stamped slightly in the future must not fall through and read
+    // as stale; the calendar-day branch catches it.
+    expect(formatInboxTimestamp(at("2026-08-08T23:20:00+02:00"), NOW)).toBe("23:20")
   })
 
   it("returns an empty string instead of 'Invalid Date' for unusable input", () => {
@@ -53,6 +76,20 @@ describe("formatWaitingSince", () => {
   it("reports the wait while the last word is the customer's", () => {
     expect(formatWaitingSince({ sender_type: "customer", created_at: "2026-08-08T20:13:00+02:00" }, NOW)).toBe("3 ore")
     expect(formatWaitingSince({ sender_type: "customer", created_at: "2026-08-06T23:13:00+02:00" }, NOW)).toBe("2 giorni")
+  })
+
+  it("measures against the instant it is given, not the real clock", () => {
+    // This function used to call formatDistanceToNowStrict, which reads
+    // Date.now() internally: the `now` argument was ignored and the tests only
+    // passed because they ran on the day they were written. A reference date
+    // far from today makes that impossible to hide.
+    const LAST_YEAR = new Date("2025-03-10T12:00:00+01:00")
+    expect(formatWaitingSince({ sender_type: "customer", created_at: "2025-03-10T09:00:00+01:00" }, LAST_YEAR)).toBe(
+      "3 ore",
+    )
+    expect(formatWaitingSince({ sender_type: "customer", created_at: "2025-03-08T12:00:00+01:00" }, LAST_YEAR)).toBe(
+      "2 giorni",
+    )
   })
 
   it("stays silent once we have replied: the clock is no longer running", () => {

@@ -160,7 +160,12 @@ interface Conversation {
    */
   last_message: {
     id?: string
-    content: string
+    /**
+     * Readable text extracted server-side, NOT the raw body. Rendering the raw
+     * body filled every row with `<html style="color-scheme:light dark"><head>
+     * <style ...` and squeezed the subject down to a single character.
+     */
+    preview: string
     sender_type: string
     created_at: string
   } | null
@@ -3087,11 +3092,23 @@ export default function InboxPage() {
                         {conv.contact?.name || conv.contact?.email || conv.contact?.phone || "Sconosciuto"}
                       </span>
                       <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
-                        <span className={`truncate text-[13px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                        {/*
+                          The subject must win the space fight. Both spans used to
+                          shrink equally, so a long preview squeezed the subject
+                          down to a single visible character. `shrink-0` up to a
+                          readable width keeps the subject legible and lets the
+                          preview take whatever is left, like Gmail does.
+                        */}
+                        <span
+                          className={`truncate text-[13px] shrink-0 max-w-[60%] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}
+                        >
                           {conv.subject || "(nessun oggetto)"}
                         </span>
-                        {conv.last_message?.content && (
-                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">{" - "}{conv.last_message.content}</span>
+                        {conv.last_message?.preview && (
+                          <span className="text-[13px] text-gray-400 truncate hidden sm:block">
+                            {" - "}
+                            {conv.last_message.preview}
+                          </span>
                         )}
                       </div>
                       {conv.unread_count > 0 && (

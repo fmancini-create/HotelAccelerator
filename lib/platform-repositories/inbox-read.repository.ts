@@ -6,6 +6,7 @@ import type {
   MessageItem,
 } from "@/lib/types/inbox-read.types"
 import { RateLimitError } from "@/lib/errors"
+import { htmlToPreview } from "@/lib/inbox/html-to-preview"
 
 function handleSupabaseError(error: any): never {
   if (error && typeof error === "object") {
@@ -214,7 +215,12 @@ export class InboxReadRepository {
       if (!lastMessageMap.has(msg.conversation_id)) {
         lastMessageMap.set(msg.conversation_id, {
           id: msg.id,
-          content: msg.content,
+          // The list only ever needs one line of readable text. `content` is
+          // the raw mail body - typically a full HTML document tens of KB long
+          // - and shipping one per row meant megabytes of markup crossing the
+          // wire for a page that shows 50 rows. It went unnoticed while the
+          // field was never rendered.
+          preview: htmlToPreview(msg.content),
           sender_type: msg.sender_type,
           created_at: msg.created_at,
         })

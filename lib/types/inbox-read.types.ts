@@ -25,7 +25,12 @@ export interface ConversationAssignee {
 
 export interface MessageSummary {
   id: string
-  content: string
+  /**
+   * One line of readable text extracted from the message body, capped for the
+   * list. NOT the raw body: see `htmlToPreview`. Message bodies are stored as
+   * they arrive, so the raw value is usually a full HTML document.
+   */
+  preview: string
   sender_type: "customer" | "agent" | "staff" | "system"
   created_at: string
 }
