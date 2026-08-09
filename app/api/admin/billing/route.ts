@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { createServiceClient } from "@/lib/supabase/server"
 import { PLANS } from "@/lib/stripe-products"
+import { handleServiceError, isExpectedAuthError } from "@/lib/errors"
 
 export async function GET(request: NextRequest) {
   try {
@@ -46,6 +47,10 @@ export async function GET(request: NextRequest) {
       billingInfo: property || {},
     })
   } catch (error) {
+    // Sessione scaduta/assente: condizione attesa, va distinta dal guasto.
+    // (getAuthenticatedPropertyId LANCIA invece di restituire null, quindi il
+    // controllo "if (!propertyId)" qui sopra non viene mai raggiunto.)
+    if (isExpectedAuthError(error)) return handleServiceError(error)
     console.error("[v0] Billing GET error:", error)
     return NextResponse.json({ error: "Failed to fetch billing data" }, { status: 500 })
   }
@@ -91,6 +96,8 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    // Sessione scaduta/assente: condizione attesa, va distinta dal guasto.
+    if (isExpectedAuthError(error)) return handleServiceError(error)
     console.error("[v0] Billing PUT error:", error)
     return NextResponse.json({ error: "Failed to update billing info" }, { status: 500 })
   }

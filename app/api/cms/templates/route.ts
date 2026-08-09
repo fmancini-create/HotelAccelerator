@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { handleServiceError, isExpectedAuthError } from "@/lib/errors"
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ templates: templates || [] })
   } catch (error: any) {
+    // Sessione scaduta/assente: condizione attesa, va distinta dal guasto.
+    if (isExpectedAuthError(error)) return handleServiceError(error)
     return NextResponse.json({ error: error.message, templates: [] }, { status: 500 })
   }
 }

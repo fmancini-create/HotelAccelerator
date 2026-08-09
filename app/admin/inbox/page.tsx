@@ -505,6 +505,8 @@ export default function InboxPage() {
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  // Sessione scaduta: condizione attesa, va mostrata e ferma il polling.
+  const [sessionExpired, setSessionExpired] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("open")
   // Channel filter for the unified (Smart) inbox: "all" or a specific channel.
@@ -1187,6 +1189,19 @@ export default function InboxPage() {
       queryParams.set("sort", inboxSort)
 
       const res = await fetch(`/api/inbox/conversations?${queryParams}`)
+
+      // Sessione scaduta: condizione ATTESA. Prima cadeva nel `return`
+      // silenzioso qui sotto, quindi la lista restava ferma senza spiegazione
+      // e il poll continuava a interrogare ogni 30s all'infinito.
+      if (res.status === 401 || res.status === 403) {
+        setSessionExpired(true)
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
+          pollIntervalRef.current = null
+        }
+        return
+      }
+
       if (!res.ok) return
 
       const data = await res.json()
@@ -2052,6 +2067,22 @@ export default function InboxPage() {
 
   return (
     <div className="h-full flex flex-col bg-white">
+      {/* Sessione scaduta: l'aggiornamento automatico e' fermo, la lista
+          mostrata non e' piu' aggiornata. Prima questa condizione era
+          invisibile e il poll continuava a fallire ogni 30 secondi. */}
+      {sessionExpired && (
+        <div
+          role="status"
+          className="flex-shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-900"
+        >
+          <span className="font-medium">Sessione scaduta.</span>
+          <span>I messaggi non si aggiornano piu&apos;.</span>
+          <a href="/admin" className="font-medium underline underline-offset-2 hover:no-underline">
+            Accedi di nuovo
+          </a>
+        </div>
+      )}
+
       {/* Gmail-style top bar */}
       <header className="h-16 flex-shrink-0 flex items-center gap-3 px-4 bg-white border-b border-gray-200/50">
         {/* Hamburger menu — collapses/expands the left sidebar */}

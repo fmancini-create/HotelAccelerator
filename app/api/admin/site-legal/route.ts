@@ -4,6 +4,7 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { createServiceClient } from "@/lib/supabase/server"
 import { DEFAULT_COOKIE_POLICY, DEFAULT_PRIVACY_POLICY, mapPropertyToSiteSettings } from "@/lib/cms/tenant-site-settings"
 import { isModuleActive } from "@/lib/modules"
+import { handleServiceError } from "@/lib/errors"
 
 const UpdateSchema = z.object({
   billing_company_name: z.string().trim().max(500).nullable(),
@@ -24,8 +25,14 @@ const UpdateSchema = z.object({
 const COLUMNS = "billing_company_name, billing_vat, billing_tax_code, billing_address, billing_city, billing_postal_code, billing_province, billing_email, legal_rea, legal_registry, legal_share_capital, site_privacy_policy, site_cookie_policy"
 
 export async function GET(request: NextRequest) {
-  const propertyId = await getAuthenticatedPropertyId(request)
-  if (!propertyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Senza try/catch l'errore di sessione scaduta lanciato da
+  // getAuthenticatedPropertyId sfuggiva dal gestore e diventava un 500 opaco.
+  let propertyId: string
+  try {
+    propertyId = await getAuthenticatedPropertyId(request)
+  } catch (error) {
+    return handleServiceError(error)
+  }
   const db = createServiceClient()
   const [{ data, error }, whiteLabel] = await Promise.all([
     db.from("properties").select(COLUMNS).eq("id", propertyId).single(),
@@ -36,8 +43,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PUT(request: NextRequest) {
-  const propertyId = await getAuthenticatedPropertyId(request)
-  if (!propertyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  let propertyId: string
+  try {
+    propertyId = await getAuthenticatedPropertyId(request)
+  } catch (error) {
+    return handleServiceError(error)
+  }
   const parsed = UpdateSchema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ error: "Dati non validi", details: parsed.error.flatten() }, { status: 400 })
   const db = createServiceClient()

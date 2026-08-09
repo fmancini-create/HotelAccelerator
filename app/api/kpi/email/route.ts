@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { handleServiceError } from "@/lib/errors"
 
 export const dynamic = "force-dynamic"
 
@@ -51,7 +52,11 @@ export async function GET(request: NextRequest) {
       metrics_status: reconciliationReady ? "gmail_state_ready" : "reconciling",
     })
   } catch (error) {
-    console.error("KPI email error:", error)
-    return NextResponse.json({ error: "Errore calcolo KPI" }, { status: 500 })
+    // Prima: ogni errore diventava 500 con messaggio generico, quindi una
+    // sessione scaduta (getAuthenticatedPropertyId lancia "Non autenticato")
+    // era indistinguibile da un guasto reale e il client non poteva reagire.
+    // handleServiceError mappa gli errori di auth a 401/403 e logga in forma
+    // breve, lasciando i 500 ai guasti veri.
+    return handleServiceError(error)
   }
 }

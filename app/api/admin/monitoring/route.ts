@@ -4,6 +4,7 @@ import { getTenantMetrics, checkTenantHealth, getAllTenantMetrics } from "@/lib/
 import { getTenantStats } from "@/lib/query-optimizer"
 import { getQuotaStatus } from "@/lib/tenant-quotas"
 import { checkRateLimit, RATE_LIMITS, rateLimitExceeded, rateLimitHeaders } from "@/lib/rate-limiter"
+import { handleServiceError, isExpectedAuthError } from "@/lib/errors"
 
 export async function GET(request: NextRequest) {
   try {
@@ -47,6 +48,8 @@ export async function GET(request: NextRequest) {
       headers: rateLimitHeaders(rateLimitResult),
     })
   } catch (error) {
+    // Sessione scaduta/assente: condizione attesa, va distinta dal guasto.
+    if (isExpectedAuthError(error)) return handleServiceError(error)
     console.error("[v0] Error fetching monitoring data:", error)
     return NextResponse.json({ error: "Failed to fetch monitoring data" }, { status: 500 })
   }
