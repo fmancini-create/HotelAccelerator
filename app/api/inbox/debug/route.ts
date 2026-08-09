@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/channels/email/webhook/gmail`,
     })
   } catch (error) {
-    console.error("[Debug API] Error:", error)
+    // Anche qui handleServiceError separa gia' auth attesa e guasto vero.
     return handleServiceError(error)
   }
 }
