@@ -14,6 +14,7 @@ import { getValidGmailToken, gmailFetchWithToken } from "@/lib/gmail-client"
 import { EmailProcessor } from "@/lib/email/email-processor"
 import { parseGmailMessage } from "@/lib/email/gmail-parse"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { handleServiceError, isExpectedAuthError } from "@/lib/errors"
 
 const PAGE_SIZE = 50 // Gmail list API page
 const PER_MESSAGE_DELAY_MS = 40 // gentle on quota
@@ -300,6 +301,8 @@ export async function POST(request: NextRequest) {
       { status: rateLimited ? 429 : pageComplete ? 200 : 503 },
     )
   } catch (error: any) {
+    // Sessione scaduta/assente: condizione attesa, va distinta dal guasto.
+    if (isExpectedAuthError(error)) return handleServiceError(error)
     console.error("[v0][full-sync] fatal:", error)
     return NextResponse.json(
       { error: error?.message || "Errore durante la sincronizzazione storica" },
@@ -345,6 +348,8 @@ export async function GET(request: NextRequest) {
       in_progress: channel.full_sync_status === "running",
     })
   } catch (error: any) {
+    // Sessione scaduta/assente: condizione attesa, va distinta dal guasto.
+    if (isExpectedAuthError(error)) return handleServiceError(error)
     return NextResponse.json({ error: error?.message || "Errore" }, { status: 500 })
   }
 }
