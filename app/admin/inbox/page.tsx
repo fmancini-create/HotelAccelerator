@@ -507,6 +507,12 @@ export default function InboxPage() {
   const [isLoading, setIsLoading] = useState(false)
   // Sessione scaduta: condizione attesa, va mostrata e ferma il polling.
   const [sessionExpired, setSessionExpired] = useState(false)
+  // Guasto del server: la lista mostrata resta quella vecchia. Senza questo
+  // stato la risposta veniva scartata in silenzio e l'operatore continuava a
+  // leggere messaggi non aggiornati credendoli attuali.
+  // Si accende dal SECONDO fallimento consecutivo: un errore momentaneo non
+  // deve accendere un avviso che poi si impara a ignorare.
+  const [guastoAggiornamento, setGuastoAggiornamento] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("open")
   // Channel filter for the unified (Smart) inbox: "all" or a specific channel.
@@ -1182,6 +1188,7 @@ export default function InboxPage() {
   const registraFallimentoConversazioni = useCallback(() => {
     fallimentiConsecutiviRef.current += 1
     cicliDaSaltareRef.current = Math.min(2 ** (fallimentiConsecutiviRef.current - 1), 9)
+    if (fallimentiConsecutiviRef.current >= 2) setGuastoAggiornamento(true)
   }, [])
 
   const loadConversations = useCallback(async (opts?: { automatico?: boolean }) => {
@@ -1234,6 +1241,7 @@ export default function InboxPage() {
       setConversations(data.conversations || [])
       fallimentiConsecutiviRef.current = 0
       cicliDaSaltareRef.current = 0
+      setGuastoAggiornamento(false)
     } catch (error) {
       console.error("Error loading conversations:", error)
       registraFallimentoConversazioni()
@@ -2109,6 +2117,27 @@ export default function InboxPage() {
           <a href="/admin" className="font-medium underline underline-offset-2 hover:no-underline">
             Accedi di nuovo
           </a>
+        </div>
+      )}
+
+      {/* Guasto del server: la lista resta quella vecchia. Prima la risposta
+          veniva scartata in silenzio e l'operatore leggeva messaggi non
+          aggiornati credendoli attuali. Il 401 ha la precedenza: se la
+          sessione e' scaduta il messaggio giusto e' quello sopra. */}
+      {guastoAggiornamento && !sessionExpired && (
+        <div
+          role="status"
+          className="flex-shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-900"
+        >
+          <span className="font-medium">Aggiornamento non riuscito.</span>
+          <span>I messaggi mostrati potrebbero non essere aggiornati.</span>
+          <button
+            type="button"
+            onClick={() => loadConversations()}
+            className="font-medium underline underline-offset-2 hover:no-underline"
+          >
+            Riprova adesso
+          </button>
         </div>
       )}
 
