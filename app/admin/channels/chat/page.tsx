@@ -167,28 +167,28 @@ export default function ChatChannelPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#faf9f7] flex items-center justify-center">
-        <div className="animate-pulse text-[#8b7355]">Caricamento...</div>
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#faf9f7]">
+    <div className="min-h-screen bg-muted">
       <AdminHeader
         title="Chat Widget"
         subtitle="Configura la chat in tempo reale per il tuo sito web"
         actions={
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-[#8b7355]">{config?.is_active ? "Attivo" : "Disattivato"}</span>
+              <span className="text-sm text-muted-foreground">{config?.is_active ? "Attivo" : "Disattivato"}</span>
               <Switch
                 checked={config?.is_active || false}
                 onCheckedChange={(checked) => setConfig(config ? { ...config, is_active: checked } : null)}
                 className="data-[state=checked]:bg-green-500"
               />
             </div>
-            <Button onClick={saveConfig} disabled={saving} className="bg-[#8b7355] hover:bg-[#5c4a3a]">
+            <Button onClick={saveConfig} disabled={saving} className="bg-ha-brand hover:bg-primary">
               {saving ? "Salvataggio..." : "Salva"}
             </Button>
           </div>
@@ -197,20 +197,20 @@ export default function ChatChannelPage() {
 
       <div className="max-w-4xl mx-auto p-6">
         <Tabs defaultValue="aspetto" className="space-y-6">
-          <TabsList className="bg-white border border-[#e8e0d8]">
-            <TabsTrigger value="aspetto" className="data-[state=active]:bg-[#f5f0eb]">
+          <TabsList className="bg-white border border-border">
+            <TabsTrigger value="aspetto" className="data-[state=active]:bg-muted">
               <Palette className="w-4 h-4 mr-2" />
               Aspetto
             </TabsTrigger>
-            <TabsTrigger value="messaggi" className="data-[state=active]:bg-[#f5f0eb]">
+            <TabsTrigger value="messaggi" className="data-[state=active]:bg-muted">
               <MessageCircle className="w-4 h-4 mr-2" />
               Messaggi
             </TabsTrigger>
-            <TabsTrigger value="ai" className="data-[state=active]:bg-[#f5f0eb]">
+            <TabsTrigger value="ai" className="data-[state=active]:bg-muted">
               <Bot className="w-4 h-4 mr-2" />
               AI
             </TabsTrigger>
-            <TabsTrigger value="installa" className="data-[state=active]:bg-[#f5f0eb]">
+            <TabsTrigger value="installa" className="data-[state=active]:bg-muted">
               <Code className="w-4 h-4 mr-2" />
               Installa
             </TabsTrigger>
@@ -219,14 +219,14 @@ export default function ChatChannelPage() {
           {/* Aspetto Tab - same as before */}
           <TabsContent value="aspetto">
             <div className="grid grid-cols-2 gap-6">
-              <Card className="bg-white border-[#e8e0d8]">
+              <Card className="bg-white border-border">
                 <CardHeader>
-                  <CardTitle className="text-[#5c4a3a] text-lg">Personalizzazione</CardTitle>
+                  <CardTitle className="text-foreground text-lg">Personalizzazione</CardTitle>
                   <CardDescription>Adatta il widget al tuo brand</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label className="text-[#5c4a3a]">Colore principale</Label>
+                    <Label className="text-foreground">Colore principale</Label>
                     <div className="flex gap-3">
                       <Input
                         type="color"
@@ -237,25 +237,25 @@ export default function ChatChannelPage() {
                       <Input
                         value={config?.config.primaryColor || "#8b7355"}
                         onChange={(e) => updateConfig("primaryColor", e.target.value)}
-                        className="flex-1 border-[#e8e0d8]"
+                        className="flex-1 border-border"
                       />
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-[#5c4a3a]">Posizione</Label>
+                    <Label className="text-foreground">Posizione</Label>
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         variant={config?.config.position === "bottom-right" ? "default" : "outline"}
                         onClick={() => updateConfig("position", "bottom-right")}
-                        className={config?.config.position === "bottom-right" ? "bg-[#8b7355]" : "border-[#e8e0d8]"}
+                        className={config?.config.position === "bottom-right" ? "bg-ha-brand" : "border-border"}
                       >
                         Destra
                       </Button>
                       <Button
                         variant={config?.config.position === "bottom-left" ? "default" : "outline"}
                         onClick={() => updateConfig("position", "bottom-left")}
-                        className={config?.config.position === "bottom-left" ? "bg-[#8b7355]" : "border-[#e8e0d8]"}
+                        className={config?.config.position === "bottom-left" ? "bg-ha-brand" : "border-border"}
                       >
                         Sinistra
                       </Button>
@@ -264,22 +264,22 @@ export default function ChatChannelPage() {
 
                   <div className="flex items-center justify-between pt-2">
                     <div>
-                      <Label className="text-[#5c4a3a]">Richiedi email</Label>
-                      <p className="text-xs text-[#8b7355]">Prima di iniziare la chat</p>
+                      <Label className="text-foreground">Richiedi email</Label>
+                      <p className="text-xs text-muted-foreground">Prima di iniziare la chat</p>
                     </div>
                     <Switch
                       checked={config?.config.collectEmail || false}
                       onCheckedChange={(checked) => updateConfig("collectEmail", checked)}
-                      className="data-[state=checked]:bg-[#8b7355]"
+                      className="data-[state=checked]:bg-ha-brand"
                     />
                   </div>
                 </CardContent>
               </Card>
 
               {/* Preview */}
-              <Card className="bg-white border-[#e8e0d8]">
+              <Card className="bg-white border-border">
                 <CardHeader>
-                  <CardTitle className="text-[#5c4a3a] text-lg flex items-center gap-2">
+                  <CardTitle className="text-foreground text-lg flex items-center gap-2">
                     <Eye className="w-4 h-4" />
                     Anteprima
                   </CardTitle>
@@ -327,38 +327,38 @@ export default function ChatChannelPage() {
 
           {/* Messaggi Tab */}
           <TabsContent value="messaggi">
-            <Card className="bg-white border-[#e8e0d8]">
+            <Card className="bg-white border-border">
               <CardHeader>
-                <CardTitle className="text-[#5c4a3a] text-lg">Messaggi predefiniti</CardTitle>
+                <CardTitle className="text-foreground text-lg">Messaggi predefiniti</CardTitle>
                 <CardDescription>Personalizza i testi visualizzati nella chat</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label className="text-[#5c4a3a]">Messaggio di benvenuto</Label>
+                  <Label className="text-foreground">Messaggio di benvenuto</Label>
                   <Input
                     value={config?.config.welcomeMessage || ""}
                     onChange={(e) => updateConfig("welcomeMessage", e.target.value)}
-                    className="border-[#e8e0d8]"
+                    className="border-border"
                     placeholder="Es: Ciao! Come possiamo aiutarti?"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-[#5c4a3a]">Placeholder input</Label>
+                  <Label className="text-foreground">Placeholder input</Label>
                   <Input
                     value={config?.config.placeholder || ""}
                     onChange={(e) => updateConfig("placeholder", e.target.value)}
-                    className="border-[#e8e0d8]"
+                    className="border-border"
                     placeholder="Es: Scrivi un messaggio..."
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-[#5c4a3a]">Messaggio offline</Label>
+                  <Label className="text-foreground">Messaggio offline</Label>
                   <Input
                     value={config?.config.offlineMessage || ""}
                     onChange={(e) => updateConfig("offlineMessage", e.target.value)}
-                    className="border-[#e8e0d8]"
+                    className="border-border"
                     placeholder="Es: Siamo offline. Lascia un messaggio..."
                   />
                 </div>
@@ -368,11 +368,11 @@ export default function ChatChannelPage() {
 
           {/* AI Tab */}
           <TabsContent value="ai">
-            <Card className="bg-white border-[#e8e0d8]">
+            <Card className="bg-white border-border">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-[#5c4a3a] text-lg flex items-center gap-2">
+                    <CardTitle className="text-foreground text-lg flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-amber-500" />
                       Assistente AI
                     </CardTitle>
@@ -389,11 +389,11 @@ export default function ChatChannelPage() {
                 {config?.config.aiEnabled ? (
                   <>
                     <div className="space-y-2">
-                      <Label className="text-[#5c4a3a]">Messaggio di presentazione AI</Label>
+                      <Label className="text-foreground">Messaggio di presentazione AI</Label>
                       <Input
                         value={config?.config.aiGreeting || ""}
                         onChange={(e) => updateConfig("aiGreeting", e.target.value)}
-                        className="border-[#e8e0d8]"
+                        className="border-border"
                         placeholder="Es: Sono l'assistente virtuale..."
                       />
                     </div>
@@ -409,7 +409,7 @@ export default function ChatChannelPage() {
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-8 text-[#8b7355]">
+                  <div className="text-center py-8 text-ha-brand-soft-foreground">
                     <Bot className="w-12 h-12 mx-auto mb-4 opacity-30" />
                     <p>Attiva l'AI per rispondere automaticamente ai clienti</p>
                   </div>
@@ -421,14 +421,14 @@ export default function ChatChannelPage() {
           <TabsContent value="installa">
             {hasCMS ? (
               /* CMS User - Simple activation */
-              <Card className="bg-white border-[#e8e0d8]">
+              <Card className="bg-white border-border">
                 <CardHeader>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
                       <Zap className="w-6 h-6 text-green-600" />
                     </div>
                     <div>
-                      <CardTitle className="text-[#5c4a3a] text-lg">Attivazione Automatica</CardTitle>
+                      <CardTitle className="text-foreground text-lg">Attivazione Automatica</CardTitle>
                       <CardDescription>Il tuo sito usa il nostro CMS, l'attivazione e automatica!</CardDescription>
                     </div>
                   </div>
@@ -442,7 +442,7 @@ export default function ChatChannelPage() {
                     </p>
 
                     <div className="flex items-center justify-center gap-4">
-                      <span className="text-lg text-[#5c4a3a]">Widget Chat</span>
+                      <span className="text-lg text-foreground">Widget Chat</span>
                       <Switch
                         checked={config?.is_active || false}
                         onCheckedChange={(checked) => {
@@ -450,14 +450,14 @@ export default function ChatChannelPage() {
                         }}
                         className="data-[state=checked]:bg-green-500 scale-125"
                       />
-                      <span className={`text-lg font-medium ${config?.is_active ? "text-green-600" : "text-gray-400"}`}>
+                      <span className={`text-lg font-medium ${config?.is_active ? "text-green-600" : "text-muted-foreground"}`}>
                         {config?.is_active ? "ATTIVO" : "SPENTO"}
                       </span>
                     </div>
                   </div>
 
-                  <div className="mt-6 flex items-start gap-3 text-sm text-[#8b7355]">
-                    <div className="w-6 h-6 rounded-full bg-[#f5f0eb] flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <div className="mt-6 flex items-start gap-3 text-sm text-ha-brand-soft-foreground">
+                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
                       <span className="text-xs font-medium">i</span>
                     </div>
                     <p>
@@ -469,9 +469,9 @@ export default function ChatChannelPage() {
               </Card>
             ) : (
               /* External Site - Code snippet */
-              <Card className="bg-white border-[#e8e0d8]">
+              <Card className="bg-white border-border">
                 <CardHeader>
-                  <CardTitle className="text-[#5c4a3a] text-lg">Installa sul tuo sito</CardTitle>
+                  <CardTitle className="text-foreground text-lg">Installa sul tuo sito</CardTitle>
                   <CardDescription>
                     Copia questo codice e incollalo nel tuo sito web. Puoi mandarlo al tuo webmaster con le istruzioni.
                   </CardDescription>
@@ -479,26 +479,26 @@ export default function ChatChannelPage() {
                 <CardContent className="space-y-6">
                   {/* Step by step */}
                   <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-[#faf9f7] rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-[#8b7355] text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
                         1
                       </div>
-                      <h4 className="font-medium text-[#5c4a3a] mb-1">Copia il codice</h4>
-                      <p className="text-xs text-[#8b7355]">Clicca sul pulsante qui sotto</p>
+                      <h4 className="font-medium text-foreground mb-1">Copia il codice</h4>
+                      <p className="text-xs text-muted-foreground">Clicca sul pulsante qui sotto</p>
                     </div>
-                    <div className="text-center p-4 bg-[#faf9f7] rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-[#8b7355] text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
                         2
                       </div>
-                      <h4 className="font-medium text-[#5c4a3a] mb-1">Incolla nel sito</h4>
-                      <p className="text-xs text-[#8b7355]">Prima di &lt;/body&gt;</p>
+                      <h4 className="font-medium text-foreground mb-1">Incolla nel sito</h4>
+                      <p className="text-xs text-muted-foreground">Prima di &lt;/body&gt;</p>
                     </div>
-                    <div className="text-center p-4 bg-[#faf9f7] rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-[#8b7355] text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
+                    <div className="text-center p-4 bg-muted rounded-lg">
+                      <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
                         3
                       </div>
-                      <h4 className="font-medium text-[#5c4a3a] mb-1">Pubblica</h4>
-                      <p className="text-xs text-[#8b7355]">Il widget apparira</p>
+                      <h4 className="font-medium text-foreground mb-1">Pubblica</h4>
+                      <p className="text-xs text-muted-foreground">Il widget apparira</p>
                     </div>
                   </div>
 

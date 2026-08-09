@@ -113,10 +113,10 @@ export default function SuperAdminLayout({
   // Show loading state while checking auth
   if (isChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <span className="w-8 h-8 border-4 border-neutral-300 border-t-neutral-900 rounded-full animate-spin" />
-          <p className="text-sm text-neutral-600">Verifica autenticazione...</p>
+          <span className="w-8 h-8 border-4 border-border border-t-foreground rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Verifica autenticazione...</p>
         </div>
       </div>
     )
@@ -128,18 +128,34 @@ export default function SuperAdminLayout({
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-50">
+    /*
+     * Light chrome, matching apps/santaddeo/app/superadmin/layout.tsx
+     * (`bg-background`, `border-border bg-card`, destructive "Super Admin"
+     * badge). This bar used to be `bg-neutral-900 text-white` - the single
+     * biggest visual divergence from the reference.
+     *
+     * The dark background and every light-on-dark colour inside it are
+     * converted in ONE change on purpose: dropping the dark surface first and
+     * the text afterwards leaves dark-on-dark text in between, which is how
+     * this exact conversion went wrong once before.
+     *
+     * The "danger zone" signal the dark bar carried is not lost - it moves to
+     * the destructive ADMIN badge, as in the reference.
+     */
+    <div className="min-h-screen flex flex-col bg-background">
       {/* Top Navigation */}
-      <header className="bg-neutral-900 text-white">
+      <header className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <Link href="/super-admin" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-lg bg-ha-brand text-ha-brand-foreground flex items-center justify-center">
                 <span className="text-sm font-bold">HA</span>
               </div>
-              <span className="font-semibold hidden sm:block">HotelAccelerator</span>
-              <span className="text-xs bg-amber-500 text-neutral-900 px-1.5 py-0.5 rounded font-medium">ADMIN</span>
+              <span className="font-semibold text-foreground hidden sm:block">HotelAccelerator</span>
+              <span className="text-xs bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded font-medium">
+                ADMIN
+              </span>
             </Link>
 
             {/* Main Navigation */}
@@ -152,8 +168,8 @@ export default function SuperAdminLayout({
                     href={item.href}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                       isActive(item.href)
-                        ? "bg-white/10 text-white"
-                        : "text-neutral-400 hover:text-white hover:bg-white/5"
+                        ? "bg-ha-brand-soft text-ha-brand-soft-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -166,8 +182,8 @@ export default function SuperAdminLayout({
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="text-neutral-300 hover:text-white hover:bg-white/10">
-                  <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center mr-2">
+                <Button variant="ghost" className="text-foreground hover:bg-muted">
+                  <div className="w-7 h-7 rounded-full bg-ha-brand text-ha-brand-foreground flex items-center justify-center mr-2">
                     <span className="text-xs font-medium">SA</span>
                   </div>
                   <span className="hidden sm:block text-sm">{userEmail}</span>
@@ -192,7 +208,7 @@ export default function SuperAdminLayout({
         </div>
 
         {/* Mobile Navigation */}
-        <div className="md:hidden border-t border-white/10">
+        <div className="md:hidden border-t border-border">
           <div className="flex overflow-x-auto">
             {navigation.map((item) => {
               const Icon = item.icon
@@ -201,7 +217,9 @@ export default function SuperAdminLayout({
                   key={item.name}
                   href={item.href}
                   className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap ${
-                    isActive(item.href) ? "text-white border-b-2 border-white" : "text-neutral-400"
+                    isActive(item.href)
+                      ? "text-ha-brand-soft-foreground border-b-2 border-ha-brand"
+                      : "text-muted-foreground"
                   }`}
                 >
                   <Icon className="w-4 h-4" />

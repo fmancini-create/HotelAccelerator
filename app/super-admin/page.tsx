@@ -149,7 +149,7 @@ export default function SuperAdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-neutral-500">Tenant Totali</CardTitle>
-              <Building2 className="w-4 h-4 text-neutral-400" />
+              <Building2 className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalTenants}</div>
@@ -166,7 +166,7 @@ export default function SuperAdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-neutral-500">MRR</CardTitle>
-              <CreditCard className="w-4 h-4 text-neutral-400" />
+              <CreditCard className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">€{stats.mrr.toLocaleString("it-IT")}</div>
@@ -189,7 +189,7 @@ export default function SuperAdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-neutral-500">Utenti Totali</CardTitle>
-              <Users className="w-4 h-4 text-neutral-400" />
+              <Users className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalUsers}</div>
@@ -202,7 +202,7 @@ export default function SuperAdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-neutral-500">Conversazioni</CardTitle>
-              <TrendingUp className="w-4 h-4 text-neutral-400" />
+              <TrendingUp className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalConversations.toLocaleString("it-IT")}</div>
@@ -251,7 +251,7 @@ export default function SuperAdminDashboard() {
                         <p className="text-sm font-medium text-neutral-900">{activity.description}</p>
                         <p className="text-xs text-neutral-500">{activity.tenant}</p>
                       </div>
-                      <time className="text-xs text-neutral-400 shrink-0">
+                      <time className="text-xs text-muted-foreground shrink-0">
                         {new Date(activity.timestamp).toLocaleString("it-IT", {
                           day: "2-digit",
                           month: "short",

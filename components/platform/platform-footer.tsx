@@ -56,19 +56,19 @@ export function PlatformFooter() {
         <nav className="flex items-center gap-3" aria-label="Link utili">
           <Link
             href="/admin/monitoring"
-            className="hover:text-ha-brand transition-colors"
+            className="hover:text-ha-brand-soft-foreground transition-colors"
           >
             Stato
           </Link>
           <Link
             href="/admin/settings"
-            className="hover:text-ha-brand transition-colors"
+            className="hover:text-ha-brand-soft-foreground transition-colors"
           >
             Impostazioni
           </Link>
           <Link
             href="/admin/profile"
-            className="hover:text-ha-brand transition-colors hidden sm:inline"
+            className="hover:text-ha-brand-soft-foreground transition-colors hidden sm:inline"
           >
             Profilo
           </Link>

@@ -160,15 +160,15 @@ export default function CollaboratorDetailPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
-        <p className="text-[#8b8b8b]">Loading collaborator details...</p>
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <p className="text-muted-foreground">Loading collaborator details...</p>
       </div>
     )
   }
 
   if (error || !collaborator) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
+      <div className="min-h-screen bg-muted flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 mb-4">{error || "Collaborator not found"}</p>
           <Link href="/super-admin/collaborators">
@@ -180,9 +180,9 @@ export default function CollaboratorDetailPage({
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       {/* Header */}
-      <header className="bg-white border-b border-[#e5e5e5]">
+      <header className="bg-white border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -192,7 +192,7 @@ export default function CollaboratorDetailPage({
                   Back
                 </Button>
               </Link>
-              <h1 className="text-xl font-serif text-[#5c5c5c]">Collaborator Details</h1>
+              <h1 className="text-xl font-semibold text-muted-foreground">Collaborator Details</h1>
             </div>
           </div>
         </div>
@@ -204,39 +204,39 @@ export default function CollaboratorDetailPage({
           {/* Left Column - Profile */}
           <div className="lg:col-span-1 space-y-6">
             {/* Profile Card */}
-            <div className="bg-white rounded-xl border border-[#e5e5e5] p-6">
-              <h2 className="text-lg font-medium text-[#5c5c5c] mb-4">Profile</h2>
+            <div className="bg-white rounded-xl border border-border p-6">
+              <h2 className="text-lg font-medium text-muted-foreground mb-4">Profile</h2>
               <div className="space-y-4">
                 <div>
-                  <p className="text-sm text-[#8b8b8b] mb-1">Name</p>
-                  <p className="text-sm font-medium text-[#5c5c5c]">{collaborator.name}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Name</p>
+                  <p className="text-sm font-medium text-muted-foreground">{collaborator.name}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-[#8b8b8b] mb-1">Email</p>
-                  <p className="text-sm font-medium text-[#5c5c5c]">{collaborator.email}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Email</p>
+                  <p className="text-sm font-medium text-muted-foreground">{collaborator.email}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-[#8b8b8b] mb-1">Role</p>
+                  <p className="text-sm text-muted-foreground mb-1">Role</p>
                   <Badge variant={getRoleBadgeVariant(collaborator.role)}>{collaborator.role}</Badge>
                 </div>
                 <div>
-                  <p className="text-sm text-[#8b8b8b] mb-1">Status</p>
+                  <p className="text-sm text-muted-foreground mb-1">Status</p>
                   <Badge variant={getStatusBadgeVariant(collaborator.status)}>{collaborator.status}</Badge>
                 </div>
                 <div>
-                  <p className="text-sm text-[#8b8b8b] mb-1">Created At</p>
-                  <p className="text-sm font-medium text-[#5c5c5c]">{formatDate(collaborator.created_at)}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Created At</p>
+                  <p className="text-sm font-medium text-muted-foreground">{formatDate(collaborator.created_at)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-[#8b8b8b] mb-1">Last Login</p>
-                  <p className="text-sm font-medium text-[#5c5c5c]">{formatDate(collaborator.last_login)}</p>
+                  <p className="text-sm text-muted-foreground mb-1">Last Login</p>
+                  <p className="text-sm font-medium text-muted-foreground">{formatDate(collaborator.last_login)}</p>
                 </div>
               </div>
             </div>
 
             {/* Risk Indicators Card */}
-            <div className="bg-white rounded-xl border border-[#e5e5e5] p-6">
-              <h2 className="text-lg font-medium text-[#5c5c5c] mb-4">Risk Indicators</h2>
+            <div className="bg-white rounded-xl border border-border p-6">
+              <h2 className="text-lg font-medium text-muted-foreground mb-4">Risk Indicators</h2>
               <div className="space-y-3">
                 {hasHighFailureRate && (
                   <div className="flex items-center gap-2 text-sm text-orange-600">
@@ -251,7 +251,7 @@ export default function CollaboratorDetailPage({
                   </div>
                 )}
                 {!hasHighFailureRate && !hasHighActivityVolume && (
-                  <p className="text-sm text-[#8b8b8b]">No risk indicators</p>
+                  <p className="text-sm text-muted-foreground">No risk indicators</p>
                 )}
               </div>
             </div>
@@ -259,44 +259,44 @@ export default function CollaboratorDetailPage({
 
           {/* Right Column - Recent Activity */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-xl border border-[#e5e5e5] overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#e5e5e5]">
-                <h2 className="text-lg font-medium text-[#5c5c5c]">Recent Activity</h2>
-                <p className="text-sm text-[#8b8b8b] mt-1">Last 20 actions</p>
+            <div className="bg-white rounded-xl border border-border overflow-hidden">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-lg font-medium text-muted-foreground">Recent Activity</h2>
+                <p className="text-sm text-muted-foreground mt-1">Last 20 actions</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-[#f8f7f4] border-b border-[#e5e5e5]">
+                  <thead className="bg-muted border-b border-border">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Timestamp
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Action
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Entity Type
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Entity ID
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-[#8b8b8b] uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Result
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-[#e5e5e5]">
+                  <tbody className="bg-white divide-y divide-border">
                     {activities.map((activity) => (
                       <tr key={activity.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[#8b8b8b]">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">
                           {formatDate(activity.timestamp)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-medium text-[#5c5c5c]">{activity.action}</span>
+                          <span className="text-sm font-medium text-muted-foreground">{activity.action}</span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-[#8b8b8b]">{activity.entity_type}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground">{activity.entity_type}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <code className="text-xs text-[#8b8b8b] bg-[#f8f7f4] px-2 py-1 rounded">
+                          <code className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
                             {activity.entity_id}
                           </code>
                         </td>

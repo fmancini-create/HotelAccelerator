@@ -40,8 +40,8 @@ export default function AdminProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f8f7f4] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#8b7355]"></div>
+      <div className="min-h-screen bg-muted flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
   }
@@ -106,7 +106,7 @@ export default function AdminProfilePage() {
   const doPasswordsMatch = newPassword === confirmPassword && confirmPassword.length > 0
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title="Profilo"
@@ -114,22 +114,22 @@ export default function AdminProfilePage() {
         />
 
         {/* Profile Info */}
-        <div className="bg-white rounded-xl border border-[#e5e5e5] p-6 mb-6">
+        <div className="bg-white rounded-xl border border-border p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 bg-[#8b7355] rounded-full flex items-center justify-center text-white">
+            <div className="w-16 h-16 bg-ha-brand rounded-full flex items-center justify-center text-white">
               <User className="w-8 h-8" />
             </div>
             <div>
-              <h2 className="text-xl font-medium text-[#5c5c5c]">{adminUser.name}</h2>
-              <p className="text-sm text-[#8b8b8b]">{adminUser.email}</p>
-              <span className="inline-block mt-1 px-2 py-0.5 bg-[#8b7355]/10 text-[#8b7355] text-xs rounded-full">
+              <h2 className="text-xl font-medium text-muted-foreground">{adminUser.name}</h2>
+              <p className="text-sm text-muted-foreground">{adminUser.email}</p>
+              <span className="inline-block mt-1 px-2 py-0.5 bg-ha-brand/10 text-ha-brand-soft-foreground text-xs rounded-full">
                 {getRoleLabel(adminUser.role)}
               </span>
             </div>
           </div>
 
-          <div className="border-t border-[#e5e5e5] pt-4">
-            <h3 className="text-sm font-medium text-[#5c5c5c] mb-3">Permessi</h3>
+          <div className="border-t border-border pt-4">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Permessi</h3>
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_upload ? (
@@ -137,7 +137,7 @@ export default function AdminProfilePage() {
                 ) : (
                   <X className="w-4 h-4 text-red-500" />
                 )}
-                <span className="text-[#8b8b8b]">Upload foto</span>
+                <span className="text-muted-foreground">Upload foto</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_delete ? (
@@ -145,7 +145,7 @@ export default function AdminProfilePage() {
                 ) : (
                   <X className="w-4 h-4 text-red-500" />
                 )}
-                <span className="text-[#8b8b8b]">Elimina foto</span>
+                <span className="text-muted-foreground">Elimina foto</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_move ? (
@@ -153,7 +153,7 @@ export default function AdminProfilePage() {
                 ) : (
                   <X className="w-4 h-4 text-red-500" />
                 )}
-                <span className="text-[#8b8b8b]">Sposta foto</span>
+                <span className="text-muted-foreground">Sposta foto</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_manage_users ? (
@@ -161,21 +161,21 @@ export default function AdminProfilePage() {
                 ) : (
                   <X className="w-4 h-4 text-red-500" />
                 )}
-                <span className="text-[#8b8b8b]">Gestione utenti</span>
+                <span className="text-muted-foreground">Gestione utenti</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Change Password */}
-        <div className="bg-white rounded-xl border border-[#e5e5e5] p-6">
+        <div className="bg-white rounded-xl border border-border p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-[#8b7355]/10 rounded-lg flex items-center justify-center">
-              <Lock className="w-5 h-5 text-[#8b7355]" />
+            <div className="w-10 h-10 bg-ha-brand/10 rounded-lg flex items-center justify-center">
+              <Lock className="w-5 h-5 text-ha-brand-soft-foreground" />
             </div>
             <div>
-              <h2 className="text-lg font-medium text-[#5c5c5c]">Cambia Password</h2>
-              <p className="text-sm text-[#8b8b8b]">Aggiorna la tua password di accesso</p>
+              <h2 className="text-lg font-medium text-muted-foreground">Cambia Password</h2>
+              <p className="text-sm text-muted-foreground">Aggiorna la tua password di accesso</p>
             </div>
           </div>
 
@@ -192,7 +192,7 @@ export default function AdminProfilePage() {
           <div className="space-y-4">
             {/* Current Password */}
             <div>
-              <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Password Attuale</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">Password Attuale</label>
               <div className="relative">
                 <Input
                   type={showCurrentPassword ? "text" : "password"}
@@ -204,7 +204,7 @@ export default function AdminProfilePage() {
                 <button
                   type="button"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8b8b8b] hover:text-[#5c5c5c]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -213,7 +213,7 @@ export default function AdminProfilePage() {
 
             {/* New Password */}
             <div>
-              <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Nuova Password</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">Nuova Password</label>
               <div className="relative">
                 <Input
                   type={showNewPassword ? "text" : "password"}
@@ -225,7 +225,7 @@ export default function AdminProfilePage() {
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8b8b8b] hover:text-[#5c5c5c]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -234,7 +234,7 @@ export default function AdminProfilePage() {
               {/* Password Requirements */}
               {newPassword.length > 0 && (
                 <div className="mt-2 space-y-1">
-                  <p className="text-xs text-[#8b8b8b]">Requisiti password:</p>
+                  <p className="text-xs text-muted-foreground">Requisiti password:</p>
                   <div className="grid grid-cols-2 gap-1">
                     <div
                       className={`text-xs flex items-center gap-1 ${newPassword.length >= 8 ? "text-green-600" : "text-red-500"}`}
@@ -277,7 +277,7 @@ export default function AdminProfilePage() {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Conferma Nuova Password</label>
+              <label className="block text-sm font-medium text-muted-foreground mb-1">Conferma Nuova Password</label>
               <div className="relative">
                 <Input
                   type={showConfirmPassword ? "text" : "password"}
@@ -289,7 +289,7 @@ export default function AdminProfilePage() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8b8b8b] hover:text-[#5c5c5c]"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -302,7 +302,7 @@ export default function AdminProfilePage() {
             <Button
               onClick={handleChangePassword}
               disabled={!isPasswordValid || !doPasswordsMatch || isSaving}
-              className="w-full bg-[#8b7355] hover:bg-[#6d5a43] text-white mt-4"
+              className="w-full bg-ha-brand hover:bg-ha-brand/90 text-white mt-4"
             >
               {isSaving ? (
                 <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>

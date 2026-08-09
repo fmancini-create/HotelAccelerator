@@ -260,7 +260,7 @@ export default function GalleryPage() {
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-gray-400">Nessuna categoria</span>
+                      <span className="text-xs text-muted-foreground">Nessuna categoria</span>
                     )}
                   </div>
                 </div>

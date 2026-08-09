@@ -45,19 +45,19 @@ export default function TrackingSitesPage() {
   const sites = data?.sites ?? []
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       <AdminHeader
         title="Tracking - Siti"
         subtitle="Gestisci le chiavi di tracking per i siti dei tuoi clienti"
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <Card className="bg-white border-[#e8e0d8]">
+        <Card className="bg-white border-border">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-[#5c4a3a]">
+            <CardTitle className="flex items-center gap-2 text-foreground">
               <Globe className="h-5 w-5 text-blue-600" /> Come funziona
             </CardTitle>
-            <CardDescription className="text-[#8b7355]">
+            <CardDescription className="text-ha-brand-soft-foreground">
               Ogni sito riceve una <strong>chiave pubblica</strong> ({`tw_...`}) da incollare nello script embed. Le
               scritture sono accettate solo dagli <strong>Origin autorizzati</strong>. Puoi disattivare un sito senza
               ruotare la chiave per pausarlo immediatamente.
@@ -68,15 +68,15 @@ export default function TrackingSitesPage() {
         <CreateSiteCard />
 
         {isLoading ? (
-          <Card className="bg-white border-[#e8e0d8]">
-            <CardContent className="py-10 flex items-center justify-center text-[#8b7355]">
+          <Card className="bg-white border-border">
+            <CardContent className="py-10 flex items-center justify-center text-ha-brand-soft-foreground">
               <Loader2 className="h-5 w-5 animate-spin mr-2" />
               Caricamento siti...
             </CardContent>
           </Card>
         ) : sites.length === 0 ? (
-          <Card className="bg-white border-[#e8e0d8]">
-            <CardContent className="py-10 text-center text-[#8b7355]">
+          <Card className="bg-white border-border">
+            <CardContent className="py-10 text-center text-ha-brand-soft-foreground">
               Nessun sito configurato. Creane uno per iniziare a tracciare.
             </CardContent>
           </Card>
@@ -122,24 +122,24 @@ function CreateSiteCard() {
 
   if (!open)
     return (
-      <Button onClick={() => setOpen(true)} className="bg-[#5c4a3a] hover:bg-[#463729] text-white">
+      <Button onClick={() => setOpen(true)} className="bg-primary hover:bg-ha-brand/90 text-white">
         <Plus className="h-4 w-4 mr-2" /> Nuovo sito
       </Button>
     )
 
   return (
-    <Card className="bg-white border-[#e8e0d8]">
+    <Card className="bg-white border-border">
       <CardHeader>
-        <CardTitle className="text-[#5c4a3a]">Nuovo sito di tracking</CardTitle>
-        <CardDescription className="text-[#8b7355]">
+        <CardTitle className="text-foreground">Nuovo sito di tracking</CardTitle>
+        <CardDescription className="text-ha-brand-soft-foreground">
           Specifica il nome (es. {`"Sito ufficiale"`}) e almeno un origin autorizzato. Esempi:{" "}
-          <code className="px-1 py-0.5 bg-[#f8f7f4] rounded">https://www.villaibarronci.it</code>,{" "}
-          <code className="px-1 py-0.5 bg-[#f8f7f4] rounded">https://*.villaibarronci.it</code>.
+          <code className="px-1 py-0.5 bg-muted rounded">https://www.villaibarronci.it</code>,{" "}
+          <code className="px-1 py-0.5 bg-muted rounded">https://*.villaibarronci.it</code>.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label className="text-[#5c4a3a]">Nome</Label>
+          <Label className="text-foreground">Nome</Label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -148,17 +148,17 @@ function CreateSiteCard() {
           />
         </div>
         <div className="space-y-2">
-          <Label className="text-[#5c4a3a]">Origin autorizzati</Label>
+          <Label className="text-foreground">Origin autorizzati</Label>
           <Textarea
             value={origins}
             onChange={(e) => setOrigins(e.target.value)}
             placeholder={"https://www.villaibarronci.it\nhttps://villaibarronci.it"}
             className="font-mono text-sm bg-white min-h-24"
           />
-          <p className="text-xs text-[#8b7355]">Uno per riga. Supporta wildcard come {`"*.example.com"`}.</p>
+          <p className="text-xs text-muted-foreground">Uno per riga. Supporta wildcard come {`"*.example.com"`}.</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={onCreate} disabled={submitting} className="bg-[#5c4a3a] hover:bg-[#463729] text-white">
+          <Button onClick={onCreate} disabled={submitting} className="bg-primary hover:bg-ha-brand/90 text-white">
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Crea
           </Button>
@@ -230,11 +230,11 @@ function SiteCard({ site }: { site: TrackingSite }) {
   }
 
   return (
-    <Card className="bg-white border-[#e8e0d8]">
+    <Card className="bg-white border-border">
       <CardHeader>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
-            <CardTitle className="flex items-center gap-2 text-[#5c4a3a]">
+            <CardTitle className="flex items-center gap-2 text-foreground">
               <Globe className="h-5 w-5 text-blue-600" />
               <span className="truncate">{site.name}</span>
               {site.is_active ? (
@@ -247,12 +247,12 @@ function SiteCard({ site }: { site: TrackingSite }) {
                 </Badge>
               )}
             </CardTitle>
-            <CardDescription className="text-[#8b7355]">
+            <CardDescription className="text-ha-brand-soft-foreground">
               ID: <code className="text-xs">{site.id.slice(0, 8)}</code>
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Label htmlFor={`active-${site.id}`} className="text-sm text-[#5c4a3a]">
+            <Label htmlFor={`active-${site.id}`} className="text-sm text-foreground">
               {site.is_active ? "On" : "Off"}
             </Label>
             <Switch
@@ -268,11 +268,11 @@ function SiteCard({ site }: { site: TrackingSite }) {
       <CardContent className="space-y-5">
         {/* Key */}
         <div className="space-y-2">
-          <Label className="flex items-center gap-2 text-[#5c4a3a]">
+          <Label className="flex items-center gap-2 text-foreground">
             <KeyRound className="h-4 w-4" /> Chiave pubblica
           </Label>
           <div className="flex items-center gap-2">
-            <code className="flex-1 px-3 py-2 bg-[#f8f7f4] border border-[#e8e0d8] rounded text-xs font-mono break-all">
+            <code className="flex-1 px-3 py-2 bg-muted border border-border rounded text-xs font-mono break-all">
               {site.write_key}
             </code>
             <Button variant="outline" size="sm" onClick={() => copy(site.write_key, setKeyCopied)}>
@@ -298,11 +298,11 @@ function SiteCard({ site }: { site: TrackingSite }) {
         {/* Name + Origins */}
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <Label className="text-[#5c4a3a]">Nome</Label>
+            <Label className="text-foreground">Nome</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label className="text-[#5c4a3a]">Origin autorizzati</Label>
+            <Label className="text-foreground">Origin autorizzati</Label>
             <Textarea
               value={origins}
               onChange={(e) => setOrigins(e.target.value)}
@@ -311,7 +311,7 @@ function SiteCard({ site }: { site: TrackingSite }) {
             />
           </div>
         </div>
-        <Button onClick={saveOriginsAndName} disabled={saving} className="bg-[#5c4a3a] hover:bg-[#463729] text-white">
+        <Button onClick={saveOriginsAndName} disabled={saving} className="bg-primary hover:bg-ha-brand/90 text-white">
           {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           Salva modifiche
         </Button>
@@ -320,11 +320,11 @@ function SiteCard({ site }: { site: TrackingSite }) {
 
         {/* Snippet */}
         <div className="space-y-2">
-          <Label className="flex items-center gap-2 text-[#5c4a3a]">
+          <Label className="flex items-center gap-2 text-foreground">
             <Activity className="h-4 w-4" /> Script da incollare nel {"<head>"} del sito
           </Label>
           <div className="relative">
-            <pre className="p-3 bg-[#1e1e1e] text-[#e8e0d8] rounded text-xs overflow-x-auto">
+            <pre className="p-3 bg-[#1e1e1e] text-border rounded text-xs overflow-x-auto">
               <code>{snippet}</code>
             </pre>
             <Button
@@ -336,7 +336,7 @@ function SiteCard({ site }: { site: TrackingSite }) {
               {snippetCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </Button>
           </div>
-          <p className="text-xs text-[#8b7355]">
+          <p className="text-xs text-muted-foreground">
             Puoi chiamare <code>window.ha.track(&apos;cta_click&apos;, {`{cta:'book_now'}`})</code> o{" "}
             <code>window.ha.identify({`{email:'guest@...'}`})</code> per catturare eventi ed identita&apos;.
           </p>

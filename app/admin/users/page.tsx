@@ -130,7 +130,7 @@ export default function AdminUsersPage() {
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="bg-card rounded-2xl shadow-xl p-8 text-center max-w-md border">
           <Lock className="w-16 h-16 text-destructive mx-auto mb-4" />
-          <h1 className="text-2xl font-serif text-foreground mb-2">Accesso Richiesto</h1>
+          <h1 className="text-2xl font-semibold text-foreground mb-2">Accesso Richiesto</h1>
           <p className="text-muted-foreground mb-6">Effettua il login per accedere a questa sezione.</p>
           <Link href="/admin">
             <Button>Torna al Login</Button>

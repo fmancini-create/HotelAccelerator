@@ -69,7 +69,7 @@ export default function BillingPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-neutral-500">MRR</CardTitle>
-              <DollarSign className="w-4 h-4 text-neutral-400" />
+              <DollarSign className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">€{stats.mrr.toLocaleString("it-IT")}</div>
@@ -82,7 +82,7 @@ export default function BillingPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-neutral-500">ARR</CardTitle>
-              <Calendar className="w-4 h-4 text-neutral-400" />
+              <Calendar className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">€{stats.arr.toLocaleString("it-IT")}</div>
@@ -93,7 +93,7 @@ export default function BillingPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-neutral-500">Fatture Pending</CardTitle>
-              <CreditCard className="w-4 h-4 text-neutral-400" />
+              <CreditCard className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.pendingInvoices}</div>

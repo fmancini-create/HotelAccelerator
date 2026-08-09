@@ -124,31 +124,32 @@ export default function AdminSettingsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
-      <AdminHeader title="Impostazioni" subtitle="Configurazione della struttura" />
+    <div className="min-h-screen bg-muted/40">
+      {/*
+       * The page used to print its own title below the header. Now that
+       * AdminHeader renders `title`, the local block would show "Impostazioni"
+       * twice, so the richer description moves up into the header.
+       */}
+      <AdminHeader
+        title="Impostazioni"
+        subtitle="Gestisci la configurazione della tua struttura: domini, canali, utenti e moduli."
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-[#1a1a1a]">Impostazioni</h1>
-          <p className="text-sm text-[#8b8b8b] mt-1">
-            Gestisci la configurazione della tua struttura: domini, canali, utenti e moduli.
-          </p>
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {visibleItems.map((item) => (
             <button key={item.id} onClick={() => router.push(item.href)} className="text-left">
-              <Card className="h-full transition-all hover:shadow-md hover:border-[#8b7355]/40">
+              <Card className="h-full transition-all hover:shadow-md hover:border-ha-brand/40">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className={`${item.color} text-white rounded-lg p-2.5 flex items-center justify-center`}>
                       {item.icon}
                     </div>
-                    <ChevronRight className="w-5 h-5 text-[#c0c0c0]" />
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <CardTitle className="text-base text-[#1a1a1a]">{item.title}</CardTitle>
+                  <CardTitle className="text-base text-foreground">{item.title}</CardTitle>
                   <CardDescription className="mt-1.5 text-sm leading-relaxed">{item.description}</CardDescription>
                 </CardContent>
               </Card>

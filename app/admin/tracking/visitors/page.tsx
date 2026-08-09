@@ -90,20 +90,20 @@ export default function VisitorsPage() {
   const selectedSession = sessions.find((s) => s.session_id === selected) ?? sessions[0]
 
   return (
-    <div className="min-h-screen bg-[#f8f7f4]">
+    <div className="min-h-screen bg-muted">
       <AdminHeader title="Tracking - Visitatori" subtitle="Sessioni live e timeline eventi" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
           <Link
             href="/admin/tracking/sites"
-            className="text-sm text-[#5c4a3a] hover:text-[#463729] inline-flex items-center gap-1"
+            className="text-sm text-foreground hover:text-ha-brand-soft-foreground inline-flex items-center gap-1"
           >
             <ArrowLeft className="h-4 w-4" /> Siti tracking
           </Link>
           <div className="flex gap-2 flex-1 max-w-md">
             <div className="relative flex-1">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#8b7355]" />
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-ha-brand-soft-foreground" />
               <Input
                 placeholder="Cerca email o session id"
                 value={q}
@@ -128,12 +128,12 @@ export default function VisitorsPage() {
           {/* List */}
           <div className="lg:col-span-2 space-y-2 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
             {isLoading ? (
-              <div className="flex items-center justify-center py-16 text-[#8b7355]">
+              <div className="flex items-center justify-center py-16 text-ha-brand-soft-foreground">
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Caricamento...
               </div>
             ) : sessions.length === 0 ? (
-              <Card className="bg-white border-[#e8e0d8]">
-                <CardContent className="py-10 text-center text-[#8b7355]">
+              <Card className="bg-white border-border">
+                <CardContent className="py-10 text-center text-ha-brand-soft-foreground">
                   Nessuna sessione ancora. Assicurati di aver installato lo script su un sito attivo.
                 </CardContent>
               </Card>
@@ -154,8 +154,8 @@ export default function VisitorsPage() {
             {selectedSession ? (
               <SessionDetail key={selectedSession.session_id} session={selectedSession} />
             ) : (
-              <Card className="bg-white border-[#e8e0d8]">
-                <CardContent className="py-16 text-center text-[#8b7355]">
+              <Card className="bg-white border-border">
+                <CardContent className="py-16 text-center text-ha-brand-soft-foreground">
                   Seleziona una sessione per vederne la timeline.
                 </CardContent>
               </Card>
@@ -174,28 +174,28 @@ function SessionRow({ s, active, onClick }: { s: Session; active: boolean; onCli
       onClick={onClick}
       className={`w-full text-left rounded-lg border transition-colors p-3 ${
         active
-          ? "bg-white border-[#5c4a3a] shadow-sm"
-          : "bg-white/70 border-[#e8e0d8] hover:bg-white"
+          ? "bg-white border-primary shadow-sm"
+          : "bg-white/70 border-border hover:bg-white"
       }`}
     >
       <div className="flex items-start gap-3">
         <div
           className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 ${
-            identified ? "bg-[#5c4a3a] text-white" : "bg-[#e8e0d8] text-[#5c4a3a]"
+            identified ? "bg-primary text-white" : "bg-border text-foreground"
           }`}
         >
           {identified ? <UserRound className="h-4 w-4" /> : <User2 className="h-4 w-4" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-medium text-[#5c4a3a] truncate">
+            <span className="font-medium text-foreground truncate">
               {s.email ?? `anonimo · ${s.session_id.slice(0, 8)}`}
             </span>
             <Badge variant="outline" className="text-xs">
               {s.event_count} eventi
             </Badge>
           </div>
-          <div className="text-xs text-[#8b7355] flex items-center gap-3 mt-1 flex-wrap">
+          <div className="text-xs text-muted-foreground flex items-center gap-3 mt-1 flex-wrap">
             <span className="flex items-center gap-1">
               <Clock className="h-3 w-3" /> {relTime(s.last_seen_at)}
             </span>
@@ -210,7 +210,7 @@ function SessionRow({ s, active, onClick }: { s: Session; active: boolean; onCli
               </span>
             )}
           </div>
-          {s.last_page && <div className="text-xs text-[#8b7355] truncate mt-1">{s.last_page}</div>}
+          {s.last_page && <div className="text-xs text-muted-foreground truncate mt-1">{s.last_page}</div>}
         </div>
       </div>
     </button>
@@ -226,9 +226,9 @@ function SessionDetail({ session }: { session: Session }) {
   const events = data?.events ?? []
 
   return (
-    <Card className="bg-white border-[#e8e0d8]">
+    <Card className="bg-white border-border">
       <CardHeader>
-        <CardTitle className="text-[#5c4a3a] flex items-center gap-2">
+        <CardTitle className="text-foreground flex items-center gap-2">
           {session.email ? (
             <>
               <UserRound className="h-5 w-5" /> {session.email}
@@ -239,7 +239,7 @@ function SessionDetail({ session }: { session: Session }) {
             </>
           )}
         </CardTitle>
-        <CardDescription className="text-[#8b7355]">
+        <CardDescription className="text-ha-brand-soft-foreground">
           Session <code className="text-xs">{session.session_id.slice(0, 12)}...</code> · iniziata{" "}
           {relTime(session.first_seen_at)} · ultimo evento {relTime(session.last_seen_at)}
         </CardDescription>
@@ -258,34 +258,34 @@ function SessionDetail({ session }: { session: Session }) {
         </div>
 
         <div>
-          <h3 className="text-sm font-medium text-[#5c4a3a] mb-2">Timeline</h3>
+          <h3 className="text-sm font-medium text-foreground mb-2">Timeline</h3>
           {isLoading ? (
-            <div className="py-8 flex items-center justify-center text-[#8b7355]">
+            <div className="py-8 flex items-center justify-center text-ha-brand-soft-foreground">
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Carico eventi...
             </div>
           ) : events.length === 0 ? (
-            <div className="py-6 text-sm text-[#8b7355] text-center">Nessun evento ancora.</div>
+            <div className="py-6 text-sm text-ha-brand-soft-foreground text-center">Nessun evento ancora.</div>
           ) : (
-            <ol className="relative border-l-2 border-[#e8e0d8] ml-2 space-y-3">
+            <ol className="relative border-l-2 border-border ml-2 space-y-3">
               {events.map((ev) => (
                 <li key={ev.id} className="pl-4 relative">
-                  <span className="absolute -left-[7px] top-2 h-3 w-3 rounded-full bg-[#5c4a3a]" />
+                  <span className="absolute -left-[7px] top-2 h-3 w-3 rounded-full bg-primary" />
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className="bg-[#5c4a3a] text-white hover:bg-[#463729]">{ev.event_type}</Badge>
+                    <Badge className="bg-primary text-white hover:bg-ha-brand/90">{ev.event_type}</Badge>
                     {ev.event_category && (
                       <Badge variant="outline" className="text-xs">
                         {ev.event_category}
                       </Badge>
                     )}
-                    <span className="text-xs text-[#8b7355]">{new Date(ev.created_at).toLocaleString("it-IT")}</span>
+                    <span className="text-xs text-muted-foreground">{new Date(ev.created_at).toLocaleString("it-IT")}</span>
                   </div>
                   {ev.page_url && (
-                    <div className="text-xs text-[#8b7355] mt-1 flex items-center gap-1">
+                    <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                       <Globe className="h-3 w-3" /> <span className="truncate">{ev.page_url}</span>
                     </div>
                   )}
                   {Object.keys(ev.payload || {}).length > 0 && (
-                    <pre className="text-xs bg-[#f8f7f4] text-[#5c4a3a] rounded p-2 mt-2 overflow-x-auto">
+                    <pre className="text-xs bg-muted text-foreground rounded p-2 mt-2 overflow-x-auto">
                       {JSON.stringify(ev.payload, null, 2)}
                     </pre>
                   )}
@@ -308,8 +308,8 @@ function SessionDetail({ session }: { session: Session }) {
 function Meta({ label, value, truncate }: { label: string; value: string | null | undefined; truncate?: boolean }) {
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-[#8b7355]">{label}</div>
-      <div className={`text-sm text-[#5c4a3a] ${truncate ? "truncate" : ""}`}>{value || "—"}</div>
+      <div className="text-xs uppercase tracking-wide text-ha-brand-soft-foreground">{label}</div>
+      <div className={`text-sm text-foreground ${truncate ? "truncate" : ""}`}>{value || "—"}</div>
     </div>
   )
 }

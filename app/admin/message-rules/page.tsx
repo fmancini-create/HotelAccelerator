@@ -260,7 +260,7 @@ export default function MessageRulesPage() {
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#8b7355]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
   }
@@ -294,8 +294,8 @@ export default function MessageRulesPage() {
 
         {/* Form */}
         {showForm && (
-          <div className="bg-white rounded-xl border border-[#e5e5e5] p-6 mb-8">
-            <h2 className="text-lg font-medium text-[#5c5c5c] mb-6">
+          <div className="bg-white rounded-xl border border-border p-6 mb-8">
+            <h2 className="text-lg font-medium text-muted-foreground mb-6">
               {editingRule ? "Modifica Messaggio" : "Nuovo Messaggio"}
             </h2>
 
@@ -303,7 +303,7 @@ export default function MessageRulesPage() {
               {/* Left - Settings */}
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Nome *</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Nome *</label>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -312,7 +312,7 @@ export default function MessageRulesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Note interne (opzionale)</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Note interne (opzionale)</label>
                   <Input
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -321,15 +321,15 @@ export default function MessageRulesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#5c5c5c] mb-2">A chi mostrare</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">A chi mostrare</label>
                   <div className="grid grid-cols-1 gap-2">
                     {Object.entries(RULE_TYPE_LABELS).map(([key, { label, description, icon: Icon }]) => (
                       <label
                         key={key}
                         className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
                           formData.rule_type === key
-                            ? "border-[#8b7355] bg-[#8b7355]/5"
-                            : "border-[#e5e5e5] hover:bg-[#f8f7f4]"
+                            ? "border-ha-brand bg-ha-brand/5"
+                            : "border-border hover:bg-muted"
                         }`}
                       >
                         <input
@@ -341,11 +341,11 @@ export default function MessageRulesPage() {
                           className="sr-only"
                         />
                         <Icon
-                          className={`w-5 h-5 ${formData.rule_type === key ? "text-[#8b7355]" : "text-[#8b8b8b]"}`}
+                          className={`w-5 h-5 ${formData.rule_type === key ? "text-ha-brand-soft-foreground" : "text-muted-foreground"}`}
                         />
                         <div>
-                          <p className="font-medium text-sm text-[#5c5c5c]">{label}</p>
-                          <p className="text-xs text-[#8b8b8b]">{description}</p>
+                          <p className="font-medium text-sm text-muted-foreground">{label}</p>
+                          <p className="text-xs text-muted-foreground">{description}</p>
                         </div>
                       </label>
                     ))}
@@ -354,9 +354,9 @@ export default function MessageRulesPage() {
 
                 {/* Condition inputs based on rule type */}
                 {formData.rule_type === "page_visits" && (
-                  <div className="space-y-3 p-3 bg-[#f8f7f4] rounded-lg">
+                  <div className="space-y-3 p-3 bg-muted rounded-lg">
                     <div>
-                      <label className="block text-sm text-[#5c5c5c] mb-1">Dopo quante visite?</label>
+                      <label className="block text-sm text-muted-foreground mb-1">Dopo quante visite?</label>
                       <Input
                         type="number"
                         min={1}
@@ -367,7 +367,7 @@ export default function MessageRulesPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm text-[#5c5c5c] mb-1">Su quali pagine? (opzionale)</label>
+                      <label className="block text-sm text-muted-foreground mb-1">Su quali pagine? (opzionale)</label>
                       <Input
                         value={formData.condition_page_pattern}
                         onChange={(e) => setFormData({ ...formData, condition_page_pattern: e.target.value })}
@@ -378,8 +378,8 @@ export default function MessageRulesPage() {
                 )}
 
                 {formData.rule_type === "room_interest" && (
-                  <div className="p-3 bg-[#f8f7f4] rounded-lg">
-                    <label className="block text-sm text-[#5c5c5c] mb-1">Dopo quante camere visitate?</label>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <label className="block text-sm text-muted-foreground mb-1">Dopo quante camere visitate?</label>
                     <Input
                       type="number"
                       min={1}
@@ -392,10 +392,10 @@ export default function MessageRulesPage() {
                 )}
 
                 {formData.rule_type === "return_visitor" && (
-                  <div className="p-3 bg-[#f8f7f4] rounded-lg space-y-3">
+                  <div className="p-3 bg-muted rounded-lg space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-sm text-[#5c5c5c] mb-1">Da giorni</label>
+                        <label className="block text-sm text-muted-foreground mb-1">Da giorni</label>
                         <Input
                           type="number"
                           min={1}
@@ -406,7 +406,7 @@ export default function MessageRulesPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm text-[#5c5c5c] mb-1">A giorni</label>
+                        <label className="block text-sm text-muted-foreground mb-1">A giorni</label>
                         <Input
                           type="number"
                           min={1}
@@ -417,20 +417,20 @@ export default function MessageRulesPage() {
                         />
                       </div>
                     </div>
-                    <p className="text-xs text-[#8b8b8b]">
+                    <p className="text-xs text-muted-foreground">
                       Mostra a chi torna tra {formData.condition_min_days} e {formData.condition_max_days} giorni
                     </p>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-[#5c5c5c] mb-2">Come mostrare</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">Come mostrare</label>
                   <div className="flex gap-3">
                     <label
                       className={`flex-1 flex items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition-colors ${
                         formData.message_type === "popup"
-                          ? "border-[#8b7355] bg-[#8b7355]/5"
-                          : "border-[#e5e5e5] hover:bg-[#f8f7f4]"
+                          ? "border-ha-brand bg-ha-brand/5"
+                          : "border-border hover:bg-muted"
                       }`}
                     >
                       <input
@@ -446,8 +446,8 @@ export default function MessageRulesPage() {
                     <label
                       className={`flex-1 flex items-center justify-center gap-2 p-3 border rounded-lg cursor-pointer transition-colors ${
                         formData.message_type === "chat"
-                          ? "border-[#8b7355] bg-[#8b7355]/5"
-                          : "border-[#e5e5e5] hover:bg-[#f8f7f4]"
+                          ? "border-ha-brand bg-ha-brand/5"
+                          : "border-border hover:bg-muted"
                       }`}
                     >
                       <input
@@ -468,7 +468,7 @@ export default function MessageRulesPage() {
               <div className="space-y-4">
                 {formData.message_type === "popup" && (
                   <div>
-                    <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Titolo (opzionale)</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">Titolo (opzionale)</label>
                     <Input
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -478,7 +478,7 @@ export default function MessageRulesPage() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Messaggio *</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Messaggio *</label>
                   <Textarea
                     value={formData.body}
                     onChange={(e) => setFormData({ ...formData, body: e.target.value })}
@@ -489,7 +489,7 @@ export default function MessageRulesPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Testo pulsante</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">Testo pulsante</label>
                     <Input
                       value={formData.cta_text}
                       onChange={(e) => setFormData({ ...formData, cta_text: e.target.value })}
@@ -497,7 +497,7 @@ export default function MessageRulesPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-[#5c5c5c] mb-1">Link pulsante</label>
+                    <label className="block text-sm font-medium text-muted-foreground mb-1">Link pulsante</label>
                     <Input
                       value={formData.cta_url}
                       onChange={(e) => setFormData({ ...formData, cta_url: e.target.value })}
@@ -508,18 +508,18 @@ export default function MessageRulesPage() {
 
                 {/* Preview */}
                 <div className="mt-6">
-                  <label className="block text-sm font-medium text-[#5c5c5c] mb-2">Anteprima</label>
-                  <div className="bg-[#f8f7f4] rounded-lg p-4 min-h-[200px] flex items-center justify-center">
+                  <label className="block text-sm font-medium text-muted-foreground mb-2">Anteprima</label>
+                  <div className="bg-muted rounded-lg p-4 min-h-[200px] flex items-center justify-center">
                     {formData.message_type === "popup" ? (
                       <div className="bg-white rounded-xl shadow-lg p-6 max-w-sm w-full">
                         {formData.title && (
-                          <h3 className="text-lg font-semibold text-[#5c5c5c] mb-2">{formData.title}</h3>
+                          <h3 className="text-lg font-semibold text-muted-foreground mb-2">{formData.title}</h3>
                         )}
-                        <p className="text-[#8b8b8b] text-sm mb-4">
+                        <p className="text-muted-foreground text-sm mb-4">
                           {formData.body || "Il tuo messaggio apparirà qui..."}
                         </p>
                         {formData.cta_text && (
-                          <button className="w-full bg-[#8b7355] text-white py-2 px-4 rounded-lg text-sm font-medium">
+                          <button className="w-full bg-ha-brand text-white py-2 px-4 rounded-lg text-sm font-medium">
                             {formData.cta_text}
                           </button>
                         )}
@@ -527,15 +527,15 @@ export default function MessageRulesPage() {
                     ) : (
                       <div className="bg-white rounded-xl shadow-lg p-4 max-w-xs w-full">
                         <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 bg-[#8b7355] rounded-full flex items-center justify-center text-white text-xs">
+                          <div className="w-8 h-8 bg-ha-brand rounded-full flex items-center justify-center text-white text-xs">
                             HA
                           </div>
                           <div className="flex-1">
-                            <p className="text-sm text-[#5c5c5c]">
+                            <p className="text-sm text-muted-foreground">
                               {formData.body || "Il tuo messaggio apparirà qui..."}
                             </p>
                             {formData.cta_text && (
-                              <button className="mt-2 text-xs text-[#8b7355] font-medium">{formData.cta_text} →</button>
+                              <button className="mt-2 text-xs text-ha-brand-soft-foreground font-medium">{formData.cta_text} →</button>
                             )}
                           </div>
                         </div>
@@ -547,11 +547,11 @@ export default function MessageRulesPage() {
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-[#e5e5e5]">
+            <div className="flex justify-end gap-3 mt-6 pt-6 border-t border-border">
               <Button variant="outline" onClick={resetForm} disabled={isSaving}>
                 Annulla
               </Button>
-              <Button onClick={handleSave} disabled={isSaving} className="bg-[#8b7355] hover:bg-[#6b5a45]">
+              <Button onClick={handleSave} disabled={isSaving} className="bg-ha-brand hover:bg-ha-brand/90">
                 {isSaving ? "Salvataggio..." : editingRule ? "Salva Modifiche" : "Crea Messaggio"}
               </Button>
             </div>
@@ -562,11 +562,11 @@ export default function MessageRulesPage() {
         {!showForm && (
           <>
             {rules.length === 0 ? (
-              <div className="bg-white rounded-xl border border-[#e5e5e5] p-12 text-center">
-                <Megaphone className="w-12 h-12 text-[#8b8b8b] mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-[#5c5c5c] mb-2">Nessun messaggio configurato</h3>
-                <p className="text-[#8b8b8b] mb-6">Crea il tuo primo messaggio per coinvolgere i visitatori del sito</p>
-                <Button onClick={() => setShowForm(true)} className="bg-[#8b7355] hover:bg-[#6b5a45]">
+              <div className="bg-white rounded-xl border border-border p-12 text-center">
+                <Megaphone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-muted-foreground mb-2">Nessun messaggio configurato</h3>
+                <p className="text-muted-foreground mb-6">Crea il tuo primo messaggio per coinvolgere i visitatori del sito</p>
+                <Button onClick={() => setShowForm(true)} className="bg-ha-brand hover:bg-ha-brand/90">
                   <Plus className="w-4 h-4 mr-2" />
                   Crea Messaggio
                 </Button>
@@ -576,19 +576,19 @@ export default function MessageRulesPage() {
                 {rules.map((rule) => (
                   <div
                     key={rule.id}
-                    className="bg-white rounded-xl border border-[#e5e5e5] p-4 flex items-center gap-4"
+                    className="bg-white rounded-xl border border-border p-4 flex items-center gap-4"
                   >
                     {/* Toggle */}
                     <Switch
                       checked={rule.is_active}
                       onCheckedChange={() => handleToggleActive(rule)}
-                      className="data-[state=checked]:bg-[#8b7355]"
+                      className="data-[state=checked]:bg-ha-brand"
                     />
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-[#5c5c5c] truncate">{rule.name}</h3>
+                        <h3 className="font-medium text-muted-foreground truncate">{rule.name}</h3>
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${
                             rule.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
@@ -597,7 +597,7 @@ export default function MessageRulesPage() {
                           {rule.is_active ? "Attivo" : "Disattivato"}
                         </span>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-[#8b8b8b]">
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                         <span>{RULE_TYPE_LABELS[rule.rule_type]?.label}</span>
                         <span>•</span>
                         <span>{MESSAGE_TYPE_LABELS[rule.message_type]}</span>
@@ -614,7 +614,7 @@ export default function MessageRulesPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => setPreviewRule(rule)}
-                        className="text-[#8b8b8b] hover:text-[#5c5c5c]"
+                        className="text-muted-foreground hover:text-foreground"
                       >
                         <Eye className="w-4 h-4" />
                       </Button>
@@ -622,7 +622,7 @@ export default function MessageRulesPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleEdit(rule)}
-                        className="text-[#8b8b8b] hover:text-[#5c5c5c]"
+                        className="text-muted-foreground hover:text-foreground"
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
@@ -649,17 +649,17 @@ export default function MessageRulesPage() {
             onClick={() => setPreviewRule(null)}
           >
             <div className="bg-white rounded-xl p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-medium text-[#5c5c5c] mb-4">Anteprima: {previewRule.name}</h3>
+              <h3 className="text-lg font-medium text-muted-foreground mb-4">Anteprima: {previewRule.name}</h3>
 
-              <div className="bg-[#f8f7f4] rounded-lg p-4 min-h-[200px] flex items-center justify-center">
+              <div className="bg-muted rounded-lg p-4 min-h-[200px] flex items-center justify-center">
                 {previewRule.message_type === "popup" ? (
                   <div className="bg-white rounded-xl shadow-lg p-6 max-w-sm w-full">
                     {previewRule.message_content.title && (
-                      <h3 className="text-lg font-semibold text-[#5c5c5c] mb-2">{previewRule.message_content.title}</h3>
+                      <h3 className="text-lg font-semibold text-muted-foreground mb-2">{previewRule.message_content.title}</h3>
                     )}
-                    <p className="text-[#8b8b8b] text-sm mb-4">{previewRule.message_content.body}</p>
+                    <p className="text-muted-foreground text-sm mb-4">{previewRule.message_content.body}</p>
                     {previewRule.message_content.cta_text && (
-                      <button className="w-full bg-[#8b7355] text-white py-2 px-4 rounded-lg text-sm font-medium">
+                      <button className="w-full bg-ha-brand text-white py-2 px-4 rounded-lg text-sm font-medium">
                         {previewRule.message_content.cta_text}
                       </button>
                     )}
@@ -667,13 +667,13 @@ export default function MessageRulesPage() {
                 ) : (
                   <div className="bg-white rounded-xl shadow-lg p-4 max-w-xs w-full">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 bg-[#8b7355] rounded-full flex items-center justify-center text-white text-xs">
+                      <div className="w-8 h-8 bg-ha-brand rounded-full flex items-center justify-center text-white text-xs">
                         HA
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm text-[#5c5c5c]">{previewRule.message_content.body}</p>
+                        <p className="text-sm text-muted-foreground">{previewRule.message_content.body}</p>
                         {previewRule.message_content.cta_text && (
-                          <button className="mt-2 text-xs text-[#8b7355] font-medium">
+                          <button className="mt-2 text-xs text-ha-brand-soft-foreground font-medium">
                             {previewRule.message_content.cta_text} →
                           </button>
                         )}
