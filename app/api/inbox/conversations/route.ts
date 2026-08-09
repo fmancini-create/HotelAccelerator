@@ -58,7 +58,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ conversations })
   } catch (error) {
-    console.error("[v0] Inbox conversations error:", error)
+    // handleServiceError distingue gia' le condizioni di auth attese (log
+    // breve, 401) dai guasti veri (log con stack). Prima qui c'era un
+    // console.error che emetteva uno stack completo su OGNI sessione scaduta:
+    // un allarme sempre acceso, che seppellisce gli errori veri nel rumore.
     return handleServiceError(error)
   }
 }
@@ -116,7 +119,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ conversation })
   } catch (error) {
-    console.error("[v0] Inbox conversations POST error:", error)
+    // Come nella GET: nessuno stack sulle sessioni scadute, che qui sono
+    // altrettanto normali.
     return handleServiceError(error)
   }
 }
