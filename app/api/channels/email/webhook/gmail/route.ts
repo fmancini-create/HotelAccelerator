@@ -250,7 +250,14 @@ async function syncNewEmails(
         result.errors.push("History page deferred to Pub/Sub retry")
         return result
       }
-      const processed = await fetchAndProcessMessage(processor, channel, token, messageId)
+      // Il tempo che resta prima di sfondare il budget: oltre quello
+      // smettiamo di aspettare e lasciamo il messaggio al prossimo tentativo.
+      const msRimasti = PROCESSING_BUDGET_MS - (Date.now() - startedAt)
+      const processed = await conScadenza(
+        fetchAndProcessMessage(processor, channel, token, messageId),
+        msRimasti,
+        { success: false, error: "Elaborazione oltre il tempo disponibile, rinviata al prossimo tentativo" },
+      )
       if (!processed.success) {
         result.errors.push(`${messageId}: ${processed.error || "processing failed"}`)
         return result
@@ -273,6 +280,34 @@ async function syncNewEmails(
   result.cursor = latestMailboxCursor
   result.complete = true
   return result
+}
+
+/**
+ * Limita un'attesa che altrimenti non ne avrebbe.
+ *
+ * Il budget di 42s viene controllato solo TRA un messaggio e l'altro: se una
+ * singola elaborazione si blocca (l'8/8 il database era in affanno) nessuno la
+ * interrompe, la funzione sfonda il limite di 60s e viene uccisa con un 504.
+ * In quel caso non resta traccia dell'errore e il cursore non avanza: al
+ * riavvio Pub/Sub ritenta lo stesso messaggio e si blocca di nuovo.
+ *
+ * Chiudendo noi entro il budget, invece, l'errore viene registrato e il
+ * rinvio a Pub/Sub segue la stessa strada gia' prevista per il budget esaurito.
+ * Nota: non possiamo annullare il lavoro gia' avviato, ma possiamo smettere di
+ * aspettarlo.
+ */
+async function conScadenza<T>(promessa: Promise<T>, msDisponibili: number, alloScadere: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promessa,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(alloScadere), msDisponibili)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 async function fetchAndProcessMessage(

@@ -24,7 +24,30 @@ export function EmailKpiBar() {
     let annullato = false
     let interval: ReturnType<typeof setInterval> | undefined
 
+    // Freno progressivo sui guasti del server (5xx/rete).
+    // A differenza del 401 non possiamo fermarci del tutto: il guasto e'
+    // transitorio e vogliamo riprenderci da soli. Ma continuare a 30s fissi
+    // mentre il server e' in affanno lo tiene sotto carico proprio quando
+    // deve rialzarsi (nei log dell'8/8: 12 minuti di 500/504 con decine di
+    // schede che continuavano a interrogare). Raddoppiamo l'attesa a ogni
+    // fallimento fino a un tetto di 5 minuti, e torniamo a 30s al primo esito
+    // buono.
+    let cicliDaSaltare = 0
+    let fallimentiConsecutivi = 0
+    const MAX_CICLI_SALTATI = 9 // 9 cicli saltati + 1 eseguito = 5 min
+
+    const registraFallimento = () => {
+      fallimentiConsecutivi += 1
+      cicliDaSaltare = Math.min(2 ** (fallimentiConsecutivi - 1), MAX_CICLI_SALTATI)
+    }
+
     const fetchKpi = async () => {
+      // Attesa del freno: consumiamo un ciclo senza toccare la rete.
+      if (cicliDaSaltare > 0) {
+        cicliDaSaltare -= 1
+        return
+      }
+
       try {
         const res = await fetch("/api/kpi/email", { credentials: "include" })
         if (annullato) return
@@ -40,9 +63,17 @@ export function EmailKpiBar() {
 
         if (res.ok) {
           setKpi(await res.json())
+          fallimentiConsecutivi = 0
+          cicliDaSaltare = 0
+        } else {
+          // 5xx e altri esiti non attesi: guasto del server, applichiamo il freno.
+          registraFallimento()
         }
       } catch (error) {
-        if (!annullato) console.error("Errore caricamento KPI:", error)
+        if (!annullato) {
+          console.error("Errore caricamento KPI:", error)
+          registraFallimento()
+        }
       } finally {
         if (!annullato) setLoading(false)
       }

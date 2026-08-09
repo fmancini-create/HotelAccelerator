@@ -566,6 +566,11 @@ export default function InboxPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const conversationsLoadInFlightRef = useRef(false)
+  // Freno progressivo sui guasti del server. Vale SOLO per gli aggiornamenti
+  // automatici (poll e realtime): un'azione esplicita dell'operatore deve
+  // sempre poter riprovare subito.
+  const cicliDaSaltareRef = useRef(0)
+  const fallimentiConsecutiviRef = useRef(0)
   const markedAsReadRef = useRef<Set<string>>(new Set())
 
   // ── Gmail connection error state (e.g. OAuth token revoked / channel not configured) ──
@@ -1172,10 +1177,26 @@ export default function InboxPage() {
 
   // ==================== SMART MODE FUNCTIONS (DB-driven ONLY - NO Gmail API calls) ====================
 
-  const loadConversations = useCallback(async () => {
+  // Raddoppia l'attesa a ogni fallimento consecutivo, con tetto a 5 minuti
+  // (9 cicli saltati + 1 eseguito, a 30s per ciclo).
+  const registraFallimentoConversazioni = useCallback(() => {
+    fallimentiConsecutiviRef.current += 1
+    cicliDaSaltareRef.current = Math.min(2 ** (fallimentiConsecutiviRef.current - 1), 9)
+  }, [])
+
+  const loadConversations = useCallback(async (opts?: { automatico?: boolean }) => {
     // Realtime, polling and user actions can all request a refresh. Never let
     // them fan out into concurrent copies of this relatively expensive query.
     if (conversationsLoadInFlightRef.current) return
+
+    // `automatico` e' passato esplicitamente solo da poll e realtime. Chi
+    // chiama in risposta a un gesto dell'operatore (o passa un evento) non
+    // entra qui e non viene mai frenato.
+    if (opts?.automatico === true && cicliDaSaltareRef.current > 0) {
+      cicliDaSaltareRef.current -= 1
+      return
+    }
+
     conversationsLoadInFlightRef.current = true
 
     try {
@@ -1202,12 +1223,20 @@ export default function InboxPage() {
         return
       }
 
-      if (!res.ok) return
+      if (!res.ok) {
+        // 5xx: guasto del server. Rallentiamo gli aggiornamenti automatici
+        // invece di martellare a 30s fissi mentre e' in affanno.
+        registraFallimentoConversazioni()
+        return
+      }
 
       const data = await res.json()
       setConversations(data.conversations || [])
+      fallimentiConsecutiviRef.current = 0
+      cicliDaSaltareRef.current = 0
     } catch (error) {
       console.error("Error loading conversations:", error)
+      registraFallimentoConversazioni()
     } finally {
       conversationsLoadInFlightRef.current = false
       setIsLoading(false)
@@ -1411,7 +1440,7 @@ export default function InboxPage() {
 
       // Fast poll: reload conversations from DB every 30s (catches webhook-imported messages)
       pollIntervalRef.current = setInterval(() => {
-        loadConversations()
+        loadConversations({ automatico: true })
       }, 30000)
 
       const supabase = createClient()
@@ -1424,7 +1453,7 @@ export default function InboxPage() {
         if (realtimeReloadTimer) return
         realtimeReloadTimer = setTimeout(() => {
           realtimeReloadTimer = null
-          loadConversations()
+          loadConversations({ automatico: true })
         }, 1000)
       }
 
