@@ -18,6 +18,10 @@ export function EmailKpiBar() {
   // Sessione scaduta: condizione ATTESA, non un guasto. Va mostrata e
   // deve fermare il ciclo di aggiornamento.
   const [sessionExpired, setSessionExpired] = useState(false)
+  // Guasto del server: senza questo la barra resta sullo scheletro pulsante
+  // finche' dura il guasto, perche' `kpi` non viene mai valorizzato. E' lo
+  // stesso difetto gia' corretto per il 401, che pero' restava aperto sui 5xx.
+  const [guastoServer, setGuastoServer] = useState(false)
 
   useEffect(() => {
     // `annullato` evita di scrivere sullo stato dopo lo smontaggio.
@@ -39,6 +43,7 @@ export function EmailKpiBar() {
     const registraFallimento = () => {
       fallimentiConsecutivi += 1
       cicliDaSaltare = Math.min(2 ** (fallimentiConsecutivi - 1), MAX_CICLI_SALTATI)
+      if (!annullato) setGuastoServer(true)
     }
 
     const fetchKpi = async () => {
@@ -65,6 +70,7 @@ export function EmailKpiBar() {
           setKpi(await res.json())
           fallimentiConsecutivi = 0
           cicliDaSaltare = 0
+          setGuastoServer(false)
         } else {
           // 5xx e altri esiti non attesi: guasto del server, applichiamo il freno.
           registraFallimento()
@@ -96,6 +102,20 @@ export function EmailKpiBar() {
         <a href="/admin" className="font-medium text-ha-brand-soft-foreground underline underline-offset-2">
           Accedi di nuovo
         </a>
+      </div>
+    )
+  }
+
+  // Guasto in corso e nessun dato mai ricevuto: senza questo ramo resterebbe
+  // lo scheletro pulsante all'infinito. Se invece i dati c'erano gia', li
+  // teniamo a schermo: sono vecchi di qualche minuto, non assenti.
+  if (guastoServer && !kpi) {
+    return (
+      <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-b text-sm">
+        <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        <span className="text-muted-foreground">
+          Statistiche non disponibili al momento. Riprovo automaticamente.
+        </span>
       </div>
     )
   }
