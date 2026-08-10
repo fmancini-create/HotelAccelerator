@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server"
 import { ACTIVE_PROPERTY_COOKIE, isValidUuid } from "@/lib/platform-context"
 import { getMemberEffectiveAreas } from "@/lib/auth/area-access"
 import { BASELINE_AREA_KEYS } from "@/lib/platform/areas"
+import { normalizeTenantType, type TenantType } from "@/lib/platform/tenant-type"
 
 export const dynamic = "force-dynamic"
 
@@ -47,14 +48,16 @@ export async function GET(request: NextRequest) {
   let activePropertyId: string | null = isValidUuid(cookieValue) ? cookieValue : null
 
   // 3. Build tenant list based on role.
-  let tenants: Array<{ id: string; name: string; subdomain: string | null }> = []
+  //    `type` distingue le strutture ricettive dai tenant azienda/agenzia:
+  //    guida le etichette del selettore e nasconde le funzioni alberghiere.
+  let tenants: Array<{ id: string; name: string; subdomain: string | null; type: TenantType }> = []
 
   if (isSuperAdmin) {
     const { data: properties } = await supabase
       .from("properties")
-      .select("id, name, subdomain")
+      .select("id, name, subdomain, type")
       .order("name", { ascending: true })
-    tenants = properties || []
+    tenants = (properties || []).map((p) => ({ ...p, type: normalizeTenantType(p.type) }))
     // If no active cookie but tenants exist, default to the first one for convenience.
     if (!activePropertyId && tenants.length > 0) {
       activePropertyId = tenants[0].id
@@ -70,6 +73,9 @@ export async function GET(request: NextRequest) {
       name: collaborator?.name || user.email.split("@")[0],
       tenants,
       activePropertyId,
+      // Tipo del tenant attivo: la UI lo usa per nascondere le funzioni
+      // alberghiere quando si opera su un tenant azienda/agenzia.
+      activeTenantType: tenants.find((t) => t.id === activePropertyId)?.type ?? "hotel",
       // Admins have access to every area; empty list signals "no filtering".
       areas: [],
     })
@@ -87,12 +93,12 @@ export async function GET(request: NextRequest) {
   if (adminUser?.property_id) {
     const { data: property } = await supabase
       .from("properties")
-      .select("id, name, subdomain")
+      .select("id, name, subdomain, type")
       .eq("id", adminUser.property_id)
       .maybeSingle()
 
     if (property) {
-      tenants = [property]
+      tenants = [{ ...property, type: normalizeTenantType(property.type) }]
       activePropertyId = property.id
     }
   }
@@ -119,6 +125,7 @@ export async function GET(request: NextRequest) {
     name: adminUser?.name || user.email.split("@")[0],
     tenants,
     activePropertyId,
+    activeTenantType: tenants.find((t) => t.id === activePropertyId)?.type ?? "hotel",
     areas,
   })
 }

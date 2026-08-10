@@ -4,7 +4,7 @@ import useSWR from "swr"
 import { TrendingUp } from "lucide-react"
 
 interface RevenueSummaryResponse {
-  status: "ready" | "not_configured" | "not_linked" | "unauthorized" | "error"
+  status: "ready" | "not_configured" | "not_linked" | "not_applicable" | "unauthorized" | "error"
   property?: { id: string; name: string }
   period?: { from: string; to: string }
   kpi?: {
@@ -54,6 +54,11 @@ export default function RevenueSummaryCard() {
   const { data, error, isLoading } = useSWR<RevenueSummaryResponse>("/api/admin/revenue/summary", fetcher, {
     revalidateOnFocus: false,
   })
+
+  // Tenant non alberghiero (azienda/agenzia): i KPI Revenue non sono pertinenti.
+  // La card sparisce del tutto, invece di mostrare un avviso che suggerirebbe
+  // una configurazione mancante da fare.
+  if (data?.status === "not_applicable") return null
 
   // Stati non-ready: card compatta informativa, mai errori bloccanti.
   let notice: string | null = null
