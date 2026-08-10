@@ -84,12 +84,13 @@ export async function getEffectiveAreasForCaller(
  * vedeva la sezione, ma poteva chiamare `/api/admin/crm/contacts` a mano.
  *
  * DUE MODALITA'
- *  - "observe" (predefinita): calcola la decisione e la registra, ma NON
- *    blocca mai. Serve a misurare su traffico vero chi verrebbe respinto,
- *    prima di attivare. Un presidio attivato alla cieca puo' essere
- *    sempre-rosso e bloccare utenti legittimi.
- *  - "enforce": lancia AccessError(403) quando l'area non e' concessa.
- * Si sceglie con la variabile d'ambiente `AREA_GUARD_MODE`.
+ *  - "enforce" (PREDEFINITA): lancia AccessError(403) quando l'area non e'
+ *    concessa. Le rotte lo traducono in 403 tramite `isAreaDenied`.
+ *  - "observe": calcola la decisione e la registra, ma NON blocca mai. E' la
+ *    via di fuga (`AREA_GUARD_MODE=observe`) e serve a misurare su traffico
+ *    vero chi verrebbe respinto. La guardia e' nata in questa modalita': un
+ *    presidio attivato alla cieca puo' essere sempre-rosso e respingere utenti
+ *    legittimi.
  *
  * IN CASO DI ERRORE DEL DATABASE LASCIA PASSARE, di proposito. Un guasto in
  * lettura non deve spegnere l'applicazione per tutti: la pagina e' comunque
@@ -98,8 +99,22 @@ export async function getEffectiveAreasForCaller(
  */
 export type AreaGuardMode = "observe" | "enforce"
 
+/**
+ * Predefinita: "enforce". L'inversione e' stata fatta nel momento piu' sicuro
+ * possibile — con la simulazione a secco a ZERO blocchi, cioe' quando non
+ * esiste ancora nessun membro non amministratore. Oggi la guardia non respinge
+ * nessuno; protegge il PROSSIMO membro invitato fin dal primo giorno.
+ *
+ * Attivarla piu' tardi sarebbe stato peggio: dopo un invito avrebbe bloccato
+ * subito una persona vera, costringendo a concessioni d'urgenza.
+ *
+ * VIA DI FUGA senza rilascio: `AREA_GUARD_MODE=observe` riporta la guardia a
+ * sola osservazione. Serve se un membro legittimo venisse respinto: si torna a
+ * osservare, si leggono le righe `[v0] area-guard`, si concedono le aree giuste
+ * e si riattiva.
+ */
 export function getAreaGuardMode(): AreaGuardMode {
-  return process.env.AREA_GUARD_MODE === "enforce" ? "enforce" : "observe"
+  return process.env.AREA_GUARD_MODE === "observe" ? "observe" : "enforce"
 }
 
 export interface AreaDecision {
