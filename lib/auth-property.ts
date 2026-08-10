@@ -90,9 +90,11 @@ export async function getAuthenticatedPropertyId(request?: NextRequest): Promise
   }
 
   // Tenant admin: property_id is scoped in admin_users.
+  // `id` e `is_tenant_admin` servono alla guardia di area qui sotto: sono presi
+  // nella stessa query, quindi non aggiungono un viaggio al database.
   const { data: adminUser, error: adminError } = await supabase
     .from("admin_users")
-    .select("property_id")
+    .select("property_id, id, is_tenant_admin")
     .eq("id", user.id)
     .maybeSingle()
 
@@ -104,7 +106,83 @@ export async function getAuthenticatedPropertyId(request?: NextRequest): Promise
     throw new Error("Utente non associato a nessuna struttura")
   }
 
+  // GUARDIA DI AREA (vedi lib/auth/api-area-map.ts).
+  // I permessi per area erano applicati solo alle pagine: le API non li
+  // verificavano, quindi un membro senza il permesso di una sezione poteva
+  // comunque chiamarne le rotte a mano. Il controllo vive qui, in un punto solo
+  // attraversato da 91 chiamate, invece che ripetuto in decine di file dove
+  // sarebbe facile dimenticarlo su una rotta nuova.
+  await enforceAreaForRequest(request, {
+    adminUserId: adminUser.id,
+    propertyId: adminUser.property_id,
+    isTenantAdmin: adminUser.is_tenant_admin === true,
+    email: user.email ?? null,
+  })
+
   return adminUser.property_id
+}
+
+/**
+ * Applica (o solo osserva) il permesso di area per la rotta chiamata.
+ *
+ * Senza `request` non c'e' percorso, quindi non c'e' area da verificare: 15
+ * rotte chiamano gli aiutanti senza passare la richiesta e restano quindi
+ * NON osservate. Non e' un dettaglio nascosto: `npm run check:area-guard` le
+ * elenca, perche' una guardia che manca un pezzo in silenzio e' peggio di una
+ * guardia assente.
+ *
+ * L'import e' dinamico per non creare un ciclo fra i moduli
+ * (area-access -> admin-access -> auth-property).
+ */
+async function enforceAreaForRequest(
+  request: NextRequest | undefined,
+  member: { adminUserId: string; propertyId: string; isTenantAdmin: boolean; email: string | null },
+): Promise<void> {
+  console.log(`[v0] guard-debug entrata request=${!!request} admin=${member.isTenantAdmin} email=${member.email}`)
+  if (!request) return
+
+  // Gli amministratori del tenant hanno ogni area: nessuna query aggiuntiva.
+  if (member.isTenantAdmin) return
+
+  try {
+    const { resolveApiArea } = await import("@/lib/auth/api-area-map")
+    const percorso = new URL(request.url).pathname
+    const areaKey = resolveApiArea(percorso)
+    console.log(`[v0] guard-debug percorso=${percorso} area=${areaKey}`)
+    if (!areaKey) return
+
+    const { BASELINE_AREA_KEYS } = await import("@/lib/platform/areas")
+    if (BASELINE_AREA_KEYS.includes(areaKey)) return
+
+    const { getMemberEffectiveAreas, getAreaGuardMode } = await import("@/lib/auth/area-access")
+    const aree = await getMemberEffectiveAreas(member.propertyId, member.adminUserId)
+    if (aree.includes(areaKey)) return
+
+    const mode = getAreaGuardMode()
+    console.log(
+      `[v0] area-guard ${mode} area=${areaKey} allowed=false reason=not-granted email=${member.email ?? "?"}`,
+    )
+
+    if (mode === "enforce") {
+      throw new AreaAccessDenied(areaKey)
+    }
+  } catch (error) {
+    // Rilancia solo il diniego voluto. Qualsiasi altro guasto (database
+    // irraggiungibile, import fallito) NON deve spegnere l'applicazione: la
+    // pagina resta comunque presidiata e le query restano vincolate al
+    // property_id. Registrato per non passare inosservato.
+    if (error instanceof AreaAccessDenied) throw error
+    console.log(`[v0] area-guard errore non bloccante: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+/** Diniego di area. Le rotte lo mappano a 403 tramite accessErrorStatus. */
+export class AreaAccessDenied extends Error {
+  status = 403
+  constructor(areaKey: string) {
+    super(`Accesso negato: area "${areaKey}" non concessa`)
+    this.name = "AreaAccessDenied"
+  }
 }
 
 /**

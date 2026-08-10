@@ -1,13 +1,13 @@
 import { createServiceClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 // GET /api/cms/pages/[id]
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
     const { data: page, error } = await supabase
       .from("cms_pages")
@@ -26,10 +26,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 // PUT /api/cms/pages/[id]
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
 
     const validation = validatePage(body)
@@ -84,10 +84,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 }
 
 // DELETE /api/cms/pages/[id]
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
 
     const { data: existingPage } = await supabase

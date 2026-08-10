@@ -3,10 +3,10 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { EmbedScriptService } from "@/lib/platform-services"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
-    const { id } = params
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const { id } = await params
     const supabase = createServiceClient()
 
     const service = new EmbedScriptService(supabase)
@@ -24,10 +24,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
-    const { id } = params
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const { id } = await params
     const supabase = createServiceClient()
     const body = await request.json()
 
@@ -42,10 +42,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
-    const { id } = params
+    const propertyId = await getAuthenticatedPropertyId(request)
+    const { id } = await params
     const supabase = createServiceClient()
 
     const service = new EmbedScriptService(supabase)

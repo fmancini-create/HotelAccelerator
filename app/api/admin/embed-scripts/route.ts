@@ -5,7 +5,7 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 export async function GET(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
 
     const service = new EmbedScriptService(supabase)
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
     const body = await request.json()
 
