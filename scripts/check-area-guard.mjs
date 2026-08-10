@@ -78,6 +78,7 @@ async function main() {
   const file = trovaRotte(RADICE_API).sort()
   const nonClassificate = []
   const nonOsservate = []
+  const statoSbagliato = []
 
   for (const f of file) {
     const url = percorsoUrl(f)
@@ -98,6 +99,13 @@ async function main() {
     if (area && usaAiutante && senzaRichiesta) {
       nonOsservate.push(url)
     }
+
+    // In "enforce" il diniego diventa 403 solo se la rotta passa da
+    // handleServiceError. Le altre lo trasformano nel loro 500 fisso: bloccano
+    // comunque, ma dicono "server rotto" invece di "permesso negato".
+    if (area && !senzaRichiesta && !/handleServiceError/.test(contenuto)) {
+      statoSbagliato.push(url)
+    }
   }
 
   console.log(`Rotte API totali: ${file.length}`)
@@ -109,6 +117,14 @@ async function main() {
 
   console.log(`NON OSSERVATE (chiamano l'aiutante senza la richiesta): ${nonOsservate.length}`)
   for (const r of nonOsservate) console.log(`  - ${r}`)
+  console.log("")
+
+  // Non fa fallire il controllo: bloccano comunque. E' un difetto di qualita'
+  // del messaggio, da sanare prima di passare a "enforce".
+  console.log(`STATO SBAGLIATO in enforce (500 invece di 403): ${statoSbagliato.length}`)
+  console.log("  (bloccano correttamente, ma il messaggio dice 'server rotto')")
+  for (const r of statoSbagliato.slice(0, 8)) console.log(`  - ${r}`)
+  if (statoSbagliato.length > 8) console.log(`  ... e altre ${statoSbagliato.length - 8}`)
   console.log("")
 
   let fallito = false

@@ -145,6 +145,15 @@ export function isAppError(
  * Maps custom errors to HTTP status codes and JSON responses
  */
 export function handleServiceError(error: unknown): { status: number; json: any } {
+  // Diniego della guardia di area: autorizzazione negata (403), non guasto
+  // (500). Riconosciuto per nome per non creare cicli fra i moduli.
+  if (error instanceof Error && error.name === "AreaAccessDenied") {
+    return {
+      status: 403,
+      json: { error: error.message, code: "AREA_FORBIDDEN", type: "AreaAccessDenied" },
+    }
+  }
+
   if (isAppError(error)) {
     return {
       status: error.statusCode,

@@ -138,7 +138,6 @@ async function enforceAreaForRequest(
   request: NextRequest | undefined,
   member: { adminUserId: string; propertyId: string; isTenantAdmin: boolean; email: string | null },
 ): Promise<void> {
-  console.log(`[v0] guard-debug entrata request=${!!request} admin=${member.isTenantAdmin} email=${member.email}`)
   if (!request) return
 
   // Gli amministratori del tenant hanno ogni area: nessuna query aggiuntiva.
@@ -146,9 +145,7 @@ async function enforceAreaForRequest(
 
   try {
     const { resolveApiArea } = await import("@/lib/auth/api-area-map")
-    const percorso = new URL(request.url).pathname
-    const areaKey = resolveApiArea(percorso)
-    console.log(`[v0] guard-debug percorso=${percorso} area=${areaKey}`)
+    const areaKey = resolveApiArea(new URL(request.url).pathname)
     if (!areaKey) return
 
     const { BASELINE_AREA_KEYS } = await import("@/lib/platform/areas")
@@ -176,7 +173,16 @@ async function enforceAreaForRequest(
   }
 }
 
-/** Diniego di area. Le rotte lo mappano a 403 tramite accessErrorStatus. */
+/**
+ * Diniego di area.
+ *
+ * LIMITE NOTO, misurato: le 31 rotte che usano `handleServiceError` rispondono
+ * 403 correttamente. Le altre hanno un `catch` generico che restituisce 500
+ * fisso, quindi in modalita' "enforce" bloccano davvero (verificato: la
+ * risposta passa da 200 a errore) ma con lo stato sbagliato: dicono "server
+ * rotto" invece di "non hai il permesso". Il blocco e' effettivo, il messaggio
+ * no. `npm run check:area-guard` elenca quali rotte sono in questa condizione.
+ */
 export class AreaAccessDenied extends Error {
   status = 403
   constructor(areaKey: string) {
