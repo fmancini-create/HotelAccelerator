@@ -176,12 +176,15 @@ async function enforceAreaForRequest(
 /**
  * Diniego di area.
  *
- * LIMITE NOTO, misurato: le 31 rotte che usano `handleServiceError` rispondono
- * 403 correttamente. Le altre hanno un `catch` generico che restituisce 500
- * fisso, quindi in modalita' "enforce" bloccano davvero (verificato: la
- * risposta passa da 200 a errore) ma con lo stato sbagliato: dicono "server
- * rotto" invece di "non hai il permesso". Il blocco e' effettivo, il messaggio
- * no. `npm run check:area-guard` elenca quali rotte sono in questa condizione.
+ * LIMITE NOTO, misurato: le rotte che usano `handleServiceError` rispondono 403
+ * correttamente. Altre **47** hanno un `catch` generico con 500 fisso: in
+ * "enforce" bloccano davvero (verificato: la risposta passa da 200 a errore) ma
+ * dicono "server rotto" invece di "non hai il permesso". Il blocco e' effettivo,
+ * il messaggio no. `npm run check:area-guard` le elenca.
+ *
+ * 47 e non 83: le altre 36 sono mappate su aree DI BASE, che non vengono mai
+ * negate, quindi su di esse il difetto non puo' manifestarsi. Contarle insieme
+ * raddoppiava il problema sulla carta.
  */
 export class AreaAccessDenied extends Error {
   status = 403

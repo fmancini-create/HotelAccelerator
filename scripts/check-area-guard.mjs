@@ -28,7 +28,10 @@ const RADICE_API = "app/api"
 // Vanno ABBASSATE quando si sistema qualcosa, mai alzate per far passare il
 // controllo. Un numero alzato in silenzio trasforma il presidio in un timbro.
 const MAX_NON_CLASSIFICATE = 0
-const MAX_NON_OSSERVATE = 15
+// Misurato: 4 (tutte su aree di base, quindi innocue). La soglia e' fissata al
+// valore REALE, non a un numero comodo: una tolleranza piu' larga del difetto
+// che deve sorvegliare lascia entrare peggioramenti senza dire niente.
+const MAX_NON_OSSERVATE = 4
 
 function trovaRotte(dir, acc = []) {
   for (const voce of readdirSync(dir)) {
@@ -53,6 +56,7 @@ async function main() {
     process.exit(1)
   }
   const { isPublicApiPath, isSuperAdminApiPath, resolveApiArea } = mappa
+  const { BASELINE_AREA_KEYS } = await import("../lib/platform/areas.ts")
 
   // CONTROLLO POSITIVO: casi di cui conosciamo gia' la risposta giusta. Se
   // sbaglia questi, e' rotto il misuratore, non il codice misurato — e senza
@@ -79,6 +83,7 @@ async function main() {
   const nonClassificate = []
   const nonOsservate = []
   const statoSbagliato = []
+  const statoSbagliatoInnocuo = []
 
   for (const f of file) {
     const url = percorsoUrl(f)
@@ -103,8 +108,17 @@ async function main() {
     // In "enforce" il diniego diventa 403 solo se la rotta passa da
     // handleServiceError. Le altre lo trasformano nel loro 500 fisso: bloccano
     // comunque, ma dicono "server rotto" invece di "permesso negato".
+    //
+    // Conta SOLO le aree concedibili: quelle di base non vengono mai negate,
+    // quindi su di esse il difetto non puo' mai manifestarsi. Contarle insieme
+    // gonfierebbe il numero da 47 a 83 e farebbe sembrare il problema il doppio
+    // di quello che e'.
     if (area && !senzaRichiesta && !/handleServiceError/.test(contenuto)) {
-      statoSbagliato.push(url)
+      if (BASELINE_AREA_KEYS.includes(area)) {
+        statoSbagliatoInnocuo.push(url)
+      } else {
+        statoSbagliato.push(url)
+      }
     }
   }
 
@@ -122,7 +136,8 @@ async function main() {
   // Non fa fallire il controllo: bloccano comunque. E' un difetto di qualita'
   // del messaggio, da sanare prima di passare a "enforce".
   console.log(`STATO SBAGLIATO in enforce (500 invece di 403): ${statoSbagliato.length}`)
-  console.log("  (bloccano correttamente, ma il messaggio dice 'server rotto')")
+  console.log("  Bloccano correttamente: e' un difetto del messaggio, non del blocco.")
+  console.log(`  (altre ${statoSbagliatoInnocuo.length} su aree di base: mai negate, quindi innocue)`)
   for (const r of statoSbagliato.slice(0, 8)) console.log(`  - ${r}`)
   if (statoSbagliato.length > 8) console.log(`  ... e altre ${statoSbagliato.length - 8}`)
   console.log("")
