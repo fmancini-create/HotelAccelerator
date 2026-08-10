@@ -48,7 +48,15 @@ function verifica(nome, atteso, ottenuto, dettaglio = "") {
 }
 
 async function chiama(percorso, corpo, token) {
-  const headers = { Host: HOST_NON_LOCALE, "Content-Type": "application/json" }
+  // `fetch` di Node SCARTA l'intestazione `Host` e la riscrive a localhost:
+  // cosi' getDevBypass scattava e OGNI chiamante (anche anonimo) diventava
+  // super amministratore -> misura completamente falsata (200 ovunque).
+  // `x-forwarded-host` viene letto PRIMA di `host` e non viene filtrato.
+  const headers = {
+    Host: HOST_NON_LOCALE,
+    "x-forwarded-host": HOST_NON_LOCALE,
+    "Content-Type": "application/json",
+  }
   if (token) headers.Authorization = `Bearer ${token}`
   const r = await fetch(`${BASE}${percorso}`, { method: "POST", headers, body: JSON.stringify(corpo) })
   return r.status
@@ -61,6 +69,9 @@ async function creaTenant(etichetta) {
     name: `PROVA ${etichetta} ${marca}`,
     slug: `prova-${etichetta}-${marca}`,
     is_active: true,
+    // Il vincolo valid_plan ammette solo free/starter/professional/enterprise
+    // e il valore predefinito non lo soddisfa: va indicato esplicitamente.
+    plan: "free",
   })
   if (error) throw new Error(`creazione tenant ${etichetta}: ${error.message}`)
   nati.proprieta.push(id)
