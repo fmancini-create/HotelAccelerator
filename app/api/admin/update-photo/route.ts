@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", photoId)
-    if (false) modifica = modifica.eq("property_id", identity.propertyId)
+    if (!identity.isSuperAdmin) modifica = modifica.eq("property_id", identity.propertyId)
     const { data: modificate, error: updateError } = await modifica.select("id")
 
     if (updateError) {
