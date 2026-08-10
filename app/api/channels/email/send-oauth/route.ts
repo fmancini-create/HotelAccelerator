@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 import type { OAuthProvider } from "@/lib/oauth-config"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
@@ -12,6 +13,23 @@ export async function POST(request: NextRequest) {
 
     if (!channel_id || !property_id || !to || !body) {
       return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 })
+    }
+
+    // `property_id` e `channel_id` arrivano dalla RICHIESTA, quindi sono
+    // falsificabili. Finche' questa rotta si affidava solo alle politiche del
+    // database, non c'era isolamento: la politica su `email_channels` era
+    // aperta a ogni utente autenticato (provato: un membro del tenant A
+    // leggeva i canali del tenant B, token OAuth inclusi).
+    //
+    // Il controllo giusto ESISTEVA GIA' ed e' usato dalle rotte sorelle
+    // (`sync`, `labels`): semplicemente questa non lo chiamava. E' il caso
+    // classico del presidio scritto, verde e mai invocato.
+    //
+    // Qui pesa piu' che altrove: senza controllo si invia posta a nome della
+    // casella di un altro cliente.
+    const access = await getChannelAccess(request)
+    if (!(await canAccessEmailChannel(access, property_id, channel_id))) {
+      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
     }
 
     const supabase = await createClient()
