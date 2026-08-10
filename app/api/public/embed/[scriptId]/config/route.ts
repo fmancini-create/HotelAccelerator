@@ -1,11 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { EmbedScriptService } from "@/lib/platform-services"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ scriptId: string }> }) {
   try {
     const { scriptId } = await params
-    const supabase = await createClient()
+    // Endpoint PUBBLICO servito ai siti dei clienti (nessuna sessione):
+    // `embed_scripts` è chiusa al ruolo `anon`, quindi serve il service client.
+    // La rotta espone solo la configurazione dello script richiesto per id, e
+    // solo se `status === "active"` (controllo qui sotto).
+    const supabase = createServiceClient()
 
     const service = new EmbedScriptService(supabase)
 

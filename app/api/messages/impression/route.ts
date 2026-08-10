@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 
 // POST - Registra un'impressione (view, click, dismiss, convert)
 export async function POST(request: NextRequest) {
@@ -15,7 +15,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "rule_id and session_id required" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    // Endpoint PUBBLICO (widget sul sito del cliente, nessuna sessione):
+    // `message_impressions` è chiusa al ruolo `anon`, quindi serve il service
+    // client. L'isolamento resta affidato al `property_id` esplicito qui sotto.
+    const supabase = createServiceClient()
 
     // Inserisce impressione
     const { error: insertError } = await supabase.from("message_impressions").insert({

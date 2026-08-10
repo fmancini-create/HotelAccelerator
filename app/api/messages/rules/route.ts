@@ -1,5 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
+
+type MessageRule = {
+  id: string
+  target_pages?: string[] | null
+  exclude_pages?: string[] | null
+  max_impressions_per_session: number
+  max_impressions_per_day: number
+}
+
+type Impression = {
+  rule_id: string
+  impression_type: string
+  created_at: string
+}
 
 // GET - Ottiene regole attive per property_id e sessione
 export async function GET(request: NextRequest) {
@@ -17,7 +31,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "session_id required" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    // Endpoint PUBBLICO (widget sul sito del cliente, nessuna sessione):
+    // `message_rules` e `message_impressions` sono chiuse al ruolo `anon`,
+    // quindi serve il service client. Entrambe le query qui sotto filtrano per
+    // `property_id`: è quello, non RLS, a garantire l'isolamento fra clienti.
+    const supabase = createServiceClient()
     const now = new Date().toISOString()
 
     // Ottiene regole attive per questa property
@@ -44,8 +62,10 @@ export async function GET(request: NextRequest) {
       .eq("property_id", propertyId)
       .gte("created_at", yesterday)
 
-    // Filtra regole in base a impressioni e targeting pagina
-    const eligibleRules = (rules || []).filter((rule) => {
+    // Filtra regole in base a impressioni e targeting pagina.
+    // I tipi sono annotati a mano perché `createServiceClient()` restituisce un
+    // client non tipizzato (import dinamico), a differenza di `createClient()`.
+    const eligibleRules = (rules || []).filter((rule: MessageRule) => {
       // Verifica targeting pagina
       const targetPages = rule.target_pages || []
       const excludePages = rule.exclude_pages || []
@@ -69,14 +89,16 @@ export async function GET(request: NextRequest) {
       }
 
       // Verifica limite impressioni per sessione
-      const ruleImpressions = (impressions || []).filter((i) => i.rule_id === rule.id && i.impression_type === "view")
+      const ruleImpressions = (impressions || []).filter(
+        (i: Impression) => i.rule_id === rule.id && i.impression_type === "view",
+      )
       if (ruleImpressions.length >= rule.max_impressions_per_session) {
         return false
       }
 
       // Verifica limite impressioni giornaliere
       const today = new Date().toISOString().split("T")[0]
-      const todayImpressions = ruleImpressions.filter((i) => i.created_at.startsWith(today))
+      const todayImpressions = ruleImpressions.filter((i: Impression) => i.created_at.startsWith(today))
       if (todayImpressions.length >= rule.max_impressions_per_day) {
         return false
       }
