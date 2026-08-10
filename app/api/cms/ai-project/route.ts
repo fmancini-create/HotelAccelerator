@@ -8,6 +8,7 @@ import {
 } from "@/lib/cms/builder-document"
 import { normalizeBuilderNavigation } from "@/lib/cms/normalize-builder-navigation"
 import { CMS_STUDIO_TEMPLATES } from "@/lib/cms/template-variants"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 const TEMPLATE_IDS = new Set(CMS_STUDIO_TEMPLATES.map((template) => template.id))
 const PROJECT_SELECT = "id, template_id, site_name, property_profile, style_prompt, page_prompt, current_step, status, project_version, builder_schema_version, builder_document, updated_at"
@@ -52,6 +53,8 @@ export async function GET(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ project: serializeProject(data) })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     return NextResponse.json({ error: message }, { status: errorStatus(message) })
   }
@@ -147,6 +150,8 @@ export async function PUT(request: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ project: serializeProject(data) })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     return NextResponse.json({ error: message }, { status: errorStatus(message) })
   }

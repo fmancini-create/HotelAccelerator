@@ -1,6 +1,7 @@
 import { put } from "@vercel/blob"
 import { NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export async function POST(request: Request) {
   try {
@@ -56,6 +57,8 @@ export async function POST(request: Request) {
       photos: uploadedPhotos,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Upload error:", error)
     return NextResponse.json({ error: "Upload failed" }, { status: 500 })
   }

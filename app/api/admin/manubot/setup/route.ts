@@ -21,6 +21,7 @@ import {
 } from "@/lib/manubot/environment-guard"
 import { hashApiToken } from "@/lib/security/token-hash"
 import crypto from "crypto"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 /**
  * Legge una variabile ambiente obbligatoria.
@@ -243,6 +244,8 @@ export async function GET(req: NextRequest) {
     })
 
   } catch (err: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(err)) return areaDeniedResponse(err)
     // Le negazioni di accesso (401/403) non sono errori server: mappale al
     // codice corretto senza includere il log di debug.
     if (isAccessError(err)) {

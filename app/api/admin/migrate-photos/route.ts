@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { list } from "@vercel/blob"
 import { createClient } from "@supabase/supabase-js"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 // Usa service role key per bypassare RLS
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -416,6 +417,8 @@ export async function POST(request: Request) {
       total: HARDCODED_PHOTOS.length,
     })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[v0] Migration error:", error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }

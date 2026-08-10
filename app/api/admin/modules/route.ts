@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getModulesWithState } from "@/lib/modules"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const dynamic = "force-dynamic"
 
@@ -20,6 +21,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ propertyId, modules })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     // 401/403 are expected access-control outcomes, not server errors.
     if (!isAccessError(error)) console.error("[v0] Modules GET error:", error)
     const status = accessErrorStatus(error)

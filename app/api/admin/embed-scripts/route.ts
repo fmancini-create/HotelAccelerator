@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { EmbedScriptService } from "@/lib/platform-services"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,6 +15,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ scripts })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[ERROR]", error.message)
     return NextResponse.json({ error: error.message || "Errore nel recupero degli script" }, { status: 500 })
   }
@@ -31,6 +34,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ script }, { status: 201 })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[ERROR]", error.message)
     return NextResponse.json({ error: error.message || "Errore nella creazione dello script" }, { status: 500 })
   }

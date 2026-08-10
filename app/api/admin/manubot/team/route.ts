@@ -23,6 +23,7 @@ import { getManubotClient } from "@/lib/manubot"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { categorizeManubotError, logManubotError } from "@/lib/manubot/route-errors"
 import { loadManubotPropertyForCaller } from "@/lib/manubot/tenant-context"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export async function GET(request: NextRequest) {
   // Guard: sessione valida + privilegi admin/super admin.
@@ -55,6 +56,8 @@ export async function GET(request: NextRequest) {
     const team = await client.getTeam()
     return NextResponse.json({ team })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     // Il messaggio reale resta nei log del server, mai in risposta.
     const category = categorizeManubotError(error)
     logManubotError("manubot/team", error, category)

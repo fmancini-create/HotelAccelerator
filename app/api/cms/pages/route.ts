@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 // GET /api/cms/pages - Lista pagine per property
 export async function GET(request: NextRequest) {
@@ -23,6 +24,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ pages })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[CMS] Error:", error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
@@ -70,6 +73,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ page }, { status: 201 })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[CMS] Error:", error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }

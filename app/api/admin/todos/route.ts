@@ -4,6 +4,7 @@ import { getAuthenticatedPropertyId, getDevBypass } from "@/lib/auth-property"
 import { getManubotClient, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { resolvePropertyIdForCaller } from "@/lib/auth/property-scope"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 /**
  * GET /api/admin/todos — elenco dei todo del tenant.
@@ -70,6 +71,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ todos })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     // Il messaggio originale resta nei log server: al client va una categoria
     // generica, per non esporre dettagli interni o testi di Supabase.
     console.error("[v0] GET /api/admin/todos failed:", error?.message)
@@ -163,6 +166,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ todo }, { status: 201 })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

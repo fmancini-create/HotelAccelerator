@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 const REAL_FILES = [
   // Dependance Economy
@@ -66,6 +67,8 @@ export async function POST() {
       remainingPhotos: (photos?.length || 0) - photosToDelete.length,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { put, del, list } from "@vercel/blob"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 // Helper per verificare autenticazione (semplificato - in produzione usare JWT/session)
 function isAuthenticated(request: NextRequest): boolean {
@@ -16,6 +17,8 @@ export async function GET(request: NextRequest) {
       files: blobs.map((b) => ({ url: b.url, pathname: b.pathname })),
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore lista foto:", error)
     return NextResponse.json({ error: "Errore durante il caricamento" }, { status: 500 })
   }
@@ -81,6 +84,8 @@ export async function POST(request: NextRequest) {
       files: uploadedFiles,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore upload:", error)
     return NextResponse.json({ error: "Errore durante l'upload" }, { status: 500 })
   }
@@ -120,6 +125,8 @@ export async function DELETE(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore eliminazione:", error)
     return NextResponse.json({ error: "Errore durante l'eliminazione" }, { status: 500 })
   }
@@ -202,6 +209,8 @@ export async function PATCH(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore spostamento:", error)
     return NextResponse.json({ error: "Errore durante lo spostamento" }, { status: 500 })
   }

@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe"
 import { getPlanById, calculateMonthlyPrice } from "@/lib/stripe-products"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export async function POST(request: NextRequest) {
   try {
@@ -88,6 +89,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ sessionId: session.id, url: session.url })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[v0] Stripe checkout error:", error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Checkout failed" },

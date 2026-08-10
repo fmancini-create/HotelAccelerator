@@ -79,6 +79,19 @@ async function main() {
     }
   }
 
+  // CONTROLLO POSITIVO sul criterio del 403: una rotta che SO essere sanata
+  // deve risultare sanata. Se il criterio smette di riconoscere l'aiutante
+  // (per esempio perche' viene rinominato), lo zero diventerebbe falso e
+  // sembrerebbe un successo.
+  const sanataNota = "app/api/admin/crm/contacts/route.ts"
+  if (!/\b(handleServiceError|isAreaDenied)\b/.test(readFileSync(sanataNota, "utf8"))) {
+    console.error(
+      `CONTROLLO POSITIVO FALLITO: ${sanataNota} dovrebbe gestire il 403 ma il criterio ` +
+        `non lo riconosce. Il conteggio "STATO SBAGLIATO" non e' attendibile.`,
+    )
+    process.exit(1)
+  }
+
   const file = trovaRotte(RADICE_API).sort()
   const nonClassificate = []
   const nonOsservate = []
@@ -113,7 +126,15 @@ async function main() {
     // quindi su di esse il difetto non puo' mai manifestarsi. Contarle insieme
     // gonfierebbe il numero da 47 a 83 e farebbe sembrare il problema il doppio
     // di quello che e'.
-    if (area && !senzaRichiesta && !/handleServiceError/.test(contenuto)) {
+    // Due modi validi di rispondere 403: l'aiutante generale
+    // (`handleServiceError`) oppure il riconoscimento diretto nel catch
+    // (`isAreaDenied`). Cercarne uno solo rendeva il criterio STANTIO: dopo il
+    // codemod il numero restava 47 anche se 42 rotte erano gia' sanate.
+    // \b ai bordi: senza, `isAreaDeniedXX` verrebbe contato come sanato,
+    // perche' CONTIENE `isAreaDenied`. Scoperto provando a "de-sanare" una
+    // rotta: il conteggio non si muoveva.
+    const gestisce403 = /\b(handleServiceError|isAreaDenied)\b/.test(contenuto)
+    if (area && !senzaRichiesta && !gestisce403) {
       if (BASELINE_AREA_KEYS.includes(area)) {
         statoSbagliatoInnocuo.push(url)
       } else {
