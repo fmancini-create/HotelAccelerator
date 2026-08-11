@@ -5,9 +5,12 @@ import { getTenantStats } from "@/lib/query-optimizer"
 import { getQuotaStatus } from "@/lib/tenant-quotas"
 import { checkRateLimit, RATE_LIMITS, rateLimitExceeded, rateLimitHeaders } from "@/lib/rate-limiter"
 import { handleServiceError, isExpectedAuthError } from "@/lib/errors"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("monitoring", request)
     const propertyId = await getAuthenticatedPropertyId(request)
 
     if (!propertyId) {

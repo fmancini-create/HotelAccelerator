@@ -5,11 +5,14 @@
  */
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireAreaApi } from "@/lib/auth/area-access"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
+// `req` (non piu' `_req`): serve a far vedere i cookie alla guardia di area.
+export async function GET(req: NextRequest, { params }: { params: Promise<{ sessionId: string }> }) {
   const { sessionId } = await params
   const supabase = await createClient()
   const {
@@ -23,6 +26,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ses
     .eq("email", user.email)
     .maybeSingle()
   if (!admin?.property_id) return NextResponse.json({ error: "no property" }, { status: 403 })
+
+  // Permesso di sezione, convertito subito in 403: senza try/catch attorno al
+  // gestore, un'eccezione qui diventerebbe un 500 e mentirebbe sul motivo.
+  try {
+    await requireAreaApi("tracking", req)
+  } catch (e) {
+    if (isAreaDenied(e)) return areaDeniedResponse(e)
+    throw e
+  }
 
   const { data: session, error: sErr } = await supabase
     .from("tracking_sessions")

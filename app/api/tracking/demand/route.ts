@@ -2,9 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getDemandData, getDemandDataForMonth } from "@/lib/tracking/demand-aggregator"
 import { createClient } from "@/lib/supabase/server"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("tracking", request)
     const supabase = await createClient()
 
     // Verifica autenticazione

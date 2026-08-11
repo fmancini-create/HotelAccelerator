@@ -193,11 +193,29 @@ async function main() {
     console.log(`Aree non concesse che rispondono 403: ${negate.length} su ${attribuibili.length}`)
     console.log(`Aree di base bloccate: ${baseNegata.length} su 2 (0 = corretto)`)
     console.log("")
-    console.log(
-      negate.length === 0
-        ? 'Modalita\' "observe": nessun blocco applicato. Cerca "area-guard observe" nei log.'
-        : 'Modalita\' "enforce": i blocchi sono attivi.',
-    )
+    // In "enforce" un conteggio di blocchi pari a ZERO non e' un esito
+    // accettabile: e' esattamente cio' che si vedeva quando la guardia era
+    // scritta ma NON invocata da nessuna rotta. Prima questo script si
+    // limitava a stampare 'modalita' observe' e usciva 0, cioe' verde.
+    const modo = process.env.AREA_GUARD_MODE === "observe" ? "observe" : "enforce"
+    if (modo === "observe") {
+      console.log('Modalita\' "observe": nessun blocco atteso. Cerca "area-guard observe" nei log.')
+      if (negate.length > 0) {
+        console.log(`ALLARME: in "observe" nessuna rotta dovrebbe bloccare, invece ${negate.length} lo fanno.`)
+        uscita = 1
+      }
+    } else if (negate.length < attribuibili.length) {
+      console.log(
+        `FALLITO: in "enforce" tutte le ${attribuibili.length} aree non concesse devono dare 403, ` +
+          `ne rispondono ${negate.length}. Una guardia definita ma non invocata da' proprio questo esito.`,
+      )
+      for (const r of attribuibili.filter((x) => x.stato !== 403)) {
+        console.log(`  - ${r.percorso} -> ${r.stato} (atteso 403)`)
+      }
+      uscita = 1
+    } else {
+      console.log('Modalita\' "enforce": i blocchi sono attivi e attribuibili alla guardia.')
+    }
   } finally {
     // SEMPRE, anche se le verifiche sopra sono esplose a meta'.
     const pulito = await rimuoviMembroTemporaneo(userId)

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { put, del, list } from "@vercel/blob"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { getCallerIdentity, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 /**
  * Prima qui c'era un `isAuthenticated()` che restituiva **sempre `true`**, con
@@ -54,6 +55,8 @@ async function soloSuperAdmin(request: NextRequest) {
 // GET - Lista tutte le foto dal Blob storage
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
     const negato = await soloSuperAdmin(request)
     if (negato) return negato
 
@@ -75,6 +78,8 @@ export async function GET(request: NextRequest) {
 // POST - Upload nuove foto
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
     const negato = await soloSuperAdmin(request)
     if (negato) return negato
 
@@ -143,6 +148,8 @@ export async function POST(request: NextRequest) {
 // DELETE - Elimina foto
 export async function DELETE(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
     const negato = await soloSuperAdmin(request)
     if (negato) return negato
 
@@ -185,6 +192,8 @@ export async function DELETE(request: NextRequest) {
 // PATCH - Sposta foto tra categorie (copia + elimina)
 export async function PATCH(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
     const negato = await soloSuperAdmin(request)
     if (negato) return negato
 

@@ -3,6 +3,7 @@ import { list } from "@vercel/blob"
 import { createClient } from "@supabase/supabase-js"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 // Usa service role key per bypassare RLS
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -356,12 +357,14 @@ const HARDCODED_PHOTOS = [
   { src: "/images/tuscan-style/shower-glass-modern.jpg", category: "Tuscan Style", name: "shower-glass-modern.jpg" },
 ]
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
     // Era chiamabile da chiunque, senza credenziali, e SCRIVE nel database
     // (misurato: HTTP 200 da un estraneo). Migrazione una-tantum: riservata
     // agli amministratori.
-    await requireTenantAdmin(request as NextRequest)
+    await requireTenantAdmin(request)
 
     console.log("[v0] Starting photo migration...")
 

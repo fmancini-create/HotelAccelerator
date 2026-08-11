@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { type NextRequest, NextResponse } from "next/server"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 const REAL_FILES = [
   // Dependance Economy
@@ -31,6 +32,8 @@ const REAL_FILES = [
 
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
     // Era chiamabile da chiunque, senza credenziali, e CANCELLA foto in blocco
     // su TUTTI i tenant. Ora richiede privilegi di amministratore.
     const identity = await requireTenantAdmin(request)

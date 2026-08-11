@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId, getAuthenticatedUser } from "@/lib/auth-property"
 import { createServiceClient } from "@/lib/supabase/server"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 const BUCKET = "cms-media"
 const MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -22,6 +23,8 @@ function errorResponse(error: unknown) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const service = createServiceClient()
     const { data, error } = await service
@@ -40,6 +43,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const user = await getAuthenticatedUser(request).catch(() => null)
     const form = await request.formData()
@@ -93,6 +98,8 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const assetId = request.nextUrl.searchParams.get("id")
     if (!assetId) throw new Error("ID media non valido")

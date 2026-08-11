@@ -3,10 +3,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 // GET /api/cms/pages/[id]
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const { id } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
@@ -31,6 +34,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 // PUT /api/cms/pages/[id]
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const { id } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
@@ -91,6 +96,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 // DELETE /api/cms/pages/[id]
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const { id } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()

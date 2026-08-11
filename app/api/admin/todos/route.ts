@@ -5,6 +5,7 @@ import { getManubotClient, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { resolvePropertyIdForCaller } from "@/lib/auth/property-scope"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 /**
  * GET /api/admin/todos — elenco dei todo del tenant.
@@ -22,6 +23,8 @@ import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
  */
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("todos", request)
     // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (NODE_ENV=development
     // + localhost/127.0.0.1, via getDevBypass). Mai su preview pubbliche/produzione.
     if (await getDevBypass(request)) {
@@ -83,6 +86,8 @@ export async function GET(request: NextRequest) {
 // POST /api/admin/todos - Create a new todo
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("todos", request)
     // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (via getDevBypass).
     if (await getDevBypass(request)) {
       const body = await request.json()

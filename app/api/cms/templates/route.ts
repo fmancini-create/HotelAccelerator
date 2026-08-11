@@ -2,9 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { handleServiceError, isExpectedAuthError } from "@/lib/errors"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
 

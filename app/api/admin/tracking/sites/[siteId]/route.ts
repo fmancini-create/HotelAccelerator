@@ -5,11 +5,18 @@
  */
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireAreaApi } from "@/lib/auth/area-access"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-async function requireProperty() {
+/**
+ * La guardia di area sta DENTRO l'aiutante: questo file restituisce l'errore
+ * invece di lanciarlo, quindi un'eccezione nel gestore diventerebbe un 500 al
+ * posto del 403. Un punto solo, attraversato sia da PATCH sia da DELETE.
+ */
+async function requireProperty(request?: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { supabase, error: NextResponse.json({ error: "unauthenticated" }, { status: 401 }) }
@@ -23,6 +30,13 @@ async function requireProperty() {
   if (!admin?.property_id)
     return { supabase, error: NextResponse.json({ error: "no property" }, { status: 403 }) }
 
+  try {
+    await requireAreaApi("tracking", request)
+  } catch (e) {
+    if (isAreaDenied(e)) return { supabase, error: areaDeniedResponse(e) }
+    throw e
+  }
+
   return { supabase, propertyId: admin.property_id as string, error: null }
 }
 
@@ -35,7 +49,7 @@ function generateWriteKey(): string {
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
-  const { supabase, propertyId, error } = await requireProperty()
+  const { supabase, propertyId, error } = await requireProperty(req)
   if (error) return error
 
   const body = await req.json().catch(() => ({}))
@@ -61,9 +75,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ si
   return NextResponse.json({ site: data })
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
+// `req` (non piu' `_req`): ora serve davvero, per far vedere i cookie alla
+// guardia di area. Lasciare il nome con l'underscore direbbe il falso.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
-  const { supabase, propertyId, error } = await requireProperty()
+  const { supabase, propertyId, error } = await requireProperty(req)
   if (error) return error
 
   const { error: dbErr } = await supabase

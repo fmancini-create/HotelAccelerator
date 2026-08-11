@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
 import { redirect } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getCallerIdentity, AccessError } from "@/lib/auth/admin-access"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { BASELINE_AREA_KEYS, GRANTABLE_AREA_KEYS } from "@/lib/platform/areas"
 
 /**
@@ -84,8 +84,8 @@ export async function getEffectiveAreasForCaller(
  * vedeva la sezione, ma poteva chiamare `/api/admin/crm/contacts` a mano.
  *
  * DUE MODALITA'
- *  - "enforce" (PREDEFINITA): lancia AccessError(403) quando l'area non e'
- *    concessa. Le rotte lo traducono in 403 tramite `isAreaDenied`.
+ *  - "enforce" (PREDEFINITA): lancia un errore `AreaAccessDenied` quando l'area
+ *    non e' concessa. Le rotte lo traducono in 403 tramite `isAreaDenied`.
  *  - "observe": calcola la decisione e la registra, ma NON blocca mai. E' la
  *    via di fuga (`AREA_GUARD_MODE=observe`) e serve a misurare su traffico
  *    vero chi verrebbe respinto. La guardia e' nata in questa modalita': un
@@ -171,7 +171,7 @@ export async function evaluateAreaAccess(areaKey: string, request?: NextRequest)
 
 /**
  * Applica la guardia di area a una rotta API.
- * In "observe" registra e lascia passare; in "enforce" lancia AccessError(403).
+ * In "observe" registra e lascia passare; in "enforce" lancia `AreaAccessDenied`.
  */
 export async function requireAreaApi(areaKey: string, request?: NextRequest): Promise<AreaDecision> {
   const decision = await evaluateAreaAccess(areaKey, request)
@@ -186,7 +186,20 @@ export async function requireAreaApi(areaKey: string, request?: NextRequest): Pr
   }
 
   if (decision.mode === "enforce" && !decision.allowed) {
-    throw new AccessError(`Accesso negato: area "${areaKey}" non concessa`, 403)
+    // Deve chiamarsi "AreaAccessDenied", non "AccessError": e' il nome che i
+    // riconoscitori gia' esistenti cercano (`isAreaDenied` in area-denied.ts,
+    // piu' `lib/errors.ts` e `lib/errors/index.ts`). Con `AccessError` il
+    // diniego non veniva riconosciuto da nessuno e cadeva nel 500 generico:
+    // bloccava, ma dicendo "server rotto" invece di "permesso negato".
+    // Misurato dal vivo con un membro vero: 500 su tutte le aree negate.
+    //
+    // Non si importa la classe da `lib/auth-property.ts` di proposito: creerebbe
+    // un ciclo fra i moduli. Il riconoscimento e' per NOME, come documentato in
+    // `area-denied.ts`, quindi un errore con lo stesso nome e' equivalente.
+    const errore = new Error(`Accesso negato: area "${areaKey}" non concessa`)
+    errore.name = "AreaAccessDenied"
+    ;(errore as Error & { status: number }).status = 403
+    throw errore
   }
 
   return decision
