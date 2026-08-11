@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { put, del, list } from "@vercel/blob"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
-import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
+import { getCallerIdentity, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 
 /**
  * Prima qui c'era un `isAuthenticated()` che restituiva **sempre `true`**, con
@@ -35,7 +35,13 @@ function rispostaDiniego(error: unknown) {
 }
 
 async function soloSuperAdmin(request: NextRequest) {
-  const identity = await requireTenantAdmin(request)
+  // NON si usa `requireTenantAdmin`: quella pretende una struttura selezionata
+  // e rispondeva **400** al super amministratore, che e' proprio il ruolo
+  // trasversale abilitato qui. Misurato dal vivo prima di accorgersene.
+  const identity = await getCallerIdentity(request)
+  if (!identity) {
+    return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
+  }
   if (!identity.isSuperAdmin) {
     return NextResponse.json(
       { error: "Riservato al super amministratore: questi file non sono separati per struttura" },
