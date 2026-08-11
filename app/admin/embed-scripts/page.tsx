@@ -55,7 +55,7 @@ export default function EmbedScriptsPage() {
 
   if (isLoading || loading) {
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center">
+      <div className="min-h-full bg-muted flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
@@ -80,7 +80,7 @@ export default function EmbedScriptsPage() {
         }
       />
 
-      <main className="min-h-screen bg-muted">
+      <main className="min-h-full bg-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
             {scripts.length === 0 ? (

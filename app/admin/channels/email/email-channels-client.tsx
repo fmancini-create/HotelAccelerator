@@ -733,7 +733,7 @@ export default function EmailChannelsClient() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-full bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
@@ -743,7 +743,7 @@ export default function EmailChannelsClient() {
   const callbackUrl = `${currentUrl}/api/channels/email/oauth/callback`
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
       <AdminHeader
         title="Email"
         subtitle="Configura e sincronizza i tuoi account email"

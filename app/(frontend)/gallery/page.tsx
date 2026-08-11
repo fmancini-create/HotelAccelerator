@@ -1,5 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
+import { Navigation } from "@/components/navigation"
+import { Footer } from "@/components/footer"
 
 export const metadata: Metadata = {
   title: "Gallery - Villa I Barronci Resort & Spa nel Chianti",
@@ -55,6 +57,8 @@ const galleryImages = [
 export default function GalleryPage() {
   return (
     <main className="min-h-screen">
+      <Navigation />
+
       {/* Hero Section */}
       <section className="relative h-[50vh] flex items-center justify-center">
         <div
@@ -119,6 +123,8 @@ export default function GalleryPage() {
           </a>
         </div>
       </section>
+
+      <Footer />
     </main>
   )
 }

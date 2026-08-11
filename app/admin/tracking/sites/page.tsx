@@ -45,7 +45,7 @@ export default function TrackingSitesPage() {
   const sites = data?.sites ?? []
 
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-full bg-muted">
       <AdminHeader
         title="Tracking - Siti"
         subtitle="Gestisci le chiavi di tracking per i siti dei tuoi clienti"

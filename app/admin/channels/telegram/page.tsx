@@ -29,7 +29,7 @@ export default function TelegramChannelPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
       <AdminHeader title="Telegram Bot" subtitle="Gestisci il canale Telegram" />
 
       <div className="container py-6">

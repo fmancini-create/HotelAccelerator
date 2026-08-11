@@ -5,7 +5,7 @@ import { Calendar, BarChart3 } from "lucide-react"
 
 export default function DemandTrackingPage() {
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-full bg-muted">
       <AdminHeader title="Calendario Domanda" subtitle="Monitora le date più cercate dai tuoi potenziali ospiti" />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

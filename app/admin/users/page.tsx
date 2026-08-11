@@ -97,7 +97,7 @@ export default function AdminUsersPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-full bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Caricamento...</p>
@@ -127,7 +127,7 @@ export default function AdminUsersPage() {
 
   if (!effectiveAdminUser) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="min-h-full bg-background flex items-center justify-center p-4">
         <div className="bg-card rounded-2xl shadow-xl p-8 text-center max-w-md border">
           <Lock className="w-16 h-16 text-destructive mx-auto mb-4" />
           <h1 className="text-2xl font-semibold text-foreground mb-2">Accesso Richiesto</h1>
@@ -265,7 +265,7 @@ export default function AdminUsersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
       <div className="container mx-auto px-4 py-8">
         <AdminHeader title="Team & Permessi" subtitle="Gestisci utenti, gruppi e permessi sui canali" />
 

@@ -108,7 +108,7 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+      <div className="min-h-full bg-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-card rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 bg-ha-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
@@ -126,7 +126,7 @@ export default function ResetPasswordPage() {
 
   if (hasRecoverySession === false) {
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+      <div className="min-h-full bg-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-card rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 bg-ha-warning-soft rounded-full flex items-center justify-center mx-auto mb-4">
@@ -151,7 +151,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
+    <div className="min-h-full bg-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="bg-card rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">

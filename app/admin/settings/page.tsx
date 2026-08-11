@@ -107,7 +107,7 @@ export default function AdminSettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-full bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Caricamento...</div>
       </div>
     )
@@ -124,7 +124,7 @@ export default function AdminSettingsPage() {
   })
 
   return (
-    <div className="min-h-screen bg-muted/40">
+    <div className="min-h-full bg-muted/40">
       {/*
        * The page used to print its own title below the header. Now that
        * AdminHeader renders `title`, the local block would show "Impostazioni"

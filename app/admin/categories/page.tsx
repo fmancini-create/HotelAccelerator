@@ -126,14 +126,14 @@ export default function CategoriesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted">
+      <div className="min-h-full flex items-center justify-center bg-muted">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-full bg-muted">
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title="Categorie"

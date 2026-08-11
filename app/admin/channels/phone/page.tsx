@@ -7,7 +7,7 @@ import { AdminHeader } from "@/components/admin/admin-header"
 
 export default function PhoneChannelPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
       <AdminHeader title="Telefono IP" subtitle="Gestione chiamate con trascrizione AI" />
 
       <div className="container py-6">

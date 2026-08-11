@@ -240,7 +240,7 @@ export default function TodosPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center">
+      <div className="min-h-full bg-muted flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ha-brand" />
       </div>
     )
@@ -255,7 +255,7 @@ export default function TodosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-full bg-muted">
       <AdminHeader
         title="Task & To-Do"
         subtitle="Gestisci attività e deleghe al team"
