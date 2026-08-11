@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import UnifiedLoginForm from "@/components/auth/unified-login-form"
+import { HotelAcceleratorLockup } from "@/components/brand/hotel-accelerator-logo"
 import { authorizeUser } from "@/lib/auth/authorize-user"
 
 type GateState = "checking" | "authenticated" | "guest"
@@ -73,9 +74,15 @@ export default function AdminPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-8">
-        <div className="mb-6 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground text-balance">HotelAccelerator</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Accedi alla piattaforma</p>
+        <div className="mb-6 flex flex-col items-center text-center">
+          {/*
+           * Qui il marchio E' il soggetto della schermata, quindi si usa il
+           * logo completo (simbolo + scritta) invece del nome scritto a mano.
+           * Il nome resta accessibile tramite l'alt del logo, per questo
+           * l'intestazione non lo ripete.
+           */}
+          <HotelAcceleratorLockup className="h-24 w-auto" priority />
+          <p className="mt-3 text-sm text-muted-foreground">Accedi alla piattaforma</p>
         </div>
         <UnifiedLoginForm />
       </div>

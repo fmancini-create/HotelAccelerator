@@ -1,7 +1,6 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
-  Building2,
   Mail,
   MessageSquare,
   BarChart3,
@@ -16,6 +15,7 @@ import {
 import type { Metadata } from "next"
 import { PlatformFooter } from "@/components/platform-footer"
 import DevButtons from "@/components/dev-buttons"
+import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 
 export const platformMetadata: Metadata = {
   title: "HotelAccelerator - Software Gestionale per Hotel e Strutture Ricettive | CRM, CMS, Email Marketing",
@@ -153,7 +153,7 @@ async function PlatformLanding() {
           aria-label="Navigazione principale"
         >
           <Link href="/" className="flex items-center gap-2" aria-label="HotelAccelerator Homepage">
-            <Building2 className="h-7 w-7 text-ha-brand" aria-hidden="true" />
+            <HotelAcceleratorMark className="h-8 w-8" priority />
             <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
           </Link>
           <div className="hidden md:flex items-center gap-8">

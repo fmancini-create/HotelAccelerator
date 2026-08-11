@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Building2, ArrowRight, CheckCircle2, Mail, Phone, Building, User } from "lucide-react"
+import { ArrowRight, CheckCircle2, Mail, Phone, Building, User } from "lucide-react"
 import { PlatformFooter } from "@/components/platform-footer"
+import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 
 export const metadata: Metadata = {
   title: "Richiedi Demo Gratuita - HotelAccelerator",
@@ -50,7 +51,7 @@ export default function RequestAccessPage() {
       <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-md">
         <nav className="container mx-auto flex h-16 items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
-            <Building2 className="h-7 w-7 text-white" />
+            <HotelAcceleratorMark className="h-8 w-8" priority />
             <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
           </Link>
           <div className="flex items-center gap-3">
