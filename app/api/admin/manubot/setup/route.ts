@@ -45,6 +45,28 @@ export async function GET(req: NextRequest) {
     // mentre in sviluppo locale resta consentito tramite il dev bypass sicuro
     // (NODE_ENV=development + localhost/127.0.0.1) ereditato da requireTenantAdmin.
     const identity = await requireTenantAdmin(req)
+
+    // AUTORIZZAZIONE PRIMA DI QUALUNQUE ALTRO LAVORO.
+    // Deve precedere anche requireEnv: con una variabile d'ambiente mancante
+    // la rotta rispondeva 500 e il diniego non veniva MAI valutato. Misurato:
+    // la prova di isolamento sembrava superata solo perche' la rotta moriva
+    // prima di arrivarci.
+    const paramsIniziali =
+      req.nextUrl?.searchParams ?? new URL(req.url, "http://localhost").searchParams
+    const propertyRichiesta = paramsIniziali.get("property_id")?.trim()
+
+    if (propertyRichiesta && !identity.isSuperAdmin && propertyRichiesta !== identity.propertyId) {
+      return NextResponse.json({ error: "Accesso negato a questa struttura" }, { status: 403 })
+    }
+
+    const propertyIdBersaglio = identity.isSuperAdmin
+      ? propertyRichiesta || identity.propertyId
+      : identity.propertyId
+
+    if (!propertyIdBersaglio) {
+      return NextResponse.json({ error: "Nessuna struttura associata all'utente" }, { status: 400 })
+    }
+
     // Credenziali Manubot da variabili ambiente (nessun valore hardcoded).
     // Se mancano, requireEnv lancia un errore controllato gestito dal catch.
     const MANUBOT_SUPABASE_URL = requireEnv("MANUBOT_SUPABASE_URL")
@@ -185,19 +207,8 @@ export async function GET(req: NextRequest) {
     // un ALTRO cliente e, peggio, ricevere in risposta un `api_token` valido
     // per il webhook di quella property. Ora si opera solo sulla PROPRIA
     // struttura; il super amministratore puo' indicarne un'altra di proposito.
-    const richiesta = searchParams.get("property_id")?.trim()
-    const propertyIdBersaglio = identity.isSuperAdmin
-      ? richiesta || identity.propertyId
-      : identity.propertyId
-
-    if (richiesta && !identity.isSuperAdmin && richiesta !== identity.propertyId) {
-      return NextResponse.json({ error: "Accesso negato a questa struttura" }, { status: 403 })
-    }
-
-    if (!propertyIdBersaglio) {
-      return NextResponse.json({ error: "Nessuna struttura associata all'utente", log }, { status: 400 })
-    }
-
+    // `propertyIdBersaglio` e' gia' stato risolto e autorizzato in cima alla
+    // funzione, prima di qualunque lavoro.
     const { data: properties } = await supabase
       .from("properties")
       .select("id, name, slug")

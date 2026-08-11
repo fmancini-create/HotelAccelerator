@@ -141,10 +141,14 @@ try {
   // Senza questo, una rotta rotta per TUTTI sembrerebbe "sicura": e' l'errore
   // gia' commesso con le rotte foto (401 anche all'admin legittimo).
   const proprio = await chiama("/api/admin/manubot/setup", token)
+  // Un 500 NON e' un successo: la rotta puo' morire PRIMA di arrivare
+  // all'autorizzazione (qui: variabile d'ambiente mancante), e allora la
+  // prova 2 non esercita nulla e il suo verde e' finto.
+  // Trappola gia' incontrata: "non e' 401/403" non basta.
   ok(
-    "l'admin PUO' agire sulla propria struttura (non e' rotta per tutti)",
-    proprio.stato !== 401 && proprio.stato !== 403,
-    `stato ${proprio.stato}`,
+    "l'admin raggiunge la logica sulla PROPRIA struttura (no 401/403/500)",
+    ![401, 403, 500].includes(proprio.stato),
+    `stato ${proprio.stato}${proprio.stato === 500 ? " — muore prima: prova 2 NON valida" : ""}`,
   )
 
   // ── PROVA 4: la property reale e' rimasta intatta ───────────────────────
