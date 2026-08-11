@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getPlatformWhatsAppConfig, getPublicWhatsAppConfig } from "@/lib/whatsapp/platform"
-import { getWhatsAppQuota } from "@/lib/whatsapp/quota"
+import { getWhatsAppQuota, quotaExceededMessage } from "@/lib/whatsapp/quota"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 import { encryptWhatsAppCredentialsForWrite } from "@/lib/whatsapp/channel-secrets"
 
@@ -190,9 +190,9 @@ export async function POST(request: NextRequest) {
       if (!quota.canAddNumber) {
         return NextResponse.json(
           {
-            error: `Hai raggiunto il limite di numeri WhatsApp del tuo piano (${quota.limit}). Acquista un numero aggiuntivo per collegarne un altro.`,
+            error: quotaExceededMessage(quota),
             code: "QUOTA_EXCEEDED",
-            quota: { limit: quota.limit, used: quota.used },
+            quota: { limit: quota.limit, used: quota.used, testNumbers: quota.testNumbers },
           },
           { status: 402 },
         )

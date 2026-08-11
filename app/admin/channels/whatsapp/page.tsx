@@ -23,6 +23,7 @@ import {
 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ChannelUserAssignment } from "@/components/admin/channel-user-assignment"
+import { quotaExceededMessage } from "@/lib/whatsapp/quota"
 
 interface WhatsAppChannel {
   id: string
@@ -49,6 +50,8 @@ interface Quota {
   includedNumbers: number
   extraNumbers: number
   canAddNumber: boolean
+  /** numeri di prova Meta che occupano un posto: si liberano scollegandoli */
+  testNumbers?: { id: string; displayPhoneNumber: string }[]
 }
 
 interface PublicConfig {
@@ -360,6 +363,12 @@ export default function WhatsAppChannelPage() {
 
   const platformReady = Boolean(publicConfig?.configured)
   const canAdd = quota?.canAddNumber ?? true
+  // Stesso testo del server: se il posto e' occupato da un numero di prova
+  // Meta la via d'uscita e' scollegarlo, non comprare un posto in piu'.
+  const messaggioLimite = quotaExceededMessage({
+    limit: quota?.limit ?? 0,
+    testNumbers: quota?.testNumbers ?? [],
+  })
 
   return (
     <div className="min-h-full bg-background">
@@ -504,10 +513,7 @@ export default function WhatsAppChannelPage() {
                 {!canAdd ? (
                   <div className="flex items-start gap-2 rounded-lg border border-ha-warning-soft bg-ha-warning-soft p-3 text-sm text-ha-warning-soft-foreground">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>
-                      Hai raggiunto il limite di numeri del tuo piano ({quota?.limit}). Acquista un numero aggiuntivo per
-                      collegarne un altro.
-                    </span>
+                    <span>{messaggioLimite}</span>
                   </div>
                 ) : !platformReady ? (
                   <div className="flex items-start gap-2 rounded-lg border border-ha-warning-soft bg-ha-warning-soft p-3 text-sm text-ha-warning-soft-foreground">
@@ -671,9 +677,7 @@ export default function WhatsAppChannelPage() {
                           Aggiungi numero
                         </Button>
                         {!canAdd && (
-                          <p className="mt-2 text-xs text-ha-warning-soft-foreground">
-                            Limite numeri raggiunto. Acquista un numero aggiuntivo per aggiungerne un altro.
-                          </p>
+                          <p className="mt-2 text-xs text-ha-warning-soft-foreground">{messaggioLimite}</p>
                         )}
                       </div>
                     </CardContent>
