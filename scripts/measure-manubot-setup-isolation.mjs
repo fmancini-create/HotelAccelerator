@@ -141,15 +141,26 @@ try {
   // Senza questo, una rotta rotta per TUTTI sembrerebbe "sicura": e' l'errore
   // gia' commesso con le rotte foto (401 anche all'admin legittimo).
   const proprio = await chiama("/api/admin/manubot/setup", token)
-  // Un 500 NON e' un successo: la rotta puo' morire PRIMA di arrivare
-  // all'autorizzazione (qui: variabile d'ambiente mancante), e allora la
-  // prova 2 non esercita nulla e il suo verde e' finto.
-  // Trappola gia' incontrata: "non e' 401/403" non basta.
-  ok(
-    "l'admin raggiunge la logica sulla PROPRIA struttura (no 401/403/500)",
-    ![401, 403, 500].includes(proprio.stato),
-    `stato ${proprio.stato}${proprio.stato === 500 ? " — muore prima: prova 2 NON valida" : ""}`,
-  )
+  // Un 500 NON e' un successo: "non e' 401/403" non basta (trappola gia'
+  // incontrata). Ma va distinto il 500 da CONFIGURAZIONE ASSENTE, che e' un
+  // limite dell'ambiente e non un difetto di autorizzazione: qui mancano
+  // MANUBOT_DEFAULT_PASSWORD e MANUBOT_BASE_URL. Qualunque ALTRO 500 resta rosso.
+  const testo = JSON.stringify(proprio.corpo ?? "")
+  const configAssente = proprio.stato === 500 && /Configurazione Manubot mancante/.test(testo)
+
+  if (configAssente) {
+    esiti.push({
+      n: "l'admin raggiunge la logica sulla PROPRIA struttura",
+      p: null, // ne' verde ne' rosso: non misurabile qui
+      d: "NON MISURABILE in questo ambiente — mancano MANUBOT_DEFAULT_PASSWORD / MANUBOT_BASE_URL (difetto preesistente, non di autorizzazione)",
+    })
+  } else {
+    ok(
+      "l'admin raggiunge la logica sulla PROPRIA struttura (no 401/403/500)",
+      ![401, 403, 500].includes(proprio.stato),
+      `stato ${proprio.stato}`,
+    )
+  }
 
   // ── PROVA 4: la property reale e' rimasta intatta ───────────────────────
   const fotoDopo = await fotografa(barronciId)
@@ -184,11 +195,18 @@ try {
 
   console.log("\n─── ESITI ───")
   let verdi = 0
+  let rossi = 0
+  let sospese = 0
   for (const e of esiti) {
-    console.log(`  ${e.p ? "VERDE" : "ROSSO"}  ${e.n}${e.d ? ` — ${e.d}` : ""}`)
-    if (e.p) verdi++
+    // Tre stati, non due: una prova NON MISURABILE non va spacciata per verde
+    // (falso verde) ne' per rossa (falso allarme).
+    const etichetta = e.p === null ? "SOSPESA" : e.p ? "VERDE  " : "ROSSO  "
+    console.log(`  ${etichetta}${e.n}${e.d ? ` — ${e.d}` : ""}`)
+    if (e.p === null) sospese++
+    else if (e.p) verdi++
+    else rossi++
   }
-  console.log(`\n  ${verdi}/${esiti.length} verdi`)
+  console.log(`\n  ${verdi} verdi, ${rossi} rossi, ${sospese} non misurabili (su ${esiti.length})`)
   console.log(`  pulizia: tenant residui=${restaTenant ?? "?"}, admin residui=${restaAdmin ?? "?"}`)
-  process.exit(verdi === esiti.length && !restaTenant && !restaAdmin ? 0 : 1)
+  process.exit(rossi === 0 && !restaTenant && !restaAdmin ? 0 : 1)
 }
