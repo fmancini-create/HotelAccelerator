@@ -343,10 +343,10 @@ export default function GuardLandingPage() {
                   className="group rounded-2xl border border-slate-200 bg-white p-6 hover:border-emerald-300 hover:shadow-lg transition-all"
                 >
                   <div className="mb-3 inline-flex rounded-lg bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                    Risultati Garantiti
+                    Risultati Misurabili
                   </div>
                   <h3 className="mb-2 text-lg font-bold text-slate-900">
-                    +20% fatturato in 30 giorni
+                    +20% fatturato medio in 90 giorni
                   </h3>
                   <p className="text-sm text-slate-600">
                     Pricing dinamico automatico per hotel.

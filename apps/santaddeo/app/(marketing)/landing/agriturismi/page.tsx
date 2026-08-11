@@ -313,8 +313,8 @@ export default function AgriturismiLandingPage() {
               Inizia oggi. Gratis.
             </h2>
             <p className="mx-auto mb-10 max-w-2xl text-xl text-stone-400">
-              Crea il tuo account in 30 secondi. Collega il PMS. Ottieni dashboard e suggerimenti tariffari.
-              Tutto gratuito, per sempre.
+              Crea il tuo account in 30 secondi. Collega il PMS e ottieni la dashboard KPI con i suggerimenti
+              tariffari. La dashboard è gratuita, per sempre.
             </p>
             <Link href="/auth/sign-up">
               <Button size="lg" className="h-14 gap-2 rounded-full bg-emerald-500 px-10 text-lg font-bold hover:bg-emerald-600">

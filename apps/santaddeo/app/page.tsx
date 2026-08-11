@@ -53,14 +53,14 @@ export default function HomePage() {
             {/* Promo banner - link to high-impact landing */}
             <Link href="/landing/vendita" className="group mb-6 inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 transition-all hover:border-amber-300 hover:bg-amber-100">
               <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-              Aumenta il fatturato del 20% in 30 giorni
+              Aumenta il fatturato fino al 20% (dato medio) nei primi 90 giorni
               <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
 
             {/* Free badge */}
             <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800">
               <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Gratis per sempre
+              Dashboard gratis per sempre
             </div>
 
             {/* Main headline - SEO: include "Revenue Management System" */}
@@ -465,9 +465,9 @@ export default function HomePage() {
 
               <Link href="/landing/vendita" className="group rounded-2xl border border-gray-200 bg-white p-6 hover:border-emerald-300 hover:shadow-lg transition-all">
                 <div className="mb-3 inline-flex rounded-lg bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                  Risultati Garantiti
+                  Risultati Misurabili
                 </div>
-                <h3 className="mb-2 text-lg font-bold text-gray-900">+20% fatturato in 30 giorni</h3>
+                <h3 className="mb-2 text-lg font-bold text-gray-900">+20% fatturato medio in 90 giorni</h3>
                 <p className="text-sm text-gray-600">Sistema automatico di pricing dinamico per hotel.</p>
                 <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 group-hover:gap-2 transition-all">
                   Scopri come <ArrowRight className="h-4 w-4" />

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "+20% Fatturato in 30 Giorni | SANTADDEO",
+    title: "+20% Fatturato Medio in 90 Giorni | SANTADDEO",
     description: "Pricing dinamico automatico per strutture ricettive.",
   images: ["https://www.santaddeo.com/og-image.jpg"],
   },
@@ -82,7 +82,7 @@ export default function LandingVenditaPage() {
         data={buildService({
           name: "Santaddeo Revenue Management",
           description:
-            "Sistema di revenue management per strutture ricettive italiane: pricing dinamico, dashboard KPI, integrazione PMS e channel manager per aumentare il fatturato camere fino al 20% in 30 giorni.",
+            "Sistema di revenue management per strutture ricettive italiane: pricing dinamico, dashboard KPI, integrazione PMS e channel manager per aumentare il fatturato camere fino al 20% (dato medio) nei primi 90 giorni.",
           url: "/landing/vendita",
           features: [
             "Pricing dinamico automatico",

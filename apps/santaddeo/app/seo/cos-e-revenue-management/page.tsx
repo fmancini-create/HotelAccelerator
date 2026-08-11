@@ -373,7 +373,7 @@ export default function CosERevenueManagementPage() {
               </li>
               <li>
                 <Link href="/landing/vendita" className="text-emerald-700 hover:underline">
-                  Aumenta il fatturato del 20% in 30 giorni
+                  Aumenta il fatturato fino al 20% (dato medio) nei primi 90 giorni
                 </Link>
               </li>
               <li>
