@@ -72,7 +72,7 @@ const automations = [
 
 export default function EmailMarketingLandingPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Schema.org */}
       <script
         type="application/ld+json"
@@ -89,7 +89,7 @@ export default function EmailMarketingLandingPage() {
       />
 
       {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-md">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <nav className="container mx-auto flex h-16 items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
             <HotelAcceleratorMark className="h-8 w-8" priority />
@@ -97,12 +97,12 @@ export default function EmailMarketingLandingPage() {
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/admin">
-              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                 Accedi
               </Button>
             </Link>
             <Link href="/request-access">
-              <Button size="sm" className="bg-white text-black hover:bg-gray-200">
+              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
                 Richiedi Demo
               </Button>
             </Link>
@@ -114,24 +114,24 @@ export default function EmailMarketingLandingPage() {
       <section className="pt-32 pb-20 px-4">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6">
+            <Link href="/" className="mx-auto mb-6 flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
               <ArrowRight className="h-4 w-4 rotate-180" />
               Torna alla home
             </Link>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-sm text-amber-400 mb-8">
+            <div className="mx-auto flex w-fit items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand mb-8">
               <Mail className="h-4 w-4" />
               Email Marketing
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 text-balance">
+            <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 text-balance">
               Email che trasformano ospiti in clienti fedeli
             </h1>
-            <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10">
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
               Campagne automatizzate <strong>pre e post soggiorno</strong> che aumentano le prenotazioni dirette. 2x
               engagement rate rispetto alla media di settore.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/request-access">
-                <Button size="lg" className="bg-amber-500 text-black hover:bg-amber-600 gap-2">
+                <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
                   Inizia con l'Email Marketing
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -140,22 +140,22 @@ export default function EmailMarketingLandingPage() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-12 border-y border-white/10">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-12 border-y border-border">
             <div className="text-center">
-              <div className="text-3xl font-bold text-amber-400 mb-1">2x</div>
-              <div className="text-sm text-gray-500">Engagement rate</div>
+              <div className="text-3xl font-bold text-ha-brand mb-1">2x</div>
+              <div className="text-sm text-muted-foreground">Engagement rate</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-amber-400 mb-1">65%</div>
-              <div className="text-sm text-gray-500">Open rate medio</div>
+              <div className="text-3xl font-bold text-ha-brand mb-1">65%</div>
+              <div className="text-sm text-muted-foreground">Open rate medio</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-amber-400 mb-1">+35%</div>
-              <div className="text-sm text-gray-500">Prenotazioni dirette</div>
+              <div className="text-3xl font-bold text-ha-brand mb-1">+35%</div>
+              <div className="text-sm text-muted-foreground">Prenotazioni dirette</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-amber-400 mb-1">∞</div>
-              <div className="text-sm text-gray-500">Automazioni</div>
+              <div className="text-3xl font-bold text-ha-brand mb-1">∞</div>
+              <div className="text-sm text-muted-foreground">Automazioni</div>
             </div>
           </div>
         </div>
@@ -166,24 +166,24 @@ export default function EmailMarketingLandingPage() {
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Automazioni che lavorano per te 24/7</h2>
-            <p className="text-gray-400">Imposta una volta, converti per sempre</p>
+            <p className="text-muted-foreground">Imposta una volta, converti per sempre</p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 overflow-hidden">
+          <div className="rounded-2xl border border-border overflow-hidden">
             <table className="w-full">
-              <thead className="bg-white/5">
+              <thead className="bg-secondary/50">
                 <tr>
-                  <th className="text-left p-4 text-sm font-medium text-gray-400">Automazione</th>
-                  <th className="text-left p-4 text-sm font-medium text-gray-400">Trigger</th>
-                  <th className="text-right p-4 text-sm font-medium text-gray-400">Open Rate</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Automazione</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Trigger</th>
+                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">Open Rate</th>
                 </tr>
               </thead>
               <tbody>
                 {automations.map((auto, i) => (
-                  <tr key={auto.name} className={i % 2 === 0 ? "bg-white/[0.02]" : ""}>
+                  <tr key={auto.name} className={i % 2 === 0 ? "bg-card/[0.02]" : ""}>
                     <td className="p-4 font-medium">{auto.name}</td>
-                    <td className="p-4 text-gray-400">{auto.trigger}</td>
-                    <td className="p-4 text-right text-amber-400 font-semibold">{auto.openRate}</td>
+                    <td className="p-4 text-muted-foreground">{auto.trigger}</td>
+                    <td className="p-4 text-right text-ha-brand font-semibold">{auto.openRate}</td>
                   </tr>
                 ))}
               </tbody>
@@ -193,7 +193,7 @@ export default function EmailMarketingLandingPage() {
       </section>
 
       {/* Features */}
-      <section className="py-24 px-4 bg-white/[0.02]">
+      <section className="py-24 px-4 bg-card/[0.02]">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Strumenti professionali per email che convertono</h2>
@@ -201,12 +201,12 @@ export default function EmailMarketingLandingPage() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature) => (
-              <article key={feature.title} className="p-6 rounded-2xl bg-white/5 border border-white/10">
-                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-amber-400" />
+              <article key={feature.title} className="p-6 rounded-2xl bg-secondary/50 border border-border">
+                <div className="w-12 h-12 rounded-xl bg-ha-brand-soft flex items-center justify-center mb-4">
+                  <feature.icon className="h-6 w-6 text-ha-brand" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-gray-400 text-sm">{feature.description}</p>
+                <p className="text-muted-foreground text-sm">{feature.description}</p>
               </article>
             ))}
           </div>
@@ -216,12 +216,12 @@ export default function EmailMarketingLandingPage() {
       {/* CTA */}
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-3xl text-center">
-          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-amber-500/20 to-amber-500/5 border border-amber-500/20">
-            <Zap className="h-12 w-12 text-amber-400 mx-auto mb-6" />
+          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-ha-brand/20 to-ha-brand-soft border border-ha-brand/20">
+            <Zap className="h-12 w-12 text-ha-brand mx-auto mb-6" />
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Inizia a convertire con le email</h2>
-            <p className="text-gray-400 mb-8">Prova gratuita di 14 giorni. Template inclusi, setup assistito.</p>
+            <p className="text-muted-foreground mb-8">Prova gratuita di 14 giorni. Template inclusi, setup assistito.</p>
             <Link href="/request-access">
-              <Button size="lg" className="bg-amber-500 text-black hover:bg-amber-600 gap-2">
+              <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
                 Richiedi Demo Gratuita
                 <ArrowRight className="h-4 w-4" />
               </Button>

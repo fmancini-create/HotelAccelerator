@@ -174,38 +174,84 @@ async function PlatformLanding() {
               </Button>
             </Link>
             <Link href="/request-access">
-              <Button size="sm" className="bg-ha-brand text-ha-brand-foreground hover:bg-ha-brand/90">
-                Richiedi Demo
-              </Button>
+              {/* Santaddeo usa l'azione primaria NEUTRA nell'intestazione
+                  (vedi apps/santaddeo/components/layout/header.tsx): il verde
+                  resta all'accento, non al pulsante di barra. */}
+              <Button size="sm">Richiedi Demo</Button>
             </Link>
           </div>
         </nav>
       </header>
 
-      {/* Hero Section - Semantic H1 */}
-      <section className="pt-32 pb-20 px-4" aria-labelledby="hero-title">
-        <div className="container mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand-soft-foreground mb-8">
+      {/* Hero Section - Semantic H1
+          Linguaggio visivo Santaddeo: sfondo sfumato tenue, titolo font-black
+          con la seconda riga in accento di marca, gerarchia a tre azioni
+          (primaria neutra scura, secondaria a contorno verde, terziaria
+          trasparente) su pillole alte. Vedi apps/santaddeo/app/page.tsx. */}
+      <section className="relative overflow-hidden" aria-labelledby="hero-title">
+        <div
+          className="absolute inset-0 bg-gradient-to-br from-muted/60 via-background to-ha-brand-soft/40"
+          aria-hidden="true"
+        />
+        <div className="container relative mx-auto max-w-5xl px-4 pt-32 pb-20 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm font-medium text-ha-brand-soft-foreground mb-8">
             <Sparkles className="h-4 w-4 text-ha-brand" aria-hidden="true" />
             <span>Piattaforma SaaS per strutture ricettive</span>
           </div>
-          <h1 id="hero-title" className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6 text-balance">
+          <h1
+            id="hero-title"
+            className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mb-6 text-balance"
+          >
             Il software gestionale
             <br />
-            <span className="text-muted-foreground">completo per hotel</span>
+            <span className="text-ha-brand">completo per hotel</span>
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-            <strong>CMS, CRM, Email Marketing, Inbox Omnicanale e AI</strong> in un'unica soluzione. Aumenta le
-            prenotazioni dirette fino al 35% e riduci le commissioni OTA.
+          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed text-pretty">
+            <strong className="text-foreground">CMS, CRM, Email Marketing, Inbox Omnicanale e AI</strong> in un'unica
+            soluzione. Aumenta le prenotazioni dirette fino al 35% e riduci le commissioni OTA.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/request-access">
-              <Button size="lg" className="bg-ha-brand text-ha-brand-foreground hover:bg-ha-brand/90 gap-2">
+              <Button size="lg" className="h-14 gap-2 rounded-full px-8 text-lg font-semibold">
                 Richiedi Demo Gratuita
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                <ArrowRight className="h-5 w-5" aria-hidden="true" />
               </Button>
             </Link>
-            {/* Removed video link button */}
+            <Link href="#features">
+              <Button
+                size="lg"
+                variant="outline"
+                className="h-14 gap-2 rounded-full border-ha-brand px-8 text-lg font-semibold text-ha-brand-soft-foreground hover:bg-ha-brand-soft"
+              >
+                Scopri le funzionalità
+                <ArrowRight className="h-5 w-5" aria-hidden="true" />
+              </Button>
+            </Link>
+            <Link href="#pricing">
+              <Button
+                size="lg"
+                variant="ghost"
+                className="h-14 gap-2 rounded-full px-8 text-lg text-muted-foreground hover:text-foreground"
+              >
+                Vedi i prezzi
+              </Button>
+            </Link>
+          </div>
+
+          {/* Indicatori di fiducia: stessa riga di rassicurazioni di Santaddeo */}
+          <div className="mt-12 flex flex-wrap items-center justify-center gap-8 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-ha-brand" aria-hidden="true" />
+              Nessuna carta di credito
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-ha-brand" aria-hidden="true" />
+              Attivazione guidata
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-4 w-4 text-ha-brand" aria-hidden="true" />
+              150+ hotel attivi
+            </div>
           </div>
         </div>
       </section>
@@ -342,7 +388,7 @@ async function PlatformLanding() {
                   Chat widget
                 </li>
               </ul>
-              <Button variant="outline" className="w-full bg-transparent">
+              <Button variant="outline" size="lg" className="w-full rounded-full bg-transparent">
                 Inizia Gratis
               </Button>
             </article>
@@ -379,7 +425,12 @@ async function PlatformLanding() {
                   Dominio personalizzato
                 </li>
               </ul>
-              <Button className="w-full bg-ha-brand text-ha-brand-foreground hover:bg-ha-brand/90">Inizia Ora</Button>
+              <Button
+                size="lg"
+                className="w-full rounded-full bg-ha-brand text-ha-brand-foreground hover:bg-ha-brand/90"
+              >
+                Inizia Ora
+              </Button>
             </article>
 
             {/* Enterprise */}
@@ -409,7 +460,7 @@ async function PlatformLanding() {
                   SLA dedicato
                 </li>
               </ul>
-              <Button variant="outline" className="w-full bg-transparent">
+              <Button variant="outline" size="lg" className="w-full rounded-full bg-transparent">
                 Contattaci
               </Button>
             </article>
@@ -430,9 +481,12 @@ async function PlatformLanding() {
               dirette.
             </p>
             <Link href="/request-access">
-              <Button size="lg" className="bg-ha-brand text-ha-brand-foreground hover:bg-ha-brand/90 gap-2">
+              <Button
+                size="lg"
+                className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90"
+              >
                 Richiedi una Demo Gratuita
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                <ArrowRight className="h-5 w-5" aria-hidden="true" />
               </Button>
             </Link>
           </div>
