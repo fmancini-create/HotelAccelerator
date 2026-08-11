@@ -111,8 +111,8 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen bg-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-card rounded-lg shadow-lg p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-green-600" />
+            <div className="w-16 h-16 bg-ha-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-8 h-8 text-ha-success-soft-foreground" />
             </div>
             <h1 className="text-2xl font-semibold text-foreground mb-2">Password reimpostata!</h1>
             <p className="text-muted-foreground">
@@ -129,8 +129,8 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen bg-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-card rounded-lg shadow-lg p-8 text-center">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-8 h-8 text-amber-700" />
+            <div className="w-16 h-16 bg-ha-warning-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-8 h-8 text-ha-warning-soft-foreground" />
             </div>
             <h1 className="text-2xl font-semibold text-foreground mb-2">Link non valido</h1>
             <p className="text-muted-foreground mb-6">
@@ -140,7 +140,7 @@ export default function ResetPasswordPage() {
               type="button"
               onClick={handleBackToLogin}
               disabled={isLeaving}
-              className="inline-flex items-center justify-center w-full h-10 rounded-md bg-amber-700 text-white text-sm font-medium hover:bg-amber-800 disabled:opacity-60"
+              className="inline-flex items-center justify-center w-full h-10 rounded-md bg-ha-warning text-white text-sm font-medium hover:bg-ha-warning disabled:opacity-60"
             >
               {isLeaving ? "Uscita in corso..." : "Torna al login"}
             </button>
@@ -155,8 +155,8 @@ export default function ResetPasswordPage() {
       <div className="w-full max-w-md">
         <div className="bg-card rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-amber-700" />
+            <div className="w-16 h-16 bg-ha-warning-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-ha-warning-soft-foreground" />
             </div>
             <h1 className="text-2xl font-semibold text-foreground">Reimposta Password</h1>
             <p className="text-muted-foreground mt-2">Inserisci la tua nuova password</p>
@@ -200,7 +200,7 @@ export default function ResetPasswordPage() {
               </div>
             </div>
 
-            {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
+            {error && <div className="bg-ha-error-soft text-ha-error-soft-foreground p-3 rounded-lg text-sm">{error}</div>}
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (

@@ -198,7 +198,7 @@ export default function CategoriesPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openDeleteDialog(category)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-ha-error-soft-foreground hover:text-ha-error-soft-foreground hover:bg-ha-error-soft"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

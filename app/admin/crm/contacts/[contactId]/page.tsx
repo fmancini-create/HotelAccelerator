@@ -112,7 +112,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ contac
       case "platinum":
         return "bg-purple-100 text-purple-800 border-purple-300"
       case "gold":
-        return "bg-yellow-100 text-yellow-800 border-yellow-300"
+        return "bg-ha-warning-soft text-ha-warning-soft-foreground border-ha-warning-soft"
       case "silver":
         return "bg-muted text-foreground border-border"
       default:
@@ -169,14 +169,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ contac
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-4 text-center">
-            <Hotel className="h-5 w-5 mx-auto mb-1 text-blue-600" />
+            <Hotel className="h-5 w-5 mx-auto mb-1 text-ha-info-soft-foreground" />
             <p className="text-2xl font-bold">{contact.total_bookings}</p>
             <p className="text-xs text-muted-foreground">Prenotazioni</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <CreditCard className="h-5 w-5 mx-auto mb-1 text-green-600" />
+            <CreditCard className="h-5 w-5 mx-auto mb-1 text-ha-success-soft-foreground" />
             <p className="text-2xl font-bold">€{(contact.total_revenue_cents / 100).toLocaleString()}</p>
             <p className="text-xs text-muted-foreground">Revenue Totale</p>
           </CardContent>
@@ -190,21 +190,21 @@ export default function ContactDetailPage({ params }: { params: Promise<{ contac
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <TrendingUp className="h-5 w-5 mx-auto mb-1 text-orange-600" />
+            <TrendingUp className="h-5 w-5 mx-auto mb-1 text-ha-warning-soft-foreground" />
             <p className="text-2xl font-bold">{contact.lead_score}</p>
             <p className="text-xs text-muted-foreground">Lead Score</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <Eye className="h-5 w-5 mx-auto mb-1 text-blue-600" />
+            <Eye className="h-5 w-5 mx-auto mb-1 text-ha-info-soft-foreground" />
             <p className="text-2xl font-bold">{contact.email_opens_count}</p>
             <p className="text-xs text-muted-foreground">Email Aperte</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4 text-center">
-            <MousePointer className="h-5 w-5 mx-auto mb-1 text-green-600" />
+            <MousePointer className="h-5 w-5 mx-auto mb-1 text-ha-success-soft-foreground" />
             <p className="text-2xl font-bold">{contact.email_clicks_count}</p>
             <p className="text-xs text-muted-foreground">Click</p>
           </CardContent>
@@ -358,11 +358,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ contac
                           <Badge
                             className={
                               stay.status === "checked_out"
-                                ? "bg-green-100 text-green-800 ml-2"
+                                ? "bg-ha-success-soft text-ha-success-soft-foreground ml-2"
                                 : stay.status === "confirmed"
-                                  ? "bg-blue-100 text-blue-800 ml-2"
+                                  ? "bg-ha-info-soft text-ha-info-soft-foreground ml-2"
                                   : stay.status === "cancelled"
-                                    ? "bg-red-100 text-red-800 ml-2"
+                                    ? "bg-ha-error-soft text-ha-error-soft-foreground ml-2"
                                     : "ml-2"
                             }
                           >

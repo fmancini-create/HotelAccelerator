@@ -133,33 +133,33 @@ export default function AdminProfilePage() {
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_upload ? (
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-ha-success-soft-foreground" />
                 ) : (
-                  <X className="w-4 h-4 text-red-500" />
+                  <X className="w-4 h-4 text-ha-error-soft-foreground" />
                 )}
                 <span className="text-muted-foreground">Upload foto</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_delete ? (
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-ha-success-soft-foreground" />
                 ) : (
-                  <X className="w-4 h-4 text-red-500" />
+                  <X className="w-4 h-4 text-ha-error-soft-foreground" />
                 )}
                 <span className="text-muted-foreground">Elimina foto</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_move ? (
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-ha-success-soft-foreground" />
                 ) : (
-                  <X className="w-4 h-4 text-red-500" />
+                  <X className="w-4 h-4 text-ha-error-soft-foreground" />
                 )}
                 <span className="text-muted-foreground">Sposta foto</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 {adminUser.can_manage_users ? (
-                  <Check className="w-4 h-4 text-green-500" />
+                  <Check className="w-4 h-4 text-ha-success-soft-foreground" />
                 ) : (
-                  <X className="w-4 h-4 text-red-500" />
+                  <X className="w-4 h-4 text-ha-error-soft-foreground" />
                 )}
                 <span className="text-muted-foreground">Gestione utenti</span>
               </div>
@@ -180,11 +180,11 @@ export default function AdminProfilePage() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+            <div className="mb-4 p-3 bg-ha-error-soft border border-ha-error-soft rounded-lg text-ha-error-soft-foreground text-sm">{error}</div>
           )}
 
           {success && (
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+            <div className="mb-4 p-3 bg-ha-success-soft border border-ha-success-soft rounded-lg text-ha-success-soft-foreground text-sm">
               {success}
             </div>
           )}
@@ -237,31 +237,31 @@ export default function AdminProfilePage() {
                   <p className="text-xs text-muted-foreground">Requisiti password:</p>
                   <div className="grid grid-cols-2 gap-1">
                     <div
-                      className={`text-xs flex items-center gap-1 ${newPassword.length >= 8 ? "text-green-600" : "text-red-500"}`}
+                      className={`text-xs flex items-center gap-1 ${newPassword.length >= 8 ? "text-ha-success-soft-foreground" : "text-ha-error-soft-foreground"}`}
                     >
                       {newPassword.length >= 8 ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                       Almeno 8 caratteri
                     </div>
                     <div
-                      className={`text-xs flex items-center gap-1 ${/[A-Z]/.test(newPassword) ? "text-green-600" : "text-red-500"}`}
+                      className={`text-xs flex items-center gap-1 ${/[A-Z]/.test(newPassword) ? "text-ha-success-soft-foreground" : "text-ha-error-soft-foreground"}`}
                     >
                       {/[A-Z]/.test(newPassword) ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                       Una maiuscola
                     </div>
                     <div
-                      className={`text-xs flex items-center gap-1 ${/[a-z]/.test(newPassword) ? "text-green-600" : "text-red-500"}`}
+                      className={`text-xs flex items-center gap-1 ${/[a-z]/.test(newPassword) ? "text-ha-success-soft-foreground" : "text-ha-error-soft-foreground"}`}
                     >
                       {/[a-z]/.test(newPassword) ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                       Una minuscola
                     </div>
                     <div
-                      className={`text-xs flex items-center gap-1 ${/[0-9]/.test(newPassword) ? "text-green-600" : "text-red-500"}`}
+                      className={`text-xs flex items-center gap-1 ${/[0-9]/.test(newPassword) ? "text-ha-success-soft-foreground" : "text-ha-error-soft-foreground"}`}
                     >
                       {/[0-9]/.test(newPassword) ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                       Un numero
                     </div>
                     <div
-                      className={`text-xs flex items-center gap-1 ${/[!@#$%^&*(),.?":{}|<>]/.test(newPassword) ? "text-green-600" : "text-red-500"}`}
+                      className={`text-xs flex items-center gap-1 ${/[!@#$%^&*(),.?":{}|<>]/.test(newPassword) ? "text-ha-success-soft-foreground" : "text-ha-error-soft-foreground"}`}
                     >
                       {/[!@#$%^&*(),.?":{}|<>]/.test(newPassword) ? (
                         <Check className="w-3 h-3" />
@@ -284,7 +284,7 @@ export default function AdminProfilePage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Conferma la nuova password"
-                  className={`pr-10 ${confirmPassword.length > 0 && !doPasswordsMatch ? "border-red-500" : ""}`}
+                  className={`pr-10 ${confirmPassword.length > 0 && !doPasswordsMatch ? "border-ha-error" : ""}`}
                 />
                 <button
                   type="button"
@@ -295,7 +295,7 @@ export default function AdminProfilePage() {
                 </button>
               </div>
               {confirmPassword.length > 0 && !doPasswordsMatch && (
-                <p className="text-xs text-red-500 mt-1">Le password non coincidono</p>
+                <p className="text-xs text-ha-error-soft-foreground mt-1">Le password non coincidono</p>
               )}
             </div>
 

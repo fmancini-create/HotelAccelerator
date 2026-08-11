@@ -167,14 +167,14 @@ export default function BillingPage() {
 
         <TabsContent value="plans" className="mt-6">
           {activeSub && (
-            <Card className="mb-6 border-green-200 bg-green-50">
+            <Card className="mb-6 border-ha-success-soft bg-ha-success-soft">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-green-800">
+                <CardTitle className="flex items-center gap-2 text-ha-success-soft-foreground">
                   <Check className="h-5 w-5" />
                   Abbonamento Attivo
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-green-700">
+              <CardContent className="text-ha-success-soft-foreground">
                 <p>
                   Piano: <strong>{data.plans.find((p) => p.id === activeSub.plan_id)?.name || activeSub.plan_id}</strong>
                 </p>
@@ -214,7 +214,7 @@ export default function BillingPage() {
                       <ul className="space-y-2">
                         {plan.features.map((f, i) => (
                           <li key={i} className="flex items-center gap-2 text-sm">
-                            <Check className="h-4 w-4 text-green-600" />
+                            <Check className="h-4 w-4 text-ha-success-soft-foreground" />
                             {f}
                           </li>
                         ))}

@@ -70,9 +70,9 @@ function QuotaItem({
   percentage: number
 }) {
   const getColor = (p: number) => {
-    if (p >= 90) return "bg-red-500"
-    if (p >= 75) return "bg-yellow-500"
-    return "bg-green-500"
+    if (p >= 90) return "bg-ha-error"
+    if (p >= 75) return "bg-ha-warning"
+    return "bg-ha-success"
   }
 
   const getBadgeVariant = (p: number): "destructive" | "secondary" | "default" => {
@@ -216,7 +216,7 @@ export default function MonitoringPage() {
             <CardContent>
               {warnings.length === 0 ? (
                 <Alert>
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <CheckCircle2 className="h-4 w-4 text-ha-success-soft-foreground" />
                   <AlertTitle>Tutto OK</AlertTitle>
                   <AlertDescription>
                     Tutti i sistemi funzionano correttamente. Nessun problema rilevato.

@@ -21,7 +21,7 @@ const modules: TrackingModule[] = [
       "Sessioni in tempo reale, timeline degli eventi e stitching automatico al CRM quando il visitatore si identifica.",
     icon: <Radio className="h-6 w-6" />,
     href: "/admin/tracking/visitors",
-    iconBg: "bg-blue-600",
+    iconBg: "bg-ha-info",
   },
   {
     id: "sites",
@@ -30,7 +30,7 @@ const modules: TrackingModule[] = [
       "Gestisci write key e domini autorizzati per tenant. Snippet pronto da incollare su siti esterni; injection automatica sui siti CMS.",
     icon: <Globe className="h-6 w-6" />,
     href: "/admin/tracking/sites",
-    iconBg: "bg-sky-600",
+    iconBg: "bg-ha-info",
   },
   {
     id: "demand",
@@ -39,7 +39,7 @@ const modules: TrackingModule[] = [
       "Aggregazione delle date piu' cercate dai visitatori: signal di pricing per intervalli specifici.",
     icon: <Calendar className="h-6 w-6" />,
     href: "/admin/tracking/demand",
-    iconBg: "bg-amber-500",
+    iconBg: "bg-ha-warning",
   },
 ]
 

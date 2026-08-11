@@ -55,7 +55,7 @@ export default function TrackingSitesPage() {
         <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
-              <Globe className="h-5 w-5 text-blue-600" /> Come funziona
+              <Globe className="h-5 w-5 text-ha-info-soft-foreground" /> Come funziona
             </CardTitle>
             <CardDescription className="text-ha-brand-soft-foreground">
               Ogni sito riceve una <strong>chiave pubblica</strong> ({`tw_...`}) da incollare nello script embed. Le
@@ -235,14 +235,14 @@ function SiteCard({ site }: { site: TrackingSite }) {
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2 text-foreground">
-              <Globe className="h-5 w-5 text-blue-600" />
+              <Globe className="h-5 w-5 text-ha-info-soft-foreground" />
               <span className="truncate">{site.name}</span>
               {site.is_active ? (
-                <Badge className="bg-green-100 text-green-800 border-green-200">
+                <Badge className="bg-ha-success-soft text-ha-success-soft-foreground border-ha-success-soft">
                   <ShieldCheck className="h-3 w-3 mr-1" /> Attivo
                 </Badge>
               ) : (
-                <Badge variant="outline" className="text-amber-700 border-amber-300">
+                <Badge variant="outline" className="text-ha-warning-soft-foreground border-ha-warning-soft">
                   <ShieldX className="h-3 w-3 mr-1" /> Disattivato
                 </Badge>
               )}
@@ -345,7 +345,7 @@ function SiteCard({ site }: { site: TrackingSite }) {
         <Separator />
 
         <div className="flex justify-end">
-          <Button variant="outline" className="text-red-600 hover:bg-red-50" onClick={onDelete}>
+          <Button variant="outline" className="text-ha-error-soft-foreground hover:bg-ha-error-soft" onClick={onDelete}>
             <Trash2 className="h-4 w-4 mr-2" /> Elimina sito
           </Button>
         </div>

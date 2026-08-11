@@ -284,10 +284,10 @@ export default function MessageRulesPage() {
 
         {/* Alerts */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+          <div className="mb-4 p-3 bg-ha-error-soft border border-ha-error-soft rounded-lg text-ha-error-soft-foreground text-sm">{error}</div>
         )}
         {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          <div className="mb-4 p-3 bg-ha-success-soft border border-ha-success-soft rounded-lg text-ha-success-soft-foreground text-sm">
             {success}
           </div>
         )}
@@ -591,7 +591,7 @@ export default function MessageRulesPage() {
                         <h3 className="font-medium text-muted-foreground truncate">{rule.name}</h3>
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${
-                            rule.is_active ? "bg-green-100 text-green-700" : "bg-muted text-muted-foreground"
+                            rule.is_active ? "bg-ha-success-soft text-ha-success-soft-foreground" : "bg-muted text-muted-foreground"
                           }`}
                         >
                           {rule.is_active ? "Attivo" : "Disattivato"}
@@ -630,7 +630,7 @@ export default function MessageRulesPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(rule)}
-                        className="text-red-400 hover:text-red-600"
+                        className="text-ha-error-soft-foreground hover:text-ha-error-soft-foreground"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>

@@ -258,7 +258,7 @@ export default function AdminPhotosPage() {
   if (authLoading || isLoading || !adminUser) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-ha-warning" />
       </div>
     )
   }
@@ -303,12 +303,12 @@ export default function AdminPhotosPage() {
                   className="w-full h-full object-cover"
                 />
                 {photo.is_published && (
-                  <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-bold">
+                  <div className="absolute top-2 right-2 bg-ha-success text-white px-2 py-1 rounded text-xs font-bold">
                     PUBBLICA
                   </div>
                 )}
                 {photo.categories && photo.categories.length > 0 && (
-                  <div className="absolute top-2 left-2 bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
+                  <div className="absolute top-2 left-2 bg-ha-warning text-white px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
                     <Tag className="h-3 w-3" />
                     {photo.categories.length}
                   </div>
@@ -321,7 +321,7 @@ export default function AdminPhotosPage() {
                 {photo.categories && photo.categories.length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {photo.categories.slice(0, 3).map((cat) => (
-                      <span key={cat.id} className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded">
+                      <span key={cat.id} className="text-xs bg-ha-warning-soft text-ha-warning-soft-foreground px-2 py-0.5 rounded">
                         {cat.name}
                       </span>
                     ))}
@@ -405,7 +405,7 @@ export default function AdminPhotosPage() {
 
               <div className="mb-4 border-t pt-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Tag className="h-4 w-4 text-amber-600" />
+                  <Tag className="h-4 w-4 text-ha-warning-soft-foreground" />
                   <h3 className="font-medium">Assegna Categorie</h3>
                 </div>
                 {categories.length > 0 ? (
@@ -414,14 +414,14 @@ export default function AdminPhotosPage() {
                       <label
                         key={category.id}
                         className={`flex items-center gap-2 p-3 border rounded cursor-pointer transition-colors ${
-                          selectedCategories.includes(category.id) ? "bg-amber-50 border-amber-600" : "hover:bg-muted"
+                          selectedCategories.includes(category.id) ? "bg-ha-warning-soft border-ha-warning" : "hover:bg-muted"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={selectedCategories.includes(category.id)}
                           onChange={() => toggleCategory(category.id)}
-                          className="rounded border-border text-amber-600 focus:ring-amber-500"
+                          className="rounded border-border text-ha-warning-soft-foreground focus:ring-ha-warning"
                         />
                         <span className="text-sm">{category.name}</span>
                       </label>

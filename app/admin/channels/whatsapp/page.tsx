@@ -367,7 +367,7 @@ export default function WhatsAppChannelPage() {
         title="WhatsApp Business"
         subtitle="Collega uno o più numeri WhatsApp della tua struttura"
         actions={
-          <Badge variant={hasNumbers ? "default" : "secondary"} className={hasNumbers ? "bg-emerald-600" : ""}>
+          <Badge variant={hasNumbers ? "default" : "secondary"} className={hasNumbers ? "bg-ha-success" : ""}>
             {hasNumbers ? `${channels.length} numero${channels.length > 1 ? "i" : ""}` : "Non collegato"}
           </Badge>
         }
@@ -385,8 +385,8 @@ export default function WhatsAppChannelPage() {
               <div
                 className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${
                   feedback.type === "success"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-red-200 bg-red-50 text-red-700"
+                    ? "border-ha-success-soft bg-ha-success-soft text-ha-success-soft-foreground"
+                    : "border-ha-error-soft bg-ha-error-soft text-ha-error-soft-foreground"
                 }`}
                 role="status"
               >
@@ -422,10 +422,10 @@ export default function WhatsAppChannelPage() {
 
             {/* Connected numbers list */}
             {channels.map((ch) => (
-              <Card key={ch.id} className={ch.is_default ? "border-emerald-200" : ""}>
+              <Card key={ch.id} className={ch.is_default ? "border-ha-success-soft" : ""}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Phone className="h-5 w-5 text-emerald-600" />
+                    <Phone className="h-5 w-5 text-ha-success-soft-foreground" />
                     {ch.config.display_phone_number || ch.display_name || "WhatsApp"}
                     {ch.is_default && (
                       <Badge variant="secondary" className="ml-1 gap-1">
@@ -437,7 +437,7 @@ export default function WhatsAppChannelPage() {
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   {ch.last_error && (
-                    <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    <div className="flex items-start gap-2 rounded-md border border-ha-warning-soft bg-ha-warning-soft p-2 text-xs text-ha-warning-soft-foreground">
                       <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                       <span>Ultimo errore: {ch.last_error}</span>
                     </div>
@@ -482,7 +482,7 @@ export default function WhatsAppChannelPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MessageCircle className="h-5 w-5 text-emerald-600" />
+                  <MessageCircle className="h-5 w-5 text-ha-success-soft-foreground" />
                   {hasNumbers ? "Collega un altro numero" : "Collega WhatsApp in un clic"}
                 </CardTitle>
                 <CardDescription>
@@ -496,13 +496,13 @@ export default function WhatsAppChannelPage() {
                     <Zap className="h-4 w-4 text-emerald-600" /> Configurazione guidata da Meta
                   </li>
                   <li className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-emerald-600" /> Le credenziali restano sulla piattaforma, al
+                    <ShieldCheck className="h-4 w-4 text-ha-success-soft-foreground" /> Le credenziali restano sulla piattaforma, al
                     sicuro
                   </li>
                 </ul>
 
                 {!canAdd ? (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="flex items-start gap-2 rounded-lg border border-ha-warning-soft bg-ha-warning-soft p-3 text-sm text-ha-warning-soft-foreground">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
                       Hai raggiunto il limite di numeri del tuo piano ({quota?.limit}). Acquista un numero aggiuntivo per
@@ -510,7 +510,7 @@ export default function WhatsAppChannelPage() {
                     </span>
                   </div>
                 ) : !platformReady ? (
-                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                  <div className="flex items-start gap-2 rounded-lg border border-ha-warning-soft bg-ha-warning-soft p-3 text-sm text-ha-warning-soft-foreground">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
                       Il collegamento rapido non è ancora abilitato dall&apos;amministratore della piattaforma. Puoi
@@ -671,7 +671,7 @@ export default function WhatsAppChannelPage() {
                           Aggiungi numero
                         </Button>
                         {!canAdd && (
-                          <p className="mt-2 text-xs text-amber-700">
+                          <p className="mt-2 text-xs text-ha-warning-soft-foreground">
                             Limite numeri raggiunto. Acquista un numero aggiuntivo per aggiungerne un altro.
                           </p>
                         )}

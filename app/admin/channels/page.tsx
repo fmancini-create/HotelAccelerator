@@ -256,7 +256,7 @@ export default function ChannelsPage() {
   const getStatusBadge = (channel: (typeof ALL_CHANNELS)[0]) => {
     if (channel.comingSoon) {
       return (
-        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+        <Badge variant="outline" className="bg-ha-warning-soft text-ha-warning-soft-foreground border-ha-warning-soft">
           <Sparkles className="w-3 h-3 mr-1" />
           Prossimamente
         </Badge>
@@ -275,7 +275,7 @@ export default function ChannelsPage() {
 
     if (status.enabled) {
       return (
-        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+        <Badge variant="outline" className="bg-ha-success-soft text-ha-success-soft-foreground border-ha-success-soft">
           <CheckCircle2 className="w-3 h-3 mr-1" />
           Attivo ({status.activeConnections})
         </Badge>
@@ -283,7 +283,7 @@ export default function ChannelsPage() {
     }
 
     return (
-      <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200">
+      <Badge variant="outline" className="bg-ha-warning-soft text-ha-warning-soft-foreground border-ha-warning-soft">
         <Circle className="w-3 h-3 mr-1" />
         Disattivato
       </Badge>
@@ -383,7 +383,7 @@ export default function ChannelsPage() {
                                   <Switch
                                     checked={isEnabled}
                                     disabled={!isConfigured}
-                                    className="data-[state=checked]:bg-green-500"
+                                    className="data-[state=checked]:bg-ha-success"
                                   />
                                 </div>
                               )}

@@ -86,8 +86,8 @@ export default function AdminSetupPage() {
       <div className="w-full max-w-md">
         <div className="bg-card rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-amber-700" />
+            <div className="w-16 h-16 bg-ha-warning-soft rounded-full flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-ha-warning-soft-foreground" />
             </div>
             <h1 className="text-2xl font-semibold text-foreground">Setup Iniziale</h1>
             <p className="text-muted-foreground mt-2">Crea il Super Admin</p>
@@ -158,7 +158,7 @@ export default function AdminSetupPage() {
               </div>
             </div>
 
-            {error && <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{error}</div>}
+            {error && <div className="bg-ha-error-soft text-ha-error-soft-foreground p-3 rounded-lg text-sm">{error}</div>}
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
@@ -173,7 +173,7 @@ export default function AdminSetupPage() {
           </form>
 
           <div className="mt-6 text-center">
-            <Link href="/" className="text-sm text-amber-700 hover:underline">
+            <Link href="/" className="text-sm text-ha-warning-soft-foreground hover:underline">
               Torna al sito
             </Link>
           </div>

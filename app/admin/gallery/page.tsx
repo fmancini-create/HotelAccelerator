@@ -200,7 +200,7 @@ export default function GalleryPage() {
 
         {/* Azioni Multiple */}
         {selectedPhotos.size > 0 && (
-          <div className="bg-blue-50 p-4 rounded-lg mb-8">
+          <div className="bg-ha-info-soft p-4 rounded-lg mb-8">
             <p className="font-semibold mb-3">{selectedPhotos.size} foto selezionate</p>
             <div className="flex gap-2 flex-wrap">
               {categories.map((cat) => (
@@ -229,7 +229,7 @@ export default function GalleryPage() {
               <div className="relative aspect-[4/3] bg-muted">
                 <Image src={photo.url || "/placeholder.svg"} alt={photo.alt || "Photo"} fill className="object-cover" />
                 {!photo.is_published && (
-                  <div className="absolute top-2 right-2 bg-orange-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                  <div className="absolute top-2 right-2 bg-ha-warning text-white px-2 py-1 rounded text-xs font-semibold">
                     NON PUBBLICATA
                   </div>
                 )}
@@ -255,7 +255,7 @@ export default function GalleryPage() {
                   <div className="flex flex-wrap gap-1 mt-1">
                     {photo.categories.length > 0 ? (
                       photo.categories.map((cat) => (
-                        <span key={cat.id} className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                        <span key={cat.id} className="text-xs bg-ha-info-soft text-ha-info-soft-foreground px-2 py-1 rounded">
                           {cat.name}
                         </span>
                       ))

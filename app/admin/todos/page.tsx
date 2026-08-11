@@ -51,16 +51,16 @@ interface Todo {
 
 const STATUS_CONFIG: Record<TodoStatus, { label: string; icon: typeof Circle; color: string }> = {
   open:        { label: "Da fare",     icon: Circle,       color: "text-muted-foreground"  },
-  in_progress: { label: "In corso",   icon: Clock,        color: "text-blue-500"  },
-  done:        { label: "Completato", icon: CheckCircle2, color: "text-green-500" },
-  cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-red-400"   },
+  in_progress: { label: "In corso",   icon: Clock,        color: "text-ha-info-soft-foreground"  },
+  done:        { label: "Completato", icon: CheckCircle2, color: "text-ha-success-soft-foreground" },
+  cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-ha-error-soft-foreground"   },
 }
 
 const PRIORITY_CONFIG: Record<TodoPriority, { label: string; dot: string; text: string }> = {
   low:    { label: "Bassa",   dot: "bg-gray-300",   text: "text-gray-500"  },
-  normal: { label: "Normale", dot: "bg-blue-400",   text: "text-blue-600"  },
-  high:   { label: "Alta",    dot: "bg-orange-400", text: "text-orange-600"},
-  urgent: { label: "Urgente", dot: "bg-red-500",    text: "text-red-600"   },
+  normal: { label: "Normale", dot: "bg-ha-info",   text: "text-ha-info-soft-foreground"  },
+  high:   { label: "Alta",    dot: "bg-ha-warning", text: "text-ha-warning-soft-foreground"},
+  urgent: { label: "Urgente", dot: "bg-ha-error",    text: "text-ha-error-soft-foreground"   },
 }
 
 function DueDateBadge({ date }: { date?: string }) {
@@ -71,9 +71,9 @@ function DueDateBadge({ date }: { date?: string }) {
   const tomorrow = isTomorrow(d)
   return (
     <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium ${
-      overdue  ? "bg-red-100 text-red-600" :
-      today    ? "bg-orange-100 text-orange-600" :
-      tomorrow ? "bg-yellow-100 text-yellow-700" :
+      overdue  ? "bg-ha-error-soft text-ha-error-soft-foreground" :
+      today    ? "bg-ha-warning-soft text-ha-warning-soft-foreground" :
+      tomorrow ? "bg-ha-warning-soft text-ha-warning-soft-foreground" :
                  "bg-muted text-muted-foreground"
     }`}>
       <Calendar className="w-3 h-3" />
@@ -276,9 +276,9 @@ export default function TodosPage() {
         <div className="grid grid-cols-4 gap-3">
           {[
             { label: "Da fare",    value: stats.open,        border: "border-border" },
-            { label: "In corso",   value: stats.in_progress, border: "border-blue-300" },
-            { label: "Completati", value: stats.done,        border: "border-green-300" },
-            { label: "Urgenti",    value: stats.urgent,      border: "border-red-300" },
+            { label: "In corso",   value: stats.in_progress, border: "border-ha-info-soft" },
+            { label: "Completati", value: stats.done,        border: "border-ha-success-soft" },
+            { label: "Urgenti",    value: stats.urgent,      border: "border-ha-error-soft" },
           ].map(s => (
             <div key={s.label} className={`bg-card rounded-xl border-l-4 ${s.border} px-4 py-3 shadow-sm`}>
               <p className="text-2xl font-semibold text-foreground">{s.value}</p>
@@ -448,7 +448,7 @@ export default function TodosPage() {
                 )}
               </div>
 
-              {error && <p className="text-xs text-red-500">{error}</p>}
+              {error && <p className="text-xs text-ha-error-soft-foreground">{error}</p>}
 
               <div className="flex gap-2 justify-end pt-1">
                 <Button type="button" variant="ghost" size="sm" onClick={resetForm}>
@@ -575,7 +575,7 @@ export default function TodosPage() {
                         </button>
                         <button
                           onClick={() => deleteTodo(todo.id)}
-                          className="p-1.5 hover:bg-red-50 rounded text-muted-foreground hover:text-red-500"
+                          className="p-1.5 hover:bg-ha-error-soft rounded text-muted-foreground hover:text-ha-error-soft-foreground"
                           title="Elimina"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -640,7 +640,7 @@ export default function TodosPage() {
 
                       {/* Manubot badge */}
                       {todo.external_source === "manubot" && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-orange-200 text-orange-600 bg-orange-50 gap-1">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-ha-warning-soft text-ha-warning-soft-foreground bg-ha-warning-soft gap-1">
                           <Wrench className="w-2.5 h-2.5" />
                           Manubot {todo.external_id && `#${todo.external_id}`}
                         </Badge>
@@ -648,7 +648,7 @@ export default function TodosPage() {
 
                       {/* Pending sync to Manubot */}
                       {todo.send_to_manubot && todo.external_source !== "manubot" && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-blue-200 text-blue-500 bg-blue-50 gap-1">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-ha-info-soft text-ha-info-soft-foreground bg-ha-info-soft gap-1">
                           <Send className="w-2.5 h-2.5" />
                           Da inviare a Manubot
                         </Badge>
@@ -662,12 +662,12 @@ export default function TodosPage() {
         )}
 
         {/* Manubot info box */}
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex gap-3">
-          <Wrench className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-orange-700 space-y-1">
+        <div className="bg-ha-warning-soft border border-ha-warning-soft rounded-xl p-4 flex gap-3">
+          <Wrench className="w-4 h-4 text-ha-warning-soft-foreground flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-ha-warning-soft-foreground space-y-1">
             <p className="font-semibold">Integrazione Manubot</p>
             <p>I task con badge arancione provengono da Manubot. I task creati qui con "Invia a Manubot" attivo vengono inviati come nuovi interventi non appena Manubot configura il webhook ricevente.</p>
-            <p className="font-mono text-[10px] bg-orange-100 px-2 py-1 rounded mt-1">
+            <p className="font-mono text-[10px] bg-ha-warning-soft px-2 py-1 rounded mt-1">
               POST {typeof window !== "undefined" ? window.location.origin : "https://tuodominio"}/api/external/manubot
             </p>
           </div>

@@ -61,12 +61,12 @@ type Availability = "idle" | "checking" | "available" | "unavailable"
 function StatusBadge({ readiness }: { readiness: DomainReadiness | null }) {
   if (!readiness || readiness.status === "not_configured") return <Badge variant="secondary">Non configurato</Badge>
   if (readiness.status === "ready") {
-    return <Badge className="bg-green-100 text-green-800"><CheckCircle2 className="mr-1 h-3 w-3" />Operativo</Badge>
+    return <Badge className="bg-ha-success-soft text-ha-success-soft-foreground"><CheckCircle2 className="mr-1 h-3 w-3" />Operativo</Badge>
   }
   if (readiness.status === "automation_unavailable" || readiness.status === "error") {
     return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3" />Errore</Badge>
   }
-  return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="mr-1 h-3 w-3" />In configurazione</Badge>
+  return <Badge className="bg-ha-warning-soft text-ha-warning-soft-foreground"><Clock className="mr-1 h-3 w-3" />In configurazione</Badge>
 }
 
 export function DomainsClient() {
@@ -239,7 +239,7 @@ export function DomainsClient() {
         </Alert>
       )}
       {error && <Alert variant="destructive"><XCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
-      {success && <Alert className="border-green-200 bg-green-50"><CheckCircle2 className="h-4 w-4 text-green-700" /><AlertDescription className="text-green-800">{success}</AlertDescription></Alert>}
+      {success && <Alert className="border-ha-success-soft bg-ha-success-soft"><CheckCircle2 className="h-4 w-4 text-ha-success-soft-foreground" /><AlertDescription className="text-ha-success-soft-foreground">{success}</AlertDescription></Alert>}
 
       <Card>
         <CardHeader>
@@ -254,7 +254,7 @@ export function DomainsClient() {
           {payload?.publicSite.url && httpsReady ? (
             <Button variant="outline" asChild><a href={payload.publicSite.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-2 h-4 w-4" />Apri sito pubblico</a></Button>
           ) : (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-amber-700">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-ha-warning-soft-foreground">
               {checkingHttps && <Loader2 className="h-4 w-4 animate-spin" />}
               <span>{payload?.publicSite.url ? "DNS valido; verifica finale del certificato HTTPS in corso" : payload?.publicSite.message || "Sito non ancora disponibile"}</span>
             </div>
@@ -276,7 +276,7 @@ export function DomainsClient() {
               <Input id="subdomain" value={subdomain} onChange={(event) => setSubdomain(event.target.value.replace(/[^a-z0-9-]/gi, "").toLowerCase())} placeholder="miohotel" className="rounded-r-none" aria-describedby="subdomain-status" />
               <div className="flex items-center rounded-r-md border border-l-0 bg-muted px-3 text-sm text-muted-foreground">.hotelaccelerator.com</div>
             </div>
-            <p id="subdomain-status" className={`mt-2 text-sm ${availability === "unavailable" ? "text-destructive" : availability === "available" ? "text-green-700" : "text-muted-foreground"}`}>
+            <p id="subdomain-status" className={`mt-2 text-sm ${availability === "unavailable" ? "text-destructive" : availability === "available" ? "text-ha-success-soft-foreground" : "text-muted-foreground"}`}>
               {availability === "checking" ? "Controllo disponibilità…" : availabilityReason || "Il controllo parte mentre scrivi"}
             </p>
           </div>
@@ -297,9 +297,9 @@ export function DomainsClient() {
           <div><Label htmlFor="custom-domain">Dominio</Label><Input id="custom-domain" value={customDomain} onChange={(event) => setCustomDomain(event.target.value.toLowerCase())} placeholder="www.miohotel.com" className="mt-1.5" /></div>
           {customDomain && <label className="flex cursor-pointer items-center gap-2 text-sm"><input type="radio" name="domain-type" checked={activeDomainType === "custom_domain"} onChange={() => setActiveDomainType("custom_domain")} />Usa questo dominio come indirizzo principale</label>}
           {customReadiness?.dns.length ? (
-            <Alert className="border-blue-200 bg-blue-50">
-              <Info className="h-4 w-4 text-blue-700" />
-              <AlertDescription className="space-y-3 text-blue-900">
+            <Alert className="border-ha-info-soft bg-ha-info-soft">
+              <Info className="h-4 w-4 text-ha-info-soft-foreground" />
+              <AlertDescription className="space-y-3 text-ha-info-soft-foreground">
                 <p className="font-medium">Record richiesti da Vercel</p>
                 <div className="space-y-2">
                   {customReadiness.dns.map((record, index) => (

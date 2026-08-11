@@ -102,19 +102,19 @@ interface AdminUser {
 }
 
 const GMAIL_SYSTEM_LABELS: Record<string, { name: string; icon: React.ReactNode; color: string }> = {
-  INBOX: { name: "Posta in arrivo", icon: <Inbox className="w-4 h-4" />, color: "text-blue-600" },
-  SENT: { name: "Posta inviata", icon: <Send className="w-4 h-4" />, color: "text-green-600" },
-  STARRED: { name: "Speciali", icon: <Star className="w-4 h-4" />, color: "text-yellow-500" },
-  IMPORTANT: { name: "Importanti", icon: <AlertCircle className="w-4 h-4" />, color: "text-orange-500" },
-  TRASH: { name: "Cestino", icon: <Trash2 className="w-4 h-4" />, color: "text-red-500" },
+  INBOX: { name: "Posta in arrivo", icon: <Inbox className="w-4 h-4" />, color: "text-ha-info-soft-foreground" },
+  SENT: { name: "Posta inviata", icon: <Send className="w-4 h-4" />, color: "text-ha-success-soft-foreground" },
+  STARRED: { name: "Speciali", icon: <Star className="w-4 h-4" />, color: "text-ha-warning-soft-foreground" },
+  IMPORTANT: { name: "Importanti", icon: <AlertCircle className="w-4 h-4" />, color: "text-ha-warning-soft-foreground" },
+  TRASH: { name: "Cestino", icon: <Trash2 className="w-4 h-4" />, color: "text-ha-error-soft-foreground" },
   SPAM: { name: "Spam", icon: <Shield className="w-4 h-4" />, color: "text-muted-foreground" },
   DRAFT: { name: "Bozze", icon: <Edit className="w-4 h-4" />, color: "text-muted-foreground" },
-  UNREAD: { name: "Non letti", icon: <Mail className="w-4 h-4" />, color: "text-blue-500" },
+  UNREAD: { name: "Non letti", icon: <Mail className="w-4 h-4" />, color: "text-ha-info-soft-foreground" },
   CATEGORY_PERSONAL: { name: "Personale", icon: <Tag className="w-4 h-4" />, color: "text-purple-500" },
   CATEGORY_SOCIAL: { name: "Social", icon: <Tag className="w-4 h-4" />, color: "text-pink-500" },
-  CATEGORY_PROMOTIONS: { name: "Promozioni", icon: <Tag className="w-4 h-4" />, color: "text-green-500" },
-  CATEGORY_UPDATES: { name: "Aggiornamenti", icon: <Tag className="w-4 h-4" />, color: "text-blue-500" },
-  CATEGORY_FORUMS: { name: "Forum", icon: <Tag className="w-4 h-4" />, color: "text-orange-500" },
+  CATEGORY_PROMOTIONS: { name: "Promozioni", icon: <Tag className="w-4 h-4" />, color: "text-ha-success-soft-foreground" },
+  CATEGORY_UPDATES: { name: "Aggiornamenti", icon: <Tag className="w-4 h-4" />, color: "text-ha-info-soft-foreground" },
+  CATEGORY_FORUMS: { name: "Forum", icon: <Tag className="w-4 h-4" />, color: "text-ha-warning-soft-foreground" },
 }
 
 // Preset palette for mailbox colors. Kept readable on light backgrounds and
@@ -752,10 +752,10 @@ export default function EmailChannelsClient() {
       <div className="container py-6 space-y-6">
         {/* OAuth Status Messages */}
         {oauthSuccess === "connected" && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            <AlertTitle className="text-green-700">Connessione riuscita!</AlertTitle>
-            <AlertDescription className="text-green-600">
+          <Alert className="bg-ha-success-soft border-ha-success-soft">
+            <CheckCircle className="h-5 w-5 text-ha-success-soft-foreground" />
+            <AlertTitle className="text-ha-success-soft-foreground">Connessione riuscita!</AlertTitle>
+            <AlertDescription className="text-ha-success-soft-foreground">
               Account email collegato con successo. La sincronizzazione è attiva.
             </AlertDescription>
           </Alert>
@@ -1027,7 +1027,7 @@ export default function EmailChannelsClient() {
                               <p className="font-medium">{channel.display_name || channel.email_address}</p>
                               {getProviderBadge(channel.provider)}
                               {channel.is_active ? (
-                                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                                <Badge variant="outline" className="bg-ha-success-soft text-ha-success-soft-foreground border-ha-success-soft">
                                   <CheckCircle className="w-3 h-3 mr-1" />
                                   Attivo
                                 </Badge>
@@ -1044,7 +1044,7 @@ export default function EmailChannelsClient() {
                                 </Badge>
                               )}
                               {channel.provider === "gmail" && channel.push_enabled && (
-                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                <Badge variant="outline" className="bg-ha-info-soft text-ha-info-soft-foreground border-ha-info-soft">
                                   <Bell className="w-3 h-3 mr-1" />
                                   Real-time
                                 </Badge>

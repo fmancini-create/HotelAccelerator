@@ -221,7 +221,7 @@ function CMSPagesContent() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "published":
-        return <Badge className="bg-green-500/10 text-green-600 border-green-500/20">Pubblicata</Badge>
+        return <Badge className="bg-ha-success/10 text-ha-success-soft-foreground border-ha-success/20">Pubblicata</Badge>
       case "draft":
         return <Badge variant="secondary">Bozza</Badge>
       case "hidden":

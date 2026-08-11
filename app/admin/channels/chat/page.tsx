@@ -185,7 +185,7 @@ export default function ChatChannelPage() {
               <Switch
                 checked={config?.is_active || false}
                 onCheckedChange={(checked) => setConfig(config ? { ...config, is_active: checked } : null)}
-                className="data-[state=checked]:bg-green-500"
+                className="data-[state=checked]:bg-ha-success"
               />
             </div>
             <Button onClick={saveConfig} disabled={saving} className="bg-ha-brand hover:bg-primary">
@@ -373,7 +373,7 @@ export default function ChatChannelPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-foreground text-lg flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-amber-500" />
+                      <Sparkles className="w-5 h-5 text-ha-warning-soft-foreground" />
                       Assistente AI
                     </CardTitle>
                     <CardDescription>Risposte automatiche intelligenti per i tuoi clienti</CardDescription>
@@ -381,7 +381,7 @@ export default function ChatChannelPage() {
                   <Switch
                     checked={config?.config.aiEnabled || false}
                     onCheckedChange={(checked) => updateConfig("aiEnabled", checked)}
-                    className="data-[state=checked]:bg-amber-500"
+                    className="data-[state=checked]:bg-ha-warning"
                   />
                 </div>
               </CardHeader>
@@ -398,9 +398,9 @@ export default function ChatChannelPage() {
                       />
                     </div>
 
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-                      <h4 className="font-medium text-amber-800 mb-2">L'AI puo rispondere a domande su:</h4>
-                      <ul className="text-sm text-amber-700 space-y-1">
+                    <div className="bg-ha-warning-soft border border-ha-warning-soft rounded-lg p-4">
+                      <h4 className="font-medium text-ha-warning-soft-foreground mb-2">L'AI puo rispondere a domande su:</h4>
+                      <ul className="text-sm text-ha-warning-soft-foreground space-y-1">
                         <li>Disponibilita camere e prezzi</li>
                         <li>Servizi della struttura</li>
                         <li>Come raggiungere l'hotel</li>
@@ -424,8 +424,8 @@ export default function ChatChannelPage() {
               <Card className="bg-card border-border">
                 <CardHeader>
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
-                      <Zap className="w-6 h-6 text-green-600" />
+                    <div className="w-12 h-12 rounded-xl bg-ha-success-soft flex items-center justify-center">
+                      <Zap className="w-6 h-6 text-ha-success-soft-foreground" />
                     </div>
                     <div>
                       <CardTitle className="text-foreground text-lg">Attivazione Automatica</CardTitle>
@@ -434,10 +434,10 @@ export default function ChatChannelPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
-                    <Globe className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                    <h3 className="text-xl font-medium text-green-800 mb-2">Nessun codice da copiare!</h3>
-                    <p className="text-green-700 mb-6">
+                  <div className="bg-ha-success-soft border border-ha-success-soft rounded-xl p-6 text-center">
+                    <Globe className="w-16 h-16 text-ha-success-soft-foreground mx-auto mb-4" />
+                    <h3 className="text-xl font-medium text-ha-success-soft-foreground mb-2">Nessun codice da copiare!</h3>
+                    <p className="text-ha-success-soft-foreground mb-6">
                       Il widget chat sara automaticamente visibile su tutte le pagine del tuo sito appena lo attivi.
                     </p>
 
@@ -448,9 +448,9 @@ export default function ChatChannelPage() {
                         onCheckedChange={(checked) => {
                           setConfig(config ? { ...config, is_active: checked } : null)
                         }}
-                        className="data-[state=checked]:bg-green-500 scale-125"
+                        className="data-[state=checked]:bg-ha-success scale-125"
                       />
-                      <span className={`text-lg font-medium ${config?.is_active ? "text-green-600" : "text-muted-foreground"}`}>
+                      <span className={`text-lg font-medium ${config?.is_active ? "text-ha-success-soft-foreground" : "text-muted-foreground"}`}>
                         {config?.is_active ? "ATTIVO" : "SPENTO"}
                       </span>
                     </div>
@@ -528,15 +528,15 @@ export default function ChatChannelPage() {
                   </div>
 
                   {/* Email to webmaster */}
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-800 mb-2">Vuoi mandarlo al tuo webmaster?</h4>
-                    <p className="text-sm text-blue-700 mb-3">
+                  <div className="bg-ha-info-soft border border-ha-info-soft rounded-lg p-4">
+                    <h4 className="font-medium text-ha-info-soft-foreground mb-2">Vuoi mandarlo al tuo webmaster?</h4>
+                    <p className="text-sm text-ha-info-soft-foreground mb-3">
                       Abbiamo preparato un'email con tutte le istruzioni che puoi inoltrare direttamente.
                     </p>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="border-blue-300 text-blue-700 hover:bg-blue-100 bg-transparent"
+                      className="border-ha-info-soft text-ha-info-soft-foreground hover:bg-ha-info-soft bg-transparent"
                       onClick={() => {
                         const subject = encodeURIComponent("Installazione Chat Widget")
                         const body = encodeURIComponent(`Ciao,
@@ -568,8 +568,8 @@ Grazie!`)
                   </div>
 
                   {!config?.is_active && (
-                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-                      <p className="text-sm text-orange-700">
+                    <div className="bg-ha-warning-soft border border-ha-warning-soft rounded-lg p-4">
+                      <p className="text-sm text-ha-warning-soft-foreground">
                         <strong>Nota:</strong> Il widget è attualmente disattivato. Attivalo usando lo switch in alto
                         per renderlo visibile sul tuo sito.
                       </p>
