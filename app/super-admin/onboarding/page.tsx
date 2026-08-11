@@ -9,8 +9,9 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Checkbox } from "@/components/ui/checkbox"
-
-type Plan = "free" | "starter" | "professional" | "enterprise"
+// Elenco unico condiviso al posto della copia locale: qui i valori erano
+// corretti, ma restavano allineati al database solo per coincidenza.
+import type { Plan } from "@/lib/types/super-admin.types"
 
 interface TenantForm {
   // Step 1: Basic Info
