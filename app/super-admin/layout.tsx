@@ -15,6 +15,11 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
+// Stesso footer delle pagine pubbliche e dell'area admin: i dati societari
+// devono essere raggiungibili da ogni pagina, non solo dal sito pubblico.
+// Import rinominato perche' esiste un secondo componente omonimo in
+// components/platform/platform-footer.tsx, riservato alla struttura admin.
+import { PlatformFooter as CompanyFooter } from "@/components/platform-footer"
 
 const navigation = [
   { name: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
@@ -231,6 +236,8 @@ export default function SuperAdminLayout({
       </header>
 
       <main className="flex-1">{children}</main>
+
+      <CompanyFooter />
     </div>
   )
 }

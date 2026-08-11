@@ -253,7 +253,7 @@ export default function AdminDashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-full bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
       </div>
     )
@@ -279,7 +279,7 @@ export default function AdminDashboardPage() {
   const siteButtonLabel = "Sito"
 
   return (
-    <main className="min-h-screen bg-background">
+    <main className="min-h-full bg-background">
       {/* Header */}
       <header className="bg-background border-b border-border sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

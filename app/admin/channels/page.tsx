@@ -292,7 +292,7 @@ export default function ChannelsPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center">
+      <div className="min-h-full bg-muted flex items-center justify-center">
         <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento canali...</div>
       </div>
     )
@@ -303,7 +303,7 @@ export default function ChannelsPage() {
   const comingSoonCount = ALL_CHANNELS.filter((c) => c.comingSoon).length
 
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-full bg-muted">
       {/* Admin Header */}
       <AdminHeader
         title="Canali di Comunicazione"

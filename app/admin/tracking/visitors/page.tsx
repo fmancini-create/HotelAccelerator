@@ -90,7 +90,7 @@ export default function VisitorsPage() {
   const selectedSession = sessions.find((s) => s.session_id === selected) ?? sessions[0]
 
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-full bg-muted">
       <AdminHeader title="Tracking - Visitatori" subtitle="Sessioni live e timeline eventi" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

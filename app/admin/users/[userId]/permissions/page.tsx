@@ -118,7 +118,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-full bg-background flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
       </div>
     )
@@ -127,7 +127,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
   const displayName = user?.name || user?.email || "Utente"
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title={`Permessi: ${displayName}`}

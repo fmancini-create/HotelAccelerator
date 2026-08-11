@@ -362,7 +362,7 @@ export default function WhatsAppChannelPage() {
   const canAdd = quota?.canAddNumber ?? true
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-full bg-background">
       <AdminHeader
         title="WhatsApp Business"
         subtitle="Collega uno o più numeri WhatsApp della tua struttura"

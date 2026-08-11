@@ -60,7 +60,7 @@ export default function AdminPage() {
 
   if (state === "checking") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-full flex items-center justify-center bg-background">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary" />
       </div>
     )
@@ -72,7 +72,7 @@ export default function AdminPage() {
 
   // Guest → show the unified login form (stessa UI per tutti i ruoli)
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-4">
+    <main className="flex min-h-full items-center justify-center bg-background p-4">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-8">
         <div className="mb-6 flex flex-col items-center text-center">
           {/*

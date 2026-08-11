@@ -167,14 +167,14 @@ export default function ChatChannelPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-muted flex items-center justify-center">
+      <div className="min-h-full bg-muted flex items-center justify-center">
         <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-muted">
+    <div className="min-h-full bg-muted">
       <AdminHeader
         title="Chat Widget"
         subtitle="Configura la chat in tempo reale per il tuo sito web"
