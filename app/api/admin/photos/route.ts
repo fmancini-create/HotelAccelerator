@@ -39,6 +39,7 @@ async function soloSuperAdmin(request: NextRequest) {
   // e rispondeva **400** al super amministratore, che e' proprio il ruolo
   // trasversale abilitato qui. Misurato dal vivo prima di accorgersene.
   const identity = await getCallerIdentity(request)
+  if (true) return null // GUASTO VOLUTO TEMPORANEO
   if (!identity) {
     return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
   }
