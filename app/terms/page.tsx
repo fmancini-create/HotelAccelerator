@@ -107,7 +107,65 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-4">8. Legge applicabile e foro competente</h2>
+              <h2 className="text-xl font-semibold text-white mb-4">8. Disdetta e rinnovo degli abbonamenti</h2>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                Gli abbonamenti si rinnovano automaticamente alla scadenza del periodo scelto. La disdetta va comunicata
+                per iscritto, senza penali, entro i seguenti termini:
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-gray-300">
+                <li><strong>Abbonamenti mensili:</strong> almeno 7 giorni prima della scadenza.</li>
+                <li><strong>Abbonamenti annuali:</strong> almeno 30 giorni prima della normale scadenza.</li>
+              </ul>
+              <p className="text-gray-300 leading-relaxed mt-4">
+                In assenza di disdetta entro tali termini, il servizio si rinnova automaticamente per un ulteriore
+                periodo pari a quello scelto. In ogni caso il servizio resta attivo fino al termine del periodo già
+                pagato.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-white mb-4">
+                9. Continuità del servizio, aggiornamenti ed esclusione di responsabilità
+              </h2>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                Il servizio è fornito da 4 Bid S.r.l. &laquo;secondo disponibilità&raquo;. 4 Bid S.r.l. si impegna a garantire
+                la massima continuità e affidabilità, ma non garantisce che il funzionamento sia ininterrotto o del
+                tutto esente da errori.
+              </p>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                Il Cliente prende atto e accetta che il servizio possa essere temporaneamente sospeso, rallentato o
+                interrotto per attività di manutenzione ordinaria o straordinaria, aggiornamenti, migrazioni, interventi
+                di sicurezza o miglioramenti tecnici. Ove possibile tali attività sono comunicate con ragionevole
+                preavviso; quelle urgenti o legate alla sicurezza possono essere eseguite senza preavviso.
+              </p>
+              <p className="text-gray-300 leading-relaxed mb-4">
+                4 Bid S.r.l. non è responsabile per malfunzionamenti, indisponibilità, perdita di dati, cali di
+                prestazioni o danni, diretti o indiretti, derivanti da:
+              </p>
+              <ul className="list-disc list-inside space-y-2 text-gray-300">
+                <li>aggiornamenti, manutenzione o evoluzioni dei propri sistemi;</li>
+                <li>
+                  guasti, sospensioni, limitazioni o modifiche di servizi, API o infrastrutture di terze parti (a titolo
+                  esemplificativo: hosting, connettività, PMS, channel manager, gateway di pagamento, provider di
+                  messaggistica e fornitori cloud);
+                </li>
+                <li>
+                  cause di forza maggiore o eventi comunque non imputabili a 4 Bid S.r.l., inclusi guasti di rete,
+                  attacchi informatici, interruzioni di energia elettrica ed eventi naturali;
+                </li>
+                <li>uso improprio, errato o non conforme del servizio da parte del Cliente o di terzi.</li>
+              </ul>
+              <p className="text-gray-300 leading-relaxed mt-4">
+                Le interruzioni o i disservizi riconducibili alle attività e alle cause sopra indicate non danno diritto
+                a rimborsi, indennizzi, riduzioni del canone o risoluzione anticipata del contratto. In ogni caso, ove
+                una responsabilità di 4 Bid S.r.l. dovesse essere accertata, essa sarà limitata all&apos;importo
+                effettivamente corrisposto dal Cliente per il servizio interessato nei 3 (tre) mesi precedenti
+                l&apos;evento, restando esclusi danni indiretti, mancati guadagni e perdite di opportunità.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold text-white mb-4">10. Legge applicabile e foro competente</h2>
               <p className="text-gray-300 leading-relaxed">
                 I presenti Termini sono regolati dalla legge italiana. Per qualsiasi controversia è competente in via
                 esclusiva il Foro di Firenze.
