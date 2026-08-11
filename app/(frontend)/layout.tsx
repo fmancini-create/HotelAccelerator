@@ -67,6 +67,16 @@ export async function generateMetadata(): Promise<Metadata> {
       index: true,
       follow: true,
     },
+    /*
+     * Il sito pubblico di un CLIENTE non deve mai mostrare il marchio della
+     * piattaforma. Senza questa riga il layout radice, che dichiara le icone
+     * di HotelAccelerator, verrebbe ereditato e il razzo comparirebbe nella
+     * scheda del browser di ogni hotel.
+     *
+     * Se il tenant ha un logo si usa quello; altrimenti si preferisce
+     * NESSUNA icona al marchio sbagliato.
+     */
+    icons: tenant?.logo_url ? { icon: [{ url: tenant.logo_url }] } : { icon: [] },
   }
 }
 

@@ -11,6 +11,8 @@ import type {
   CollaboratorActivity,
   StructureUsageStats,
 } from "@/lib/types/super-admin.types"
+// Import di VALORI (non `import type`): servono a runtime per la convalida.
+import { PLAN_VALUES, DEFAULT_PLAN, isPlan } from "@/lib/types/super-admin.types"
 import { createClient } from "@/lib/supabase/server"
 
 export class SuperAdminService {
@@ -157,10 +159,19 @@ export class SuperAdminService {
     if (!slugRegex.test(command.slug)) {
       throw new ValidationError("Slug must contain only lowercase letters, numbers, and hyphens")
     }
+    // Il piano finiva grezzo nel database: un valore non ammesso dal vincolo
+    // `valid_plan` faceva fallire la scrittura con un errore oscuro (500)
+    // invece di dire che il piano non e' valido. Se manca, si usa il piano
+    // predefinito applicativo.
+    const piano = command.plan ?? DEFAULT_PLAN
+    if (!isPlan(piano)) {
+      throw new ValidationError(`Piano non valido: "${piano}". Ammessi: ${PLAN_VALUES.join(", ")}`)
+    }
+
     return repository.createStructure({
       name: command.name.trim(),
       slug: command.slug.trim(),
-      plan: command.plan,
+      plan: piano,
       trial_ends_at: command.trial_ends_at || null,
     })
   }
@@ -179,7 +190,14 @@ export class SuperAdminService {
       }
       updates.name = command.name.trim()
     }
-    if (command.plan !== undefined) updates.plan = command.plan
+    if (command.plan !== undefined) {
+      // Stessa convalida della creazione: senza, un piano inesistente passava
+      // fino al database e tornava come errore generico.
+      if (!isPlan(command.plan)) {
+        throw new ValidationError(`Piano non valido: "${command.plan}". Ammessi: ${PLAN_VALUES.join(", ")}`)
+      }
+      updates.plan = command.plan
+    }
     if (command.subscription_status !== undefined) {
       updates.subscription_status = command.subscription_status
     }

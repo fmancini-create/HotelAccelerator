@@ -88,25 +88,25 @@ export default function MarketingPage() {
     switch (status) {
       case "sent":
         return (
-          <Badge className="bg-green-100 text-green-800">
+          <Badge className="bg-ha-success-soft text-ha-success-soft-foreground">
             <CheckCircle className="h-3 w-3 mr-1" /> Inviata
           </Badge>
         )
       case "scheduled":
         return (
-          <Badge className="bg-blue-100 text-blue-800">
+          <Badge className="bg-ha-info-soft text-ha-info-soft-foreground">
             <Clock className="h-3 w-3 mr-1" /> Programmata
           </Badge>
         )
       case "sending":
         return (
-          <Badge className="bg-yellow-100 text-yellow-800">
+          <Badge className="bg-ha-warning-soft text-ha-warning-soft-foreground">
             <Send className="h-3 w-3 mr-1" /> In Invio
           </Badge>
         )
       case "paused":
         return (
-          <Badge className="bg-orange-100 text-orange-800">
+          <Badge className="bg-ha-warning-soft text-ha-warning-soft-foreground">
             <Pause className="h-3 w-3 mr-1" /> In Pausa
           </Badge>
         )
@@ -162,7 +162,7 @@ export default function MarketingPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-green-600" />
+                <Eye className="h-4 w-4 text-ha-success-soft-foreground" />
                 <span className="text-sm text-muted-foreground">Open Rate</span>
               </div>
               <p className="text-2xl font-bold">{stats.avg_open_rate.toFixed(1)}%</p>
@@ -171,7 +171,7 @@ export default function MarketingPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center gap-2">
-                <MousePointer className="h-4 w-4 text-blue-600" />
+                <MousePointer className="h-4 w-4 text-ha-info-soft-foreground" />
                 <span className="text-sm text-muted-foreground">Click Rate</span>
               </div>
               <p className="text-2xl font-bold">{stats.avg_click_rate.toFixed(1)}%</p>
@@ -180,7 +180,7 @@ export default function MarketingPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertCircle className="h-4 w-4 text-ha-error-soft-foreground" />
                 <span className="text-sm text-muted-foreground">Disiscrizioni</span>
               </div>
               <p className="text-2xl font-bold">{stats.total_unsubscribes}</p>
@@ -260,19 +260,19 @@ export default function MarketingPage() {
                       {campaign.status === "sent" && (
                         <div className="flex items-center gap-6 text-sm">
                           <div className="text-center">
-                            <p className="font-bold text-green-600">
+                            <p className="font-bold text-ha-success-soft-foreground">
                               {calculateRate(campaign.opened_count, campaign.delivered_count)}
                             </p>
                             <p className="text-xs text-muted-foreground">Aperture</p>
                           </div>
                           <div className="text-center">
-                            <p className="font-bold text-blue-600">
+                            <p className="font-bold text-ha-info-soft-foreground">
                               {calculateRate(campaign.clicked_count, campaign.delivered_count)}
                             </p>
                             <p className="text-xs text-muted-foreground">Click</p>
                           </div>
                           <div className="text-center">
-                            <p className="font-bold text-red-600">
+                            <p className="font-bold text-ha-error-soft-foreground">
                               {calculateRate(campaign.bounced_count, campaign.sent_count)}
                             </p>
                             <p className="text-xs text-muted-foreground">Bounce</p>

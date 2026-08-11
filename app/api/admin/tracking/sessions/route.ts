@@ -4,6 +4,8 @@
  */
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireAreaApi } from "@/lib/auth/area-access"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -21,6 +23,16 @@ export async function GET(req: NextRequest) {
     .eq("email", user.email)
     .maybeSingle()
   if (!admin?.property_id) return NextResponse.json({ error: "no property" }, { status: 403 })
+
+  // Permesso di sezione. Qui i controlli sono in linea e restituiscono la
+  // risposta (niente try/catch attorno al gestore), quindi il diniego va
+  // convertito subito: lanciato, diventerebbe un 500 invece di un 403.
+  try {
+    await requireAreaApi("tracking", req)
+  } catch (e) {
+    if (isAreaDenied(e)) return areaDeniedResponse(e)
+    throw e
+  }
 
   const url = new URL(req.url)
   const rawLimit = parseInt(url.searchParams.get("limit") || "50", 10)

@@ -13,10 +13,10 @@ export default function PhoneChannelPage() {
       <div className="container py-6">
         <div className="max-w-2xl mx-auto space-y-6">
           {/* Coming Soon Card */}
-          <Card className="border-amber-200 dark:border-amber-800">
+          <Card className="border-ha-warning-soft dark:border-ha-warning">
             <CardHeader className="text-center pb-2">
-              <div className="w-20 h-20 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center mx-auto mb-4">
-                <Phone className="h-10 w-10 text-amber-500" />
+              <div className="w-20 h-20 rounded-full bg-ha-warning-soft dark:bg-ha-warning flex items-center justify-center mx-auto mb-4">
+                <Phone className="h-10 w-10 text-ha-warning-soft-foreground" />
               </div>
               <CardTitle className="text-2xl">Telefonia IP in arrivo</CardTitle>
               <CardDescription className="text-base">
@@ -52,8 +52,8 @@ export default function PhoneChannelPage() {
                     },
                   ].map((feature, i) => (
                     <div key={i} className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
-                      <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
-                        <feature.icon className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      <div className="w-10 h-10 rounded-full bg-ha-warning-soft dark:bg-ha-warning flex items-center justify-center shrink-0">
+                        <feature.icon className="h-5 w-5 text-ha-warning-soft-foreground dark:text-ha-warning-soft-foreground" />
                       </div>
                       <div>
                         <h5 className="font-medium">{feature.title}</h5>

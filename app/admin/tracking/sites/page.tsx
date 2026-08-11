@@ -52,10 +52,10 @@ export default function TrackingSitesPage() {
       />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <Card className="bg-white border-border">
+        <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
-              <Globe className="h-5 w-5 text-blue-600" /> Come funziona
+              <Globe className="h-5 w-5 text-ha-info-soft-foreground" /> Come funziona
             </CardTitle>
             <CardDescription className="text-ha-brand-soft-foreground">
               Ogni sito riceve una <strong>chiave pubblica</strong> ({`tw_...`}) da incollare nello script embed. Le
@@ -68,14 +68,14 @@ export default function TrackingSitesPage() {
         <CreateSiteCard />
 
         {isLoading ? (
-          <Card className="bg-white border-border">
+          <Card className="bg-card border-border">
             <CardContent className="py-10 flex items-center justify-center text-ha-brand-soft-foreground">
               <Loader2 className="h-5 w-5 animate-spin mr-2" />
               Caricamento siti...
             </CardContent>
           </Card>
         ) : sites.length === 0 ? (
-          <Card className="bg-white border-border">
+          <Card className="bg-card border-border">
             <CardContent className="py-10 text-center text-ha-brand-soft-foreground">
               Nessun sito configurato. Creane uno per iniziare a tracciare.
             </CardContent>
@@ -128,7 +128,7 @@ function CreateSiteCard() {
     )
 
   return (
-    <Card className="bg-white border-border">
+    <Card className="bg-card border-border">
       <CardHeader>
         <CardTitle className="text-foreground">Nuovo sito di tracking</CardTitle>
         <CardDescription className="text-ha-brand-soft-foreground">
@@ -144,7 +144,7 @@ function CreateSiteCard() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Sito ufficiale"
-            className="bg-white"
+            className="bg-card"
           />
         </div>
         <div className="space-y-2">
@@ -153,7 +153,7 @@ function CreateSiteCard() {
             value={origins}
             onChange={(e) => setOrigins(e.target.value)}
             placeholder={"https://www.villaibarronci.it\nhttps://villaibarronci.it"}
-            className="font-mono text-sm bg-white min-h-24"
+            className="font-mono text-sm bg-card min-h-24"
           />
           <p className="text-xs text-muted-foreground">Uno per riga. Supporta wildcard come {`"*.example.com"`}.</p>
         </div>
@@ -230,19 +230,19 @@ function SiteCard({ site }: { site: TrackingSite }) {
   }
 
   return (
-    <Card className="bg-white border-border">
+    <Card className="bg-card border-border">
       <CardHeader>
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2 text-foreground">
-              <Globe className="h-5 w-5 text-blue-600" />
+              <Globe className="h-5 w-5 text-ha-info-soft-foreground" />
               <span className="truncate">{site.name}</span>
               {site.is_active ? (
-                <Badge className="bg-green-100 text-green-800 border-green-200">
+                <Badge className="bg-ha-success-soft text-ha-success-soft-foreground border-ha-success-soft">
                   <ShieldCheck className="h-3 w-3 mr-1" /> Attivo
                 </Badge>
               ) : (
-                <Badge variant="outline" className="text-amber-700 border-amber-300">
+                <Badge variant="outline" className="text-ha-warning-soft-foreground border-ha-warning-soft">
                   <ShieldX className="h-3 w-3 mr-1" /> Disattivato
                 </Badge>
               )}
@@ -330,7 +330,7 @@ function SiteCard({ site }: { site: TrackingSite }) {
             <Button
               variant="outline"
               size="sm"
-              className="absolute top-2 right-2 bg-white"
+              className="absolute top-2 right-2 bg-card"
               onClick={() => copy(snippet, setSnippetCopied)}
             >
               {snippetCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -345,7 +345,7 @@ function SiteCard({ site }: { site: TrackingSite }) {
         <Separator />
 
         <div className="flex justify-end">
-          <Button variant="outline" className="text-red-600 hover:bg-red-50" onClick={onDelete}>
+          <Button variant="outline" className="text-ha-error-soft-foreground hover:bg-ha-error-soft" onClick={onDelete}>
             <Trash2 className="h-4 w-4 mr-2" /> Elimina sito
           </Button>
         </div>

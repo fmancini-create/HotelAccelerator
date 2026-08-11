@@ -223,17 +223,17 @@ interface SmartDebugInfo {
 }
 
 const channelConfig = {
-  chat: { icon: MessageCircle, color: "text-green-600 bg-green-100", name: "Chat" },
+  chat: { icon: MessageCircle, color: "text-ha-success-soft-foreground bg-ha-success-soft", name: "Chat" },
   whatsapp: { icon: Phone, color: "text-emerald-600 bg-emerald-100", name: "WhatsApp" },
-  email: { icon: Mail, color: "text-blue-600 bg-blue-100", name: "Email" },
+  email: { icon: Mail, color: "text-ha-info-soft-foreground bg-ha-info-soft", name: "Email" },
   telegram: { icon: Send, color: "text-sky-600 bg-sky-100", name: "Telegram" },
 }
 
 const statusConfig = {
-  open: { label: "Aperto", color: "bg-amber-100 text-amber-700" },
-  pending: { label: "In attesa", color: "bg-orange-100 text-orange-700" },
-  resolved: { label: "Risolto", color: "bg-green-100 text-green-700" },
-  spam: { label: "Spam", color: "bg-red-100 text-red-700" },
+  open: { label: "Aperto", color: "bg-ha-warning-soft text-ha-warning-soft-foreground" },
+  pending: { label: "In attesa", color: "bg-ha-warning-soft text-ha-warning-soft-foreground" },
+  resolved: { label: "Risolto", color: "bg-ha-success-soft text-ha-success-soft-foreground" },
+  spam: { label: "Spam", color: "bg-ha-error-soft text-ha-error-soft-foreground" },
 }
 
 // Gmail system folder config
@@ -2044,27 +2044,27 @@ export default function InboxPage() {
 
         <div className="space-y-2">
           <div className="border-b border-gray-700 pb-2">
-            <div className="font-semibold text-yellow-400">Gmail Watch Status</div>
+            <div className="font-semibold text-ha-warning-soft-foreground">Gmail Watch Status</div>
             <div>Push enabled: {smartDebugInfo.channel?.pushEnabled ? "✅" : "❌"}</div>
             <div>Watch active: {watchStatus ? "✅" : "❌ EXPIRED"}</div>
             <div>Watch expires: {smartDebugInfo.channel?.watchExpiration || "N/A"}</div>
           </div>
 
           <div className="border-b border-gray-700 pb-2">
-            <div className="font-semibold text-yellow-400">Sync Status</div>
+            <div className="font-semibold text-ha-warning-soft-foreground">Sync Status</div>
             <div>Last webhook sync: {lastSync}</div>
             <div>History ID: {smartDebugInfo.channel?.historyId || "N/A"}</div>
           </div>
 
           <div className="border-b border-gray-700 pb-2">
-            <div className="font-semibold text-yellow-400">Database</div>
+            <div className="font-semibold text-ha-warning-soft-foreground">Database</div>
             <div>Messages in DB: {smartDebugInfo.database.messagesCount}</div>
             <div>Conversations: {smartDebugInfo.database.conversationsCount}</div>
             <div>Last message: {smartDebugInfo.database.lastMessageSubject?.substring(0, 30) || "N/A"}</div>
           </div>
 
           <div>
-            <div className="font-semibold text-yellow-400">Recent Messages (DB)</div>
+            <div className="font-semibold text-ha-warning-soft-foreground">Recent Messages (DB)</div>
             {smartDebugInfo.recentMessages.slice(0, 3).map((m, i) => (
               <div key={i} className="text-muted-foreground truncate">
                 {m.subject?.substring(0, 25) || "No subject"} - {m.from?.split("@")[0]}
@@ -2072,7 +2072,7 @@ export default function InboxPage() {
             ))}
           </div>
 
-          <div className="pt-2 text-gray-500">Webhook URL: {smartDebugInfo.webhookUrl}</div>
+          <div className="pt-2 text-muted-foreground">Webhook URL: {smartDebugInfo.webhookUrl}</div>
         </div>
 
         <Button size="sm" variant="outline" className="mt-2 w-full text-xs bg-transparent" onClick={loadSmartDebugInfo}>
@@ -2103,14 +2103,14 @@ export default function InboxPage() {
   )
 
   return (
-    <div className="h-full flex flex-col bg-white">
+    <div className="h-full flex flex-col bg-card">
       {/* Sessione scaduta: l'aggiornamento automatico e' fermo, la lista
           mostrata non e' piu' aggiornata. Prima questa condizione era
           invisibile e il poll continuava a fallire ogni 30 secondi. */}
       {sessionExpired && (
         <div
           role="status"
-          className="flex-shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-900"
+          className="flex-shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 bg-ha-warning-soft border-b border-ha-warning-soft text-sm text-ha-warning-soft-foreground"
         >
           <span className="font-medium">Sessione scaduta.</span>
           <span>I messaggi non si aggiornano piu&apos;.</span>
@@ -2127,7 +2127,7 @@ export default function InboxPage() {
       {guastoAggiornamento && !sessionExpired && (
         <div
           role="status"
-          className="flex-shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-900"
+          className="flex-shrink-0 flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 bg-ha-warning-soft border-b border-ha-warning-soft text-sm text-ha-warning-soft-foreground"
         >
           <span className="font-medium">Aggiornamento non riuscito.</span>
           <span>I messaggi mostrati potrebbero non essere aggiornati.</span>
@@ -2142,10 +2142,10 @@ export default function InboxPage() {
       )}
 
       {/* Gmail-style top bar */}
-      <header className="h-16 flex-shrink-0 flex items-center gap-3 px-4 bg-white border-b border-gray-200/50">
+      <header className="h-16 flex-shrink-0 flex items-center gap-3 px-4 bg-card border-b border-border/50">
         {/* Hamburger menu — collapses/expands the left sidebar */}
         <button
-          className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-full hover:bg-muted transition-colors"
           onClick={() => setSidebarCollapsed((v) => !v)}
           title={sidebarCollapsed ? "Mostra menu laterale" : "Nascondi menu laterale"}
           aria-label={sidebarCollapsed ? "Mostra menu laterale" : "Nascondi menu laterale"}
@@ -2160,7 +2160,7 @@ export default function InboxPage() {
           <svg width="32" height="32" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
             <path fill="#4caf50" d="M45,16.2l-5,2.75l-5,4.75L35,40h7c1.657,0,3-1.343,3-3V16.2z"/><path fill="#1e88e5" d="M3,16.2l3.614,5.547L13,23.7V40H6c-1.657,0-3-1.343-3-3V16.2z"/><polygon fill="#e53935" points="35,11.2 24,19.45 13,11.2 12,17 13,23.7 24,31.95 35,23.7 36,17"/><path fill="#c62828" d="M3,12.298V16.2l10,7.5V11.2L9,7.3C7.553,6.173,5.5,6.583,3,12.298z"/><path fill="#fbc02d" d="M45,12.298V16.2l-10,7.5V11.2l4-3.9C40.447,6.173,42.5,6.583,45,12.298z"/>
           </svg>
-          <span className="text-2xl font-normal text-gray-600 tracking-tight flex-shrink-0">
+          <span className="text-2xl font-normal text-muted-foreground tracking-tight flex-shrink-0">
             {inboxMode === "gmail" ? "Gmail" : "Inbox"}
           </span>
           {/* Which mailbox/channel am I looking at? — switchable in Gmail mode */}
@@ -2174,10 +2174,10 @@ export default function InboxPage() {
               if (availableChannels.length <= 1) {
                 return (
                   <span
-                    className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
+                    className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-muted text-foreground text-xs font-medium max-w-[280px]"
                     title={currentLabel}
                   >
-                    <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                     <span className="truncate">{currentLabel}</span>
                   </span>
                 )
@@ -2186,16 +2186,16 @@ export default function InboxPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium max-w-[300px] transition-colors"
+                      className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-muted hover:bg-muted text-foreground text-xs font-medium max-w-[300px] transition-colors"
                       title={`Casella attiva: ${currentLabel}. Clicca per cambiare.`}
                     >
-                      <Mail className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                      <Mail className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                       <span className="truncate">{currentLabel}</span>
-                      <ChevronDown className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start" className="w-72">
-                    <div className="px-2 py-1.5 text-xs font-medium text-gray-500">
+                    <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                       Caselle disponibili
                     </div>
                     <DropdownMenuSeparator />
@@ -2213,7 +2213,7 @@ export default function InboxPage() {
                           )}
                         </div>
                         {c.id === selectedChannelId && (
-                          <Check className="h-4 w-4 text-blue-600 flex-shrink-0" />
+                          <Check className="h-4 w-4 text-ha-info-soft-foreground flex-shrink-0" />
                         )}
                       </DropdownMenuItem>
                     ))}
@@ -2223,10 +2223,10 @@ export default function InboxPage() {
             })()
           ) : (
             <span
-              className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-medium max-w-[280px]"
+              className="hidden sm:inline-flex items-center gap-1.5 ml-1 px-2.5 py-1 rounded-full bg-muted text-foreground text-xs font-medium max-w-[280px]"
               title="Inbox unificata — tutti i canali (Email, WhatsApp, Telegram, Chat)"
             >
-              <Inbox className="h-3.5 w-3.5 text-gray-500 flex-shrink-0" />
+              <Inbox className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
               <span className="truncate">Tutti i canali</span>
             </span>
           )}
@@ -2235,10 +2235,10 @@ export default function InboxPage() {
         {/* Search bar centered */}
         <div className="flex-1 max-w-md">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               placeholder="Cerca nella posta"
-              className="w-full h-10 pl-10 pr-3 bg-[#f1f3f4] hover:bg-[#e8eaed] focus:bg-white border-0 rounded-2xl text-sm shadow-none focus-visible:ring-0 focus:shadow-sm transition-all"
+              className="w-full h-10 pl-10 pr-3 bg-[#f1f3f4] hover:bg-[#e8eaed] focus:bg-card border-0 rounded-2xl text-sm shadow-none focus-visible:ring-0 focus:shadow-sm transition-all"
               value={inboxMode === "gmail" ? gmailSearchQuery : searchQuery}
               onChange={(e) => inboxMode === "gmail" ? setGmailSearchQuery(e.target.value) : setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && (inboxMode === "gmail" ? handleGmailSearch() : loadConversations())}
@@ -2262,12 +2262,12 @@ export default function InboxPage() {
             title="Impostazioni canali email"
             aria-label="Impostazioni canali email"
           >
-            <Settings className="h-4 w-4 text-gray-600" />
+            <Settings className="h-4 w-4 text-muted-foreground" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-semibold ml-2 cursor-pointer hover:bg-blue-700 transition-colors"
+                className="h-8 w-8 rounded-full bg-ha-info flex items-center justify-center text-white text-xs font-semibold ml-2 cursor-pointer hover:bg-ha-info transition-colors"
                 title="Account"
                 aria-label="Menu account"
               >
@@ -2276,11 +2276,11 @@ export default function InboxPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
               <div className="px-2 py-2">
-                <div className="text-sm font-medium text-gray-900 truncate">
+                <div className="text-sm font-medium text-foreground truncate">
                   {adminUser?.name || "Operatore"}
                 </div>
                 {adminUser?.email && (
-                  <div className="text-xs text-gray-500 truncate">{adminUser.email}</div>
+                  <div className="text-xs text-muted-foreground truncate">{adminUser.email}</div>
                 )}
                 {gmailAccount?.email && (
                   <div className="text-xs text-muted-foreground truncate mt-1">
@@ -2302,22 +2302,22 @@ export default function InboxPage() {
 
       {/* Gmail connection error banner */}
       {gmailAuthError && (
-        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
+        <div className="flex-shrink-0 bg-ha-warning-soft border-b border-ha-warning-soft px-4 py-2.5 flex items-center gap-3">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="#b45309" aria-hidden="true">
             <path d="M12 2L1 21h22L12 2zm0 6l7.5 12h-15L12 8zm-1 3v4h2v-4h-2zm0 5v2h2v-2h-2z"/>
           </svg>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-amber-900">
+            <div className="text-sm font-medium text-ha-warning-soft-foreground">
               Gmail non sincronizzato
             </div>
-            <div className="text-xs text-amber-800 truncate">
+            <div className="text-xs text-ha-warning-soft-foreground truncate">
               {gmailAuthError} — Per riprendere la sincronizzazione è necessario riconnettere il canale.
             </div>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="bg-white hover:bg-amber-100 border-amber-300 text-amber-900"
+            className="bg-card hover:bg-ha-warning-soft border-ha-warning-soft text-ha-warning-soft-foreground"
             onClick={() => router.push("/admin/channels/email")}
           >
             Riconnetti Gmail
@@ -2328,18 +2328,18 @@ export default function InboxPage() {
       {/* A transient API/DB outage is not an OAuth failure. Keep stale data on
           screen and offer a retry instead of telling the user to reconnect. */}
       {!gmailAuthError && gmailSyncWarning && (
-        <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center gap-3">
-          <AlertCircle className="h-[18px] w-[18px] text-amber-700" aria-hidden="true" />
+        <div className="flex-shrink-0 bg-ha-warning-soft border-b border-ha-warning-soft px-4 py-2.5 flex items-center gap-3">
+          <AlertCircle className="h-[18px] w-[18px] text-ha-warning-soft-foreground" aria-hidden="true" />
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-amber-900">Sincronizzazione Gmail rallentata</div>
-            <div className="text-xs text-amber-800 truncate">
+            <div className="text-sm font-medium text-ha-warning-soft-foreground">Sincronizzazione Gmail rallentata</div>
+            <div className="text-xs text-ha-warning-soft-foreground truncate">
               {gmailSyncWarning} Nessuna riconnessione è necessaria.
             </div>
           </div>
           <Button
             size="sm"
             variant="outline"
-            className="bg-white hover:bg-amber-100 border-amber-300 text-amber-900"
+            className="bg-card hover:bg-ha-warning-soft border-ha-warning-soft text-ha-warning-soft-foreground"
             onClick={() => {
               loadGmailLabels()
               loadGmailThreads(gmailLabelId)
@@ -2353,13 +2353,13 @@ export default function InboxPage() {
 
       {/* Debug bar */}
       {inboxMode === "gmail" && showDebugPanel && gmailDebugInfo && (
-        <div className="flex-shrink-0 bg-gray-900 text-green-400 font-mono text-xs px-4 py-2 flex items-center gap-4 flex-wrap">
+        <div className="flex-shrink-0 bg-gray-900 text-ha-success-soft-foreground font-mono text-xs px-4 py-2 flex items-center gap-4 flex-wrap">
           <span>Label: <strong>{gmailDebugInfo.labelId}</strong></span>
           <span>API: <strong>{gmailDebugInfo.rawThreadsCount}</strong></span>
           <span>Processed: <strong>{gmailDebugInfo.processedThreadsCount}</strong></span>
           <span>Pagina: <strong>{gmailCurrentPage}</strong></span>
           <span>Visualizzati: <strong>{gmailThreads.length}</strong></span>
-          {gmailApiVersion && <span>v: <strong className="text-yellow-400">{gmailApiVersion}</strong></span>}
+          {gmailApiVersion && <span>v: <strong className="text-ha-warning-soft-foreground">{gmailApiVersion}</strong></span>}
         </div>
       )}
 
@@ -2456,9 +2456,9 @@ export default function InboxPage() {
         </div>
 
         {/* ── MAIN: Thread/Conversation list OR Detail view (full-width like Gmail) ── */}
-        <div className="flex flex-col border-l border-gray-200/60 bg-white flex-1 min-w-0 min-h-0 overflow-hidden">
+        <div className="flex flex-col border-l border-border/60 bg-card flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Gmail-style toolbar */}
-          <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200 flex-shrink-0 h-12 min-w-0 overflow-x-auto">
+          <div className="flex items-center gap-1 px-3 py-1 border-b border-border flex-shrink-0 h-12 min-w-0 overflow-x-auto">
             {/* Back button when viewing thread detail */}
             {(selectedGmailThread || selectedConversation) && (
               <Button
@@ -2704,7 +2704,7 @@ export default function InboxPage() {
           {bulkSyncWarning && (
             <div
               role="alert"
-              className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800"
+              className="flex items-center justify-between gap-3 border-b border-ha-warning-soft bg-ha-warning-soft px-4 py-2 text-sm text-ha-warning-soft-foreground"
             >
               <span className="flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0" />
@@ -2713,7 +2713,7 @@ export default function InboxPage() {
               <button
                 type="button"
                 onClick={() => setBulkSyncWarning(null)}
-                className="text-amber-700 hover:text-amber-900 text-xs font-medium"
+                className="text-ha-warning-soft-foreground hover:text-ha-warning-soft-foreground text-xs font-medium"
               >
                 Chiudi
               </button>
@@ -2730,12 +2730,12 @@ export default function InboxPage() {
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
               <div className="flex flex-col h-full">
                 {/* Subject header */}
-                <div className="px-6 py-4 border-b border-gray-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-border overflow-hidden">
                   <h1 className="text-xl font-normal text-[#202124] truncate">
                     {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
                   </h1>
                   <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Posta in arrivo</span>
+                    <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">Posta in arrivo</span>
                   </div>
                 </div>
 
@@ -2752,9 +2752,9 @@ export default function InboxPage() {
                     </div>
                   ) : (
                     (inboxMode === "gmail" ? gmailMessages : messages).map((message: any, idx: number) => (
-                      <div key={message.id} className="border border-gray-200 rounded-lg bg-white overflow-hidden max-w-full">
+                      <div key={message.id} className="border border-border rounded-lg bg-card overflow-hidden max-w-full">
                         {/* Message header */}
-                        <div className="flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50 max-w-full overflow-hidden">
+                        <div className="flex items-start gap-3 p-4 cursor-pointer hover:bg-muted max-w-full overflow-hidden">
                           <div className="h-10 w-10 rounded-full bg-[#a0c3ff] flex items-center justify-center text-[#1a365d] font-semibold flex-shrink-0 text-sm">
                             {(message.from?.name || message.from?.email || "?")[0].toUpperCase()}
                           </div>
@@ -2764,12 +2764,12 @@ export default function InboxPage() {
                                 <span className="font-semibold text-sm text-[#202124] truncate">
                                   {message.sender_type === "agent" ? "Tu" : message.from?.name || message.from?.email?.split("@")[0]}
                                 </span>
-                                <span className="text-xs text-gray-500 truncate">
+                                <span className="text-xs text-muted-foreground truncate">
                                   {"<"}{message.from?.email || ""}{">"} 
                                 </span>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <span className="text-xs text-gray-500 whitespace-nowrap">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">
                                   {format(new Date(message.gmail_internal_date || message.received_at || message.created_at), "EEe d MMM, HH:mm", { locale: it })}
                                 </span>
                                 <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
@@ -2777,12 +2777,12 @@ export default function InboxPage() {
                                 </Button>
                               </div>
                             </div>
-                            <div className="text-xs text-gray-500 mt-0.5 truncate">a {message.to || "me"}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5 truncate">a {message.to || "me"}</div>
                           </div>
                         </div>
                         {/* Message content */}
                         <div className="px-4 pb-4 pl-4 max-w-full overflow-hidden">
-                          <div className="text-sm text-gray-800 break-words whitespace-pre-wrap">
+                          <div className="text-sm text-foreground break-words whitespace-pre-wrap">
                             {renderEmailContent(message.content, message.content_type)}
                           </div>
                         </div>
@@ -2794,12 +2794,12 @@ export default function InboxPage() {
 
                 {/* Action buttons (Gmail-style) OR Reply box */}
                 {showReplyBox ? (
-                  <div className="flex-shrink-0 px-6 py-4 border-t bg-white">
-                    <div className="bg-white rounded-lg border border-gray-300 overflow-hidden">
+                  <div className="flex-shrink-0 px-6 py-4 border-t bg-card">
+                    <div className="bg-card rounded-lg border border-border overflow-hidden">
                       {/* Recipients header (Gmail-style) */}
-                      <div className="border-b border-gray-100">
+                      <div className="border-b border-border">
                         <div className="flex items-center gap-2 px-3 py-2">
-                          <label htmlFor="reply-to" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                          <label htmlFor="reply-to" className="text-xs font-medium text-muted-foreground w-8 shrink-0">
                             A
                           </label>
                           <input
@@ -2815,7 +2815,7 @@ export default function InboxPage() {
                               <button
                                 type="button"
                                 onClick={() => setShowCcField(true)}
-                                className="text-gray-500 hover:text-gray-700 px-1"
+                                className="text-muted-foreground hover:text-foreground px-1"
                               >
                                 Cc
                               </button>
@@ -2824,7 +2824,7 @@ export default function InboxPage() {
                               <button
                                 type="button"
                                 onClick={() => setShowBccField(true)}
-                                className="text-gray-500 hover:text-gray-700 px-1"
+                                className="text-muted-foreground hover:text-foreground px-1"
                               >
                                 Ccn
                               </button>
@@ -2832,8 +2832,8 @@ export default function InboxPage() {
                           </div>
                         </div>
                         {showCcField && (
-                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
-                            <label htmlFor="reply-cc" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
+                            <label htmlFor="reply-cc" className="text-xs font-medium text-muted-foreground w-8 shrink-0">
                               Cc
                             </label>
                             <input
@@ -2850,7 +2850,7 @@ export default function InboxPage() {
                                 setShowCcField(false)
                                 setReplyCc("")
                               }}
-                              className="text-muted-foreground hover:text-gray-600 text-xs px-1"
+                              className="text-muted-foreground hover:text-muted-foreground text-xs px-1"
                               aria-label="Rimuovi Cc"
                             >
                               ×
@@ -2858,8 +2858,8 @@ export default function InboxPage() {
                           </div>
                         )}
                         {showBccField && (
-                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
-                            <label htmlFor="reply-bcc" className="text-xs font-medium text-gray-500 w-8 shrink-0">
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
+                            <label htmlFor="reply-bcc" className="text-xs font-medium text-muted-foreground w-8 shrink-0">
                               Ccn
                             </label>
                             <input
@@ -2876,7 +2876,7 @@ export default function InboxPage() {
                                 setShowBccField(false)
                                 setReplyBcc("")
                               }}
-                              className="text-muted-foreground hover:text-gray-600 text-xs px-1"
+                              className="text-muted-foreground hover:text-muted-foreground text-xs px-1"
                               aria-label="Rimuovi Ccn"
                             >
                               ×
@@ -2884,8 +2884,8 @@ export default function InboxPage() {
                           </div>
                         )}
                         {isForwarding && (
-                          <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-100">
-                            <label htmlFor="forward-subject" className="text-xs font-medium text-gray-500 w-14 shrink-0">
+                          <div className="flex items-center gap-2 px-3 py-2 border-t border-border">
+                            <label htmlFor="forward-subject" className="text-xs font-medium text-muted-foreground w-14 shrink-0">
                               Oggetto
                             </label>
                             <input
@@ -2900,30 +2900,30 @@ export default function InboxPage() {
                         )}
                       </div>
 
-  <div className="flex items-center gap-0.5 flex-wrap px-2 py-1 border-b border-gray-100">
+  <div className="flex items-center gap-0.5 flex-wrap px-2 py-1 border-b border-border">
     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Grassetto" onClick={() => applyInlineFormat("*")}>
-      <Bold className="h-4 w-4 text-gray-600" />
+      <Bold className="h-4 w-4 text-muted-foreground" />
     </Button>
     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Corsivo" onClick={() => applyInlineFormat("_")}>
-      <Italic className="h-4 w-4 text-gray-600" />
+      <Italic className="h-4 w-4 text-muted-foreground" />
     </Button>
     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Barrato" onClick={() => applyInlineFormat("~")}>
-      <Strikethrough className="h-4 w-4 text-gray-600" />
+      <Strikethrough className="h-4 w-4 text-muted-foreground" />
     </Button>
-    <span className="mx-1 h-4 w-px bg-gray-200" />
+    <span className="mx-1 h-4 w-px bg-muted" />
     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Elenco puntato" onClick={() => applyLinePrefix("bullet")}>
-      <List className="h-4 w-4 text-gray-600" />
+      <List className="h-4 w-4 text-muted-foreground" />
     </Button>
     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Elenco numerato" onClick={() => applyLinePrefix("ordered")}>
-      <ListOrdered className="h-4 w-4 text-gray-600" />
+      <ListOrdered className="h-4 w-4 text-muted-foreground" />
     </Button>
     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Inserisci link" onClick={insertLink}>
-      <Link2 className="h-4 w-4 text-gray-600" />
+      <Link2 className="h-4 w-4 text-muted-foreground" />
     </Button>
     <Popover>
       <PopoverTrigger asChild>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Emoji">
-          <Smile className="h-4 w-4 text-gray-600" />
+          <Smile className="h-4 w-4 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-2" align="start">
@@ -2932,7 +2932,7 @@ export default function InboxPage() {
             <button
               key={e}
               type="button"
-              className="hover:bg-gray-100 rounded p-1 leading-none"
+              className="hover:bg-muted rounded p-1 leading-none"
               onClick={() => insertEmoji(e)}
             >
               {e}
@@ -2941,10 +2941,10 @@ export default function InboxPage() {
         </div>
       </PopoverContent>
     </Popover>
-    <span className="mx-1 h-4 w-px bg-gray-200" />
+    <span className="mx-1 h-4 w-px bg-muted" />
     <DropdownMenu onOpenChange={(open) => open && cannedResponses.length === 0 && loadCannedResponses()}>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs text-gray-600" title="Risposte predefinite">
+        <Button type="button" variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground" title="Risposte predefinite">
           <BookText className="h-4 w-4" />
           <span className="hidden sm:inline">Predefinite</span>
           <ChevronDown className="h-3 w-3" />
@@ -2957,24 +2957,24 @@ export default function InboxPage() {
           <div className="px-3 py-4 text-center text-sm text-muted-foreground">Nessuna risposta salvata</div>
         ) : (
           cannedResponses.map((r) => (
-            <div key={r.id} className="group flex items-start gap-1 px-2 py-1.5 hover:bg-gray-50 rounded-sm">
+            <div key={r.id} className="group flex items-start gap-1 px-2 py-1.5 hover:bg-muted rounded-sm">
               <button
                 type="button"
                 className="flex-1 text-left min-w-0"
                 onClick={() => insertCannedResponse(r.content)}
               >
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-gray-800 truncate">{r.title}</span>
+                  <span className="text-sm font-medium text-foreground truncate">{r.title}</span>
                   {r.is_shared && (
-                    <span className="flex-shrink-0 rounded bg-blue-50 px-1 text-[10px] font-medium text-blue-600">Team</span>
+                    <span className="flex-shrink-0 rounded bg-ha-info-soft px-1 text-[10px] font-medium text-ha-info-soft-foreground">Team</span>
                   )}
                 </div>
-                <p className="text-xs text-gray-500 truncate">{r.content}</p>
+                <p className="text-xs text-muted-foreground truncate">{r.content}</p>
               </button>
               {r.is_owner && (
                 <button
                   type="button"
-                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-red-600"
+                  className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-ha-error-soft-foreground"
                   title="Elimina"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -3011,7 +3011,7 @@ export default function InboxPage() {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
   }}
   />
-                      <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
+                      <div className="flex items-center justify-between px-3 py-2 border-t border-border">
                         <Button
                           onClick={handleSendReply}
                           disabled={!replyText.trim() || isSending}
@@ -3022,7 +3022,7 @@ export default function InboxPage() {
                         </Button>
                         <div className="flex items-center gap-1">
                           <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}>
-                            <Paperclip className="h-4 w-4 text-gray-500" />
+                            <Paperclip className="h-4 w-4 text-muted-foreground" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -3032,16 +3032,16 @@ export default function InboxPage() {
                               setIsForwarding(false)
                             }}
                           >
-                            <Trash2 className="h-4 w-4 text-gray-500" />
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
                           </Button>
                         </div>
                         <input type="file" multiple ref={fileInputRef} onChange={handleFileChange} className="hidden" />
                       </div>
                     </div>
-                    {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+                    {error && <div className="text-ha-error-soft-foreground text-sm mt-2">{error}</div>}
                   </div>
                 ) : (
-                  <div className="flex-shrink-0 px-6 py-4 border-t bg-white flex items-center gap-3">
+                  <div className="flex-shrink-0 px-6 py-4 border-t bg-card flex items-center gap-3">
                     <Button
                       variant="outline"
                       className="rounded-full px-6"
@@ -3072,11 +3072,11 @@ export default function InboxPage() {
                     <div
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
                         (selectedGmailThread as GmailThread | null)?.id === thread.id
                           ? "bg-[#d3e3fd]"
                           : thread.isUnread
-                            ? "bg-white hover:bg-[#f2f6fc]"
+                            ? "bg-card hover:bg-[#f2f6fc]"
                             : "bg-muted hover:bg-border"
                       }`}
                     >
@@ -3086,8 +3086,8 @@ export default function InboxPage() {
                         onClick={(e) => e.stopPropagation()}
                         className="h-7 w-7 [&_svg]:size-5 flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=checked]:opacity-100"
                       />
-                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleGmailStarToggle(thread, e)}>
-                        <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-muted-foreground"}`} />
+                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-muted" onClick={(e) => handleGmailStarToggle(thread, e)}>
+                        <Star className={`h-4 w-4 ${thread.isStarred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground group-hover:text-muted-foreground"}`} />
                       </button>
                       <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[160px] ${thread.isUnread ? "font-bold text-[#202124]" : "font-normal text-[#444746]"}`}>
                         {thread.from.name || thread.from.email.split("@")[0]}
@@ -3102,9 +3102,9 @@ export default function InboxPage() {
                         )}
                       </span>
                       {thread.messagesCount > 1 && (
-                        <span className="text-[11px] text-gray-500 flex-shrink-0">{thread.messagesCount}</span>
+                        <span className="text-[11px] text-muted-foreground flex-shrink-0">{thread.messagesCount}</span>
                       )}
-                      <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-gray-500"}`}>
+                      <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-muted-foreground"}`}>
                         {format(new Date(thread.date), "d MMM", { locale: it })}
                       </span>
                     </div>
@@ -3125,11 +3125,11 @@ export default function InboxPage() {
                     <div
                       key={conv.id}
                       onClick={() => handleSelectConversation(conv)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-gray-100 transition-colors group min-w-0 ${
+                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group min-w-0 ${
                         (selectedConversation as Conversation | null)?.id === conv.id
                           ? "bg-[#d3e3fd]"
                           : conv.unread_count > 0
-                            ? "bg-white hover:bg-[#f2f6fc]"
+                            ? "bg-card hover:bg-[#f2f6fc]"
                             : "bg-muted hover:bg-border"
                       }`}
                     >
@@ -3139,8 +3139,8 @@ export default function InboxPage() {
                         onClick={(e) => e.stopPropagation()}
                         className="h-7 w-7 [&_svg]:size-5 flex-shrink-0"
                       />
-                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-gray-200" onClick={(e) => handleToggleStar(conv, e)}>
-                        <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground group-hover:text-muted-foreground"}`} />
+                      <button className="flex-shrink-0 p-0.5 rounded hover:bg-muted" onClick={(e) => handleToggleStar(conv, e)}>
+                        <Star className={`h-4 w-4 ${conv.is_starred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground group-hover:text-muted-foreground"}`} />
                       </button>
                       {(() => {
                         const cfg = channelConfig[conv.channel as keyof typeof channelConfig] || channelConfig.email
@@ -3170,7 +3170,7 @@ export default function InboxPage() {
                               : undefined
                           }
                           className={`flex-shrink-0 hidden md:inline-flex items-center gap-1 max-w-[150px] rounded border px-1.5 py-0.5 text-[11px] font-medium ${
-                            conv.origin.color ? "" : "bg-gray-100 text-gray-600 border-transparent"
+                            conv.origin.color ? "" : "bg-muted text-muted-foreground border-transparent"
                           }`}
                           title={conv.origin.detail ? `${conv.origin.label} (${conv.origin.detail})` : conv.origin.label}
                         >
@@ -3213,7 +3213,7 @@ export default function InboxPage() {
                         className="flex-shrink-0 min-w-[58px] flex flex-col items-end leading-tight"
                         title={formatInboxTimestampFull(conv.last_message_at)}
                       >
-                        <span className={`text-[11px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-gray-500"}`}>
+                        <span className={`text-[11px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-muted-foreground"}`}>
                           {formatInboxTimestamp(conv.last_message_at)}
                         </span>
                         {(() => {
@@ -3228,7 +3228,7 @@ export default function InboxPage() {
                             conv.contact?.email ?? conv.contact_email ?? conv.last_message?.from_address,
                           )
                           return waiting ? (
-                            <span className="text-[10px] text-amber-600" title={`In attesa di risposta da ${waiting}`}>
+                            <span className="text-[10px] text-ha-warning-soft-foreground" title={`In attesa di risposta da ${waiting}`}>
                               {waiting}
                             </span>
                           ) : null
@@ -3263,14 +3263,14 @@ export default function InboxPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Anteprima</Label>
-              <div className="max-h-32 overflow-y-auto rounded-md border bg-gray-50 p-2 text-sm text-gray-600 whitespace-pre-wrap">
+              <div className="max-h-32 overflow-y-auto rounded-md border bg-muted p-2 text-sm text-muted-foreground whitespace-pre-wrap">
                 {replyText || "—"}
               </div>
             </div>
             <div className="flex items-center justify-between rounded-md border p-3">
               <div>
                 <p className="text-sm font-medium">Condividi col team</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted-foreground">
                   {cannedShared ? "Visibile a tutti gli operatori della struttura" : "Visibile solo a te"}
                 </p>
               </div>
@@ -3291,7 +3291,7 @@ export default function InboxPage() {
 
       {showComposeModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4">
+          <div className="bg-card rounded-xl shadow-2xl w-full max-w-2xl mx-4">
             <div className="flex items-center justify-between p-4 border-b">
               <h2 className="font-semibold text-lg">Nuovo messaggio</h2>
               <Button variant="ghost" size="icon" onClick={() => setShowComposeModal(false)}>
@@ -3300,7 +3300,7 @@ export default function InboxPage() {
             </div>
             <div className="p-4 space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-700">A:</label>
+                <label className="text-sm font-medium text-foreground">A:</label>
                 <Input
                   placeholder="email@esempio.com"
                   value={composeData.to}
@@ -3309,7 +3309,7 @@ export default function InboxPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Oggetto:</label>
+                <label className="text-sm font-medium text-foreground">Oggetto:</label>
                 <Input
                   placeholder="Oggetto del messaggio"
                   value={composeData.subject}
@@ -3318,7 +3318,7 @@ export default function InboxPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Messaggio:</label>
+                <label className="text-sm font-medium text-foreground">Messaggio:</label>
                 <Textarea
                   placeholder="Scrivi il tuo messaggio..."
                   value={composeData.body}
@@ -3326,16 +3326,16 @@ export default function InboxPage() {
                   className="mt-1 min-h-[200px]"
                 />
               </div>
-              {error && <div className="text-red-600 text-sm">{error}</div>}
+              {error && <div className="text-ha-error-soft-foreground text-sm">{error}</div>}
             </div>
-            <div className="flex justify-end gap-2 p-4 border-t bg-gray-50">
+            <div className="flex justify-end gap-2 p-4 border-t bg-muted">
               <Button variant="outline" onClick={() => setShowComposeModal(false)}>
                 Annulla
               </Button>
               <Button
                 onClick={handleComposeEmail}
                 disabled={!composeData.to || !composeData.body || isSending}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-ha-info hover:bg-ha-info"
               >
                 {isSending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
                 Invia

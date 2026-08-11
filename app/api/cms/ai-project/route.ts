@@ -9,6 +9,7 @@ import {
 import { normalizeBuilderNavigation } from "@/lib/cms/normalize-builder-navigation"
 import { CMS_STUDIO_TEMPLATES } from "@/lib/cms/template-variants"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 const TEMPLATE_IDS = new Set(CMS_STUDIO_TEMPLATES.map((template) => template.id))
 const PROJECT_SELECT = "id, template_id, site_name, property_profile, style_prompt, page_prompt, current_step, status, project_version, builder_schema_version, builder_document, updated_at"
@@ -42,6 +43,8 @@ function serializeProject(project: Record<string, unknown> | null) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
     const { data, error } = await supabase
@@ -62,6 +65,8 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json().catch(() => ({}))
     const payload: Record<string, unknown> = { property_id: propertyId }

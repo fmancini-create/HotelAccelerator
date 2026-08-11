@@ -1,23 +1,74 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { put, del, list } from "@vercel/blob"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { getCallerIdentity, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
-// Helper per verificare autenticazione (semplificato - in produzione usare JWT/session)
-function isAuthenticated(request: NextRequest): boolean {
-  // In produzione, verificare token JWT o session
-  return true
+/**
+ * Prima qui c'era un `isAuthenticated()` che restituiva **sempre `true`**, con
+ * un commento "in produzione usare JWT/session" mai onorato. Misurato dal vivo:
+ * `GET` anonimo rispondeva **200** con l'elenco reale delle foto, e `DELETE`
+ * accetta un URL qualsiasi — cioe' chiunque, senza credenziali, poteva
+ * **cancellare le foto di qualunque cliente**. Il proxy non copre `/api`
+ * (esclude esplicitamente quel prefisso), quindi non c'era nessuna rete di
+ * protezione a monte.
+ *
+ * LIMITE NOTO, non nascosto: i file su Blob hanno percorsi per categoria
+ * (`images/suite`, `gallery/...`) **senza struttura**, quindi qui si puo'
+ * chiudere l'accesso anonimo ma **non** separare i tenant. Finche' i percorsi
+ * non includono la struttura, l'operativita' resta riservata al super
+ * amministratore, che e' l'unico ruolo legittimamente trasversale.
+ */
+/**
+ * Traduce il diniego in 401/403. Senza questo, `requireTenantAdmin` lancia e
+ * il `catch` generico risponde **500**: un anonimo verrebbe respinto "per
+ * caso", ma qualsiasi misura leggerebbe 500 invece di 401 — la trappola in cui
+ * sono gia' caduto (un 500 non prova che l'autorizzazione abbia deciso).
+ */
+function rispostaDiniego(error: unknown) {
+  if (isAccessError(error) || (error as { name?: string })?.name === "AccessError") {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Accesso negato" },
+      { status: accessErrorStatus(error) },
+    )
+  }
+  return null
+}
+
+async function soloSuperAdmin(request: NextRequest) {
+  // NON si usa `requireTenantAdmin`: quella pretende una struttura selezionata
+  // e rispondeva **400** al super amministratore, che e' proprio il ruolo
+  // trasversale abilitato qui. Misurato dal vivo prima di accorgersene.
+  const identity = await getCallerIdentity(request)
+  if (!identity) {
+    return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
+  }
+  if (!identity.isSuperAdmin) {
+    return NextResponse.json(
+      { error: "Riservato al super amministratore: questi file non sono separati per struttura" },
+      { status: 403 },
+    )
+  }
+  return null
 }
 
 // GET - Lista tutte le foto dal Blob storage
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
+    const negato = await soloSuperAdmin(request)
+    if (negato) return negato
+
     const { blobs } = await list()
     return NextResponse.json({
       success: true,
       files: blobs.map((b) => ({ url: b.url, pathname: b.pathname })),
     })
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    // Diniego di autorizzazione: 401/403, mai il 500 generico qui sotto.
+    const diniego = rispostaDiniego(error)
+    if (diniego) return diniego
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore lista foto:", error)
     return NextResponse.json({ error: "Errore durante il caricamento" }, { status: 500 })
@@ -27,9 +78,10 @@ export async function GET(request: NextRequest) {
 // POST - Upload nuove foto
 export async function POST(request: NextRequest) {
   try {
-    if (!isAuthenticated(request)) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    }
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
+    const negato = await soloSuperAdmin(request)
+    if (negato) return negato
 
     const formData = await request.formData()
     const files = formData.getAll("files") as File[]
@@ -84,7 +136,9 @@ export async function POST(request: NextRequest) {
       files: uploadedFiles,
     })
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    // Diniego di autorizzazione: 401/403, mai il 500 generico qui sotto.
+    const diniego = rispostaDiniego(error)
+    if (diniego) return diniego
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore upload:", error)
     return NextResponse.json({ error: "Errore durante l'upload" }, { status: 500 })
@@ -94,9 +148,10 @@ export async function POST(request: NextRequest) {
 // DELETE - Elimina foto
 export async function DELETE(request: NextRequest) {
   try {
-    if (!isAuthenticated(request)) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    }
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
+    const negato = await soloSuperAdmin(request)
+    if (negato) return negato
 
     const body = await request.json()
     const { files } = body as { files: string[] }
@@ -125,7 +180,9 @@ export async function DELETE(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    // Diniego di autorizzazione: 401/403, mai il 500 generico qui sotto.
+    const diniego = rispostaDiniego(error)
+    if (diniego) return diniego
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore eliminazione:", error)
     return NextResponse.json({ error: "Errore durante l'eliminazione" }, { status: 500 })
@@ -135,9 +192,10 @@ export async function DELETE(request: NextRequest) {
 // PATCH - Sposta foto tra categorie (copia + elimina)
 export async function PATCH(request: NextRequest) {
   try {
-    if (!isAuthenticated(request)) {
-      return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    }
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("photos", request)
+    const negato = await soloSuperAdmin(request)
+    if (negato) return negato
 
     const body = await request.json()
     const { moves } = body as { moves: { from: string; toCategory: string }[] }
@@ -209,7 +267,9 @@ export async function PATCH(request: NextRequest) {
       errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    // Diniego di autorizzazione: 401/403, mai il 500 generico qui sotto.
+    const diniego = rispostaDiniego(error)
+    if (diniego) return diniego
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Errore spostamento:", error)
     return NextResponse.json({ error: "Errore durante lo spostamento" }, { status: 500 })

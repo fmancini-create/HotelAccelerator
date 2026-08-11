@@ -10,10 +10,10 @@ import {
   Brain,
   MessageCircle,
   Settings,
-  Building2,
   Zap,
 } from "lucide-react"
 import { PlatformFooter } from "@/components/platform-footer"
+import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 
 export const metadata: Metadata = {
   title: "AI Assistant per Hotel - Chatbot Intelligente 24/7 | HotelAccelerator",
@@ -85,7 +85,7 @@ const conversations = [
 
 export default function AIAssistantLandingPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Schema.org */}
       <script
         type="application/ld+json"
@@ -102,20 +102,20 @@ export default function AIAssistantLandingPage() {
       />
 
       {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/10 bg-[#0a0a0a]/80 backdrop-blur-md">
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
         <nav className="container mx-auto flex h-16 items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2">
-            <Building2 className="h-7 w-7 text-white" />
+            <HotelAcceleratorMark className="h-8 w-8" priority />
             <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/admin">
-              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
                 Accedi
               </Button>
             </Link>
             <Link href="/request-access">
-              <Button size="sm" className="bg-white text-black hover:bg-gray-200">
+              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
                 Richiedi Demo
               </Button>
             </Link>
@@ -127,24 +127,24 @@ export default function AIAssistantLandingPage() {
       <section className="pt-32 pb-20 px-4">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16">
-            <Link href="/" className="inline-flex items-center gap-2 text-sm text-gray-400 hover:text-white mb-6">
+            <Link href="/" className="mx-auto mb-6 flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
               <ArrowRight className="h-4 w-4 rotate-180" />
               Torna alla home
             </Link>
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-pink-500/10 border border-pink-500/20 text-sm text-pink-400 mb-8">
+            <div className="mx-auto flex w-fit items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand mb-8">
               <Sparkles className="h-4 w-4" />
               AI Assistant
             </div>
-            <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 text-balance">
+            <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 text-balance">
               Il concierge che non dorme mai
             </h1>
-            <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10">
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
               <strong>Risposte automatiche intelligenti 24/7</strong>. Analisi intento, suggerimenti personalizzati,
               multilingua. Il tuo team sempre supportato.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link href="/request-access">
-                <Button size="lg" className="bg-pink-500 text-white hover:bg-pink-600 gap-2">
+                <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
                   Prova l'AI Assistant
                   <ArrowRight className="h-4 w-4" />
                 </Button>
@@ -153,21 +153,21 @@ export default function AIAssistantLandingPage() {
           </div>
 
           {/* Demo Conversation */}
-          <div className="max-w-xl mx-auto rounded-2xl border border-white/10 bg-white/5 p-6">
-            <div className="flex items-center gap-2 mb-6 pb-4 border-b border-white/10">
-              <Bot className="h-6 w-6 text-pink-400" />
+          <div className="max-w-xl mx-auto rounded-2xl border border-border bg-secondary/50 p-6">
+            <div className="flex items-center gap-2 mb-6 pb-4 border-b border-border">
+              <Bot className="h-6 w-6 text-ha-brand" />
               <span className="font-medium">AI Assistant Demo</span>
             </div>
             <div className="space-y-4">
               {conversations.map((conv, i) => (
                 <div key={i} className="space-y-3">
                   <div className="flex justify-end">
-                    <div className="bg-white/10 rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%]">
+                    <div className="bg-muted rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%]">
                       <p className="text-sm">{conv.user}</p>
                     </div>
                   </div>
                   <div className="flex">
-                    <div className="bg-pink-500/20 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]">
+                    <div className="bg-ha-brand-soft rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%]">
                       <p className="text-sm">{conv.ai}</p>
                     </div>
                   </div>
@@ -189,12 +189,12 @@ export default function AIAssistantLandingPage() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature) => (
-              <article key={feature.title} className="p-6 rounded-2xl bg-white/5 border border-white/10">
-                <div className="w-12 h-12 rounded-xl bg-pink-500/10 flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-pink-400" />
+              <article key={feature.title} className="p-6 rounded-2xl bg-secondary/50 border border-border">
+                <div className="w-12 h-12 rounded-xl bg-ha-brand-soft flex items-center justify-center mb-4">
+                  <feature.icon className="h-6 w-6 text-ha-brand" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-gray-400 text-sm">{feature.description}</p>
+                <p className="text-muted-foreground text-sm">{feature.description}</p>
               </article>
             ))}
           </div>
@@ -202,20 +202,20 @@ export default function AIAssistantLandingPage() {
       </section>
 
       {/* Stats */}
-      <section className="py-24 px-4 bg-white/[0.02]">
+      <section className="py-24 px-4 bg-card/[0.02]">
         <div className="container mx-auto max-w-5xl">
           <div className="grid md:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-center">
-              <div className="text-4xl font-bold text-pink-400 mb-2">24/7</div>
-              <div className="text-gray-400">Sempre disponibile</div>
+            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
+              <div className="text-4xl font-bold text-ha-brand mb-2">24/7</div>
+              <div className="text-muted-foreground">Sempre disponibile</div>
             </div>
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-center">
-              <div className="text-4xl font-bold text-pink-400 mb-2">&lt;3s</div>
-              <div className="text-gray-400">Tempo di risposta</div>
+            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
+              <div className="text-4xl font-bold text-ha-brand mb-2">&lt;3s</div>
+              <div className="text-muted-foreground">Tempo di risposta</div>
             </div>
-            <div className="p-6 rounded-2xl bg-white/5 border border-white/10 text-center">
-              <div className="text-4xl font-bold text-pink-400 mb-2">5+</div>
-              <div className="text-gray-400">Lingue supportate</div>
+            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
+              <div className="text-4xl font-bold text-ha-brand mb-2">5+</div>
+              <div className="text-muted-foreground">Lingue supportate</div>
             </div>
           </div>
         </div>
@@ -224,12 +224,12 @@ export default function AIAssistantLandingPage() {
       {/* CTA */}
       <section className="py-24 px-4">
         <div className="container mx-auto max-w-3xl text-center">
-          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-pink-500/20 to-pink-500/5 border border-pink-500/20">
-            <Zap className="h-12 w-12 text-pink-400 mx-auto mb-6" />
+          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-ha-brand/20 to-ha-brand-soft border border-ha-brand/20">
+            <Zap className="h-12 w-12 text-ha-brand mx-auto mb-6" />
             <h2 className="text-2xl md:text-3xl font-bold mb-4">Attiva il tuo AI Assistant</h2>
-            <p className="text-gray-400 mb-8">Configurazione assistita, training sui tuoi contenuti incluso.</p>
+            <p className="text-muted-foreground mb-8">Configurazione assistita, training sui tuoi contenuti incluso.</p>
             <Link href="/request-access">
-              <Button size="lg" className="bg-pink-500 text-white hover:bg-pink-600 gap-2">
+              <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
                 Richiedi Demo Gratuita
                 <ArrowRight className="h-4 w-4" />
               </Button>

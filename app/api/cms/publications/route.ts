@@ -6,6 +6,7 @@ import { tenantSubdomainHost } from "@/lib/domains/domain-names"
 import { createClient, createServiceClient } from "@/lib/supabase/server"
 import { inspectProjectDomain } from "@/lib/vercel/project-domains"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 function statusFor(message: string) {
   return message.includes("Non autenticato") ? 401 : 500
@@ -43,6 +44,8 @@ async function publicSiteState(property: PublicSiteProperty | null) {
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const db = createServiceClient()
     const [{ data: versions, error }, { data: property, error: propertyError }] = await Promise.all([
@@ -71,6 +74,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json().catch(() => ({}))
     const db = createServiceClient()

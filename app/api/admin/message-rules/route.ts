@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { MessageRuleService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("message-rules", request)
     const rules = await MessageRuleService.listRules(request)
     return NextResponse.json({ rules })
   } catch (error) {
@@ -13,6 +16,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("message-rules", request)
     const body = await request.json()
     const rule = await MessageRuleService.createRule(request, body)
     return NextResponse.json({ rule }, { status: 201 })

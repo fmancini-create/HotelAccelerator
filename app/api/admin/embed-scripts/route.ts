@@ -3,9 +3,12 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { EmbedScriptService } from "@/lib/platform-services"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("embed-scripts", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
 
@@ -24,6 +27,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("embed-scripts", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
     const body = await request.json()

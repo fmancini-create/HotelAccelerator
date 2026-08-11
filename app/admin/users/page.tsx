@@ -143,22 +143,22 @@ export default function AdminUsersPage() {
   const getRoleIcon = (role: UserRole) => {
     switch (role) {
       case "super_admin":
-        return <ShieldCheck className="w-5 h-5 text-amber-600" />
+        return <ShieldCheck className="w-5 h-5 text-ha-warning-soft-foreground" />
       case "admin":
-        return <Shield className="w-5 h-5 text-blue-600" />
+        return <Shield className="w-5 h-5 text-ha-info-soft-foreground" />
       case "editor":
-        return <Edit3 className="w-5 h-5 text-green-600" />
+        return <Edit3 className="w-5 h-5 text-ha-success-soft-foreground" />
     }
   }
 
   const getRoleBadgeColor = (role: UserRole) => {
     switch (role) {
       case "super_admin":
-        return "bg-amber-100 text-amber-800 border-amber-200"
+        return "bg-ha-warning-soft text-ha-warning-soft-foreground border-ha-warning-soft"
       case "admin":
-        return "bg-blue-100 text-blue-800 border-blue-200"
+        return "bg-ha-info-soft text-ha-info-soft-foreground border-ha-info-soft"
       case "editor":
-        return "bg-green-100 text-green-800 border-green-200"
+        return "bg-ha-success-soft text-ha-success-soft-foreground border-ha-success-soft"
     }
   }
 
@@ -275,7 +275,7 @@ export default function AdminUsersPage() {
           </div>
         )}
         {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          <div className="mb-4 p-3 bg-ha-success-soft border border-ha-success-soft rounded-lg text-ha-success-soft-foreground text-sm">
             {success}
           </div>
         )}
@@ -346,7 +346,7 @@ export default function AdminUsersPage() {
                   </label>
                 </div>
                 <div className="flex gap-2 mt-4">
-                  <Button onClick={handleCreateUser} className="bg-green-600 hover:bg-green-700">
+                  <Button onClick={handleCreateUser} className="bg-ha-success hover:bg-ha-success">
                     <Check className="w-4 h-4 mr-2" />
                     Salva
                   </Button>
@@ -469,7 +469,7 @@ export default function AdminUsersPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
-                  <Button onClick={handleCreateGroup} className="bg-green-600 hover:bg-green-700">
+                  <Button onClick={handleCreateGroup} className="bg-ha-success hover:bg-ha-success">
                     <Check className="w-4 h-4 mr-2" />
                     Crea Gruppo
                   </Button>
@@ -536,9 +536,9 @@ export default function AdminUsersPage() {
             </div>
 
             {/* Info box */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-              <h4 className="font-medium text-blue-900 mb-2">Come funzionano i gruppi?</h4>
-              <ul className="text-sm text-blue-800 space-y-1">
+            <div className="bg-ha-info-soft border border-ha-info-soft rounded-xl p-4">
+              <h4 className="font-medium text-ha-info-soft-foreground mb-2">Come funzionano i gruppi?</h4>
+              <ul className="text-sm text-ha-info-soft-foreground space-y-1">
                 <li>{"• Crea gruppi come \"Reception\", \"Spa\", \"Ristorante\" per organizzare il team"}</li>
                 <li>• Assegna utenti a uno o più gruppi</li>
                 <li>• Configura le aree della piattaforma e i permessi sui canali di ogni gruppo</li>
@@ -591,7 +591,7 @@ export default function AdminUsersPage() {
                             <Button
                               size="sm"
                               onClick={() => handleSaveSignature(user.id!)}
-                              className="bg-green-600 hover:bg-green-700"
+                              className="bg-ha-success hover:bg-ha-success"
                             >
                               <Check className="w-4 h-4 mr-1" />
                               Salva

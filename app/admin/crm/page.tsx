@@ -152,9 +152,9 @@ export default function CRMPage() {
   const getVipBadge = (level: string) => {
     const colors: Record<string, string> = {
       platinum: "bg-purple-100 text-purple-800",
-      gold: "bg-yellow-100 text-yellow-800",
-      silver: "bg-gray-200 text-gray-800",
-      standard: "bg-gray-100 text-gray-600",
+      gold: "bg-ha-warning-soft text-ha-warning-soft-foreground",
+      silver: "bg-muted text-foreground",
+      standard: "bg-muted text-muted-foreground",
     }
     return colors[level] || colors.standard
   }
@@ -219,7 +219,7 @@ export default function CRMPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-green-600" />
+                <UserCheck className="h-4 w-4 text-ha-success-soft-foreground" />
                 <span className="text-sm text-muted-foreground">Con Consenso</span>
               </div>
               <p className="text-2xl font-bold">{stats.with_consent.toLocaleString()}</p>
@@ -228,7 +228,7 @@ export default function CRMPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center gap-2">
-                <Star className="h-4 w-4 text-yellow-500" />
+                <Star className="h-4 w-4 text-ha-warning-soft-foreground" />
                 <span className="text-sm text-muted-foreground">VIP</span>
               </div>
               <p className="text-2xl font-bold">{stats.vip_contacts}</p>
@@ -246,7 +246,7 @@ export default function CRMPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-blue-600" />
+                <Calendar className="h-4 w-4 text-ha-info-soft-foreground" />
                 <span className="text-sm text-muted-foreground">Prenotazioni</span>
               </div>
               <p className="text-2xl font-bold">{stats.total_bookings.toLocaleString()}</p>
@@ -255,7 +255,7 @@ export default function CRMPage() {
           <Card>
             <CardContent className="pt-4">
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-green-600" />
+                <TrendingUp className="h-4 w-4 text-ha-success-soft-foreground" />
                 <span className="text-sm text-muted-foreground">Revenue</span>
               </div>
               <p className="text-2xl font-bold">€{(stats.total_revenue / 100).toLocaleString()}</p>
@@ -419,7 +419,7 @@ export default function CRMPage() {
                             {contact.unsubscribed ? (
                               <Badge variant="destructive">Disiscritto</Badge>
                             ) : contact.marketing_consent ? (
-                              <Badge className="bg-green-100 text-green-800">OK</Badge>
+                              <Badge className="bg-ha-success-soft text-ha-success-soft-foreground">OK</Badge>
                             ) : (
                               <Badge variant="secondary">No</Badge>
                             )}
@@ -502,7 +502,7 @@ export default function CRMPage() {
             <Card className="border-dashed">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Star className="h-5 w-5 text-yellow-500" />
+                  <Star className="h-5 w-5 text-ha-warning-soft-foreground" />
                   VIP Guests
                 </CardTitle>
                 <CardDescription>Ospiti Gold e Platinum</CardDescription>
@@ -518,7 +518,7 @@ export default function CRMPage() {
             <Card className="border-dashed">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-red-500" />
+                  <Heart className="h-5 w-5 text-ha-error-soft-foreground" />
                   Returning Guests
                 </CardTitle>
                 <CardDescription>2+ prenotazioni</CardDescription>
@@ -534,7 +534,7 @@ export default function CRMPage() {
             <Card className="border-dashed">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-blue-500" />
+                  <Calendar className="h-5 w-5 text-ha-info-soft-foreground" />
                   Birthday This Month
                 </CardTitle>
                 <CardDescription>Compleanni questo mese</CardDescription>

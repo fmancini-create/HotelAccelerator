@@ -284,17 +284,17 @@ export default function MessageRulesPage() {
 
         {/* Alerts */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+          <div className="mb-4 p-3 bg-ha-error-soft border border-ha-error-soft rounded-lg text-ha-error-soft-foreground text-sm">{error}</div>
         )}
         {success && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+          <div className="mb-4 p-3 bg-ha-success-soft border border-ha-success-soft rounded-lg text-ha-success-soft-foreground text-sm">
             {success}
           </div>
         )}
 
         {/* Form */}
         {showForm && (
-          <div className="bg-white rounded-xl border border-border p-6 mb-8">
+          <div className="bg-card rounded-xl border border-border p-6 mb-8">
             <h2 className="text-lg font-medium text-muted-foreground mb-6">
               {editingRule ? "Modifica Messaggio" : "Nuovo Messaggio"}
             </h2>
@@ -511,7 +511,7 @@ export default function MessageRulesPage() {
                   <label className="block text-sm font-medium text-muted-foreground mb-2">Anteprima</label>
                   <div className="bg-muted rounded-lg p-4 min-h-[200px] flex items-center justify-center">
                     {formData.message_type === "popup" ? (
-                      <div className="bg-white rounded-xl shadow-lg p-6 max-w-sm w-full">
+                      <div className="bg-card rounded-xl shadow-lg p-6 max-w-sm w-full">
                         {formData.title && (
                           <h3 className="text-lg font-semibold text-muted-foreground mb-2">{formData.title}</h3>
                         )}
@@ -525,7 +525,7 @@ export default function MessageRulesPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="bg-white rounded-xl shadow-lg p-4 max-w-xs w-full">
+                      <div className="bg-card rounded-xl shadow-lg p-4 max-w-xs w-full">
                         <div className="flex items-start gap-3">
                           <div className="w-8 h-8 bg-ha-brand rounded-full flex items-center justify-center text-white text-xs">
                             HA
@@ -562,7 +562,7 @@ export default function MessageRulesPage() {
         {!showForm && (
           <>
             {rules.length === 0 ? (
-              <div className="bg-white rounded-xl border border-border p-12 text-center">
+              <div className="bg-card rounded-xl border border-border p-12 text-center">
                 <Megaphone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-muted-foreground mb-2">Nessun messaggio configurato</h3>
                 <p className="text-muted-foreground mb-6">Crea il tuo primo messaggio per coinvolgere i visitatori del sito</p>
@@ -576,7 +576,7 @@ export default function MessageRulesPage() {
                 {rules.map((rule) => (
                   <div
                     key={rule.id}
-                    className="bg-white rounded-xl border border-border p-4 flex items-center gap-4"
+                    className="bg-card rounded-xl border border-border p-4 flex items-center gap-4"
                   >
                     {/* Toggle */}
                     <Switch
@@ -591,7 +591,7 @@ export default function MessageRulesPage() {
                         <h3 className="font-medium text-muted-foreground truncate">{rule.name}</h3>
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${
-                            rule.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"
+                            rule.is_active ? "bg-ha-success-soft text-ha-success-soft-foreground" : "bg-muted text-muted-foreground"
                           }`}
                         >
                           {rule.is_active ? "Attivo" : "Disattivato"}
@@ -630,7 +630,7 @@ export default function MessageRulesPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDelete(rule)}
-                        className="text-red-400 hover:text-red-600"
+                        className="text-ha-error-soft-foreground hover:text-ha-error-soft-foreground"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -648,12 +648,12 @@ export default function MessageRulesPage() {
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             onClick={() => setPreviewRule(null)}
           >
-            <div className="bg-white rounded-xl p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-card rounded-xl p-6 max-w-lg w-full" onClick={(e) => e.stopPropagation()}>
               <h3 className="text-lg font-medium text-muted-foreground mb-4">Anteprima: {previewRule.name}</h3>
 
               <div className="bg-muted rounded-lg p-4 min-h-[200px] flex items-center justify-center">
                 {previewRule.message_type === "popup" ? (
-                  <div className="bg-white rounded-xl shadow-lg p-6 max-w-sm w-full">
+                  <div className="bg-card rounded-xl shadow-lg p-6 max-w-sm w-full">
                     {previewRule.message_content.title && (
                       <h3 className="text-lg font-semibold text-muted-foreground mb-2">{previewRule.message_content.title}</h3>
                     )}
@@ -665,7 +665,7 @@ export default function MessageRulesPage() {
                     )}
                   </div>
                 ) : (
-                  <div className="bg-white rounded-xl shadow-lg p-4 max-w-xs w-full">
+                  <div className="bg-card rounded-xl shadow-lg p-4 max-w-xs w-full">
                     <div className="flex items-start gap-3">
                       <div className="w-8 h-8 bg-ha-brand rounded-full flex items-center justify-center text-white text-xs">
                         HA

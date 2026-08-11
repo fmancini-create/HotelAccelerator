@@ -57,7 +57,7 @@ export default function CMSStudioPreviewPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-emerald-600/25 bg-emerald-600/5 p-3 text-sm text-emerald-900">
+      <div className="rounded-lg border border-ha-success/25 bg-ha-success/5 p-3 text-sm text-ha-success-soft-foreground">
         I collegamenti del menu navigano ora tra le pagine della bozza senza uscire dall’anteprima e senza generare errori 404.
       </div>
 
@@ -67,7 +67,7 @@ export default function CMSStudioPreviewPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-900">
+      <div className="rounded-lg border border-ha-warning/30 bg-ha-warning/5 p-4 text-sm text-ha-warning-soft-foreground">
         Questa è una bozza autenticata. Non modifica né pubblica il sito pubblico. Prima della pubblicazione devono essere verificati immagini, testi, link, booking, accessibilità e resa mobile.
       </div>
     </>}

@@ -154,7 +154,7 @@ export default function CategoriesPage() {
           </div>
 
           {/* Categories Table */}
-          <div className="bg-white rounded-lg border border-border overflow-hidden">
+          <div className="bg-card rounded-lg border border-border overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -198,7 +198,7 @@ export default function CategoriesPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => openDeleteDialog(category)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            className="text-ha-error-soft-foreground hover:text-ha-error-soft-foreground hover:bg-ha-error-soft"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -319,7 +319,7 @@ export default function CategoriesPage() {
               </div>
               <div className="space-y-2">
                 <Label>Slug (identificativo)</Label>
-                <Input value={newValue} disabled={!selectedCategory?.isCustom} className="font-mono bg-gray-50" />
+                <Input value={newValue} disabled={!selectedCategory?.isCustom} className="font-mono bg-muted" />
                 {!selectedCategory?.isCustom && (
                   <p className="text-xs text-muted-foreground">
                     Lo slug delle categorie predefinite non può essere modificato

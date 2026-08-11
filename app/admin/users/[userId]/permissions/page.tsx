@@ -149,19 +149,19 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
         />
 
         {error && (
-          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mt-6 rounded-lg border border-ha-error-soft bg-ha-error-soft px-4 py-3 text-sm text-ha-error-soft-foreground">
             {error}
           </div>
         )}
 
         {saved && !error && (
-          <div className="mt-6 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          <div className="mt-6 rounded-lg border border-ha-success-soft bg-ha-success-soft px-4 py-3 text-sm text-ha-success-soft-foreground">
             Permessi salvati correttamente.
           </div>
         )}
 
         {user?.is_tenant_admin && (
-          <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+          <div className="mt-6 rounded-lg border border-ha-info-soft bg-ha-info-soft px-4 py-3 text-sm text-ha-info-soft-foreground">
             Questo utente è un amministratore del tenant e ha accesso completo a tutti i canali, a
             prescindere dalle assegnazioni qui sotto.
           </div>
@@ -220,7 +220,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
-                          <Inbox className="w-4 h-4 text-blue-500" />
+                          <Inbox className="w-4 h-4 text-ha-info-soft-foreground" />
                           <span className="text-sm font-medium">Ricezione</span>
                         </div>
                         <Switch
@@ -232,7 +232,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
 
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
-                          <Send className="w-4 h-4 text-green-500" />
+                          <Send className="w-4 h-4 text-ha-success-soft-foreground" />
                           <span className="text-sm font-medium">Invio</span>
                         </div>
                         <Switch
@@ -244,7 +244,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
 
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
-                          <Bell className="w-4 h-4 text-amber-500" />
+                          <Bell className="w-4 h-4 text-ha-warning-soft-foreground" />
                           <span className="text-sm font-medium">Notifiche</span>
                         </div>
                         <Switch

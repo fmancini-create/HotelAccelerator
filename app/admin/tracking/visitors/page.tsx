@@ -108,11 +108,11 @@ export default function VisitorsPage() {
                 placeholder="Cerca email o session id"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                className="pl-9 bg-white"
+                className="pl-9 bg-card"
               />
             </div>
             <Select value={identified} onValueChange={(v) => setIdentified(v as typeof identified)}>
-              <SelectTrigger className="w-[180px] bg-white">
+              <SelectTrigger className="w-[180px] bg-card">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -132,7 +132,7 @@ export default function VisitorsPage() {
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Caricamento...
               </div>
             ) : sessions.length === 0 ? (
-              <Card className="bg-white border-border">
+              <Card className="bg-card border-border">
                 <CardContent className="py-10 text-center text-ha-brand-soft-foreground">
                   Nessuna sessione ancora. Assicurati di aver installato lo script su un sito attivo.
                 </CardContent>
@@ -154,7 +154,7 @@ export default function VisitorsPage() {
             {selectedSession ? (
               <SessionDetail key={selectedSession.session_id} session={selectedSession} />
             ) : (
-              <Card className="bg-white border-border">
+              <Card className="bg-card border-border">
                 <CardContent className="py-16 text-center text-ha-brand-soft-foreground">
                   Seleziona una sessione per vederne la timeline.
                 </CardContent>
@@ -174,7 +174,7 @@ function SessionRow({ s, active, onClick }: { s: Session; active: boolean; onCli
       onClick={onClick}
       className={`w-full text-left rounded-lg border transition-colors p-3 ${
         active
-          ? "bg-white border-primary shadow-sm"
+          ? "bg-card border-primary shadow-sm"
           : "bg-white/70 border-border hover:bg-white"
       }`}
     >
@@ -226,7 +226,7 @@ function SessionDetail({ session }: { session: Session }) {
   const events = data?.events ?? []
 
   return (
-    <Card className="bg-white border-border">
+    <Card className="bg-card border-border">
       <CardHeader>
         <CardTitle className="text-foreground flex items-center gap-2">
           {session.email ? (

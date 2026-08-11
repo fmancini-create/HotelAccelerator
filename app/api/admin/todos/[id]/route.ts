@@ -3,10 +3,13 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId, getDevBypass } from "@/lib/auth-property"
 import { getManubotClient, HA_TO_MANUBOT_STATUS, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 // PATCH /api/admin/todos/[id] - Update a todo
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("todos", request)
     const { id } = await params
 
     // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (NODE_ENV=development
@@ -70,6 +73,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 // DELETE /api/admin/todos/[id] - Delete a todo
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("todos", request)
     const { id } = await params
 
     // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (via getDevBypass).

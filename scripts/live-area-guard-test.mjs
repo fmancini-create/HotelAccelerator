@@ -130,13 +130,33 @@ async function tokenPer(email) {
     token_hash: hashed,
   })
   if (errVer) throw new Error(`verifyOtp: ${errVer.message}`)
-  return ver.session?.access_token
+  return ver.session ?? null
 }
 
-async function chiama(percorso, token) {
+/**
+ * Costruisce il cookie di sessione nel formato che `@supabase/ssr` si aspetta.
+ *
+ * Serve perche' nel progetto convivono DUE modi di autenticare:
+ *  - `getAuthenticatedPropertyId` legge l'intestazione `Authorization: Bearer`;
+ *  - `createClient` (lib/supabase/server.ts) legge SOLO i cookie.
+ * Mandando il solo Bearer, le rotte del secondo gruppo rispondevano 401 e la
+ * misura sembrava un difetto della guardia: era invece un limite dello
+ * strumento. Si mandano entrambi, come farebbe un browser reale.
+ */
+function cookieDiSessione(sessione) {
+  const ref = (url.match(/https:\/\/([^.]+)\./) || [])[1]
+  if (!ref) throw new Error("impossibile ricavare il riferimento del progetto dall'URL Supabase")
+  const valore = Buffer.from(JSON.stringify(sessione), "utf8").toString("base64")
+  return `sb-${ref}-auth-token=base64-${valore}`
+}
+
+async function chiama(percorso, token, cookie) {
   const r = await fetch(`${BASE}${percorso}`, {
     headers: {
       authorization: `Bearer ${token}`,
+      // Entrambe le forme: vedi `cookieDiSessione`. Senza il cookie le rotte
+      // basate su `createClient` danno 401 a prescindere dai permessi.
+      ...(cookie ? { cookie } : {}),
       // Host non-localhost: neutralizza il bypass di sviluppo, che altrimenti
       // restituirebbe un super admin fittizio e una misura verde e falsa.
       host: "app.hotelaccelerator.com",
@@ -155,8 +175,25 @@ async function main() {
 
   let uscita = 0
   try {
-    const token = await tokenPer(EMAIL_TEMP)
+    const sessione = await tokenPer(EMAIL_TEMP)
+    const token = sessione?.access_token
     if (!token) throw new Error("nessun token ottenuto")
+    const cookie = cookieDiSessione(sessione)
+
+    // CONTROLLO DI VALIDITA' DELLO STRUMENTO: il cookie forgiato viene
+    // davvero accettato? Se non lo fosse, ogni rotta basata su `createClient`
+    // darebbe 401 e la prova misurerebbe il proprio difetto invece dei
+    // permessi. Gia' successo una volta con un cookie mal formato: allora se
+    // ne accorse il controllo positivo, qui la verifica e' esplicita.
+    const provaCookie = await fetch(`${BASE}/api/platform/me`, {
+      headers: { cookie, host: "app.hotelaccelerator.com", "x-forwarded-host": "app.hotelaccelerator.com" },
+    })
+    if (provaCookie.status === 401) {
+      console.log("STRUMENTO NON VALIDO: il cookie di sessione non viene accettato (401 su /api/platform/me).")
+      console.log("Senza cookie valido la prova non misura i permessi. Interrotta senza dichiarare esiti.")
+      uscita = 1
+      throw new Error("cookie non accettato")
+    }
 
     const casi = [
       // Aree NON concesse: in "observe" passano, in "enforce" devono dare 403.
@@ -175,7 +212,7 @@ async function main() {
 
     const risultati = []
     for (const [percorso, area, atteso] of casi) {
-      const stato = await chiama(percorso, token)
+      const stato = await chiama(percorso, token, cookie)
       risultati.push({ percorso, area, atteso, stato })
       console.log(`  ${String(stato).padEnd(4)} ${percorso}  [${area}] ${atteso}`)
     }
@@ -193,11 +230,29 @@ async function main() {
     console.log(`Aree non concesse che rispondono 403: ${negate.length} su ${attribuibili.length}`)
     console.log(`Aree di base bloccate: ${baseNegata.length} su 2 (0 = corretto)`)
     console.log("")
-    console.log(
-      negate.length === 0
-        ? 'Modalita\' "observe": nessun blocco applicato. Cerca "area-guard observe" nei log.'
-        : 'Modalita\' "enforce": i blocchi sono attivi.',
-    )
+    // In "enforce" un conteggio di blocchi pari a ZERO non e' un esito
+    // accettabile: e' esattamente cio' che si vedeva quando la guardia era
+    // scritta ma NON invocata da nessuna rotta. Prima questo script si
+    // limitava a stampare 'modalita' observe' e usciva 0, cioe' verde.
+    const modo = process.env.AREA_GUARD_MODE === "observe" ? "observe" : "enforce"
+    if (modo === "observe") {
+      console.log('Modalita\' "observe": nessun blocco atteso. Cerca "area-guard observe" nei log.')
+      if (negate.length > 0) {
+        console.log(`ALLARME: in "observe" nessuna rotta dovrebbe bloccare, invece ${negate.length} lo fanno.`)
+        uscita = 1
+      }
+    } else if (negate.length < attribuibili.length) {
+      console.log(
+        `FALLITO: in "enforce" tutte le ${attribuibili.length} aree non concesse devono dare 403, ` +
+          `ne rispondono ${negate.length}. Una guardia definita ma non invocata da' proprio questo esito.`,
+      )
+      for (const r of attribuibili.filter((x) => x.stato !== 403)) {
+        console.log(`  - ${r.percorso} -> ${r.stato} (atteso 403)`)
+      }
+      uscita = 1
+    } else {
+      console.log('Modalita\' "enforce": i blocchi sono attivi e attribuibili alla guardia.')
+    }
   } finally {
     // SEMPRE, anche se le verifiche sopra sono esplose a meta'.
     const pulito = await rimuoviMembroTemporaneo(userId)

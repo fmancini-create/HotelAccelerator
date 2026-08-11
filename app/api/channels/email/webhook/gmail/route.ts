@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { EmailProcessor } from "@/lib/email/email-processor"
 import { parseGmailMessage } from "@/lib/email/gmail-parse"
 import { getValidGmailToken, gmailFetchWithToken } from "@/lib/gmail-client"
+import { verificaNotificaPubSub } from "@/lib/email/pubsub-verify"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -82,6 +83,24 @@ export async function POST(request: NextRequest) {
     if (!emailAddress || !historyId) {
       return NextResponse.json({ error: "Notifica Gmail incompleta" }, { status: 400 })
     }
+
+    // ORIGINE DELLA NOTIFICA — SOLO OSSERVAZIONE, NON BLOCCA NULLA.
+    // Questo webhook accetta oggi richieste da chiunque (gli altri del progetto
+    // — WhatsApp, Meta, Stripe — verificano tutti il mittente). Prima di
+    // attivare il blocco dobbiamo sapere se le notifiche legittime portano
+    // davvero un token OIDC: la sottoscrizione push si configura nella console
+    // Google, non qui. Si registra e basta; quando i dati diranno che i
+    // legittimi passano tutti, il blocco sara' una riga sola.
+    const origine = await verificaNotificaPubSub(request)
+    console.info("[gmail-webhook][origine-osservata]", {
+      stato: origine.stato,
+      motivo: "motivo" in origine ? origine.motivo : undefined,
+      email: "email" in origine ? origine.email : undefined,
+      aud: "aud" in origine ? origine.aud : undefined,
+      iss: "iss" in origine ? origine.iss : undefined,
+      casella: emailAddress,
+      bloccante: false,
+    })
 
     // Google Pub/Sub has no HotelAccelerator user cookie. A request-scoped SSR
     // client would be anonymous and subject to RLS, making channel/token lookup

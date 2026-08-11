@@ -17,9 +17,9 @@ export function Toast({ message, type, onClose }: ToastProps) {
     }
   }, [type, onClose])
 
-  const bgColor = type === "success" ? "bg-green-50" : type === "error" ? "bg-red-50" : "bg-blue-50"
-  const textColor = type === "success" ? "text-green-800" : type === "error" ? "text-red-800" : "text-blue-800"
-  const borderColor = type === "success" ? "border-green-200" : type === "error" ? "border-red-200" : "border-blue-200"
+  const bgColor = type === "success" ? "bg-ha-success-soft" : type === "error" ? "bg-ha-error-soft" : "bg-ha-info-soft"
+  const textColor = type === "success" ? "text-ha-success-soft-foreground" : type === "error" ? "text-ha-error-soft-foreground" : "text-ha-info-soft-foreground"
+  const borderColor = type === "success" ? "border-ha-success-soft" : type === "error" ? "border-ha-error-soft" : "border-ha-info-soft"
 
   return (
     <div

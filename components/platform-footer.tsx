@@ -1,6 +1,7 @@
-import { Building2, Shield } from "lucide-react"
+import { Shield } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
+import { HotelAcceleratorLogo } from "@/components/brand/hotel-accelerator-logo"
 
 export function PlatformFooter() {
   return (
@@ -9,10 +10,13 @@ export function PlatformFooter() {
         <div className="grid md:grid-cols-4 gap-8 mb-8">
           {/* Logo HotelAccelerator */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Building2 className="h-6 w-6 text-ha-brand" aria-hidden="true" />
-              <span className="font-semibold text-foreground">HotelAccelerator</span>
-            </div>
+            <HotelAcceleratorLogo
+              className="mb-4"
+              markClassName="h-7 w-7"
+              markSizes="28px"
+              textClassName="font-semibold text-foreground"
+            />
+
             <p className="text-sm text-muted-foreground">La piattaforma completa per hotel e strutture ricettive.</p>
           </div>
 

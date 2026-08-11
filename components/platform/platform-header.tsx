@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { TenantSwitcher } from "@/components/admin/tenant-switcher"
+import { HotelAcceleratorLogo, HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 import { createClient } from "@/lib/supabase/client"
 
 type NavItem = {
@@ -306,10 +307,7 @@ export function PlatformHeader() {
       <header className="flex-shrink-0 h-14 border-b border-border bg-white z-30">
         <div className="h-full flex items-center px-3 sm:px-4">
           <Link href="/admin" className="flex items-center gap-2" aria-label="HotelAccelerator">
-            <div className="w-8 h-8 rounded-md bg-ha-brand flex items-center justify-center text-ha-brand-foreground font-semibold text-sm">
-              HA
-            </div>
-            <span className="font-semibold text-foreground text-sm">HotelAccelerator</span>
+            <HotelAcceleratorLogo markClassName="h-8 w-8" priority />
           </Link>
         </div>
       </header>
@@ -325,9 +323,7 @@ export function PlatformHeader() {
           className="flex items-center gap-2 flex-shrink-0 pr-2 sm:pr-4 border-r border-border h-full"
           aria-label="Torna alla dashboard"
         >
-          <div className="w-8 h-8 rounded-md bg-ha-brand flex items-center justify-center text-ha-brand-foreground font-semibold text-sm">
-            HA
-          </div>
+          <HotelAcceleratorMark className="h-8 w-8" priority />
           <span className="hidden md:block font-semibold text-foreground text-sm">
             HotelAccelerator
           </span>

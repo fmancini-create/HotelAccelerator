@@ -3,10 +3,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 // GET /api/cms/pages - Lista pagine per property
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const supabase = createServiceClient()
@@ -34,6 +37,8 @@ export async function GET(request: NextRequest) {
 // POST /api/cms/pages - Crea nuova pagina
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const authenticatedPropertyId = await getAuthenticatedPropertyId(request)
 
     const body = await request.json()

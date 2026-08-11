@@ -2,7 +2,29 @@
 
 export type PlatformRole = "super_admin" | "support" | "viewer"
 export type SubscriptionStatus = "active" | "trial" | "suspended" | "cancelled"
-export type Plan = "trial" | "basic" | "pro" | "enterprise"
+/**
+ * Piani ammessi per `properties.plan`.
+ *
+ * ATTENZIONE: questi valori DEVONO coincidere con il vincolo `valid_plan`
+ * della tabella `properties`. Il tipo diceva `trial | basic | pro | enterprise`,
+ * cioe' TRE valori su quattro che il database rifiuta: "basic" e "pro" non
+ * sono mai esistiti a livello di dati, e "trial" e' uno STATO (vedi
+ * `SubscriptionStatus`), non un piano. Il tipo dava quindi per validi valori
+ * che avrebbero fatto fallire la scrittura.
+ *
+ * E' un array costante e non solo un'unione perche' serve anche a CONVALIDARE
+ * a runtime: i tipi spariscono in esecuzione, e questi valori arrivano da
+ * moduli e da chiamate esterne.
+ */
+export const PLAN_VALUES = ["free", "starter", "professional", "enterprise"] as const
+export type Plan = (typeof PLAN_VALUES)[number]
+
+/** Piano di partenza: il meno impegnativo fra quelli ammessi. */
+export const DEFAULT_PLAN: Plan = "free"
+
+export function isPlan(valore: unknown): valore is Plan {
+  return typeof valore === "string" && (PLAN_VALUES as readonly string[]).includes(valore)
+}
 
 // Platform Collaborators
 export interface PlatformCollaborator {

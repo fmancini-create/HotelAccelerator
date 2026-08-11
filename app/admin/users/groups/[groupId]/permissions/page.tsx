@@ -178,7 +178,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
                       {/* Lettura */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
-                          <Eye className="w-4 h-4 text-blue-500" />
+                          <Eye className="w-4 h-4 text-ha-info-soft-foreground" />
                           <span className="text-sm font-medium">Lettura</span>
                         </div>
                         <Switch
@@ -190,7 +190,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
                       {/* Scrittura */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
-                          <Edit3 className="w-4 h-4 text-green-500" />
+                          <Edit3 className="w-4 h-4 text-ha-success-soft-foreground" />
                           <span className="text-sm font-medium">Scrittura</span>
                         </div>
                         <Switch
@@ -225,14 +225,14 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
           <h3 className="font-medium mb-4">Legenda Permessi</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div className="flex items-start gap-2">
-              <Eye className="w-4 h-4 text-blue-500 mt-0.5" />
+              <Eye className="w-4 h-4 text-ha-info-soft-foreground mt-0.5" />
               <div>
                 <p className="font-medium">Lettura</p>
                 <p className="text-muted-foreground">Può visualizzare messaggi e conversazioni</p>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <Edit3 className="w-4 h-4 text-green-500 mt-0.5" />
+              <Edit3 className="w-4 h-4 text-ha-success-soft-foreground mt-0.5" />
               <div>
                 <p className="font-medium">Scrittura</p>
                 <p className="text-muted-foreground">Può rispondere e inviare messaggi</p>

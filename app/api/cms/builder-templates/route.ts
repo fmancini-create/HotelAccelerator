@@ -5,6 +5,7 @@ import { getCMSTemplateDesignProfile } from "@/lib/cms/template-design-profiles"
 import { CMS_STUDIO_TEMPLATES, getCMSStudioTemplate } from "@/lib/cms/template-variants"
 import { personalizeBuilderDocument } from "@/lib/cms/profile-personalizer"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 const PersonalizeRequestSchema = z.object({
   templateId: z.string().min(1).max(120),
@@ -73,6 +74,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     const payload = PersonalizeRequestSchema.parse(await request.json())
     const result = createVariantDocument(payload.templateId)
     if (!result) return NextResponse.json({ error: "Template non trovato" }, { status: 404 })

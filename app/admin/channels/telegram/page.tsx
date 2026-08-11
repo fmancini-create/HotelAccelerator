@@ -109,7 +109,7 @@ export default function TelegramChannelPage() {
                       </div>
 
                       <Button
-                        className="w-full bg-blue-500 hover:bg-blue-600"
+                        className="w-full bg-ha-info hover:bg-ha-info"
                         onClick={testConnection}
                         disabled={!botToken}
                       >
@@ -120,11 +120,11 @@ export default function TelegramChannelPage() {
                   </>
                 ) : (
                   <div className="space-y-6">
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-                      <CheckCircle2 className="h-8 w-8 text-blue-500" />
+                    <div className="flex items-center gap-4 p-4 rounded-lg bg-ha-info-soft dark:bg-ha-info border border-ha-info-soft dark:border-ha-info">
+                      <CheckCircle2 className="h-8 w-8 text-ha-info-soft-foreground" />
                       <div>
                         <h4 className="font-medium text-blue-700 dark:text-blue-300">Bot Telegram connesso!</h4>
-                        <p className="text-sm text-blue-600 dark:text-blue-400">
+                        <p className="text-sm text-ha-info-soft-foreground dark:text-ha-info-soft-foreground">
                           I messaggi verranno ricevuti nella tua inbox
                         </p>
                       </div>
@@ -174,9 +174,9 @@ export default function TelegramChannelPage() {
                   <CardTitle>Stato Webhook</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    <span className="text-sm text-green-700 dark:text-green-300">
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-ha-success-soft dark:bg-ha-success border border-ha-success-soft dark:border-ha-success">
+                    <CheckCircle2 className="h-5 w-5 text-ha-success-soft-foreground" />
+                    <span className="text-sm text-ha-success-soft-foreground dark:text-ha-success-soft-foreground">
                       Webhook configurato automaticamente e attivo
                     </span>
                   </div>
@@ -224,7 +224,7 @@ export default function TelegramChannelPage() {
                 <Textarea value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} rows={4} />
                 <div className="p-4 rounded-lg border bg-muted/30">
                   <p className="text-xs text-muted-foreground mb-2">Anteprima:</p>
-                  <div className="bg-blue-500 text-white p-3 rounded-lg rounded-bl-none max-w-xs text-sm">
+                  <div className="bg-ha-info text-white p-3 rounded-lg rounded-bl-none max-w-xs text-sm">
                     {welcomeMessage}
                   </div>
                 </div>
@@ -246,7 +246,7 @@ export default function TelegramChannelPage() {
                 <div className="flex items-center justify-between p-4 rounded-lg border">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center ${aiEnabled ? "bg-blue-500" : "bg-muted"}`}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center ${aiEnabled ? "bg-ha-info" : "bg-muted"}`}
                     >
                       <Bot className={`h-5 w-5 ${aiEnabled ? "text-white" : "text-muted-foreground"}`} />
                     </div>
@@ -268,12 +268,12 @@ export default function TelegramChannelPage() {
                       />
                     </div>
 
-                    <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+                    <div className="p-4 rounded-lg bg-ha-warning-soft dark:bg-ha-warning border border-ha-warning-soft dark:border-ha-warning">
                       <div className="flex gap-2">
-                        <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+                        <AlertCircle className="h-5 w-5 text-ha-warning-soft-foreground shrink-0" />
                         <div>
-                          <h4 className="font-medium text-amber-700 dark:text-amber-300 text-sm">Consiglio</h4>
-                          <p className="text-sm text-amber-600 dark:text-amber-400">
+                          <h4 className="font-medium text-ha-warning-soft-foreground dark:text-ha-warning-soft-foreground text-sm">Consiglio</h4>
+                          <p className="text-sm text-ha-warning-soft-foreground dark:text-ha-warning-soft-foreground">
                             Su Telegram l'AI può rispondere istantaneamente. Configurala per passare la conversazione a
                             un operatore per richieste complesse.
                           </p>

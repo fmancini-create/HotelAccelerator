@@ -51,16 +51,16 @@ interface Todo {
 
 const STATUS_CONFIG: Record<TodoStatus, { label: string; icon: typeof Circle; color: string }> = {
   open:        { label: "Da fare",     icon: Circle,       color: "text-muted-foreground"  },
-  in_progress: { label: "In corso",   icon: Clock,        color: "text-blue-500"  },
-  done:        { label: "Completato", icon: CheckCircle2, color: "text-green-500" },
-  cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-red-400"   },
+  in_progress: { label: "In corso",   icon: Clock,        color: "text-ha-info-soft-foreground"  },
+  done:        { label: "Completato", icon: CheckCircle2, color: "text-ha-success-soft-foreground" },
+  cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-ha-error-soft-foreground"   },
 }
 
 const PRIORITY_CONFIG: Record<TodoPriority, { label: string; dot: string; text: string }> = {
   low:    { label: "Bassa",   dot: "bg-gray-300",   text: "text-gray-500"  },
-  normal: { label: "Normale", dot: "bg-blue-400",   text: "text-blue-600"  },
-  high:   { label: "Alta",    dot: "bg-orange-400", text: "text-orange-600"},
-  urgent: { label: "Urgente", dot: "bg-red-500",    text: "text-red-600"   },
+  normal: { label: "Normale", dot: "bg-ha-info",   text: "text-ha-info-soft-foreground"  },
+  high:   { label: "Alta",    dot: "bg-ha-warning", text: "text-ha-warning-soft-foreground"},
+  urgent: { label: "Urgente", dot: "bg-ha-error",    text: "text-ha-error-soft-foreground"   },
 }
 
 function DueDateBadge({ date }: { date?: string }) {
@@ -71,10 +71,10 @@ function DueDateBadge({ date }: { date?: string }) {
   const tomorrow = isTomorrow(d)
   return (
     <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium ${
-      overdue  ? "bg-red-100 text-red-600" :
-      today    ? "bg-orange-100 text-orange-600" :
-      tomorrow ? "bg-yellow-100 text-yellow-700" :
-                 "bg-gray-100 text-gray-500"
+      overdue  ? "bg-ha-error-soft text-ha-error-soft-foreground" :
+      today    ? "bg-ha-warning-soft text-ha-warning-soft-foreground" :
+      tomorrow ? "bg-ha-warning-soft text-ha-warning-soft-foreground" :
+                 "bg-muted text-muted-foreground"
     }`}>
       <Calendar className="w-3 h-3" />
       {overdue ? "Scaduto" : today ? "Oggi" : tomorrow ? "Domani" : format(d, "d MMM", { locale: it })}
@@ -275,22 +275,22 @@ export default function TodosPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3">
           {[
-            { label: "Da fare",    value: stats.open,        border: "border-gray-300" },
-            { label: "In corso",   value: stats.in_progress, border: "border-blue-300" },
-            { label: "Completati", value: stats.done,        border: "border-green-300" },
-            { label: "Urgenti",    value: stats.urgent,      border: "border-red-300" },
+            { label: "Da fare",    value: stats.open,        border: "border-border" },
+            { label: "In corso",   value: stats.in_progress, border: "border-ha-info-soft" },
+            { label: "Completati", value: stats.done,        border: "border-ha-success-soft" },
+            { label: "Urgenti",    value: stats.urgent,      border: "border-ha-error-soft" },
           ].map(s => (
-            <div key={s.label} className={`bg-white rounded-xl border-l-4 ${s.border} px-4 py-3 shadow-sm`}>
-              <p className="text-2xl font-semibold text-gray-800">{s.value}</p>
-              <p className="text-xs text-gray-500 mt-0.5">{s.label}</p>
+            <div key={s.label} className={`bg-card rounded-xl border-l-4 ${s.border} px-4 py-3 shadow-sm`}>
+              <p className="text-2xl font-semibold text-foreground">{s.value}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
 
         {/* Form */}
         {showForm && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-4">
+          <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
+            <h3 className="text-sm font-semibold text-foreground mb-4">
               {editingTodo ? "Modifica task" : "Nuovo task"}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -367,19 +367,19 @@ export default function TodosPage() {
               </div>
 
               {/* Send to Manubot toggle */}
-              <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/50 space-y-3">
+              <div className="border border-border rounded-xl p-3 bg-muted/50 space-y-3">
                 <label className="flex items-center gap-3 cursor-pointer group w-fit">
                   <div
                     onClick={() => setForm(f => ({ ...f, send_to_manubot: !f.send_to_manubot }))}
                     className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${
-                      form.send_to_manubot ? "bg-ha-brand" : "bg-gray-200"
+                      form.send_to_manubot ? "bg-ha-brand" : "bg-muted"
                     }`}
                   >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-all ${
+                    <span className={`absolute top-0.5 w-4 h-4 bg-card rounded-full shadow transition-all ${
                       form.send_to_manubot ? "left-5" : "left-0.5"
                     }`} />
                   </div>
-                  <span className="flex items-center gap-1.5 text-sm text-gray-700 font-medium group-hover:text-gray-900">
+                  <span className="flex items-center gap-1.5 text-sm text-foreground font-medium group-hover:text-foreground">
                     <Wrench className="w-3.5 h-3.5 text-ha-brand-soft-foreground" />
                     Invia a Manubot
                     <span className="text-xs text-muted-foreground font-normal">(crea intervento di manutenzione)</span>
@@ -388,17 +388,17 @@ export default function TodosPage() {
 
                 {/* Campi Manubot — visibili solo se send_to_manubot è attivo */}
                 {form.send_to_manubot && (
-                  <div className="grid grid-cols-2 gap-3 pt-1 border-t border-gray-100">
+                  <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border">
                     {/* Tecnico Manubot */}
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-gray-500 flex items-center gap-1">
+                      <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                         <Wrench className="w-3 h-3" /> Tecnico Manubot
                       </label>
                       <Select
                         value={form.manubot_assigned_to || "none"}
                         onValueChange={v => setForm(f => ({ ...f, manubot_assigned_to: v === "none" ? "" : v }))}
                       >
-                        <SelectTrigger className="text-sm h-9 bg-white">
+                        <SelectTrigger className="text-sm h-9 bg-card">
                           <SelectValue placeholder="Seleziona tecnico..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -419,14 +419,14 @@ export default function TodosPage() {
 
                     {/* Impianto/Asset Manubot */}
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-gray-500 flex items-center gap-1">
+                      <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                         <Settings className="w-3 h-3" /> Impianto / Asset
                       </label>
                       <Select
                         value={form.manubot_asset_id || "none"}
                         onValueChange={v => setForm(f => ({ ...f, manubot_asset_id: v === "none" ? "" : v }))}
                       >
-                        <SelectTrigger className="text-sm h-9 bg-white">
+                        <SelectTrigger className="text-sm h-9 bg-card">
                           <SelectValue placeholder="Seleziona impianto..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -448,7 +448,7 @@ export default function TodosPage() {
                 )}
               </div>
 
-              {error && <p className="text-xs text-red-500">{error}</p>}
+              {error && <p className="text-xs text-ha-error-soft-foreground">{error}</p>}
 
               <div className="flex gap-2 justify-end pt-1">
                 <Button type="button" variant="ghost" size="sm" onClick={resetForm}>
@@ -478,7 +478,7 @@ export default function TodosPage() {
                 className={`text-xs px-3 py-1 rounded-full transition-colors ${
                   filterStatus === s
                     ? "bg-ha-brand text-white"
-                    : "bg-white text-gray-500 border border-gray-200 hover:border-ha-brand hover:text-ha-brand-soft-foreground"
+                    : "bg-card text-muted-foreground border border-border hover:border-ha-brand hover:text-ha-brand-soft-foreground"
                 }`}
               >
                 {s === "all" ? "Tutti" : STATUS_CONFIG[s].label}
@@ -489,7 +489,7 @@ export default function TodosPage() {
             <div className="flex items-center gap-1.5">
               <Users className="w-4 h-4 text-muted-foreground" />
               <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-                <SelectTrigger className="h-7 text-xs border-gray-200 w-36">
+                <SelectTrigger className="h-7 text-xs border-border w-36">
                   <SelectValue placeholder="Tutti" />
                 </SelectTrigger>
                 <SelectContent>
@@ -502,7 +502,7 @@ export default function TodosPage() {
             </div>
             <button
               onClick={loadTodos}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-gray-600 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
             </button>
@@ -515,7 +515,7 @@ export default function TodosPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ha-brand" />
           </div>
         ) : todos.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-16 text-center">
+          <div className="bg-card rounded-2xl border border-dashed border-border py-16 text-center">
             <CheckCircle2 className="w-10 h-10 text-gray-200 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">
               {filterStatus === "all" && filterAssignee === "all"
@@ -535,7 +535,7 @@ export default function TodosPage() {
               return (
                 <div
                   key={todo.id}
-                  className={`bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-start gap-3 group hover:border-ha-brand/40 transition-all ${isDone ? "opacity-55" : ""}`}
+                  className={`bg-card rounded-xl border border-border px-4 py-3 flex items-start gap-3 group hover:border-ha-brand/40 transition-all ${isDone ? "opacity-55" : ""}`}
                 >
                   {/* Status toggle */}
                   <button
@@ -551,7 +551,7 @@ export default function TodosPage() {
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <button
                         onClick={() => openEdit(todo)}
-                        className={`text-sm font-medium text-left hover:text-ha-brand-soft-foreground transition-colors ${isDone ? "line-through text-muted-foreground" : "text-gray-800"}`}
+                        className={`text-sm font-medium text-left hover:text-ha-brand-soft-foreground transition-colors ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}
                       >
                         {todo.title}
                       </button>
@@ -560,7 +560,7 @@ export default function TodosPage() {
                       <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                         {todo.external_url && (
                           <a href={todo.external_url} target="_blank" rel="noopener noreferrer"
-                            className="p-1.5 hover:bg-gray-100 rounded text-muted-foreground hover:text-gray-600"
+                            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-muted-foreground"
                             title="Apri in Manubot"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -568,14 +568,14 @@ export default function TodosPage() {
                         )}
                         <button
                           onClick={() => openEdit(todo)}
-                          className="p-1.5 hover:bg-gray-100 rounded text-muted-foreground hover:text-gray-600"
+                          className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-muted-foreground"
                           title="Modifica"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => deleteTodo(todo.id)}
-                          className="p-1.5 hover:bg-red-50 rounded text-muted-foreground hover:text-red-500"
+                          className="p-1.5 hover:bg-ha-error-soft rounded text-muted-foreground hover:text-ha-error-soft-foreground"
                           title="Elimina"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -602,7 +602,7 @@ export default function TodosPage() {
                           value={todo.status}
                           onValueChange={(v) => updateStatus(todo, v as TodoStatus)}
                         >
-                          <SelectTrigger className="h-5 text-xs border-0 shadow-none p-0 w-auto gap-1 text-muted-foreground hover:text-gray-600 focus:ring-0">
+                          <SelectTrigger className="h-5 text-xs border-0 shadow-none p-0 w-auto gap-1 text-muted-foreground hover:text-muted-foreground focus:ring-0">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -616,7 +616,7 @@ export default function TodosPage() {
 
                       {/* Assignee */}
                       {assigneeName ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                           <Avatar name={assigneeName} size="sm" />
                           {assigneeName}
                         </span>
@@ -632,7 +632,7 @@ export default function TodosPage() {
 
                       {/* Tags */}
                       {todo.tags?.map(tag => (
-                        <span key={tag} className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">
+                        <span key={tag} className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 bg-muted text-muted-foreground rounded">
                           <Tag className="w-2.5 h-2.5" />
                           {tag}
                         </span>
@@ -640,7 +640,7 @@ export default function TodosPage() {
 
                       {/* Manubot badge */}
                       {todo.external_source === "manubot" && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-orange-200 text-orange-600 bg-orange-50 gap-1">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-ha-warning-soft text-ha-warning-soft-foreground bg-ha-warning-soft gap-1">
                           <Wrench className="w-2.5 h-2.5" />
                           Manubot {todo.external_id && `#${todo.external_id}`}
                         </Badge>
@@ -648,7 +648,7 @@ export default function TodosPage() {
 
                       {/* Pending sync to Manubot */}
                       {todo.send_to_manubot && todo.external_source !== "manubot" && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-blue-200 text-blue-500 bg-blue-50 gap-1">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-ha-info-soft text-ha-info-soft-foreground bg-ha-info-soft gap-1">
                           <Send className="w-2.5 h-2.5" />
                           Da inviare a Manubot
                         </Badge>
@@ -662,12 +662,12 @@ export default function TodosPage() {
         )}
 
         {/* Manubot info box */}
-        <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex gap-3">
-          <Wrench className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-orange-700 space-y-1">
+        <div className="bg-ha-warning-soft border border-ha-warning-soft rounded-xl p-4 flex gap-3">
+          <Wrench className="w-4 h-4 text-ha-warning-soft-foreground flex-shrink-0 mt-0.5" />
+          <div className="text-xs text-ha-warning-soft-foreground space-y-1">
             <p className="font-semibold">Integrazione Manubot</p>
             <p>I task con badge arancione provengono da Manubot. I task creati qui con "Invia a Manubot" attivo vengono inviati come nuovi interventi non appena Manubot configura il webhook ricevente.</p>
-            <p className="font-mono text-[10px] bg-orange-100 px-2 py-1 rounded mt-1">
+            <p className="font-mono text-[10px] bg-ha-warning-soft px-2 py-1 rounded mt-1">
               POST {typeof window !== "undefined" ? window.location.origin : "https://tuodominio"}/api/external/manubot
             </p>
           </div>

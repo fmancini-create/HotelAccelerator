@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getAutoCaptureSettings } from "@/lib/crm/auto-capture"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 // GET /api/admin/crm/auto-capture-settings
 // Returns the current tenant's auto-capture policy. Falls back to defaults
@@ -10,6 +11,8 @@ import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 // keeps the endpoint resilient to new properties added outside the migration).
 export async function GET(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("crm", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
     const settings = await getAutoCaptureSettings(supabase, propertyId)
@@ -28,6 +31,8 @@ export async function GET(request: NextRequest) {
 // are updated. Arrays are replaced atomically (not merged).
 export async function PUT(request: NextRequest) {
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("crm", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
     const body = await request.json().catch(() => ({}))

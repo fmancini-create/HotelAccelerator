@@ -5,11 +5,19 @@
  */
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { requireAreaApi } from "@/lib/auth/area-access"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-async function requireProperty() {
+/**
+ * Qui la guardia di area sta DENTRO l'aiutante, non nei gestori: questo file
+ * non usa `try/catch` ma restituisce l'errore, quindi un `requireAreaApi`
+ * lanciato nel gestore diventerebbe un 500 invece di un 403. Un punto solo,
+ * attraversato da GET e POST, e nessun gestore puo' dimenticarsene.
+ */
+async function requireProperty(request?: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { supabase, error: NextResponse.json({ error: "unauthenticated" }, { status: 401 }) }
@@ -23,6 +31,14 @@ async function requireProperty() {
   if (!admin?.property_id)
     return { supabase, error: NextResponse.json({ error: "no property" }, { status: 403 }) }
 
+  // Permesso di sezione: tradotto in 403 qui, senza passare da un'eccezione.
+  try {
+    await requireAreaApi("tracking", request)
+  } catch (e) {
+    if (isAreaDenied(e)) return { supabase, error: areaDeniedResponse(e) }
+    throw e
+  }
+
   return { supabase, propertyId: admin.property_id as string, error: null }
 }
 
@@ -34,8 +50,8 @@ function generateWriteKey(): string {
   return `tw_${b64}`
 }
 
-export async function GET() {
-  const { supabase, propertyId, error } = await requireProperty()
+export async function GET(request: NextRequest) {
+  const { supabase, propertyId, error } = await requireProperty(request)
   if (error) return error
 
   const { data, error: dbErr } = await supabase
@@ -49,7 +65,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { supabase, propertyId, error } = await requireProperty()
+  const { supabase, propertyId, error } = await requireProperty(req)
   if (error) return error
 
   const body = await req.json().catch(() => ({}))

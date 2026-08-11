@@ -265,7 +265,7 @@ export default function NewCampaignPage() {
               </TabsContent>
 
               <TabsContent value="preview">
-                <div className="border rounded-lg p-4 min-h-[400px] bg-white">
+                <div className="border rounded-lg p-4 min-h-[400px] bg-card">
                   {campaign.content_html ? (
                     <div dangerouslySetInnerHTML={{ __html: campaign.content_html }} />
                   ) : (

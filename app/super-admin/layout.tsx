@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
+import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 
 const navigation = [
   { name: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
@@ -149,9 +150,7 @@ export default function SuperAdminLayout({
           <div className="flex items-center justify-between h-14">
             {/* Logo */}
             <Link href="/super-admin" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-ha-brand text-ha-brand-foreground flex items-center justify-center">
-                <span className="text-sm font-bold">HA</span>
-              </div>
+              <HotelAcceleratorMark className="h-8 w-8" priority />
               <span className="font-semibold text-foreground hidden sm:block">HotelAccelerator</span>
               <span className="text-xs bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded font-medium">
                 ADMIN

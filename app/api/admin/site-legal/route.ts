@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { DEFAULT_COOKIE_POLICY, DEFAULT_PRIVACY_POLICY, mapPropertyToSiteSettings } from "@/lib/cms/tenant-site-settings"
 import { isModuleActive } from "@/lib/modules"
 import { handleServiceError } from "@/lib/errors"
+import { requireAreaApi } from "@/lib/auth/area-access"
 
 const UpdateSchema = z.object({
   billing_company_name: z.string().trim().max(500).nullable(),
@@ -29,6 +30,8 @@ export async function GET(request: NextRequest) {
   // getAuthenticatedPropertyId sfuggiva dal gestore e diventava un 500 opaco.
   let propertyId: string
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     propertyId = await getAuthenticatedPropertyId(request)
   } catch (error) {
     return handleServiceError(error)
@@ -45,6 +48,8 @@ export async function GET(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   let propertyId: string
   try {
+    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
+    await requireAreaApi("cms", request)
     propertyId = await getAuthenticatedPropertyId(request)
   } catch (error) {
     return handleServiceError(error)
