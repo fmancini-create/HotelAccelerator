@@ -5,8 +5,12 @@ import { Loader2 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { ModuleCard, type ModuleView } from "@/components/admin/module-card"
+import { errorMessage, isSessionExpired, jsonFetcher } from "@/lib/swr-fetcher"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+// Deve fallire sugli stati HTTP di errore: senza, `{"error":"Non autenticato"}`
+// veniva accolto come dato buono e la pagina si schiantava su
+// `data.modules.filter(...)`.
+const fetcher = jsonFetcher
 
 const SECTIONS: { category: ModuleView["category"]; title: string; subtitle: string }[] = [
   { category: "core", title: "Moduli core", subtitle: "Funzioni base della piattaforma." },
@@ -26,7 +30,16 @@ export default function ModulesPage() {
         <AdminHeader title="Moduli" subtitle="Attiva o disattiva le funzioni della tua struttura" />
         <Card className="mt-6">
           <CardContent className="py-12 text-center text-muted-foreground">
-            Errore nel caricamento dei moduli.
+            {isSessionExpired(error) ? (
+              <span className="inline-flex flex-wrap items-center justify-center gap-1">
+                Sessione scaduta: i dati non sono aggiornati.
+                <a href="/admin" className="font-medium text-ha-brand-soft-foreground underline underline-offset-2">
+                  Accedi di nuovo
+                </a>
+              </span>
+            ) : (
+              errorMessage(error, "Errore nel caricamento dei moduli.")
+            )}
           </CardContent>
         </Card>
       </div>
