@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     // preview pubbliche e produzione l'endpoint richiede sempre auth reale,
     // mentre in sviluppo locale resta consentito tramite il dev bypass sicuro
     // (NODE_ENV=development + localhost/127.0.0.1) ereditato da requireTenantAdmin.
-    await requireTenantAdmin(req)
+    const identity = await requireTenantAdmin(req)
     // Credenziali Manubot da variabili ambiente (nessun valore hardcoded).
     // Se mancano, requireEnv lancia un errore controllato gestito dal catch.
     const MANUBOT_SUPABASE_URL = requireEnv("MANUBOT_SUPABASE_URL")
@@ -179,21 +179,35 @@ export async function GET(req: NextRequest) {
     log.push("4. Salvataggio su HotelAccelerator Supabase...")
     const supabase = createServiceClient()
 
-    // Trova la property (prova per slug, poi per ID dev)
+    // ISOLAMENTO: prima questa rotta cercava una property FISSA
+    // ("villa-i-barronci") ignorando chi stava chiamando. Un amministratore di
+    // un tenant qualsiasi poteva quindi sovrascrivere le credenziali Manubot di
+    // un ALTRO cliente e, peggio, ricevere in risposta un `api_token` valido
+    // per il webhook di quella property. Ora si opera solo sulla PROPRIA
+    // struttura; il super amministratore puo' indicarne un'altra di proposito.
+    const richiesta = searchParams.get("property_id")?.trim()
+    const propertyIdBersaglio = identity.isSuperAdmin
+      ? richiesta || identity.propertyId
+      : identity.propertyId
+
+    if (richiesta && !identity.isSuperAdmin && richiesta !== identity.propertyId) {
+      return NextResponse.json({ error: "Accesso negato a questa struttura" }, { status: 403 })
+    }
+
+    if (!propertyIdBersaglio) {
+      return NextResponse.json({ error: "Nessuna struttura associata all'utente", log }, { status: 400 })
+    }
+
     const { data: properties } = await supabase
       .from("properties")
       .select("id, name, slug")
-      .or("slug.eq.villa-i-barronci,id.eq.c16ad260-2c34-4544-9909-5cd444773986")
+      .eq("id", propertyIdBersaglio)
       .limit(1)
 
-    log.push(`   Properties trovate: ${JSON.stringify(properties)}`)
     const property = properties?.[0]
 
     if (!property) {
-      return NextResponse.json({
-        error: "Property 'villa-i-barronci' non trovata su HotelAccelerator",
-        log,
-      }, { status: 404 })
+      return NextResponse.json({ error: "Struttura non trovata", log }, { status: 404 })
     }
 
     // WRITE-ENCRYPT: salviamo `manubot_password` cifrata `enc:v1:` at-rest.
