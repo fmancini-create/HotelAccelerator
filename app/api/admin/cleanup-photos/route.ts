@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 
 const REAL_FILES = [
   // Dependance Economy
@@ -27,12 +29,19 @@ const REAL_FILES = [
   // All other real images from public/images
 ]
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    // Era chiamabile da chiunque, senza credenziali, e CANCELLA foto in blocco
+    // su TUTTI i tenant. Ora richiede privilegi di amministratore.
+    const identity = await requireTenantAdmin(request)
+
     const supabase = createServiceClient()
 
-    // Get all photos from database
-    const { data: photos, error: fetchError } = await supabase.from("photos").select("id, filename, url")
+    // Il ruolo di servizio SCAVALCA le politiche di sicurezza: l'isolamento
+    // fra tenant va scritto qui, nella query, altrimenti non esiste.
+    let query = supabase.from("photos").select("id, filename, url")
+    if (!identity.isSuperAdmin) query = query.eq("property_id", identity.propertyId)
+    const { data: photos, error: fetchError } = await query
 
     if (fetchError) {
       return NextResponse.json({ error: fetchError.message }, { status: 500 })
@@ -66,6 +75,15 @@ export async function POST() {
       remainingPhotos: (photos?.length || 0) - photosToDelete.length,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
+    // Idem per il diniego di autorizzazione: un 500 mascherebbe il rifiuto.
+    if (isAccessError(error) || (error as { name?: string })?.name === "AccessError") {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Accesso negato" },
+        { status: accessErrorStatus(error) },
+      )
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }

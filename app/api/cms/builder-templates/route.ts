@@ -4,6 +4,7 @@ import { createDocumentFromTemplate } from "@/lib/cms/template-catalog"
 import { getCMSTemplateDesignProfile } from "@/lib/cms/template-design-profiles"
 import { CMS_STUDIO_TEMPLATES, getCMSStudioTemplate } from "@/lib/cms/template-variants"
 import { personalizeBuilderDocument } from "@/lib/cms/profile-personalizer"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 const PersonalizeRequestSchema = z.object({
   templateId: z.string().min(1).max(120),
@@ -89,6 +90,8 @@ export async function POST(request: NextRequest) {
       personalization: responsePersonalization(result, "deterministic-design-profile-v1"),
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Profilo non valido", details: error.flatten() }, { status: 400 })
     }

@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 type CampaignRow = {
   status: string | null
@@ -40,6 +41,8 @@ export async function GET(request: NextRequest) {
       total_unsubscribes: totalUnsubscribes,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Error fetching marketing stats:", error)
     return NextResponse.json({ error: "Failed to fetch stats" }, { status: 500 })
   }

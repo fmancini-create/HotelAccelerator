@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS, type OAuthProvider } from "@/lib/oauth-config"
 import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 import { encryptSecret } from "@/lib/crypto/secrets"
@@ -13,7 +13,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "channel_id obbligatorio" }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    // Questa rotta è chiamata server-to-server da `channels/email/send-oauth`
+    // (self-fetch senza cookie), quindi gira SENZA sessione. `email_channels`
+    // contiene i token OAuth ed è chiusa al ruolo `anon`: serve il service client.
+    //
+    // NOTA DI SICUREZZA: la rotta non verifica l'identità del chiamante. Non
+    // restituisce token, ma con un `channel_id` noto è possibile forzare un
+    // refresh. Va aggiunta un'autorizzazione (oppure va sostituito il self-fetch
+    // con `renewGmailWatch`/refresh in-process di `lib/email/gmail-watch.ts`,
+    // che è già stato pensato per questo).
+    const supabase = createServiceClient()
 
     // Get channel with refresh token
     const { data: rawChannel, error: fetchError } = await supabase

@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCallerIdentity, AccessError, accessErrorStatus } from "@/lib/auth/admin-access"
 import { sanitizeSignatureHtml, htmlToPlainText } from "@/lib/html-sanitize"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ userId: string }> }) {
   try {
@@ -50,6 +51,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }

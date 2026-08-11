@@ -58,6 +58,7 @@ import { encryptManubotPasswordForWrite } from "@/lib/manubot/credential-secrets
 import { ManubotClient } from "@/lib/manubot"
 import { validateManubotSupabaseUrlForEnvironment } from "@/lib/manubot/environment-guard"
 import { categorizeManubotError, logManubotError } from "@/lib/manubot/route-errors"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -177,6 +178,8 @@ export async function POST(req: NextRequest) {
       // Il token ottenuto viene scartato: serviva solo a provare la credenziale.
       await client.login(email, envPassword)
     } catch (validationError) {
+      // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+      if (isAreaDenied(validationError)) return areaDeniedResponse(validationError)
       const category = categorizeManubotError(validationError)
       logManubotError("resync-password: validation failed (DB non aggiornato)", validationError, category)
       return NextResponse.json(
@@ -216,6 +219,8 @@ export async function POST(req: NextRequest) {
       updated_at_refreshed: true,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     if (isAccessError(error)) {
       return NextResponse.json({ success: false, error: "forbidden" }, { status: accessErrorStatus(error) })
     }

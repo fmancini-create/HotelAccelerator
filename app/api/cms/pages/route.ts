@@ -1,12 +1,13 @@
 import { createServiceClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 // GET /api/cms/pages - Lista pagine per property
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
 
     const supabase = createServiceClient()
 
@@ -23,15 +24,17 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ pages })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[CMS] Error:", error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
 
 // POST /api/cms/pages - Crea nuova pagina
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const authenticatedPropertyId = await getAuthenticatedPropertyId()
+    const authenticatedPropertyId = await getAuthenticatedPropertyId(request)
 
     const body = await request.json()
 
@@ -70,6 +73,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ page }, { status: 201 })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[CMS] Error:", error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }

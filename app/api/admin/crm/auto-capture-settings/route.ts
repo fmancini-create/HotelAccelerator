@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getAutoCaptureSettings } from "@/lib/crm/auto-capture"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 // GET /api/admin/crm/auto-capture-settings
 // Returns the current tenant's auto-capture policy. Falls back to defaults
@@ -14,6 +15,8 @@ export async function GET(request: NextRequest) {
     const settings = await getAutoCaptureSettings(supabase, propertyId)
     return NextResponse.json({ settings })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     const status = message.includes("Non autenticato") ? 401 : 500
     return NextResponse.json({ error: message }, { status })
@@ -63,6 +66,8 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ settings: data })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     const status = message.includes("Non autenticato") ? 401 : 500
     return NextResponse.json({ error: message }, { status })

@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { list } from "@vercel/blob"
 import { createClient } from "@supabase/supabase-js"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 
 // Usa service role key per bypassare RLS
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -356,6 +358,11 @@ const HARDCODED_PHOTOS = [
 
 export async function POST(request: Request) {
   try {
+    // Era chiamabile da chiunque, senza credenziali, e SCRIVE nel database
+    // (misurato: HTTP 200 da un estraneo). Migrazione una-tantum: riservata
+    // agli amministratori.
+    await requireTenantAdmin(request as NextRequest)
+
     console.log("[v0] Starting photo migration...")
 
     // Verifica categorie esistenti
@@ -416,6 +423,12 @@ export async function POST(request: Request) {
       total: HARDCODED_PHOTOS.length,
     })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
+    // Idem per il diniego di autorizzazione: un 500 mascherebbe il rifiuto.
+    if (isAccessError(error) || error?.name === "AccessError") {
+      return NextResponse.json({ success: false, error: error.message }, { status: accessErrorStatus(error) })
+    }
     console.error("[v0] Migration error:", error)
     return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }

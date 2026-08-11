@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { GRANTABLE_AREA_KEYS } from "@/lib/platform/areas"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ groupId: string }> }) {
   try {
@@ -39,6 +40,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ permissions: permissions || [], areas })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }
@@ -105,6 +108,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
 }

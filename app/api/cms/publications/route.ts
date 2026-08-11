@@ -5,6 +5,7 @@ import { normalizeBuilderNavigation } from "@/lib/cms/normalize-builder-navigati
 import { tenantSubdomainHost } from "@/lib/domains/domain-names"
 import { createClient, createServiceClient } from "@/lib/supabase/server"
 import { inspectProjectDomain } from "@/lib/vercel/project-domains"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 function statusFor(message: string) {
   return message.includes("Non autenticato") ? 401 : 500
@@ -61,6 +62,8 @@ export async function GET(request: NextRequest) {
       publicSite,
     })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     return NextResponse.json({ error: message }, { status: statusFor(message) })
   }
@@ -106,6 +109,8 @@ export async function POST(request: NextRequest) {
     if (publishError || !publication) return NextResponse.json({ error: publishError?.message || "Pubblicazione non riuscita" }, { status: 500 })
     return NextResponse.json({ publication }, { status: 201 })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore sconosciuto"
     return NextResponse.json({ error: message }, { status: statusFor(message) })
   }

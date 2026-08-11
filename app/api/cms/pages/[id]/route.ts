@@ -1,13 +1,14 @@
 import { createServiceClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { validatePage } from "@/lib/cms/section-schemas"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 // GET /api/cms/pages/[id]
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
     const { data: page, error } = await supabase
       .from("cms_pages")
@@ -21,15 +22,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     if (!page) return NextResponse.json({ error: "Pagina non trovata" }, { status: 404 })
     return NextResponse.json({ page })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
 
 // PUT /api/cms/pages/[id]
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
 
     const validation = validatePage(body)
@@ -79,15 +82,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     return NextResponse.json({ page })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
 
 // DELETE /api/cms/pages/[id]
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const propertyId = await getAuthenticatedPropertyId()
+    const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
 
     const { data: existingPage } = await supabase
@@ -106,6 +111,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }

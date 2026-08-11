@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getActiveModuleKeys } from "@/lib/modules"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const dynamic = "force-dynamic"
 
@@ -25,6 +26,8 @@ export async function GET(request: NextRequest) {
   try {
     propertyId = await getAuthenticatedPropertyId(request)
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     // Utente non autenticato / nessun tenant: caso atteso, niente log.
     // Il menu non si rompe: nessun modulo attivo da filtrare.
     if (isExpectedAuthError(error)) {
@@ -40,6 +43,8 @@ export async function GET(request: NextRequest) {
     const keys = await getActiveModuleKeys(supabase, propertyId)
     return NextResponse.json({ activeModules: Array.from(keys) })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[v0] Platform modules GET error:", error)
     // In caso di errore non rompiamo il menu: mostriamo tutto (fail-open soft).
     return NextResponse.json({ activeModules: null })

@@ -3,6 +3,7 @@ import { getCurrentProperty } from "@/lib/auth-property"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getSantaddeoClient } from "@/lib/santaddeo/client"
 import { getSantaddeoKpis } from "@/lib/santaddeo/kpi"
+import { isHotelTenant } from "@/lib/platform/tenant-type"
 
 export const dynamic = "force-dynamic"
 
@@ -41,9 +42,17 @@ export async function GET(request: NextRequest) {
     const hub = createServiceClient()
     const { data: prop, error: propError } = await hub
       .from("properties")
-      .select("id, name, santaddeo_hotel_id")
+      .select("id, name, santaddeo_hotel_id, type")
       .eq("id", propertyId)
       .maybeSingle()
+
+    // I KPI Revenue hanno senso solo per una struttura ricettiva. Su un tenant
+    // azienda/agenzia (es. 4bid srl) la risposta e' "non pertinente", diversa da
+    // "non collegato": la card sparisce invece di suggerire una configurazione
+    // mancante che non va fatta.
+    if (prop && !isHotelTenant(prop.type)) {
+      return NextResponse.json({ status: "not_applicable" })
+    }
 
     if (propError || !prop || !prop.santaddeo_hotel_id) {
       return NextResponse.json({ status: "not_linked" })

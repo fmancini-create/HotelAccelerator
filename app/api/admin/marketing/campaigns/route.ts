@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +40,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(campaigns)
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Error fetching campaigns:", error)
     return NextResponse.json({ error: "Failed to fetch campaigns" }, { status: 500 })
   }
@@ -67,6 +70,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data)
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Error creating campaign:", error)
     return NextResponse.json({ error: "Failed to create campaign" }, { status: 500 })
   }

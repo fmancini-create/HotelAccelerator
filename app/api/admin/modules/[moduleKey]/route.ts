@@ -3,6 +3,7 @@ import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth
 import { getPlatformRole } from "@/lib/modules/auth"
 import { createServiceClient } from "@/lib/supabase/server"
 import { setModuleStatus, type ModuleStatus } from "@/lib/modules"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const dynamic = "force-dynamic"
 
@@ -79,6 +80,8 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, moduleKey, status })
   } catch (error) {
+    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     if (!isAccessError(error)) console.error("[v0] Module PATCH error:", error)
     const status = accessErrorStatus(error)
     const message = error instanceof Error && status !== 500 ? error.message : "Failed to update module"

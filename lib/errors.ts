@@ -102,6 +102,15 @@ export function handleServiceError(error: unknown): NextResponse {
     console.error("[ServiceError]", error)
   }
 
+  // Diniego della guardia di area: e' una decisione di autorizzazione, non un
+  // guasto. Deve dire "non hai il permesso" (403) e non "il server e' rotto"
+  // (500), altrimenti l'interfaccia mostra un errore tecnico al posto di una
+  // spiegazione. Riconosciuto per nome invece che con un import, per non creare
+  // un ciclo fra i moduli (auth-property -> errors -> auth-property).
+  if (error instanceof Error && error.name === "AreaAccessDenied") {
+    return NextResponse.json({ error: error.message, code: "AREA_FORBIDDEN" }, { status: 403 })
+  }
+
   if (error instanceof ServiceError) {
     return NextResponse.json(
       { error: error.message, code: error.code },
