@@ -34,7 +34,7 @@ const MARK_SIZES = [32, 64, 96, 128, 192, 256, 512] as const
 const LOCKUP_HEIGHTS = [96, 192, 288, 576] as const
 
 /** Proporzione MISURATA del logo completo dopo il ritaglio stretto. */
-const LOCKUP_RATIO = 1.0931
+const LOCKUP_RATIO = 1.0958
 
 const markSrcSet = MARK_SIZES.map((s) => `/logo-ha-mark-${s}.png ${s}w`).join(", ")
 const lockupSrcSet = LOCKUP_HEIGHTS.map((h) => `/logo-ha-lockup-${h}.png ${Math.round(h * LOCKUP_RATIO)}w`).join(", ")
@@ -131,7 +131,7 @@ export function HotelAcceleratorLockup({
       srcSet={lockupSrcSet}
       sizes={sizes}
       alt="HotelAccelerator"
-      width={630}
+      width={631}
       height={576}
       decoding="async"
       loading={priority ? "eager" : "lazy"}
