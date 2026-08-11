@@ -227,7 +227,7 @@ export default function BillingPage() {
                     )}
                     Gestisci abbonamento / Disattiva rinnovo
                   </Button>
-                  <p className="mt-2 text-sm text-green-700">
+                  <p className="mt-2 text-sm text-ha-success-soft-foreground">
                     Puoi disattivare il rinnovo automatico in autonomia dalla gestione abbonamento, senza
                     comunicazioni scritte. Il servizio resta attivo fino al termine del periodo gia&apos; pagato.
                   </p>
