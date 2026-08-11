@@ -105,6 +105,9 @@ async function main() {
     const { data: ra, error: errA } = await admin
       .from("admin_users")
       .insert({
+        // `id` non ha valore predefinito: e' l'id dell'utente di
+        // autenticazione. Letto dallo schema, non indovinato.
+        id: idAdmin,
         email: EMAIL_ADMIN,
         name: "Prova admin aree",
         property_id: struttura.id,
@@ -119,10 +122,13 @@ async function main() {
     const { data: rm, error: errM } = await admin
       .from("admin_users")
       .insert({
+        id: idMembro,
         email: EMAIL_MEMBRO,
         name: "Prova membro crm",
         property_id: struttura.id,
-        role: "staff",
+        // I ruoli ammessi sono solo super_admin / admin / editor (letto dal
+        // vincolo della tabella): "staff" veniva rifiutato.
+        role: "editor",
         is_tenant_admin: false,
       })
       .select("id")
