@@ -139,7 +139,9 @@ async function main() {
     // Al membro si concede SOLO "crm".
     const { error: errP } = await admin
       .from("user_area_permissions")
-      .insert({ user_id: rigaMembro, property_id: struttura.id, area_key: "crm", granted: true })
+      // Nessuna colonna "granted": la PRESENZA della riga e' la concessione
+      // (letto dallo schema). Passarla faceva fallire l'inserimento.
+      .insert({ user_id: rigaMembro, property_id: struttura.id, area_key: "crm" })
     if (errP) throw new Error(`user_area_permissions: ${errP.message}`)
 
     console.log(`Struttura: "${struttura.name}"`)
