@@ -61,6 +61,7 @@ async function fotografa(propertyId) {
 
 let tenantQa = null
 let utenteQa = null
+let abortita = null
 let barronciId = null
 let fotoPrima = null
 
@@ -174,6 +175,9 @@ try {
     console.error(fotoRipristino === fotoPrima ? "   ripristino RIUSCITO" : "   ripristino FALLITO")
   }
 } catch (e) {
+  // L'errore NON va assorbito: prima usciva 0 (= successo) anche se la prova
+  // era morta subito. Va registrato come fallimento esplicito.
+  abortita = e.message
   console.error("\nErrore durante la prova:", e.message)
 } finally {
   // ── Pulizia, con verifica in lettura ────────────────────────────────────
@@ -208,5 +212,15 @@ try {
   }
   console.log(`\n  ${verdi} verdi, ${rossi} rossi, ${sospese} non misurabili (su ${esiti.length})`)
   console.log(`  pulizia: tenant residui=${restaTenant ?? "?"}, admin residui=${restaAdmin ?? "?"}`)
-  process.exit(rossi === 0 && !restaTenant && !restaAdmin ? 0 : 1)
+
+  // Zero prove eseguite NON e' un successo: senza questo controllo lo script
+  // usciva 0 anche quando il server era irraggiungibile (falso verde).
+  const PROVE_ATTESE = 4
+  if (abortita) console.error(`\n  ESITO: FALLITA — prova interrotta (${abortita})`)
+  else if (esiti.length < PROVE_ATTESE)
+    console.error(`\n  ESITO: FALLITA — eseguite ${esiti.length}/${PROVE_ATTESE} prove`)
+
+  const superata =
+    !abortita && esiti.length >= PROVE_ATTESE && rossi === 0 && !restaTenant && !restaAdmin
+  process.exit(superata ? 0 : 1)
 }
