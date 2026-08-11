@@ -144,8 +144,10 @@ export default function TermsPage() {
             <section>
               <h2 className="text-xl font-semibold text-white mb-4">8-bis. Disdetta e rinnovo degli abbonamenti</h2>
               <p className="text-gray-300 leading-relaxed mb-4">
-                Gli abbonamenti si rinnovano automaticamente alla scadenza del periodo scelto. La disdetta va comunicata
-                per iscritto, senza penali, entro i seguenti termini:
+                Gli abbonamenti si rinnovano automaticamente alla scadenza del periodo scelto. Per disdire &egrave;
+                sufficiente disattivare autonomamente il rinnovo automatico direttamente dalla piattaforma, dall&apos;area
+                Fatturazione &gt; Gestisci abbonamento, senza penali e senza necessit&agrave; di alcuna comunicazione
+                scritta, entro i seguenti termini:
               </p>
               <ul className="list-disc list-inside space-y-2 text-gray-300">
                 <li><strong>Abbonamenti mensili:</strong> almeno 7 giorni prima della scadenza.</li>
