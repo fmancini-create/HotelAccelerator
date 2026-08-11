@@ -4,11 +4,12 @@ import { SuperAdminService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 import { getAuthenticatedUserEmail } from "@/lib/auth-property"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const actorEmail = await getAuthenticatedUserEmail()
     const service = new SuperAdminService()
-    const collaborator = await service.getCollaboratorDetails(params.id, actorEmail)
+    const collaborator = await service.getCollaboratorDetails(id, actorEmail)
 
     return NextResponse.json(collaborator)
   } catch (error) {
@@ -16,12 +17,15 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const actorEmail = await getAuthenticatedUserEmail()
     const updates = await request.json()
     const service = new SuperAdminService()
-    const collaborator = await service.updateCollaborator({ id: params.id, ...updates }, actorEmail)
+    // `id` per ultimo: il corpo della richiesta non deve poter cambiare quale
+    // collaboratore viene modificato.
+    const collaborator = await service.updateCollaborator({ ...updates, id }, actorEmail)
 
     return NextResponse.json(collaborator)
   } catch (error) {

@@ -3,11 +3,11 @@ import { MessageRuleService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 import { requireAreaApi } from "@/lib/auth/area-access"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("message-rules", request)
-    const { id } = params
+    const { id } = await params
     const rule = await MessageRuleService.getRule(request, id)
     return NextResponse.json({ rule })
   } catch (error) {
@@ -15,11 +15,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("message-rules", request)
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const rule = await MessageRuleService.updateRule(request, id, body)
     return NextResponse.json({ rule })
@@ -28,11 +28,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("message-rules", request)
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
     const { is_active } = body
 
@@ -47,11 +47,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("message-rules", request)
-    const { id } = params
+    const { id } = await params
     await MessageRuleService.deleteRule(request, id)
     return NextResponse.json({ success: true })
   } catch (error) {

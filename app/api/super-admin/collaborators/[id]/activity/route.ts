@@ -3,11 +3,12 @@ import { SuperAdminService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 import { getAuthenticatedUserEmail } from "@/lib/auth-property"
 
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params
     const actorEmail = await getAuthenticatedUserEmail()
     const service = new SuperAdminService()
-    const activity = await service.getCollaboratorActivity(params.id, actorEmail)
+    const activity = await service.getCollaboratorActivity(id, actorEmail)
 
     return NextResponse.json(activity)
   } catch (error) {

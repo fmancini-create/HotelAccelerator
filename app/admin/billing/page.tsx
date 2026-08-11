@@ -12,8 +12,12 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { Check, CreditCard, FileText, Building2, Loader2, Settings } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { errorMessage, isSessionExpired, jsonFetcher } from "@/lib/swr-fetcher"
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
+// Il fetcher deve fallire sugli stati HTTP di errore: senza, la risposta
+// `{"error":"Non autenticato"}` (JSON valido) veniva accolta da SWR come dato
+// buono e la pagina si schiantava piu' sotto su `data.subscriptions.find(...)`.
+const fetcher = jsonFetcher
 
 interface Plan {
   id: string
@@ -147,12 +151,26 @@ export default function BillingPage() {
     iso ? new Date(iso).toLocaleDateString("it-IT") : "-"
 
   if (error) {
+    // Sessione scaduta: condizione attesa, va distinta dal guasto e deve dire
+    // all'utente cosa fare. Testo e destinazione /admin come in
+    // components/admin/email-kpi-bar.tsx. Negli altri casi vince il messaggio
+    // del server, che e' piu' preciso di qualunque testo generico.
+    const sessionExpired = isSessionExpired(error)
     return (
       <div className="p-8">
         <AdminHeader title="Fatturazione" subtitle="Gestisci abbonamenti e dati di fatturazione" />
         <Card className="mt-6">
           <CardContent className="py-12 text-center text-muted-foreground">
-            Errore nel caricamento dei dati di fatturazione.
+            {sessionExpired ? (
+              <span className="inline-flex flex-wrap items-center justify-center gap-1">
+                Sessione scaduta: i dati non sono aggiornati.
+                <a href="/admin" className="font-medium text-ha-brand-soft-foreground underline underline-offset-2">
+                  Accedi di nuovo
+                </a>
+              </span>
+            ) : (
+              errorMessage(error, "Errore nel caricamento dei dati di fatturazione.")
+            )}
           </CardContent>
         </Card>
       </div>
@@ -209,7 +227,7 @@ export default function BillingPage() {
                     )}
                     Gestisci abbonamento / Disattiva rinnovo
                   </Button>
-                  <p className="mt-2 text-sm text-green-700">
+                  <p className="mt-2 text-sm text-ha-success-soft-foreground">
                     Puoi disattivare il rinnovo automatico in autonomia dalla gestione abbonamento, senza
                     comunicazioni scritte. Il servizio resta attivo fino al termine del periodo gia&apos; pagato.
                   </p>
