@@ -81,7 +81,7 @@ export default function AdminPage() {
            * Il nome resta accessibile tramite l'alt del logo, per questo
            * l'intestazione non lo ripete.
            */}
-          <HotelAcceleratorLockup className="h-24 w-auto" priority />
+          <HotelAcceleratorLockup className="h-28 w-auto" sizes="123px" priority />
           <p className="mt-3 text-sm text-muted-foreground">Accedi alla piattaforma</p>
         </div>
         <UnifiedLoginForm />
