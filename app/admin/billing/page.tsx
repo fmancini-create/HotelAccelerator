@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { Check, CreditCard, FileText, Building2, Loader2 } from "lucide-react"
+import { Check, CreditCard, FileText, Building2, Loader2, Settings } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
@@ -72,6 +72,7 @@ export default function BillingPage() {
   const [billingForm, setBillingForm] = useState<BillingInfo | null>(null)
   const [savingBilling, setSavingBilling] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null)
+  const [portalLoading, setPortalLoading] = useState(false)
 
   useEffect(() => {
     if (data?.billingInfo && !billingForm) {
@@ -97,6 +98,23 @@ export default function BillingPage() {
       toast.error("Errore di rete")
     } finally {
       setCheckoutLoading(null)
+    }
+  }
+
+  const handlePortal = async () => {
+    setPortalLoading(true)
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" })
+      const result = await res.json()
+      if (result.url) {
+        window.location.href = result.url
+      } else {
+        toast.error(result.error || "Impossibile aprire la gestione abbonamento")
+      }
+    } catch {
+      toast.error("Errore di rete")
+    } finally {
+      setPortalLoading(false)
     }
   }
 
@@ -182,6 +200,20 @@ export default function BillingPage() {
                 <p>
                   Periodo: {formatDate(activeSub.current_period_start)} - {formatDate(activeSub.current_period_end)}
                 </p>
+                <div className="mt-4">
+                  <Button variant="outline" onClick={handlePortal} disabled={portalLoading}>
+                    {portalLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Settings className="mr-2 h-4 w-4" />
+                    )}
+                    Gestisci abbonamento / Disattiva rinnovo
+                  </Button>
+                  <p className="mt-2 text-sm text-green-700">
+                    Puoi disattivare il rinnovo automatico in autonomia dalla gestione abbonamento, senza
+                    comunicazioni scritte. Il servizio resta attivo fino al termine del periodo gia&apos; pagato.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           )}
