@@ -87,7 +87,16 @@ try {
   // ── Soggetti usa-e-getta ──────────────────────────────────────────────────
   const { data: tenant, error: errT } = await admin
     .from("properties")
-    .insert({ name: `Prova foto ${marca}`, slug: `prova-foto-${marca}` })
+    // `plan` va indicato: il valore PREDEFINITO della colonna e' 'trial', che
+    // il vincolo `valid_plan` NON ammette (free/starter/professional/
+    // enterprise) — quindi ogni inserimento che lo omette fallisce.
+    .insert({
+      name: `Prova foto ${marca}`,
+      slug: `prova-foto-${marca}`,
+      plan: "free",
+      type: "hotel",
+      subscription_status: "active",
+    })
     .select("id")
     .single()
   if (errT) throw new Error(`creazione struttura fallita: ${errT.message}`)
