@@ -98,6 +98,22 @@ export const metadata: Metadata = {
     google: "your-google-verification-code",
   },
   category: "technology",
+  /*
+   * Icone del marchio, DICHIARATE qui invece di usare la convenzione a file
+   * (app/icon.png). Motivo: le icone da convenzione valgono per ogni rotta
+   * sotto questo layout e un layout figlio non puo' toglierle — il razzo di
+   * HotelAccelerator sarebbe finito nella scheda del browser anche sui siti
+   * pubblici dei CLIENTI, che da qui ereditano i metadati. Dichiarandole si
+   * possono sovrascrivere per i tenant (vedi app/(frontend)/layout.tsx).
+   *
+   * Prima di questa modifica il prodotto non aveva alcuna favicon: non
+   * esistevano ne' app/icon.*, ne' favicon.ico. I file che sembravano
+   * icone (public/apple-icon.png, public/icon*.svg) erano il logo di v0.
+   */
+  icons: {
+    icon: [{ url: "/favicon-hotelaccelerator.png", type: "image/png", sizes: "512x512" }],
+    apple: [{ url: "/apple-icon-hotelaccelerator.png", sizes: "180x180" }],
+  },
   manifest: "/manifest.json",
     generator: 'v0.app'
 }
