@@ -120,7 +120,14 @@ try {
   const superAdmin = await creaUtente(emailSuper)
   const { error: errPC } = await admin
     .from("platform_collaborators")
-    .insert({ email: emailSuper, role: "super_admin", is_active: true })
+    // `name` e `role` sono obbligatorie (lette dallo schema, non indovinate);
+    // `role` ammette solo super_admin / support / viewer.
+    .insert({
+      email: emailSuper,
+      name: `Prova super ${marca}`,
+      role: "super_admin",
+      is_active: true,
+    })
   if (errPC) throw new Error(`nomina super admin fallita: ${errPC.message}`)
   daPulire.collaboratori.push(emailSuper)
 
