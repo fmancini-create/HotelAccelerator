@@ -150,7 +150,7 @@ export default function TerminiPage() {
               </p>
               <p className="text-muted-foreground leading-relaxed mt-2">
                 La responsabilità massima di 4 BID S.r.l. è limitata all&apos;importo pagato dall&apos;Utente 
-                per i Servizi nei 12 mesi precedenti l&apos;evento che ha dato origine alla responsabilità.
+                per i Servizi nei 12 mesi precedenti l&apos;evento che ha dato origine alla responsabilità; resta fermo il diverso e più specifico limite previsto all&apos;art. 15 per le ipotesi di interruzione, indisponibilità e cause di terzi o di forza maggiore ivi disciplinate, che prevale per le materie da esso regolate.
               </p>
             </section>
 
@@ -176,7 +176,54 @@ export default function TerminiPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">12. Disdetta e Rinnovo degli Abbonamenti</h2>
+              <h2 className="text-xl font-semibold mb-4">12. Piani, Dashboard Gratuita e Servizi a Pagamento</h2>
+              <p className="text-muted-foreground leading-relaxed">
+                Santaddeo adotta un modello con una componente gratuita e componenti a pagamento:
+              </p>
+              <ul className="list-disc pl-6 text-muted-foreground space-y-2 mt-2">
+                <li>
+                  <strong>Dashboard gratuita per sempre:</strong> la dashboard di analisi e monitoraggio delle
+                  performance (KPI, reportistica di base) è offerta a titolo gratuito, senza limiti di tempo e, salvo
+                  diversa indicazione, senza obbligo di carta di credito.
+                </li>
+                <li>
+                  <strong>Servizi e moduli a pagamento:</strong> le funzionalità avanzate e i servizi ulteriori rispetto
+                  alla dashboard gratuita &mdash; a titolo esemplificativo l&apos;automazione del pricing dinamico, i
+                  connettori e le integrazioni con PMS e channel manager, i moduli evoluti (ad es. AutoPilot, Guard) e
+                  gli eventuali componenti aggiuntivi (add-on) &mdash; possono essere soggetti a corrispettivo secondo il
+                  piano o l&apos;offerta di volta in volta sottoscritti.
+                </li>
+              </ul>
+              <p className="text-muted-foreground leading-relaxed mt-2">
+                I contenuti, i limiti e i prezzi aggiornati dei servizi a pagamento sono indicati nella relativa offerta.
+                Gli eventuali abbonamenti sono soggetti alle condizioni di disdetta e rinnovo di cui all&apos;art. 13.
+                Le offerte promozionali (ad esempio periodi di utilizzo gratuito dei servizi a pagamento riservati a un
+                numero limitato di nuove strutture) si applicano nei limiti, per la durata e alle condizioni indicate
+                nella singola promozione, non sono cumulabili e non sono ripetibili per la stessa Struttura, salvo
+                diverso accordo. La gratuità &laquo;per sempre&raquo; è riferita esclusivamente alla dashboard e non si
+                estende ai servizi e ai moduli a pagamento.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold mb-4">13. Assenza di Garanzia di Risultato</h2>
+              <p className="text-muted-foreground leading-relaxed">
+                Le indicazioni di performance eventualmente riportate nelle pagine del sito o nel materiale commerciale
+                (a titolo esemplificativo incrementi di fatturato, RevPAR o ADR, come &laquo;+20% di fatturato&raquo; o
+                risultati entro un determinato numero di giorni) hanno finalità illustrative e si basano su risultati
+                medi osservati con altri clienti. Esse <strong>non costituiscono una garanzia di risultato</strong>.
+              </p>
+              <p className="text-muted-foreground leading-relaxed mt-2">
+                I risultati effettivi dipendono da numerosi fattori esterni al controllo di 4 BID S.r.l. (tra cui
+                mercato, stagionalità, posizionamento e caratteristiche della Struttura, prezzi e scelte gestionali
+                dell&apos;Utente, effettiva applicazione delle indicazioni fornite). Salvo diverso accordo scritto e
+                specifico, il pagamento dei corrispettivi non è subordinato al raggiungimento di un determinato
+                risultato e non dà diritto a rimborsi in caso di mancato conseguimento delle stime.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="text-xl font-semibold mb-4">14. Disdetta e Rinnovo degli Abbonamenti</h2>
               <p className="text-muted-foreground leading-relaxed">
                 Gli abbonamenti si rinnovano automaticamente alla scadenza del periodo scelto. La disdetta va
                 comunicata per iscritto, senza penali, entro i seguenti termini:
@@ -193,7 +240,7 @@ export default function TerminiPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">13. Continuità del Servizio, Aggiornamenti ed Esclusione di Responsabilità</h2>
+              <h2 className="text-xl font-semibold mb-4">15. Continuità del Servizio, Aggiornamenti ed Esclusione di Responsabilità</h2>
               <p className="text-muted-foreground leading-relaxed">
                 La Piattaforma è fornita da 4 BID S.r.l. &laquo;secondo disponibilità&raquo;. 4 BID S.r.l. si impegna a
                 garantire la massima continuità e affidabilità, ma non garantisce che il funzionamento sia
@@ -232,7 +279,7 @@ export default function TerminiPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">14. Legge Applicabile e Foro Competente</h2>
+              <h2 className="text-xl font-semibold mb-4">16. Legge Applicabile e Foro Competente</h2>
               <p className="text-muted-foreground leading-relaxed">
                 I presenti Termini sono regolati dalla legge italiana. Per qualsiasi controversia 
                 derivante dall&apos;interpretazione o esecuzione dei presenti Termini sarà competente 
@@ -241,7 +288,7 @@ export default function TerminiPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold mb-4">15. Contatti</h2>
+              <h2 className="text-xl font-semibold mb-4">17. Contatti</h2>
               <p className="text-muted-foreground leading-relaxed">
                 Per qualsiasi domanda relativa ai presenti Termini, contattare:
               </p>
