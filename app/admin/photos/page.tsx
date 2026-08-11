@@ -284,7 +284,7 @@ export default function AdminPhotosPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-muted-foreground">
             {photos.length} foto totali ({photos.filter((p) => p.is_published).length} pubblicate)
           </div>
         </div>
@@ -296,7 +296,7 @@ export default function AdminPhotosPage() {
               onClick={() => handlePhotoClick(photo)}
               className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
             >
-              <div className="aspect-[4/3] relative bg-gray-100">
+              <div className="aspect-[4/3] relative bg-muted">
                 <img
                   src={photo.url || "/placeholder.svg"}
                   alt={photo.alt || `Photo ${index + 1}`}
@@ -314,8 +314,8 @@ export default function AdminPhotosPage() {
                   </div>
                 )}
               </div>
-              <div className="p-3 bg-white space-y-2">
-                <p className="text-sm font-medium text-gray-900 truncate" title={photo.alt || "Senza titolo"}>
+              <div className="p-3 bg-card space-y-2">
+                <p className="text-sm font-medium text-foreground truncate" title={photo.alt || "Senza titolo"}>
                   {photo.alt || <span className="text-muted-foreground italic">Senza titolo</span>}
                 </p>
                 {photo.categories && photo.categories.length > 0 ? (
@@ -326,7 +326,7 @@ export default function AdminPhotosPage() {
                       </span>
                     ))}
                     {photo.categories.length > 3 && (
-                      <span className="text-xs text-gray-500">+{photo.categories.length - 3}</span>
+                      <span className="text-xs text-muted-foreground">+{photo.categories.length - 3}</span>
                     )}
                   </div>
                 ) : (
@@ -340,7 +340,7 @@ export default function AdminPhotosPage() {
         {photos.length === 0 && (
           <div className="text-center py-12">
             <ImageIcon className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-            <p className="text-gray-600 mb-4">Nessuna foto trovata</p>
+            <p className="text-muted-foreground mb-4">Nessuna foto trovata</p>
             <Button onClick={() => router.push("/admin/gallery")} variant="default">
               Carica Prima Foto
             </Button>
@@ -358,14 +358,14 @@ export default function AdminPhotosPage() {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <h2 className="text-xl font-semibold mb-1">Dettagli Foto</h2>
-                  <p className="text-sm text-gray-600">{selectedPhoto.alt || "Senza descrizione"}</p>
+                  <p className="text-sm text-muted-foreground">{selectedPhoto.alt || "Senza descrizione"}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => setSelectedPhoto(null)}>
                   ✕
                 </Button>
               </div>
 
-              <div className="aspect-[4/3] relative bg-gray-100 rounded-lg overflow-hidden mb-4">
+              <div className="aspect-[4/3] relative bg-muted rounded-lg overflow-hidden mb-4">
                 <img
                   src={selectedPhoto.url || "/placeholder.svg"}
                   alt={selectedPhoto.alt}
@@ -399,7 +399,7 @@ export default function AdminPhotosPage() {
                 </p>
                 <p className="text-sm break-all">
                   <span className="font-medium">URL:</span>{" "}
-                  <span className="text-gray-600 text-xs">{selectedPhoto.url}</span>
+                  <span className="text-muted-foreground text-xs">{selectedPhoto.url}</span>
                 </p>
               </div>
 
@@ -414,21 +414,21 @@ export default function AdminPhotosPage() {
                       <label
                         key={category.id}
                         className={`flex items-center gap-2 p-3 border rounded cursor-pointer transition-colors ${
-                          selectedCategories.includes(category.id) ? "bg-amber-50 border-amber-600" : "hover:bg-gray-50"
+                          selectedCategories.includes(category.id) ? "bg-amber-50 border-amber-600" : "hover:bg-muted"
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={selectedCategories.includes(category.id)}
                           onChange={() => toggleCategory(category.id)}
-                          className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                          className="rounded border-border text-amber-600 focus:ring-amber-500"
                         />
                         <span className="text-sm">{category.name}</span>
                       </label>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 italic">
+                  <p className="text-sm text-muted-foreground italic">
                     Nessuna categoria disponibile. Crea prima delle categorie.
                   </p>
                 )}

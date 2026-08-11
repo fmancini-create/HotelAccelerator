@@ -107,8 +107,8 @@ const GMAIL_SYSTEM_LABELS: Record<string, { name: string; icon: React.ReactNode;
   STARRED: { name: "Speciali", icon: <Star className="w-4 h-4" />, color: "text-yellow-500" },
   IMPORTANT: { name: "Importanti", icon: <AlertCircle className="w-4 h-4" />, color: "text-orange-500" },
   TRASH: { name: "Cestino", icon: <Trash2 className="w-4 h-4" />, color: "text-red-500" },
-  SPAM: { name: "Spam", icon: <Shield className="w-4 h-4" />, color: "text-gray-500" },
-  DRAFT: { name: "Bozze", icon: <Edit className="w-4 h-4" />, color: "text-gray-600" },
+  SPAM: { name: "Spam", icon: <Shield className="w-4 h-4" />, color: "text-muted-foreground" },
+  DRAFT: { name: "Bozze", icon: <Edit className="w-4 h-4" />, color: "text-muted-foreground" },
   UNREAD: { name: "Non letti", icon: <Mail className="w-4 h-4" />, color: "text-blue-500" },
   CATEGORY_PERSONAL: { name: "Personale", icon: <Tag className="w-4 h-4" />, color: "text-purple-500" },
   CATEGORY_SOCIAL: { name: "Social", icon: <Tag className="w-4 h-4" />, color: "text-pink-500" },
@@ -611,7 +611,7 @@ export default function EmailChannelsClient() {
   const getProviderBadge = (provider: string | null) => {
     if (provider === "gmail") {
       return (
-        <Badge variant="outline" className="gap-1 bg-white">
+        <Badge variant="outline" className="gap-1 bg-card">
           <GmailIcon className="w-3 h-3" />
           Gmail
         </Badge>
@@ -619,7 +619,7 @@ export default function EmailChannelsClient() {
     }
     if (provider === "outlook") {
       return (
-        <Badge variant="outline" className="gap-1 bg-white">
+        <Badge variant="outline" className="gap-1 bg-card">
           <OutlookIcon className="w-3 h-3" />
           Outlook
         </Badge>
@@ -811,7 +811,7 @@ export default function EmailChannelsClient() {
                     disabled={connecting}
                     className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-12 h-12 rounded-xl bg-card shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
                       {connecting && oauthProvider === "gmail" ? (
                         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                       ) : (
@@ -830,7 +830,7 @@ export default function EmailChannelsClient() {
                     disabled={connecting}
                     className="flex items-center gap-4 p-4 rounded-xl border-2 border-dashed border-muted hover:border-primary hover:bg-muted/50 transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <div className="w-12 h-12 rounded-xl bg-white shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <div className="w-12 h-12 rounded-xl bg-card shadow-sm flex items-center justify-center group-hover:scale-110 transition-transform">
                       {connecting && oauthProvider === "outlook" ? (
                         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
                       ) : (
@@ -1006,7 +1006,7 @@ export default function EmailChannelsClient() {
                         }}
                       >
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                          <div className="w-10 h-10 rounded-full bg-card shadow-sm flex items-center justify-center">
                             {channel.provider === "gmail" ? (
                               <GmailIcon className="w-7 h-7" />
                             ) : channel.provider === "outlook" ? (
@@ -1032,7 +1032,7 @@ export default function EmailChannelsClient() {
                                   Attivo
                                 </Badge>
                               ) : (
-                                <Badge variant="outline" className="bg-gray-50 text-gray-500">
+                                <Badge variant="outline" className="bg-muted text-muted-foreground">
                                   <XCircle className="w-3 h-3 mr-1" />
                                   Disattivo
                                 </Badge>

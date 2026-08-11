@@ -153,8 +153,8 @@ export default function CRMPage() {
     const colors: Record<string, string> = {
       platinum: "bg-purple-100 text-purple-800",
       gold: "bg-yellow-100 text-yellow-800",
-      silver: "bg-gray-200 text-gray-800",
-      standard: "bg-gray-100 text-gray-600",
+      silver: "bg-muted text-foreground",
+      standard: "bg-muted text-muted-foreground",
     }
     return colors[level] || colors.standard
   }

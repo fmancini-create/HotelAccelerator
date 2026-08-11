@@ -84,7 +84,7 @@ export default function EmbedScriptsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
             {scripts.length === 0 ? (
-              <Card className="p-12 text-center bg-white border-border">
+              <Card className="p-12 text-center bg-card border-border">
                 <Code className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold text-muted-foreground mb-2">Nessuno script creato</h3>
                 <p className="text-muted-foreground mb-6">
@@ -102,7 +102,7 @@ export default function EmbedScriptsPage() {
                 {scripts.map((script) => (
                   <Card
                     key={script.id}
-                    className="p-6 bg-white border-border hover:border-ha-brand transition-colors"
+                    className="p-6 bg-card border-border hover:border-ha-brand transition-colors"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">

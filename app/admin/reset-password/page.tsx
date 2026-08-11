@@ -108,14 +108,14 @@ export default function ResetPasswordPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="bg-card rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
-            <h1 className="text-2xl font-semibold text-stone-800 mb-2">Password reimpostata!</h1>
-            <p className="text-stone-600">
+            <h1 className="text-2xl font-semibold text-foreground mb-2">Password reimpostata!</h1>
+            <p className="text-muted-foreground">
               La tua password è stata aggiornata con successo. Verrai reindirizzato tra pochi istanti...
             </p>
           </div>
@@ -126,14 +126,14 @@ export default function ResetPasswordPage() {
 
   if (hasRecoverySession === false) {
     return (
-      <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-muted flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center">
+          <div className="bg-card rounded-lg shadow-lg p-8 text-center">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-8 h-8 text-amber-700" />
             </div>
-            <h1 className="text-2xl font-semibold text-stone-800 mb-2">Link non valido</h1>
-            <p className="text-stone-600 mb-6">
+            <h1 className="text-2xl font-semibold text-foreground mb-2">Link non valido</h1>
+            <p className="text-muted-foreground mb-6">
               Il link di recupero è scaduto o non è valido. Richiedine uno nuovo dalla pagina di accesso.
             </p>
             <button
@@ -151,22 +151,22 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="bg-card rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8 text-amber-700" />
             </div>
-            <h1 className="text-2xl font-semibold text-stone-800">Reimposta Password</h1>
-            <p className="text-stone-600 mt-2">Inserisci la tua nuova password</p>
+            <h1 className="text-2xl font-semibold text-foreground">Reimposta Password</h1>
+            <p className="text-muted-foreground mt-2">Inserisci la tua nuova password</p>
           </div>
 
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Nuova Password</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Nuova Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={password}
@@ -178,7 +178,7 @@ export default function ResetPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-muted-foreground"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -186,9 +186,9 @@ export default function ResetPasswordPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Conferma Password</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Conferma Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type={showPassword ? "text" : "password"}
                   value={confirmPassword}
@@ -217,7 +217,7 @@ export default function ResetPasswordPage() {
               type="button"
               onClick={handleBackToLogin}
               disabled={isLeaving}
-              className="block w-full text-center text-sm text-stone-600 hover:text-stone-800 disabled:opacity-60"
+              className="block w-full text-center text-sm text-muted-foreground hover:text-foreground disabled:opacity-60"
             >
               {isLeaving ? "Uscita in corso..." : "Annulla e torna al login"}
             </button>

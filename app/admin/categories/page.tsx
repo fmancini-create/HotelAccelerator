@@ -154,7 +154,7 @@ export default function CategoriesPage() {
           </div>
 
           {/* Categories Table */}
-          <div className="bg-white rounded-lg border border-border overflow-hidden">
+          <div className="bg-card rounded-lg border border-border overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -319,7 +319,7 @@ export default function CategoriesPage() {
               </div>
               <div className="space-y-2">
                 <Label>Slug (identificativo)</Label>
-                <Input value={newValue} disabled={!selectedCategory?.isCustom} className="font-mono bg-gray-50" />
+                <Input value={newValue} disabled={!selectedCategory?.isCustom} className="font-mono bg-muted" />
                 {!selectedCategory?.isCustom && (
                   <p className="text-xs text-muted-foreground">
                     Lo slug delle categorie predefinite non può essere modificato

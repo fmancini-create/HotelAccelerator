@@ -82,22 +82,22 @@ export default function AdminSetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-muted flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-lg shadow-lg p-8">
+        <div className="bg-card rounded-lg shadow-lg p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Lock className="w-8 h-8 text-amber-700" />
             </div>
-            <h1 className="text-2xl font-semibold text-stone-800">Setup Iniziale</h1>
-            <p className="text-stone-600 mt-2">Crea il Super Admin</p>
+            <h1 className="text-2xl font-semibold text-foreground">Setup Iniziale</h1>
+            <p className="text-muted-foreground mt-2">Crea il Super Admin</p>
           </div>
 
           <form onSubmit={handleSetup} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Nome Completo</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Nome Completo</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type="text"
                   value={name}
@@ -110,9 +110,9 @@ export default function AdminSetupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Email</label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type="email"
                   value={email}
@@ -123,13 +123,13 @@ export default function AdminSetupPage() {
                   disabled
                 />
               </div>
-              <p className="text-xs text-stone-500 mt-1">Solo questa email può completare il setup</p>
+              <p className="text-xs text-muted-foreground mt-1">Solo questa email può completare il setup</p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type="password"
                   value={password}
@@ -143,9 +143,9 @@ export default function AdminSetupPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-stone-700 mb-1">Conferma Password</label>
+              <label className="block text-sm font-medium text-foreground mb-1">Conferma Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
                   type="password"
                   value={confirmPassword}

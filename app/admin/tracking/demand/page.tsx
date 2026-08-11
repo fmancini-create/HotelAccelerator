@@ -17,7 +17,7 @@ export default function DemandTrackingPage() {
 
           {/* Sidebar con info */}
           <div className="space-y-4">
-            <Card className="bg-white border-border">
+            <Card className="bg-card border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2 text-foreground">
                   <BarChart3 className="h-5 w-5 text-blue-600" />
@@ -43,7 +43,7 @@ export default function DemandTrackingPage() {
               </CardContent>
             </Card>
 
-            <Card className="bg-white border-border">
+            <Card className="bg-card border-border">
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg flex items-center gap-2 text-foreground">
                   <Calendar className="h-5 w-5 text-green-600" />

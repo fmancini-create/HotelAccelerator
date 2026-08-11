@@ -92,7 +92,7 @@ function Nav({ template, preset }: { template: StudioTemplate; preset: VariantPr
 function Booking({ accent, mode }: { accent: string; mode: BookingMode }) {
   if (mode === "vertical" || mode === "sidebar") {
     return (
-      <div className="w-36 bg-white p-3 text-[#191919] shadow-2xl">
+      <div className="w-36 bg-card p-3 text-[#191919] shadow-2xl">
         <p className="text-[6px] uppercase tracking-[.2em] text-black/40">Book your stay</p>
         {["Check-in", "Check-out", "Guests"].map((item) => (
           <div key={item} className="border-b py-2">
@@ -107,7 +107,7 @@ function Booking({ accent, mode }: { accent: string; mode: BookingMode }) {
 
   const compact = mode === "compact"
   return (
-    <div className={`grid items-center border border-black/10 bg-white text-[#1f1f1f] shadow-xl ${compact ? "grid-cols-[1fr_1fr_auto]" : "grid-cols-[1fr_1fr_1fr_auto]"}`}>
+    <div className={`grid items-center border border-black/10 bg-card text-[#1f1f1f] shadow-xl ${compact ? "grid-cols-[1fr_1fr_auto]" : "grid-cols-[1fr_1fr_1fr_auto]"}`}>
       <div className="border-r px-3 py-2"><p className="text-[6px] uppercase tracking-[.2em] text-black/45">Check-in</p><p className="mt-1 text-[9px]">12 Oct</p></div>
       <div className="border-r px-3 py-2"><p className="text-[6px] uppercase tracking-[.2em] text-black/45">Check-out</p><p className="mt-1 text-[9px]">15 Oct</p></div>
       {!compact && <div className="border-r px-3 py-2"><p className="text-[6px] uppercase tracking-[.2em] text-black/45">Guests</p><p className="mt-1 text-[9px]">2 Adults</p></div>}
@@ -165,8 +165,8 @@ function CollageHero({ template, preset }: { template: StudioTemplate; preset: V
       <Nav template={template} preset={preset} />
       <div className={`grid h-[385px] grid-cols-[.95fr_1.05fr] gap-8 p-8 ${preset.reverse ? "direction-rtl" : ""}`}>
         <div className="relative">
-          <div className="absolute left-4 top-2 h-[270px] w-[78%] -rotate-3 bg-white p-2 shadow-xl"><img src={p.image} alt="" className="h-full w-full object-cover" /></div>
-          <div className="absolute bottom-3 right-0 h-[150px] w-[55%] rotate-3 bg-white p-2 shadow-xl"><img src={p.secondaryImage} alt="" className="h-full w-full object-cover" /></div>
+          <div className="absolute left-4 top-2 h-[270px] w-[78%] -rotate-3 bg-card p-2 shadow-xl"><img src={p.image} alt="" className="h-full w-full object-cover" /></div>
+          <div className="absolute bottom-3 right-0 h-[150px] w-[55%] rotate-3 bg-card p-2 shadow-xl"><img src={p.secondaryImage} alt="" className="h-full w-full object-cover" /></div>
         </div>
         <div className="flex items-center"><Copy template={template} preset={preset} /></div>
       </div>
@@ -181,7 +181,7 @@ function GridHero({ template, preset }: { template: StudioTemplate; preset: Vari
     <div className="bg-[#f4f2ed] text-[#202020]">
       <Nav template={template} preset={preset} />
       <div className="grid h-[385px] grid-cols-12 gap-3 p-4">
-        <div className={`col-span-4 flex flex-col justify-center bg-white p-6 ${radius}`}><Copy template={template} preset={preset} /></div>
+        <div className={`col-span-4 flex flex-col justify-center bg-card p-6 ${radius}`}><Copy template={template} preset={preset} /></div>
         <div className={`col-span-5 overflow-hidden ${radius}`}><img src={p.image} alt="" className="h-full w-full object-cover" /></div>
         <div className="col-span-3 grid grid-rows-2 gap-3">
           <div className={`p-5 text-white ${radius}`} style={{ backgroundColor: p.accent }}><p className="text-[7px] uppercase tracking-widest">{preset.label}</p><p className="mt-4 text-2xl font-semibold">Explore more.</p></div>
@@ -217,8 +217,8 @@ function CatalogHero({ template, preset }: { template: StudioTemplate; preset: V
           <div className="mt-5 space-y-2 text-[8px]"><div className="border p-3">Destination</div><div className="border p-3">Property type</div><div className="p-3 text-center text-white" style={{ backgroundColor: p.accent }}>Search homes</div></div>
         </aside>
         <div className="grid grid-cols-2 gap-3 p-4">
-          <div className="relative row-span-2 overflow-hidden"><img src={p.image} alt="" className="h-full w-full object-cover" /><span className="absolute bottom-3 left-3 bg-white p-2 text-[7px] uppercase">Country villa</span></div>
-          <div className="relative overflow-hidden"><img src={p.secondaryImage} alt="" className="h-full w-full object-cover" /><span className="absolute bottom-3 left-3 bg-white p-2 text-[7px] uppercase">City apartment</span></div>
+          <div className="relative row-span-2 overflow-hidden"><img src={p.image} alt="" className="h-full w-full object-cover" /><span className="absolute bottom-3 left-3 bg-card p-2 text-[7px] uppercase">Country villa</span></div>
+          <div className="relative overflow-hidden"><img src={p.secondaryImage} alt="" className="h-full w-full object-cover" /><span className="absolute bottom-3 left-3 bg-card p-2 text-[7px] uppercase">City apartment</span></div>
           <div className="flex items-center justify-center border text-center"><div><p className="text-3xl font-bold">24</p><p className="text-[7px] uppercase">Homes available</p></div></div>
         </div>
       </div>
@@ -243,11 +243,11 @@ function Footer({ template, preset }: { template: StudioTemplate; preset: Varian
   }
 
   if (preset.footer === "features") {
-    return <div className="grid h-[110px] grid-cols-3 bg-white p-6 text-center"><span>Rooms</span><span className="border-x">Experiences</span><span>Services</span></div>
+    return <div className="grid h-[110px] grid-cols-3 bg-card p-6 text-center"><span>Rooms</span><span className="border-x">Experiences</span><span>Services</span></div>
   }
 
   if (preset.footer === "map") {
-    return <div className="grid h-[105px] grid-cols-3 divide-x bg-white text-center"><span className="p-6">Map search</span><span className="p-6">Instant booking</span><span className="p-6">Local support</span></div>
+    return <div className="grid h-[105px] grid-cols-3 divide-x bg-card text-center"><span className="p-6">Map search</span><span className="p-6">Instant booking</span><span className="p-6">Local support</span></div>
   }
 
   if (preset.footer === "story") {
@@ -255,16 +255,16 @@ function Footer({ template, preset }: { template: StudioTemplate; preset: Varian
   }
 
   if (preset.footer === "services") {
-    return <div className="grid h-[120px] grid-cols-[.7fr_1.3fr] bg-white"><div className="flex flex-col justify-center px-7"><p className="font-serif text-xl">Tailored services</p><p className="text-[8px] opacity-50">Designed around every guest.</p></div><div className="flex items-center px-7"><Booking accent={p.accent} mode="inline" /></div></div>
+    return <div className="grid h-[120px] grid-cols-[.7fr_1.3fr] bg-card"><div className="flex flex-col justify-center px-7"><p className="font-serif text-xl">Tailored services</p><p className="text-[8px] opacity-50">Designed around every guest.</p></div><div className="flex items-center px-7"><Booking accent={p.accent} mode="inline" /></div></div>
   }
 
-  return <div className="grid h-[120px] grid-cols-[.7fr_1.3fr] bg-white"><img src={p.secondaryImage} alt="" className="h-full w-full object-cover" /><div className="flex items-center px-7"><Booking accent={p.accent} mode="inline" /></div></div>
+  return <div className="grid h-[120px] grid-cols-[.7fr_1.3fr] bg-card"><img src={p.secondaryImage} alt="" className="h-full w-full object-cover" /><div className="flex items-center px-7"><Booking accent={p.accent} mode="inline" /></div></div>
 }
 
 function RealisticHomepage({ template }: { template: StudioTemplate }) {
   const preset = PRESETS[template.id] ?? PRESETS["luxury-editorial"]
   return (
-    <div className="overflow-hidden rounded-t-xl border border-b-0 bg-white shadow-[0_24px_70px_-38px_rgba(0,0,0,.65)]">
+    <div className="overflow-hidden rounded-t-xl border border-b-0 bg-card shadow-[0_24px_70px_-38px_rgba(0,0,0,.65)]">
       <BrowserChrome />
       <Hero template={template} preset={preset} />
       {(preset.booking === "bottom" || preset.footer !== "story") && <Footer template={template} preset={preset} />}

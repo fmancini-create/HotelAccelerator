@@ -181,9 +181,9 @@ export default function GalleryPage() {
         />
 
         {/* Upload Section */}
-        <div className="bg-white p-6 rounded-lg shadow mb-8">
+        <div className="bg-card p-6 rounded-lg shadow mb-8">
           <h2 className="text-xl font-semibold mb-4">Upload Foto</h2>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+          <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
             <Input
               type="file"
               multiple
@@ -192,7 +192,7 @@ export default function GalleryPage() {
               disabled={uploading}
               className="max-w-md mx-auto"
             />
-            <p className="text-sm text-gray-500 mt-2">
+            <p className="text-sm text-muted-foreground mt-2">
               {uploading ? "Caricamento..." : "Seleziona una o più immagini"}
             </p>
           </div>
@@ -215,18 +215,18 @@ export default function GalleryPage() {
         {/* Griglia Foto */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {photos.map((photo) => (
-            <div key={photo.id} className="bg-white rounded-lg shadow overflow-hidden">
+            <div key={photo.id} className="bg-card rounded-lg shadow overflow-hidden">
               {/* Checkbox selezione */}
               <div className="p-3 border-b flex items-center gap-2">
                 <Checkbox
                   checked={selectedPhotos.has(photo.id)}
                   onCheckedChange={() => togglePhotoSelection(photo.id)}
                 />
-                <span className="text-sm text-gray-600">Seleziona</span>
+                <span className="text-sm text-muted-foreground">Seleziona</span>
               </div>
 
               {/* Immagine */}
-              <div className="relative aspect-[4/3] bg-gray-100">
+              <div className="relative aspect-[4/3] bg-muted">
                 <Image src={photo.url || "/placeholder.svg"} alt={photo.alt || "Photo"} fill className="object-cover" />
                 {!photo.is_published && (
                   <div className="absolute top-2 right-2 bg-orange-500 text-white px-2 py-1 rounded text-xs font-semibold">
@@ -239,7 +239,7 @@ export default function GalleryPage() {
               <div className="p-3 space-y-3">
                 {/* ALT/Descrizione */}
                 <div>
-                  <Label className="text-xs text-gray-600">Descrizione/ALT</Label>
+                  <Label className="text-xs text-muted-foreground">Descrizione/ALT</Label>
                   <Input
                     value={photo.alt || ""}
                     onChange={(e) => updateAlt(photo.id, e.target.value)}
@@ -251,7 +251,7 @@ export default function GalleryPage() {
 
                 {/* Categorie */}
                 <div>
-                  <Label className="text-xs text-gray-600">Categorie</Label>
+                  <Label className="text-xs text-muted-foreground">Categorie</Label>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {photo.categories.length > 0 ? (
                       photo.categories.map((cat) => (
@@ -285,7 +285,7 @@ export default function GalleryPage() {
         </div>
 
         {photos.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-muted-foreground">
             Nessuna foto caricata. Inizia caricando le tue prime immagini.
           </div>
         )}

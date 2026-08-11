@@ -197,7 +197,7 @@ export default function ChatChannelPage() {
 
       <div className="max-w-4xl mx-auto p-6">
         <Tabs defaultValue="aspetto" className="space-y-6">
-          <TabsList className="bg-white border border-border">
+          <TabsList className="bg-card border border-border">
             <TabsTrigger value="aspetto" className="data-[state=active]:bg-muted">
               <Palette className="w-4 h-4 mr-2" />
               Aspetto
@@ -219,7 +219,7 @@ export default function ChatChannelPage() {
           {/* Aspetto Tab - same as before */}
           <TabsContent value="aspetto">
             <div className="grid grid-cols-2 gap-6">
-              <Card className="bg-white border-border">
+              <Card className="bg-card border-border">
                 <CardHeader>
                   <CardTitle className="text-foreground text-lg">Personalizzazione</CardTitle>
                   <CardDescription>Adatta il widget al tuo brand</CardDescription>
@@ -277,7 +277,7 @@ export default function ChatChannelPage() {
               </Card>
 
               {/* Preview */}
-              <Card className="bg-white border-border">
+              <Card className="bg-card border-border">
                 <CardHeader>
                   <CardTitle className="text-foreground text-lg flex items-center gap-2">
                     <Eye className="w-4 h-4" />
@@ -285,7 +285,7 @@ export default function ChatChannelPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="relative h-80 bg-gray-100 rounded-lg overflow-hidden">
+                  <div className="relative h-80 bg-muted rounded-lg overflow-hidden">
                     <div
                       className={`absolute bottom-4 ${
                         config?.config.position === "bottom-right" ? "right-4" : "left-4"
@@ -302,7 +302,7 @@ export default function ChatChannelPage() {
                     <div
                       className={`absolute bottom-20 ${
                         config?.config.position === "bottom-right" ? "right-4" : "left-4"
-                      } w-72 bg-white rounded-lg shadow-xl overflow-hidden`}
+                      } w-72 bg-card rounded-lg shadow-xl overflow-hidden`}
                     >
                       <div
                         className="p-4 text-white"
@@ -310,8 +310,8 @@ export default function ChatChannelPage() {
                       >
                         <h4 className="font-medium">Chat</h4>
                       </div>
-                      <div className="p-4 h-32 bg-gray-50">
-                        <div className="bg-white p-2 rounded-lg shadow-sm text-sm text-gray-600">
+                      <div className="p-4 h-32 bg-muted">
+                        <div className="bg-card p-2 rounded-lg shadow-sm text-sm text-muted-foreground">
                           {config?.config.welcomeMessage}
                         </div>
                       </div>
@@ -327,7 +327,7 @@ export default function ChatChannelPage() {
 
           {/* Messaggi Tab */}
           <TabsContent value="messaggi">
-            <Card className="bg-white border-border">
+            <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-foreground text-lg">Messaggi predefiniti</CardTitle>
                 <CardDescription>Personalizza i testi visualizzati nella chat</CardDescription>
@@ -368,7 +368,7 @@ export default function ChatChannelPage() {
 
           {/* AI Tab */}
           <TabsContent value="ai">
-            <Card className="bg-white border-border">
+            <Card className="bg-card border-border">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
@@ -421,7 +421,7 @@ export default function ChatChannelPage() {
           <TabsContent value="installa">
             {hasCMS ? (
               /* CMS User - Simple activation */
-              <Card className="bg-white border-border">
+              <Card className="bg-card border-border">
                 <CardHeader>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center">
@@ -469,7 +469,7 @@ export default function ChatChannelPage() {
               </Card>
             ) : (
               /* External Site - Code snippet */
-              <Card className="bg-white border-border">
+              <Card className="bg-card border-border">
                 <CardHeader>
                   <CardTitle className="text-foreground text-lg">Installa sul tuo sito</CardTitle>
                   <CardDescription>

@@ -114,7 +114,7 @@ export default function AdminProfilePage() {
         />
 
         {/* Profile Info */}
-        <div className="bg-white rounded-xl border border-border p-6 mb-6">
+        <div className="bg-card rounded-xl border border-border p-6 mb-6">
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-ha-brand rounded-full flex items-center justify-center text-white">
               <User className="w-8 h-8" />
@@ -168,7 +168,7 @@ export default function AdminProfilePage() {
         </div>
 
         {/* Change Password */}
-        <div className="bg-white rounded-xl border border-border p-6">
+        <div className="bg-card rounded-xl border border-border p-6">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 bg-ha-brand/10 rounded-lg flex items-center justify-center">
               <Lock className="w-5 h-5 text-ha-brand-soft-foreground" />

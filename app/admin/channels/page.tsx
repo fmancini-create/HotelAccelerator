@@ -266,7 +266,7 @@ export default function ChannelsPage() {
     const status = channelStatuses[channel.id]
     if (!status?.configured) {
       return (
-        <Badge variant="outline" className="bg-gray-50 text-gray-500 border-gray-200">
+        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
           <Circle className="w-3 h-3 mr-1" />
           Non configurato
         </Badge>
@@ -313,19 +313,19 @@ export default function ChannelsPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <Card className="bg-white border-border">
+          <Card className="bg-card border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{activeCount}</div>
               <div className="text-sm text-muted-foreground">Canali Attivi</div>
             </CardContent>
           </Card>
-          <Card className="bg-white border-border">
+          <Card className="bg-card border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{totalConnections}</div>
               <div className="text-sm text-muted-foreground">Connessioni Totali</div>
             </CardContent>
           </Card>
-          <Card className="bg-white border-border">
+          <Card className="bg-card border-border">
             <CardContent className="p-4 text-center">
               <div className="text-3xl font-bold text-foreground">{comingSoonCount}</div>
               <div className="text-sm text-muted-foreground">In Arrivo</div>
@@ -351,7 +351,7 @@ export default function ChannelsPage() {
                 return (
                   <Card
                     key={channel.id}
-                    className={`bg-white border-border transition-all duration-200 ${
+                    className={`bg-card border-border transition-all duration-200 ${
                       channel.comingSoon ? "opacity-60" : "hover:shadow-md hover:border-ha-brand/40"
                     }`}
                   >

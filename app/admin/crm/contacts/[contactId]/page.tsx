@@ -114,9 +114,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ contac
       case "gold":
         return "bg-yellow-100 text-yellow-800 border-yellow-300"
       case "silver":
-        return "bg-gray-200 text-gray-800 border-gray-400"
+        return "bg-muted text-foreground border-border"
       default:
-        return "bg-gray-100 text-gray-600"
+        return "bg-muted text-muted-foreground"
     }
   }
 

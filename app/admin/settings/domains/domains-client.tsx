@@ -303,7 +303,7 @@ export function DomainsClient() {
                 <p className="font-medium">Record richiesti da Vercel</p>
                 <div className="space-y-2">
                   {customReadiness.dns.map((record, index) => (
-                    <div key={`${record.type}-${record.name}-${index}`} className="grid gap-2 rounded border bg-white p-3 text-xs sm:grid-cols-[70px_1fr_1fr_auto] sm:items-center">
+                    <div key={`${record.type}-${record.name}-${index}`} className="grid gap-2 rounded border bg-card p-3 text-xs sm:grid-cols-[70px_1fr_1fr_auto] sm:items-center">
                       <Badge variant="outline" className="w-fit">{record.type}</Badge>
                       <code className="break-all">{record.name}</code>
                       <code className="break-all">{record.value}</code>
