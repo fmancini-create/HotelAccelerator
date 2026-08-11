@@ -3,9 +3,9 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 
 // GET - Carica etichette e il loro stato di sincronizzazione
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: channelId } = params
+    const { id: channelId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const access = await getChannelAccess(request)
@@ -34,9 +34,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PATCH - Aggiorna stato sincronizzazione etichetta
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: channelId } = params
+    const { id: channelId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
 
