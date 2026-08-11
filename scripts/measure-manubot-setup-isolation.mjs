@@ -105,12 +105,15 @@ try {
   if (eu) throw new Error(`creazione utente: ${eu.message}`)
   utenteQa = u.user.id
 
+  // Colonne reali di admin_users: la chiave e' `id` (= id dell'utente auth),
+  // non esistono `user_id` ne' `is_active`.
   const { error: ea } = await admin.from("admin_users").insert({
-    user_id: utenteQa,
+    id: utenteQa,
     email,
+    name: `Prova manubot ${marca}`,
     property_id: tenantQa,
     role: "admin",
-    is_active: true,
+    is_tenant_admin: true,
   })
   if (ea) throw new Error(`nomina admin: ${ea.message}`)
 
@@ -134,7 +137,17 @@ try {
     `stato ${mirato.stato}`,
   )
 
-  // ── PROVA 3: la property reale e' rimasta intatta ───────────────────────
+  // ── PROVA 3: CONTROLLO POSITIVO ─────────────────────────────────────────
+  // Senza questo, una rotta rotta per TUTTI sembrerebbe "sicura": e' l'errore
+  // gia' commesso con le rotte foto (401 anche all'admin legittimo).
+  const proprio = await chiama("/api/admin/manubot/setup", token)
+  ok(
+    "l'admin PUO' agire sulla propria struttura (non e' rotta per tutti)",
+    proprio.stato !== 401 && proprio.stato !== 403,
+    `stato ${proprio.stato}`,
+  )
+
+  // ── PROVA 4: la property reale e' rimasta intatta ───────────────────────
   const fotoDopo = await fotografa(barronciId)
   ok("credenziali della property reale invariate", fotoDopo === fotoPrima)
 
@@ -150,8 +163,9 @@ try {
 } finally {
   // ── Pulizia, con verifica in lettura ────────────────────────────────────
   if (utenteQa) {
-    await admin.from("admin_users").delete().eq("user_id", utenteQa)
-    await admin.auth.admin.deleteUser(utenteQa)
+    // La chiave e' `id`, non `user_id`: col nome sbagliato la riga restava.
+    await admin.from("admin_users").delete().eq("id", utenteQa)
+    await admin.auth.admin.deleteUser(utenteQa).catch(() => {})
   }
   if (tenantQa) await admin.from("properties").delete().eq("id", tenantQa)
 
@@ -161,7 +175,7 @@ try {
     .like("slug", `prova-manubot-${marca}%`)
   const { count: restaAdmin } = await admin
     .from("admin_users")
-    .select("user_id", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .like("email", `qa-manubot-${marca}%`)
 
   console.log("\n─── ESITI ───")
