@@ -1,7 +1,7 @@
 import "server-only"
 import { generateText } from "ai"
 import { CHAT_MODEL, DEFAULT_CONFIDENCE_THRESHOLD } from "./config"
-import { retrieveContext, type RetrievedChunk } from "./retrieval"
+import { attachSourceMeta, retrieveContext, type RetrievedChunk } from "./retrieval"
 
 export interface ConversationTurn {
   role: "user" | "assistant"
@@ -78,7 +78,10 @@ function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boole
       "- Usa ESCLUSIVAMENTE le informazioni presenti nella BASE DI CONOSCENZA qui sotto.",
       "- Se la base di conoscenza non contiene la risposta, NON inventare: dillo educatamente e proponi di mettere in contatto con lo staff.",
       "- Non citare l'esistenza della 'base di conoscenza' né dei 'frammenti': rispondi in modo naturale.",
+      "- PERTINENZA: rispondi SOLO all'argomento che il cliente ha chiesto. Se le informazioni qui sotto riguardano un argomento diverso, NON usarle e non cambiare discorso: chiedi un chiarimento oppure ammetti di non avere quel dato.",
       "- COERENZA: ciò che hai già detto in questa conversazione resta valido. Non contraddirlo e non negarlo. Se il cliente chiede di approfondire un argomento che hai già trattato, riprendi il filo di quel discorso.",
+      "- LINK: quando il cliente chiede dove prenotare o dove trovare qualcosa, fornisci l'indirizzo web completo indicato nella riga '(fonte: ...)' della sezione pertinente. Non inventare MAI un indirizzo che non sia scritto qui sotto, e non limitarti a dire che lo indirizzerai: dai il link.",
+      "- Se hai proposto due alternative e il cliente risponde in modo ambiguo (es. 'sì grazie'), chiedi quale preferisce invece di scegliere al posto suo.",
       "- Sii breve e diretto; adatto a messaggistica (Telegram/WhatsApp) o email.",
       "",
       "BASE DI CONOSCENZA:",
@@ -98,6 +101,8 @@ function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boole
     "- NON inventare MAI informazioni sulla struttura: orari, prezzi, disponibilità, servizi, politiche, indirizzi. Se non sono nelle INFORMAZIONI DISPONIBILI, non affermarle in nessun modo.",
     "- COERENZA: ciò che hai già detto in questa conversazione resta valido. Non contraddirlo e non negarlo mai. Se il cliente ti chiede di proseguire su un argomento che hai già trattato (es. 'prego mi dica', 'sì grazie'), riprendi quel filo invece di dire che non hai informazioni.",
     "- Se il cliente chiede un'informazione che non hai MAI dato e che non è nelle INFORMAZIONI DISPONIBILI, ammettilo in una frase senza giri di parole e proponi di far intervenire un membro dello staff.",
+    "- LINK: se una fonte pertinente riporta un indirizzo web nella riga '(fonte: ...)' e il cliente chiede dove prenotare o dove trovare qualcosa, forniscilo per intero. Non inventare MAI un indirizzo che non sia scritto qui sotto.",
+    "- Se hai proposto due alternative e il cliente risponde in modo ambiguo (es. 'sì grazie'), chiedi quale preferisce invece di scegliere al posto suo.",
     "- Non dire mai che stai consultando documenti, basi di conoscenza o frammenti.",
     "- Massimo 2-3 frasi, tono cordiale, adatto alla messaggistica.",
     "",
@@ -145,8 +150,18 @@ export async function generateReply(
 
   // In conversational mode only clearly-related chunks are surfaced, so a noisy
   // match can never become the basis for an invented answer.
-  const contextChunks = grounded ? chunks : chunks.filter((c) => c.similarity >= WEAK_CONTEXT_MIN_SIMILARITY)
-  const context = contextChunks.map((c, i) => `[${i + 1}] ${c.content}`).join("\n\n")
+  const contextChunks = await attachSourceMeta(
+    grounded ? chunks : chunks.filter((c) => c.similarity >= WEAK_CONTEXT_MIN_SIMILARITY),
+  )
+  // The origin page travels with each excerpt: it is the only place the actual
+  // web address survives, so the assistant can hand out a real link instead of
+  // promising a redirect it cannot perform.
+  const context = contextChunks
+    .map((c, i) => {
+      const origin = [c.source_title?.trim(), c.source_url?.trim()].filter(Boolean).join(" — ")
+      return origin ? `[${i + 1}] (fonte: ${origin})\n${c.content}` : `[${i + 1}] ${c.content}`
+    })
+    .join("\n\n")
 
   const { text } = await generateText({
     model: CHAT_MODEL,
