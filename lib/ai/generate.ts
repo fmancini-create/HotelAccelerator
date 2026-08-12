@@ -33,6 +33,35 @@ export interface ReplyConfig {
  */
 const WEAK_CONTEXT_MIN_SIMILARITY = 0.22
 
+/** Upper bound on chunks handed to the model after merging both retrievals. */
+const MERGED_CONTEXT_MAX_CHUNKS = 8
+
+/**
+ * Build a second, context-aware retrieval query.
+ *
+ * A follow-up like "prego mi dica", "sì grazie" or "e il prezzo?" carries no
+ * searchable content on its own: embedding it alone either misses everything or
+ * — worse — lands on an unrelated chunk with a deceptively passable score.
+ * Prefixing the recent turns restores the subject of the conversation.
+ */
+function buildContextualQuery(incomingMessage: string, history: ConversationTurn[]): string | null {
+  const recent = history.slice(-4).filter((t) => t.content.trim())
+  if (recent.length === 0) return null
+  // Cap each turn so a long earlier reply cannot drown out the new message.
+  const parts = recent.map((t) => t.content.trim().slice(0, 300))
+  return [...parts, incomingMessage].join("\n")
+}
+
+/** Merge two retrievals, keeping the best similarity per chunk. */
+function mergeChunks(a: RetrievedChunk[], b: RetrievedChunk[]): RetrievedChunk[] {
+  const best = new Map<string, RetrievedChunk>()
+  for (const chunk of [...a, ...b]) {
+    const existing = best.get(chunk.id)
+    if (!existing || chunk.similarity > existing.similarity) best.set(chunk.id, chunk)
+  }
+  return [...best.values()].sort((x, y) => y.similarity - x.similarity).slice(0, MERGED_CONTEXT_MAX_CHUNKS)
+}
+
 function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boolean): string {
   const persona =
     config.persona?.trim() ||
@@ -49,6 +78,7 @@ function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boole
       "- Usa ESCLUSIVAMENTE le informazioni presenti nella BASE DI CONOSCENZA qui sotto.",
       "- Se la base di conoscenza non contiene la risposta, NON inventare: dillo educatamente e proponi di mettere in contatto con lo staff.",
       "- Non citare l'esistenza della 'base di conoscenza' né dei 'frammenti': rispondi in modo naturale.",
+      "- COERENZA: ciò che hai già detto in questa conversazione resta valido. Non contraddirlo e non negarlo. Se il cliente chiede di approfondire un argomento che hai già trattato, riprendi il filo di quel discorso.",
       "- Sii breve e diretto; adatto a messaggistica (Telegram/WhatsApp) o email.",
       "",
       "BASE DI CONOSCENZA:",
@@ -66,7 +96,8 @@ function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boole
     `- Rispondi SEMPRE nella lingua del cliente (lingua predefinita: ${language}).`,
     "- CONVERSA in modo naturale e umano: saluta, ringrazia, riconosci quello che dice il cliente, mantieni il filo del discorso e, se la richiesta è vaga, chiedi cortesemente di cosa ha bisogno.",
     "- NON inventare MAI informazioni sulla struttura: orari, prezzi, disponibilità, servizi, politiche, indirizzi. Se non sono nelle INFORMAZIONI DISPONIBILI, non affermarle in nessun modo.",
-    "- Se il cliente chiede un'informazione che non hai, ammettilo in una frase senza giri di parole e proponi di far intervenire un membro dello staff.",
+    "- COERENZA: ciò che hai già detto in questa conversazione resta valido. Non contraddirlo e non negarlo mai. Se il cliente ti chiede di proseguire su un argomento che hai già trattato (es. 'prego mi dica', 'sì grazie'), riprendi quel filo invece di dire che non hai informazioni.",
+    "- Se il cliente chiede un'informazione che non hai MAI dato e che non è nelle INFORMAZIONI DISPONIBILI, ammettilo in una frase senza giri di parole e proponi di far intervenire un membro dello staff.",
     "- Non dire mai che stai consultando documenti, basi di conoscenza o frammenti.",
     "- Massimo 2-3 frasi, tono cordiale, adatto alla messaggistica.",
     "",
@@ -96,9 +127,18 @@ export async function generateReply(
   const threshold =
     typeof config.confidenceThreshold === "number" ? config.confidenceThreshold : DEFAULT_CONFIDENCE_THRESHOLD
 
-  const chunks = await retrieveContext(config.baseIds, incomingMessage, {
-    minSimilarity: 0, // fetch top matches, then judge with threshold below
-  })
+  // Two retrievals in parallel: the message on its own (best for a
+  // self-contained question) and the message prefixed with the recent turns
+  // (best for follow-ups such as "prego mi dica"). Keeping the strongest match
+  // from either means a follow-up no longer loses the subject of the thread.
+  const contextualQuery = buildContextualQuery(incomingMessage, history)
+  const [directChunks, contextualChunks] = await Promise.all([
+    retrieveContext(config.baseIds, incomingMessage, { minSimilarity: 0 }),
+    contextualQuery
+      ? retrieveContext(config.baseIds, contextualQuery, { minSimilarity: 0 })
+      : Promise.resolve([] as RetrievedChunk[]),
+  ])
+  const chunks = mergeChunks(directChunks, contextualChunks)
 
   const topSimilarity = chunks.length > 0 ? chunks[0].similarity : 0
   const grounded = topSimilarity >= threshold
