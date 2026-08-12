@@ -8,6 +8,40 @@ export interface RetrievedChunk {
   source_id: string
   content: string
   similarity: number
+  /** Origin page of the chunk, filled in by attachSourceMeta. */
+  source_url?: string | null
+  source_title?: string | null
+}
+
+/**
+ * Attach the origin page (url + title) to already-retrieved chunks.
+ *
+ * The crawler stores page *text*, so links are stripped: a chunk can literally
+ * read "clicca qui" with no href, and 0 of the indexed chunks contain a URL.
+ * The address is not lost though — it lives on the source row. Without this the
+ * assistant can offer to "redirect you to the booking system" and then be
+ * unable to say where, which is a dead end for the guest.
+ */
+export async function attachSourceMeta(chunks: RetrievedChunk[]): Promise<RetrievedChunk[]> {
+  const sourceIds = [...new Set(chunks.map((c) => c.source_id).filter(Boolean))]
+  if (sourceIds.length === 0) return chunks
+
+  const supabase = createServiceClient()
+  const { data, error } = await supabase.from("knowledge_sources").select("id, url, title").in("id", sourceIds)
+
+  if (error) {
+    console.log(`[v0] attachSourceMeta error: ${error.message}`)
+    return chunks
+  }
+
+  type SourceMeta = { id: string; url: string | null; title: string | null }
+  const byId = new Map<string, SourceMeta>(
+    ((data ?? []) as unknown as SourceMeta[]).map((s) => [s.id, s]),
+  )
+  return chunks.map((c) => {
+    const source = byId.get(c.source_id)
+    return { ...c, source_url: source?.url ?? null, source_title: source?.title ?? null }
+  })
 }
 
 /**
