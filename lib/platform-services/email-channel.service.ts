@@ -204,6 +204,12 @@ export class EmailChannelService {
         oauth_refresh_token: refreshToken,
         oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
         is_active: true,
+        // A fresh grant clears the revoked state; otherwise the mailbox keeps
+        // showing "reconnect required" after a successful reconnect and the
+        // reconnect appears to do nothing.
+        oauth_reconnect_required: false,
+        last_sync_error: null,
+        last_sync_error_at: null,
       })
     } else {
       await this.repository.create({

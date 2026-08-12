@@ -84,6 +84,8 @@ interface EmailChannel {
   assignments?: { user_id: string }[]
   push_enabled?: boolean
   gmail_watch_expiration?: string | null
+  oauth_reconnect_required?: boolean
+  last_sync_error?: string | null
 }
 
 interface GmailLabel {
@@ -1037,7 +1039,13 @@ export default function EmailChannelsClient() {
                                   Disattivo
                                 </Badge>
                               )}
-                              {isTokenExpired(channel) && (
+                              {channel.oauth_reconnect_required && (
+                                <Badge variant="destructive">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
+                                  Riconnessione richiesta
+                                </Badge>
+                              )}
+                              {!channel.oauth_reconnect_required && isTokenExpired(channel) && (
                                 <Badge variant="destructive">
                                   <AlertCircle className="w-3 h-3 mr-1" />
                                   Token scaduto
@@ -1066,6 +1074,26 @@ export default function EmailChannelsClient() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
+                          {channel.oauth_reconnect_required &&
+                            (channel.provider === "gmail" || channel.provider === "outlook") && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOAuthConnect(channel.provider as "gmail" | "outlook")
+                                }}
+                                disabled={connecting}
+                                title="Riautorizza l'accesso a questa casella"
+                              >
+                                {connecting && oauthProvider === channel.provider ? (
+                                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                                ) : (
+                                  <RefreshCw className="w-4 h-4 mr-1" />
+                                )}
+                                Riconnetti
+                              </Button>
+                            )}
                           {channel.provider === "gmail" && (
                             <Button
                               variant={channel.push_enabled ? "default" : "outline"}
