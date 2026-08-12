@@ -19,29 +19,46 @@ export async function GET(request: NextRequest) {
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
 
-    const [{ data: gmailChannels, error: channelsError }, { count: unreadCount, error: unreadError }] =
-      await Promise.all([
-        supabase
-          .from("email_channels")
-          .select("id, gmail_state_reconciled_at")
-          .eq("property_id", propertyId)
-          .eq("provider", "gmail")
-          .eq("is_active", true),
-        supabase
-          .from("conversations")
-          .select("id", { count: "exact", head: true })
-          .eq("property_id", propertyId)
-          .eq("channel", "email")
-          .gt("unread_count", 0),
-      ])
+    const { data: gmailChannels, error: channelsError } = await supabase
+      .from("email_channels")
+      .select("id, gmail_state_reconciled_at, oauth_reconnect_required")
+      .eq("property_id", propertyId)
+      .eq("provider", "gmail")
+      .eq("is_active", true)
 
-    if (channelsError || unreadError) {
-      throw channelsError || unreadError
+    if (channelsError) {
+      throw channelsError
     }
 
+    // Mailboxes whose Gmail grant is revoked can no longer sync, so their unread
+    // counts are frozen/phantom. Excluding them keeps "Non lette" honest until
+    // the operator reconnects the account.
+    const revokedChannelIds = (gmailChannels || [])
+      .filter((c) => c.oauth_reconnect_required === true)
+      .map((c) => c.id)
+
+    let unreadQuery = supabase
+      .from("conversations")
+      .select("id", { count: "exact", head: true })
+      .eq("property_id", propertyId)
+      .eq("channel", "email")
+      .gt("unread_count", 0)
+
+    if (revokedChannelIds.length > 0) {
+      unreadQuery = unreadQuery.not("channel_id", "in", `(${revokedChannelIds.join(",")})`)
+    }
+
+    const { count: unreadCount, error: unreadError } = await unreadQuery
+
+    if (unreadError) {
+      throw unreadError
+    }
+
+    // A revoked mailbox never finishes reconciliation, so don't let it block the
+    // whole KPI from publishing — only require reconciliation on healthy channels.
+    const healthyChannels = (gmailChannels || []).filter((c) => c.oauth_reconnect_required !== true)
     const reconciliationReady =
-      (gmailChannels || []).length > 0 &&
-      (gmailChannels || []).every((channel) => Boolean(channel.gmail_state_reconciled_at))
+      healthyChannels.length > 0 && healthyChannels.every((channel) => Boolean(channel.gmail_state_reconciled_at))
 
     return NextResponse.json({
       unread_count: reconciliationReady ? unreadCount || 0 : null,
