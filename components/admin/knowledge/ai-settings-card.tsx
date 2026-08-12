@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { toast } from "@/components/ui/use-toast"
-import { Ban, Hand, Bot, Send, MessagesSquare, Mail, Loader2 } from "lucide-react"
+import { Ban, Hand, Bot, Send, MessagesSquare, Mail, Loader2, AlertCircle } from "lucide-react"
 
 export type AiMode = "disabled" | "on_request" | "autopilot"
 export interface AiSettings {
@@ -50,7 +50,10 @@ const CHANNELS: { id: keyof AiSettings["channels"]; label: string; icon: typeof 
 
 export function AiSettingsCard({ initial }: { initial: AiSettings }) {
   const [settings, setSettings] = useState<AiSettings>(initial)
+  const [savedSettings, setSavedSettings] = useState<AiSettings>(initial)
   const [saving, setSaving] = useState(false)
+
+  const dirty = JSON.stringify(settings) !== JSON.stringify(savedSettings)
 
   const update = <K extends keyof AiSettings>(key: K, value: AiSettings[K]) =>
     setSettings((s) => ({ ...s, [key]: value }))
@@ -65,6 +68,10 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
         body: JSON.stringify(settings),
       })
       if (!res.ok) throw new Error((await res.json()).error || "Errore di salvataggio")
+      const data = await res.json().catch(() => null)
+      const persisted = (data?.settings as AiSettings | undefined) ?? settings
+      setSettings(persisted)
+      setSavedSettings(persisted)
       toast({ title: "Impostazioni salvate", description: "La configurazione dell'assistente IA è stata aggiornata." })
     } catch (err) {
       toast({
@@ -86,6 +93,16 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
         <CardDescription>Scegli come l&apos;IA deve gestire le conversazioni in arrivo.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+        {settings.mode !== savedSettings.mode && (
+          <div className="flex items-center gap-2 rounded-lg border border-ha-warning/40 bg-ha-warning/10 px-3 py-2 text-sm text-foreground">
+            <AlertCircle className="h-4 w-4 shrink-0 text-ha-warning" />
+            <span>
+              Hai selezionato una nuova modalità ma non è ancora attiva. Premi{" "}
+              <strong>Salva impostazioni</strong> in fondo per applicarla.
+            </span>
+          </div>
+        )}
+
         {/* Mode selector */}
         <div className="grid gap-3 sm:grid-cols-3">
           {MODES.map((mode) => {
@@ -211,10 +228,20 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
           />
         </div>
 
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <div className="flex items-center justify-end gap-3">
+          {dirty && (
+            <span className="flex items-center gap-1.5 text-sm text-ha-warning">
+              <AlertCircle className="h-4 w-4" />
+              Modifiche non salvate
+            </span>
+          )}
+          <Button
+            onClick={save}
+            disabled={saving || !dirty}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Salva impostazioni
+            {dirty ? "Salva impostazioni" : "Impostazioni salvate"}
           </Button>
         </div>
       </CardContent>
