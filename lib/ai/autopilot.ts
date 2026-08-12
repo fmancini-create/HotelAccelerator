@@ -1,6 +1,7 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { generateReply, type ConversationTurn } from "./generate"
+import { contactIsComplete, registerStaffHandoff } from "./handoff"
 import { getBasesForChannel } from "./knowledge-bases"
 
 export type AiChannel = "telegram" | "whatsapp" | "email"
@@ -79,9 +80,12 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     // never left without a reply. In on_request mode we stay silent because an
     // operator already sees the conversation and will answer.
     if (mode === "autopilot" && send) {
+      // This text must not claim the request was forwarded: in this branch no
+      // handoff has been registered, so "ho inoltrato la richiesta" would be
+      // false. It asks for the details that make a real handoff possible.
       const fallback =
         primary.fallback_message?.trim() ||
-        "Grazie per il messaggio! Al momento non ho una risposta precisa a questa domanda, ma ho inoltrato la richiesta al nostro staff che ti risponderà il prima possibile."
+        "Grazie per il messaggio! Su questa richiesta preferisco farla rispondere direttamente dal nostro staff: può indicarmi nome, cognome, email e telefono così li faccio ricontattare?"
       let externalId: string | undefined
       try {
         const sendResult = await send(fallback)
@@ -136,12 +140,46 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     return { action: "skipped", reason: result.reason ?? "no_answer", confidence: result.confidence }
   }
 
+  // The guest asked for a human AND left usable contact details: register the
+  // handoff BEFORE delivering, so by the time the reply says "la metto in
+  // contatto con lo staff" a ManuBot task exists and the conversation is
+  // flagged in the inbox. Registering after sending would leave a window where
+  // the promise is already made and nothing backs it.
+  let handoffMeta: Record<string, unknown> | undefined
+  if (result.staffRequested && contactIsComplete(result.contact)) {
+    const handoff = await registerStaffHandoff({
+      supabase,
+      propertyId,
+      conversationId,
+      channel,
+      contact: result.contact,
+      question: incomingText,
+    })
+    handoffMeta = {
+      ai_handoff: true,
+      ai_handoff_registered: handoff.registered,
+      ai_handoff_already_open: handoff.alreadyOpen,
+      ai_handoff_todo_id: handoff.todoId ?? null,
+      ai_handoff_manubot_task_id: handoff.manubotTaskId ?? null,
+      ai_handoff_errors: handoff.errors.length > 0 ? handoff.errors : null,
+    }
+
+    // The promise is added HERE, by the code that knows whether the request was
+    // actually registered — not by the model. The model was measured promising
+    // a callback while still asking for a surname the guest had already given,
+    // and it has no way of knowing whether the task was really created.
+    if (handoff.registered) {
+      result.answer = `${result.answer ?? ""}\n\nHo passato la sua richiesta al nostro staff, che la ricontatterà al più presto.`.trim()
+    }
+  }
+
   const baseMetadata = {
     channel,
     ai_generated: true,
     ai_confidence: result.confidence,
     ai_source_ids: result.usedChunks.map((c) => c.source_id),
     ai_knowledge_base_id: primary.id,
+    ...(handoffMeta ?? {}),
   }
 
   // ON REQUEST: store a draft for operator approval; do not deliver.
