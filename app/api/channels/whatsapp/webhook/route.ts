@@ -4,8 +4,9 @@ import { resolveWebhookChallenge, verifyWhatsAppSignature } from "@/lib/whatsapp
 import { parseWhatsAppWebhook, getWhatsAppChannelByPhoneNumberId } from "@/lib/whatsapp/channels"
 import { decryptWhatsAppCredentials } from "@/lib/whatsapp/channel-secrets"
 import { WhatsAppProcessor } from "@/lib/whatsapp/processor"
-import { markWhatsAppRead } from "@/lib/whatsapp/client"
+import { markWhatsAppRead, sendWhatsAppText } from "@/lib/whatsapp/client"
 import { getPlatformWhatsAppConfig } from "@/lib/whatsapp/platform"
+import { runAutopilot } from "@/lib/ai/autopilot"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 
 // Webhook is called by Meta servers, not the browser. No user auth here:
@@ -127,6 +128,39 @@ export async function POST(request: NextRequest) {
         anyInbound = true
         // Best-effort read receipt.
         await markWhatsAppRead(typedChannel.config, typedChannel.credentials, msg.externalId)
+
+        // AI knowledge assistant (gated per-tenant via ai_agent_settings). The
+        // inbound message opens WhatsApp's 24h window, so a free-form reply is
+        // deliverable here.
+        if (result.conversationId) {
+          try {
+            const outcome = await runAutopilot({
+              supabase,
+              propertyId: typedChannel.property_id,
+              conversationId: result.conversationId,
+              channel: "whatsapp",
+              incomingText: msg.body,
+              send: async (text) => {
+                const sent = await sendWhatsAppText(
+                  typedChannel.config,
+                  typedChannel.credentials,
+                  msg.fromPhone,
+                  text,
+                )
+                if (!sent.success) throw new Error(sent.error ?? "Errore invio WhatsApp")
+                return { externalId: sent.externalMessageId }
+              },
+            })
+            if (outcome.action === "sent") {
+              await supabase
+                .from("messaging_channels")
+                .update({ last_outbound_at: new Date().toISOString() })
+                .eq("id", typedChannel.id)
+            }
+          } catch (e) {
+            console.error("[WhatsApp autopilot] error:", e)
+          }
+        }
       }
     }
 

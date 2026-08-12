@@ -63,6 +63,8 @@ import { formatDistanceToNow, format } from "date-fns"
 import { it } from "date-fns/locale"
 import { formatInboxTimestamp, formatInboxTimestampFull, formatWaitingSince } from "@/lib/inbox/format-list-date"
 import { EmailKpiBar } from "@/components/admin/email-kpi-bar"
+import { AiDraftPanel } from "@/components/admin/inbox/ai-draft-panel"
+import { AddToKnowledgeButton } from "@/components/admin/inbox/add-to-knowledge-button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -2822,6 +2824,12 @@ export default function InboxPage() {
                                 <span className="text-xs text-muted-foreground whitespace-nowrap">
                                   {format(new Date(message.gmail_internal_date || message.received_at || message.created_at), "EEe d MMM, HH:mm", { locale: it })}
                                 </span>
+                                {message.sender_type === "agent" && message.content && (
+                                  <AddToKnowledgeButton
+                                    content={message.content}
+                                    contextTitle={selectedConversation?.contact?.name || selectedConversation?.subject || undefined}
+                                  />
+                                )}
                                 <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
                                   <Star className="h-4 w-4 text-muted-foreground" />
                                 </Button>
@@ -2949,6 +2957,19 @@ export default function InboxPage() {
                           </div>
                         )}
                       </div>
+
+  {selectedConversation?.id && (
+    <div className="px-2 pt-2">
+      <AiDraftPanel
+        conversationId={selectedConversation.id}
+        onUseText={(text) => {
+          setReplyText(text)
+          setShowReplyBox(true)
+        }}
+        onSent={() => loadMessages(selectedConversation.id)}
+      />
+    </div>
+  )}
 
   <div className="flex items-center gap-0.5 flex-wrap px-2 py-1 border-b border-border">
     <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="Grassetto" onClick={() => applyInlineFormat("*")}>

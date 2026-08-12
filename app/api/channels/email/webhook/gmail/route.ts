@@ -1,10 +1,11 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { type NextRequest, NextResponse, after } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createServiceClient } from "@/lib/supabase/server"
 import { EmailProcessor } from "@/lib/email/email-processor"
 import { parseGmailMessage } from "@/lib/email/gmail-parse"
 import { getValidGmailToken, gmailFetchWithToken } from "@/lib/gmail-client"
 import { verificaNotificaPubSub } from "@/lib/email/pubsub-verify"
+import { processEmailAiTasks, type EmailAiTask } from "@/lib/ai/channels/email"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -131,12 +132,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: "already_processed", version: API_VERSION })
     }
 
+    // Newly-received inbound emails to hand to the AI assistant. Populated
+    // during the sync and processed AFTER the response, so knowledge retrieval
+    // and reply generation never eat into the tight Gmail sync budget.
+    const aiTasks: EmailAiTask[] = []
+    after(async () => {
+      try {
+        await processEmailAiTasks(supabase, channel.id, channel.property_id, aiTasks)
+      } catch (e) {
+        console.error("[gmail-webhook] AI tasks failed", { message: e instanceof Error ? e.message : String(e) })
+      }
+    })
+
     const syncResult = await syncNewEmails(
       supabase,
       channel as GmailChannel,
       String(channel.gmail_history_id || "0"),
       String(historyId),
       startedAt,
+      aiTasks,
     )
 
     // Advance only to a cursor whose preceding page was fully processed. On a
@@ -202,6 +216,7 @@ async function syncNewEmails(
   startHistoryId: string,
   endHistoryId: string,
   startedAt: number,
+  aiTasks: EmailAiTask[],
 ): Promise<HistorySyncResult> {
   const result: HistorySyncResult = {
     complete: false,
@@ -273,7 +288,7 @@ async function syncNewEmails(
       // smettiamo di aspettare e lasciamo il messaggio al prossimo tentativo.
       const msRimasti = PROCESSING_BUDGET_MS - (Date.now() - startedAt)
       const processed = await conScadenza(
-        fetchAndProcessMessage(processor, channel, token, messageId),
+        fetchAndProcessMessage(processor, channel, token, messageId, aiTasks),
         msRimasti,
         { success: false, error: "Elaborazione oltre il tempo disponibile, rinviata al prossimo tentativo" },
       )
@@ -334,16 +349,30 @@ async function fetchAndProcessMessage(
   channel: GmailChannel,
   token: string,
   messageId: string,
+  aiTasks: EmailAiTask[],
 ): Promise<{ success: boolean; duplicate?: boolean; error?: string }> {
   const { data, error } = await gmailFetchWithToken(token, `messages/${messageId}?format=full`)
   if (error || !data) return { success: false, error: error || "Messaggio Gmail non disponibile" }
 
-  const processed = await processor.processInboundEmail(
-    parseGmailMessage(data),
-    channel.id,
-    channel.property_id,
-  )
+  const parsed = parseGmailMessage(data)
+  const processed = await processor.processInboundEmail(parsed, channel.id, channel.property_id)
   if (!processed.success) return { success: false, error: processed.error }
+
+  // Enqueue for the AI assistant only genuinely new inbound emails that opened
+  // or continued a conversation. Duplicates (re-seen during idempotent polling)
+  // must never trigger a second reply.
+  if (!processed.isDuplicate && processed.conversationId && parsed.body?.trim()) {
+    aiTasks.push({
+      conversationId: processed.conversationId,
+      fromHeader: parsed.from,
+      subject: parsed.subject,
+      threadId: parsed.threadId,
+      externalId: parsed.externalId,
+      body: parsed.body,
+      contentType: parsed.contentType,
+    })
+  }
+
   return { success: true, duplicate: Boolean(processed.isDuplicate) }
 }
 

@@ -38,6 +38,7 @@ import {
   MoreHorizontal,
   Radio,
   Settings,
+  Sparkles,
   Tag,
   Users,
 } from "lucide-react"
@@ -108,6 +109,14 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Radio,
     match: (p) => p.startsWith("/admin/channels"),
     module: "inbox",
+  },
+  {
+    href: "/admin/knowledge",
+    label: "Assistente IA",
+    icon: Sparkles,
+    match: (p) => p.startsWith("/admin/knowledge"),
+    module: "inbox",
+    adminOnly: true,
   },
   {
     href: "/admin/users",
