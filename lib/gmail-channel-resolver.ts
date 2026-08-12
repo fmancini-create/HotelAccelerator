@@ -4,6 +4,8 @@ export interface AccessibleGmailChannel {
   id: string
   email: string | null
   name: string | null
+  reconnectRequired?: boolean
+  lastSyncError?: string | null
 }
 
 /**
@@ -32,13 +34,15 @@ export async function listAccessibleGmailChannels(
       id: r.id,
       email: r.email_address ?? null,
       name: r.display_name ?? r.name ?? r.email_address ?? null,
+      reconnectRequired: r.oauth_reconnect_required === true,
+      lastSyncError: r.last_sync_error ?? null,
     }))
 
   // 1. Super admin: every active Gmail channel
   if (adminUser?.role === "super_admin") {
     const { data, error } = await supabase
       .from("email_channels")
-      .select("id, email_address, name, display_name")
+      .select("id, email_address, name, display_name, oauth_reconnect_required, last_sync_error")
       .eq("provider", "gmail")
       .eq("is_active", true)
       .order("email_address")
@@ -50,7 +54,7 @@ export async function listAccessibleGmailChannels(
   if (adminUser?.is_tenant_admin && adminUser.property_id) {
     const { data, error } = await supabase
       .from("email_channels")
-      .select("id, email_address, name, display_name")
+      .select("id, email_address, name, display_name, oauth_reconnect_required, last_sync_error")
       .eq("provider", "gmail")
       .eq("is_active", true)
       .eq("property_id", adminUser.property_id)
@@ -92,7 +96,7 @@ export async function listAccessibleGmailChannels(
 
   const { data, error } = await supabase
     .from("email_channels")
-    .select("id, email_address, name, display_name")
+    .select("id, email_address, name, display_name, oauth_reconnect_required, last_sync_error")
     .in("id", grantedIds)
     .eq("provider", "gmail")
     .eq("is_active", true)
