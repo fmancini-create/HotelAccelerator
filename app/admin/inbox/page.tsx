@@ -490,7 +490,13 @@ export default function InboxPage() {
   const [gmailAccount, setGmailAccount] = useState<{ email: string | null; name: string | null } | null>(null)
   // Mailbox switcher: list of mailboxes the user can operate on + the selected one
   const [availableChannels, setAvailableChannels] = useState<
-    { id: string; email: string | null; name: string | null }[]
+    {
+      id: string
+      email: string | null
+      name: string | null
+      reconnectRequired?: boolean
+      lastSyncError?: string | null
+    }[]
   >([])
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   // Ref mirror so fetch callbacks (with [] deps) always read the current mailbox
@@ -2324,6 +2330,40 @@ export default function InboxPage() {
           </Button>
         </div>
       )}
+
+      {/* Per-mailbox reconnect banner: surfaces ANY connected Gmail channel whose
+          OAuth grant was revoked (invalid_grant), even one the user isn't
+          currently viewing. Without this, a dead mailbox stays silently
+          out-of-sync in the unified "Tutti i canali" view and its stale unread
+          counts never reconcile. */}
+      {(() => {
+        const broken = availableChannels.filter((c) => c.reconnectRequired)
+        if (broken.length === 0) return null
+        const label = broken.map((c) => c.email || c.name).filter(Boolean).join(", ")
+        return (
+          <div className="flex-shrink-0 bg-ha-warning-soft border-b border-ha-warning-soft px-4 py-2.5 flex items-center gap-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#b45309" aria-hidden="true">
+              <path d="M12 2L1 21h22L12 2zm0 6l7.5 12h-15L12 8zm-1 3v4h2v-4h-2zm0 5v2h2v-2h-2z" />
+            </svg>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-ha-warning-soft-foreground">
+                {broken.length === 1 ? "Casella non sincronizzata" : `${broken.length} caselle non sincronizzate`}
+              </div>
+              <div className="text-xs text-ha-warning-soft-foreground truncate">
+                {`Autorizzazione Gmail revocata per ${label}. I nuovi messaggi e lo stato letto/non letto non si aggiornano finché non riconnetti l'account.`}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="bg-card hover:bg-ha-warning-soft border-ha-warning-soft text-ha-warning-soft-foreground flex-shrink-0"
+              onClick={() => router.push("/admin/channels/email")}
+            >
+              Riconnetti Gmail
+            </Button>
+          </div>
+        )
+      })()}
 
       {/* A transient API/DB outage is not an OAuth failure. Keep stale data on
           screen and offer a retry instead of telling the user to reconnect. */}

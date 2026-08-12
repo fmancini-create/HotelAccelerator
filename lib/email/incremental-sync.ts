@@ -54,6 +54,31 @@ export interface ChannelSyncResult {
   readSynced?: number
   stateReconciled?: boolean
   error?: string
+  // True when the Gmail grant is revoked and the mailbox needs reconnection.
+  reconnectRequired?: boolean
+}
+
+/**
+ * Records (or clears) the reconnect/health state of a channel so the inbox can
+ * surface a "Riconnetti Gmail" banner. Best-effort: never throws.
+ */
+async function recordChannelHealth(
+  supabase: any,
+  channelId: string,
+  opts: { reconnectRequired: boolean; error?: string | null },
+): Promise<void> {
+  try {
+    await supabase
+      .from("email_channels")
+      .update({
+        oauth_reconnect_required: opts.reconnectRequired,
+        last_sync_error: opts.reconnectRequired ? opts.error ?? "Autorizzazione Gmail revocata" : null,
+        last_sync_error_at: opts.reconnectRequired ? new Date().toISOString() : null,
+      })
+      .eq("id", channelId)
+  } catch (e) {
+    console.error("[v0][incremental-sync] health update failed:", e)
+  }
 }
 
 export async function listRecentInboxMessageIds(
@@ -137,6 +162,16 @@ export async function syncChannelIncremental(
   const tokenResult = await getValidGmailToken(channel.id, supabase)
   if (!tokenResult.token) {
     out.error = tokenResult.error || "Token non disponibile"
+    // A revoked grant (invalid_grant) permanently blocks this mailbox until the
+    // operator reconnects it — persist that so the inbox can flag it. Transient
+    // errors (timeout, 429, 503) never set the reconnect flag.
+    if (tokenResult.reconnectRequired) {
+      out.reconnectRequired = true
+      await recordChannelHealth(supabase, channel.id, {
+        reconnectRequired: true,
+        error: tokenResult.error,
+      })
+    }
     return out
   }
   const token = tokenResult.token
@@ -161,6 +196,7 @@ export async function syncChannelIncremental(
 
   const ids = listed.ids
   if (ids.length === 0) {
+    await recordChannelHealth(supabase, channel.id, { reconnectRequired: false })
     await markPollCompleted(supabase, channel.id)
     return out
   }
@@ -244,6 +280,10 @@ export async function syncChannelIncremental(
   } catch (e) {
     console.error("[v0][incremental-sync] state reconcile error:", e)
   }
+
+  // The token was valid this run, so any previously-recorded revoked state is
+  // resolved. Clear the reconnect flag (best-effort) so the banner disappears.
+  await recordChannelHealth(supabase, channel.id, { reconnectRequired: false })
 
   // Never move the polling watermark past a partially failed batch. The next
   // run will repeat the overlap and recover the missing message.
