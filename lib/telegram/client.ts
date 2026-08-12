@@ -129,6 +129,44 @@ export async function setTelegramWebhook(
   }
 }
 
+export interface WebhookInfoResult {
+  success: boolean
+  url?: string
+  pendingUpdateCount?: number
+  lastErrorMessage?: string
+  lastErrorDate?: number
+  ipAddress?: string
+  error?: string
+}
+
+/**
+ * Ask Telegram what webhook it currently has registered for this bot, plus any
+ * delivery errors. This is the ground truth for diagnosing "messages don't
+ * arrive": a non-empty `lastErrorMessage` or a `url` on a redirecting host
+ * (e.g. non-www) explains silent non-delivery.
+ */
+export async function getTelegramWebhookInfo(botToken: string): Promise<WebhookInfoResult> {
+  if (!botToken) return { success: false, error: "Token mancante" }
+  try {
+    const res = await fetch(apiUrl(botToken, "getWebhookInfo"), { method: "GET" })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.ok) {
+      return { success: false, error: json?.description || `HTTP ${res.status}` }
+    }
+    const r = json.result || {}
+    return {
+      success: true,
+      url: r.url || "",
+      pendingUpdateCount: r.pending_update_count ?? 0,
+      lastErrorMessage: r.last_error_message,
+      lastErrorDate: r.last_error_date,
+      ipAddress: r.ip_address,
+    }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Errore di rete" }
+  }
+}
+
 /**
  * Remove the webhook for a bot (used on disconnect). Best-effort.
  */

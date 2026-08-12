@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Loader2,
   Trash2,
+  RefreshCw,
 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ChannelUserAssignment } from "@/components/admin/channel-user-assignment"
@@ -47,6 +48,15 @@ export default function TelegramChannelPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [testChatId, setTestChatId] = useState("")
   const [testing, setTesting] = useState(false)
+
+  // Webhook diagnostics (per channel)
+  const [webhookBusyId, setWebhookBusyId] = useState<string | null>(null)
+  const [webhookDiag, setWebhookDiag] = useState<
+    Record<
+      string,
+      { registeredUrl?: string; url?: string; pendingUpdateCount?: number; lastErrorMessage?: string; ipAddress?: string }
+    >
+  >({})
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -160,6 +170,43 @@ export default function TelegramChannelPage() {
       setFeedback({ type: "error", text: "Errore di rete" })
     } finally {
       setTesting(false)
+    }
+  }
+
+  const resetWebhook = async (channel: TelegramChannel) => {
+    setWebhookBusyId(channel.id)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/channels/telegram", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: channel.id, action: "reset_webhook" }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFeedback({ type: "error", text: data.error || "Ripristino webhook non riuscito" })
+        return
+      }
+      setWebhookDiag((prev) => ({
+        ...prev,
+        [channel.id]: {
+          registeredUrl: data.registeredUrl,
+          url: data.webhookInfo?.url,
+          pendingUpdateCount: data.webhookInfo?.pendingUpdateCount,
+          lastErrorMessage: data.webhookInfo?.lastErrorMessage,
+          ipAddress: data.webhookInfo?.ipAddress,
+        },
+      }))
+      setFeedback(
+        data.ok
+          ? { type: "success", text: "Webhook registrato. Scrivi al bot per verificare la ricezione." }
+          : { type: "error", text: `Webhook non registrato: ${data.error || "errore"}` },
+      )
+      await loadAll()
+    } catch {
+      setFeedback({ type: "error", text: "Errore di rete" })
+    } finally {
+      setWebhookBusyId(null)
     }
   }
 
@@ -322,6 +369,57 @@ export default function TelegramChannelPage() {
                       <span>{channel.last_error}</span>
                     </div>
                   )}
+
+                  {/* Webhook status / repair */}
+                  <div className="p-4 rounded-lg border space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <h4 className="font-medium">Stato webhook</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Se i messaggi non arrivano in inbox, ripristina il webhook e controlla la diagnostica.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => resetWebhook(channel)}
+                        disabled={webhookBusyId === channel.id}
+                      >
+                        {webhookBusyId === channel.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                        )}
+                        Verifica / Ripristina
+                      </Button>
+                    </div>
+                    {webhookDiag[channel.id] && (
+                      <div className="text-xs font-mono bg-muted/50 rounded-md p-3 space-y-1 break-all">
+                        <div>
+                          <span className="text-muted-foreground">URL registrato su Telegram: </span>
+                          {webhookDiag[channel.id].url || "(nessuno)"}
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">In coda: </span>
+                          {webhookDiag[channel.id].pendingUpdateCount ?? 0}
+                        </div>
+                        {webhookDiag[channel.id].ipAddress && (
+                          <div>
+                            <span className="text-muted-foreground">IP: </span>
+                            {webhookDiag[channel.id].ipAddress}
+                          </div>
+                        )}
+                        {webhookDiag[channel.id].lastErrorMessage ? (
+                          <div className="text-ha-error-soft-foreground">
+                            <span className="text-muted-foreground">Ultimo errore Telegram: </span>
+                            {webhookDiag[channel.id].lastErrorMessage}
+                          </div>
+                        ) : (
+                          <div className="text-ha-success-soft-foreground">Nessun errore di consegna.</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Autopilot */}
                   <div className="flex items-center justify-between p-4 rounded-lg border">

@@ -70,6 +70,11 @@ export interface UpdateChannelInput {
   sync_enabled?: boolean
   last_sync_at?: string | null
   color?: string | null
+  // Revoked-grant state: a successful re-auth must be able to clear these so the
+  // mailbox stops being flagged as "reconnect required".
+  oauth_reconnect_required?: boolean
+  last_sync_error?: string | null
+  last_sync_error_at?: string | null
 }
 
 export class EmailChannelRepository {
