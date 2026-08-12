@@ -91,7 +91,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         return { action: "skipped", reason: "send_failed", confidence: result.confidence }
       }
 
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("messages")
         .insert({
           property_id: propertyId,
@@ -102,7 +102,6 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
           status: "sent",
           external_message_id: externalId ?? null,
           stored_at: new Date().toISOString(),
-          sent_at: new Date().toISOString(),
           metadata: {
             channel,
             ai_generated: true,
@@ -113,6 +112,13 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         })
         .select("id")
         .single()
+
+      // The guest already received the message, so we never fail the request
+      // here — but a silent insert error means the reply is invisible in the
+      // operator inbox, which is exactly the bug we must never ship again.
+      if (error) {
+        console.log(`[v0] autopilot fallback log insert error: ${error.message}`)
+      }
 
       await supabase
         .from("conversations")
@@ -185,7 +191,6 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         status: "sent",
         external_message_id: externalId ?? null,
         stored_at: new Date().toISOString(),
-        sent_at: new Date().toISOString(),
         metadata: { ...baseMetadata, ai_autopilot: true },
       })
       .select("id")
