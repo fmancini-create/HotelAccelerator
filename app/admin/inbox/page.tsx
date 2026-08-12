@@ -3169,7 +3169,7 @@ export default function InboxPage() {
                                 }
                               : undefined
                           }
-                          className={`flex-shrink-0 hidden md:inline-flex items-center gap-1 max-w-[150px] rounded border px-1.5 py-0.5 text-[11px] font-medium ${
+                          className={`flex-shrink-0 hidden md:inline-flex items-center gap-1 w-[130px] rounded border px-1.5 py-0.5 text-[11px] font-medium ${
                             conv.origin.color ? "" : "bg-muted text-muted-foreground border-transparent"
                           }`}
                           title={conv.origin.detail ? `${conv.origin.label} (${conv.origin.detail})` : conv.origin.label}
@@ -3183,7 +3183,7 @@ export default function InboxPage() {
                           <span className="truncate">{conv.origin.label}</span>
                         </span>
                       )}
-                      <span className={`flex-shrink-0 truncate text-[13px] min-w-[100px] max-w-[120px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
+                      <span className={`flex-shrink-0 truncate text-[13px] w-[150px] ${conv.unread_count > 0 ? "font-bold text-[#202124]" : "text-[#444746]"}`}>
                         {conv.contact?.name || conv.contact?.email || conv.contact?.phone || "Sconosciuto"}
                       </span>
                       <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
