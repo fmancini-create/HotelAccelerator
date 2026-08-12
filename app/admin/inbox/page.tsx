@@ -1091,6 +1091,16 @@ export default function InboxPage() {
     gmailSearchQueryRef.current = gmailSearchQuery
   }, [gmailSearchQuery])
 
+  // Load the accessible Gmail channels (and their health) in BOTH inbox modes.
+  // The "Riconnetti Gmail" banner reads availableChannels, and the default view
+  // is the unified ("Tutti i canali") inbox — without this, a revoked mailbox
+  // stays invisible there because channels were only fetched in Gmail mode.
+  useEffect(() => {
+    if (!authLoading && adminUser) {
+      loadGmailChannels()
+    }
+  }, [authLoading, adminUser, loadGmailChannels])
+
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
     if (inboxMode === "gmail" && !authLoading && adminUser) {
