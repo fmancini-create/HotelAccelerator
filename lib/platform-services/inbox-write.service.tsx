@@ -12,6 +12,8 @@ import { logCommand } from "@/lib/logging/command-log"
 import { sendGmailEmail } from "@/lib/gmail-client"
 import { getWhatsAppChannelForConversation } from "@/lib/whatsapp/channels"
 import { sendWhatsAppText } from "@/lib/whatsapp/client"
+import { getTelegramChannelForConversation } from "@/lib/telegram/channels"
+import { sendTelegramText } from "@/lib/telegram/client"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export class InboxWriteService {
@@ -129,6 +131,18 @@ export class InboxWriteService {
       )
       if (!waSendResult.success) {
         throw new ValidationError(waSendResult.error || "Errore invio WhatsApp")
+      }
+    }
+
+    if (conversation.channel === "telegram") {
+      const tgSendResult = await this.sendTelegramReply(
+        conversation,
+        command.content,
+        command.propertyId,
+        command.forwardTo,
+      )
+      if (!tgSendResult.success) {
+        throw new ValidationError(tgSendResult.error || "Errore invio Telegram")
       }
     }
 
@@ -314,6 +328,53 @@ export class InboxWriteService {
       await this.supabase
         .from("messaging_channels")
         .update({ last_error: result.error ?? "Errore invio WhatsApp" })
+        .eq("id", channel.id)
+    }
+
+    return { success: result.success, error: result.error }
+  }
+
+  private async sendTelegramReply(
+    conversation: any,
+    content: string,
+    propertyId: string,
+    forwardTo?: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    // Forwarding: send to the provided chat id instead of the contact.
+    let chatId: string | undefined = forwardTo?.trim()
+      ? forwardTo.trim()
+      : conversation.metadata?.chat_id
+
+    if (!chatId && !forwardTo?.trim() && conversation.contact_id) {
+      const { data: contact } = await this.supabase
+        .from("contacts")
+        .select("telegram_id")
+        .eq("id", conversation.contact_id)
+        .single()
+      chatId = contact?.telegram_id || undefined
+    }
+
+    if (!chatId) {
+      console.error("[v0] No Telegram chat id for conversation:", conversation.id)
+      return { success: false, error: "Chat Telegram del destinatario non trovata" }
+    }
+
+    const channel = await getTelegramChannelForConversation(this.supabase, propertyId, conversation)
+    if (!channel) {
+      return { success: false, error: "Nessun canale Telegram configurato" }
+    }
+
+    const result = await sendTelegramText(channel.credentials, chatId, content)
+
+    if (result.success) {
+      await this.supabase
+        .from("messaging_channels")
+        .update({ last_outbound_at: new Date().toISOString(), last_error: null })
+        .eq("id", channel.id)
+    } else {
+      await this.supabase
+        .from("messaging_channels")
+        .update({ last_error: result.error ?? "Errore invio Telegram" })
         .eq("id", channel.id)
     }
 

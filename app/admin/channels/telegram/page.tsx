@@ -1,291 +1,409 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
-import { Send, Bot, CheckCircle2, Copy, ExternalLink, AlertCircle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import {
+  Send,
+  Bot,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  AlertCircle,
+  Loader2,
+  Trash2,
+} from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { ChannelUserAssignment } from "@/components/admin/channel-user-assignment"
+
+interface TelegramChannel {
+  id: string
+  display_name: string | null
+  config: { bot_id: string; bot_username: string; autopilot_enabled: boolean }
+  credentials_preview: { bot_token: string }
+  has_credentials: { bot_token: boolean }
+  is_active: boolean
+  is_default: boolean
+  last_inbound_at: string | null
+  last_outbound_at: string | null
+  last_error: string | null
+}
 
 export default function TelegramChannelPage() {
-  const [isConnected, setIsConnected] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [channels, setChannels] = useState<TelegramChannel[]>([])
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
+  // Connect form
+  const [displayName, setDisplayName] = useState("Telegram")
   const [botToken, setBotToken] = useState("")
-  const [aiEnabled, setAiEnabled] = useState(true)
+  const [connecting, setConnecting] = useState(false)
 
-  const [welcomeMessage, setWelcomeMessage] = useState(
-    "Benvenuto! Sono l'assistente di Hotel Villa I Barronci. Come posso aiutarti?",
-  )
+  // Per-channel busy + test
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [testChatId, setTestChatId] = useState("")
+  const [testing, setTesting] = useState(false)
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const loadAll = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/channels/telegram")
+      const data = await res.json()
+      if (res.ok) setChannels(data.channels ?? [])
+      else setFeedback({ type: "error", text: data.error || "Impossibile caricare la configurazione" })
+    } catch {
+      setFeedback({ type: "error", text: "Impossibile caricare la configurazione" })
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadAll()
+  }, [loadAll])
+
+  const connectBot = async () => {
+    if (!botToken.trim()) return
+    setConnecting(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/channels/telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ display_name: displayName.trim() || "Telegram", bot_token: botToken.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFeedback({ type: "error", text: data.error || "Connessione non riuscita" })
+        return
+      }
+      setBotToken("")
+      if (data.warning) {
+        setFeedback({ type: "error", text: data.warning })
+      } else {
+        setFeedback({ type: "success", text: "Bot Telegram connesso e webhook attivo." })
+      }
+      await loadAll()
+    } catch {
+      setFeedback({ type: "error", text: "Errore di rete durante la connessione" })
+    } finally {
+      setConnecting(false)
+    }
   }
 
-  const testConnection = async () => {
-    setIsConnected(true)
+  const toggleAutopilot = async (channel: TelegramChannel, enabled: boolean) => {
+    setBusyId(channel.id)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/channels/telegram", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: channel.id, action: "toggle_autopilot", autopilot_enabled: enabled }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFeedback({ type: "error", text: data.error || "Aggiornamento non riuscito" })
+        return
+      }
+      setChannels((prev) => prev.map((c) => (c.id === channel.id ? data.channel : c)))
+    } catch {
+      setFeedback({ type: "error", text: "Errore di rete" })
+    } finally {
+      setBusyId(null)
+    }
   }
+
+  const disconnectBot = async (channel: TelegramChannel) => {
+    setBusyId(channel.id)
+    setFeedback(null)
+    try {
+      const res = await fetch(`/api/channels/telegram?id=${encodeURIComponent(channel.id)}`, { method: "DELETE" })
+      const data = await res.json()
+      if (!res.ok) {
+        setFeedback({ type: "error", text: data.error || "Disconnessione non riuscita" })
+        return
+      }
+      setFeedback({ type: "success", text: "Bot disconnesso." })
+      await loadAll()
+    } catch {
+      setFeedback({ type: "error", text: "Errore di rete" })
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const sendTest = async (channel: TelegramChannel) => {
+    if (!testChatId.trim()) {
+      setFeedback({ type: "error", text: "Inserisci il Chat ID di prova" })
+      return
+    }
+    setTesting(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/channels/telegram/send-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testChatId.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFeedback({ type: "error", text: data.error || "Invio test non riuscito" })
+        return
+      }
+      setFeedback({ type: "success", text: "Messaggio di test inviato." })
+      await loadAll()
+    } catch {
+      setFeedback({ type: "error", text: "Errore di rete" })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  const copyToClipboard = (text: string) => navigator.clipboard.writeText(text)
 
   return (
     <div className="min-h-full bg-background">
       <AdminHeader title="Telegram Bot" subtitle="Gestisci il canale Telegram" />
 
-      <div className="container py-6">
-        <Tabs defaultValue="connection" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3">
-            <TabsTrigger value="connection">Connessione</TabsTrigger>
-            <TabsTrigger value="messages">Messaggi</TabsTrigger>
-            <TabsTrigger value="ai">AI</TabsTrigger>
-          </TabsList>
+      <div className="container py-6 space-y-6">
+        {feedback && (
+          <div
+            role="alert"
+            className={`flex items-center gap-2 p-3 rounded-lg border text-sm ${
+              feedback.type === "success"
+                ? "bg-ha-success-soft text-ha-success-soft-foreground border-ha-success-soft"
+                : "bg-ha-error-soft text-ha-error-soft-foreground border-ha-error-soft"
+            }`}
+          >
+            {feedback.type === "success" ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            ) : (
+              <AlertCircle className="h-4 w-4 shrink-0" />
+            )}
+            <span>{feedback.text}</span>
+          </div>
+        )}
 
-          {/* Tab Connessione */}
-          <TabsContent value="connection" className="space-y-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" /> Caricamento…
+          </div>
+        ) : (
+          <>
+            {/* Connect a new bot */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Send className="h-5 w-5" />
-                  Connetti il tuo Bot Telegram
+                  Connetti un Bot Telegram
                 </CardTitle>
-                <CardDescription>Crea un bot Telegram e collegalo alla piattaforma in 3 semplici passi</CardDescription>
+                <CardDescription>Crea un bot con @BotFather e incolla qui il token per collegarlo.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {!isConnected ? (
-                  <>
-                    <div className="space-y-4">
-                      <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/50">
-                        <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium shrink-0">
-                          1
-                        </div>
-                        <div>
-                          <h4 className="font-medium">Apri Telegram e cerca @BotFather</h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            BotFather è il bot ufficiale di Telegram per creare nuovi bot
-                          </p>
-                          <Button variant="link" className="px-0 h-auto mt-2" asChild>
-                            <a href="https://t.me/botfather" target="_blank" rel="noopener noreferrer">
-                              Apri BotFather <ExternalLink className="h-3 w-3 ml-1" />
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/50">
-                        <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium shrink-0">
-                          2
-                        </div>
-                        <div>
-                          <h4 className="font-medium">Crea un nuovo bot con /newbot</h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Scrivi <code className="bg-muted px-1 rounded">/newbot</code> e segui le istruzioni
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/50">
-                        <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium shrink-0">
-                          3
-                        </div>
-                        <div>
-                          <h4 className="font-medium">Copia il Token del bot</h4>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            BotFather ti darà un token. Copialo qui sotto
-                          </p>
-                        </div>
-                      </div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
+                    <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium shrink-0">
+                      1
                     </div>
-
-                    <div className="border-t pt-6 space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="bot-token">Token del Bot</Label>
-                        <Input
-                          id="bot-token"
-                          type="password"
-                          value={botToken}
-                          onChange={(e) => setBotToken(e.target.value)}
-                          placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                        />
-                      </div>
-
-                      <Button
-                        className="w-full bg-ha-info hover:bg-ha-info"
-                        onClick={testConnection}
-                        disabled={!botToken}
-                      >
-                        <Send className="h-4 w-4 mr-2" />
-                        Connetti Bot
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-4 p-4 rounded-lg bg-ha-info-soft dark:bg-ha-info border border-ha-info-soft dark:border-ha-info">
-                      <CheckCircle2 className="h-8 w-8 text-ha-info-soft-foreground" />
-                      <div>
-                        <h4 className="font-medium text-blue-700 dark:text-blue-300">Bot Telegram connesso!</h4>
-                        <p className="text-sm text-ha-info-soft-foreground dark:text-ha-info-soft-foreground">
-                          I messaggi verranno ricevuti nella tua inbox
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Username del Bot</Label>
-                        <div className="flex gap-2">
-                          <Input value="@VillaBarronciBot" readOnly className="font-mono" />
-                          <Button variant="outline" asChild>
-                            <a href="https://t.me/VillaBarronciBot" target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-lg bg-muted/50 space-y-2">
-                        <h4 className="font-medium text-sm">Link diretto al bot</h4>
-                        <div className="flex gap-2">
-                          <Input value="https://t.me/VillaBarronciBot" readOnly className="font-mono text-sm" />
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => copyToClipboard("https://t.me/VillaBarronciBot")}
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="border-t pt-4">
-                      <Button variant="destructive" size="sm" onClick={() => setIsConnected(false)}>
-                        Disconnetti Bot
+                    <div>
+                      <h4 className="font-medium text-sm">Apri @BotFather</h4>
+                      <Button variant="link" className="px-0 h-auto mt-1 text-xs" asChild>
+                        <a href="https://t.me/botfather" target="_blank" rel="noopener noreferrer">
+                          Apri BotFather <ExternalLink className="h-3 w-3 ml-1" />
+                        </a>
                       </Button>
                     </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {isConnected && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Stato Webhook</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-ha-success-soft dark:bg-ha-success border border-ha-success-soft dark:border-ha-success">
-                    <CheckCircle2 className="h-5 w-5 text-ha-success-soft-foreground" />
-                    <span className="text-sm text-ha-success-soft-foreground dark:text-ha-success-soft-foreground">
-                      Webhook configurato automaticamente e attivo
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-
-          {/* Tab Messaggi */}
-          <TabsContent value="messages" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Comandi del Bot</CardTitle>
-                <CardDescription>Configura i comandi disponibili per gli utenti</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  {[
-                    { command: "/start", desc: "Messaggio di benvenuto" },
-                    { command: "/prenota", desc: "Avvia procedura prenotazione" },
-                    { command: "/info", desc: "Informazioni sull'hotel" },
-                    { command: "/contatti", desc: "Mostra i contatti" },
-                  ].map((cmd, i) => (
-                    <div key={i} className="flex items-center gap-3 p-3 rounded-lg border">
-                      <code className="bg-muted px-2 py-1 rounded text-sm font-mono">{cmd.command}</code>
-                      <span className="text-sm flex-1">{cmd.desc}</span>
-                      <Button variant="ghost" size="sm">
-                        Modifica
-                      </Button>
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
+                    <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium shrink-0">
+                      2
                     </div>
-                  ))}
+                    <div>
+                      <h4 className="font-medium text-sm">Usa /newbot</h4>
+                      <p className="text-xs text-muted-foreground mt-1">Segui le istruzioni per creare il bot.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-4 rounded-lg bg-muted/50">
+                    <div className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium shrink-0">
+                      3
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-sm">Copia il token</h4>
+                      <p className="text-xs text-muted-foreground mt-1">Incollalo qui sotto.</p>
+                    </div>
+                  </div>
                 </div>
-                <Button variant="outline" className="w-full bg-transparent">
-                  + Aggiungi comando
+
+                <div className="border-t pt-6 grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="tg-name">Nome visualizzato</Label>
+                    <Input
+                      id="tg-name"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Telegram"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tg-token">Token del Bot</Label>
+                    <Input
+                      id="tg-token"
+                      type="password"
+                      value={botToken}
+                      onChange={(e) => setBotToken(e.target.value)}
+                      placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                    />
+                  </div>
+                </div>
+                <Button
+                  className="w-full sm:w-auto bg-ha-info hover:bg-ha-info"
+                  onClick={connectBot}
+                  disabled={!botToken.trim() || connecting}
+                >
+                  {connecting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                  Connetti Bot
                 </Button>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Messaggio di Benvenuto</CardTitle>
-                <CardDescription>Inviato quando un utente scrive /start</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Textarea value={welcomeMessage} onChange={(e) => setWelcomeMessage(e.target.value)} rows={4} />
-                <div className="p-4 rounded-lg border bg-muted/30">
-                  <p className="text-xs text-muted-foreground mb-2">Anteprima:</p>
-                  <div className="bg-ha-info text-white p-3 rounded-lg rounded-bl-none max-w-xs text-sm">
-                    {welcomeMessage}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Tab AI */}
-          <TabsContent value="ai" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Bot className="h-5 w-5" />
-                  Assistente AI
-                </CardTitle>
-                <CardDescription>L'AI risponde automaticamente ai messaggi Telegram</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-full flex items-center justify-center ${aiEnabled ? "bg-ha-info" : "bg-muted"}`}
+            {/* Connected bots */}
+            {channels.map((channel) => (
+              <Card key={channel.id}>
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Bot className="h-5 w-5" />
+                      {channel.display_name || "Telegram"}
+                      {channel.is_default && <Badge variant="secondary">Predefinito</Badge>}
+                    </CardTitle>
+                    <Badge
+                      className={
+                        channel.is_active
+                          ? "bg-ha-success-soft text-ha-success-soft-foreground"
+                          : "bg-muted text-muted-foreground"
+                      }
                     >
-                      <Bot className={`h-5 w-5 ${aiEnabled ? "text-white" : "text-muted-foreground"}`} />
-                    </div>
-                    <div>
-                      <h4 className="font-medium">AI Attiva su Telegram</h4>
-                      <p className="text-sm text-muted-foreground">Risposte automatiche intelligenti</p>
-                    </div>
+                      {channel.is_active ? "Attivo" : "Inattivo"}
+                    </Badge>
                   </div>
-                  <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} />
-                </div>
-
-                {aiEnabled && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Personalità del Bot</Label>
-                      <Textarea
-                        placeholder="Es: Sei un assistente cordiale e professionale dell'Hotel Villa I Barronci..."
-                        rows={4}
-                      />
+                  {channel.config.bot_username && (
+                    <CardDescription className="flex items-center gap-2 pt-1">
+                      <span className="font-mono">@{channel.config.bot_username}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => copyToClipboard(`https://t.me/${channel.config.bot_username}`)}
+                        aria-label="Copia link bot"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" asChild>
+                        <a
+                          href={`https://t.me/${channel.config.bot_username}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label="Apri bot su Telegram"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </Button>
+                    </CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {channel.last_error && (
+                    <div className="flex items-start gap-2 p-3 rounded-lg bg-ha-error-soft text-ha-error-soft-foreground text-sm">
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span>{channel.last_error}</span>
                     </div>
+                  )}
 
-                    <div className="p-4 rounded-lg bg-ha-warning-soft dark:bg-ha-warning border border-ha-warning-soft dark:border-ha-warning">
-                      <div className="flex gap-2">
-                        <AlertCircle className="h-5 w-5 text-ha-warning-soft-foreground shrink-0" />
-                        <div>
-                          <h4 className="font-medium text-ha-warning-soft-foreground dark:text-ha-warning-soft-foreground text-sm">Consiglio</h4>
-                          <p className="text-sm text-ha-warning-soft-foreground dark:text-ha-warning-soft-foreground">
-                            Su Telegram l'AI può rispondere istantaneamente. Configurala per passare la conversazione a
-                            un operatore per richieste complesse.
-                          </p>
-                        </div>
+                  {/* Autopilot */}
+                  <div className="flex items-center justify-between p-4 rounded-lg border">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                          channel.config.autopilot_enabled ? "bg-ha-info" : "bg-muted"
+                        }`}
+                      >
+                        <Bot
+                          className={`h-5 w-5 ${
+                            channel.config.autopilot_enabled ? "text-white" : "text-muted-foreground"
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <h4 className="font-medium">Autopilot</h4>
+                        <p className="text-sm text-muted-foreground">
+                          Risponde ai comandi (/start, /help). Il resto va in inbox.
+                        </p>
                       </div>
                     </div>
+                    <Switch
+                      checked={channel.config.autopilot_enabled}
+                      disabled={busyId === channel.id}
+                      onCheckedChange={(v) => toggleAutopilot(channel, v)}
+                    />
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+
+                  {/* Test send */}
+                  <div className="space-y-2">
+                    <Label htmlFor={`test-${channel.id}`}>Invia messaggio di prova (Chat ID)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id={`test-${channel.id}`}
+                        value={testChatId}
+                        onChange={(e) => setTestChatId(e.target.value)}
+                        placeholder="es. 123456789"
+                        className="font-mono"
+                      />
+                      <Button variant="outline" onClick={() => sendTest(channel)} disabled={testing}>
+                        {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                        <span className="ml-2 hidden sm:inline">Invia test</span>
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Il destinatario deve aver avviato il bot almeno una volta.
+                    </p>
+                  </div>
+
+                  {/* Operator assignment (parity with WhatsApp/email) */}
+                  <ChannelUserAssignment channelType="telegram" channelId={channel.id} />
+
+                  <div className="border-t pt-4">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => disconnectBot(channel)}
+                      disabled={busyId === channel.id}
+                    >
+                      {busyId === channel.id ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 mr-2" />
+                      )}
+                      Disconnetti Bot
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {channels.length === 0 && (
+              <Card>
+                <CardContent className="py-10 text-center text-muted-foreground">
+                  <Bot className="h-8 w-8 mx-auto mb-3 opacity-50" />
+                  <p>Nessun bot Telegram collegato. Connettine uno qui sopra per iniziare.</p>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
