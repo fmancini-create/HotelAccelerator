@@ -74,6 +74,59 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   )
 
   if (!result.answer) {
+    // No confident answer from the knowledge base. In autopilot mode we send a
+    // brief courtesy/handoff message instead of staying silent, so the guest is
+    // never left without a reply. In on_request mode we stay silent because an
+    // operator already sees the conversation and will answer.
+    if (mode === "autopilot" && send) {
+      const fallback =
+        primary.fallback_message?.trim() ||
+        "Grazie per il messaggio! Al momento non ho una risposta precisa a questa domanda, ma ho inoltrato la richiesta al nostro staff che ti risponderà il prima possibile."
+      let externalId: string | undefined
+      try {
+        const sendResult = await send(fallback)
+        externalId = sendResult?.externalId
+      } catch (err) {
+        console.log(`[v0] autopilot fallback send failed: ${err instanceof Error ? err.message : String(err)}`)
+        return { action: "skipped", reason: "send_failed", confidence: result.confidence }
+      }
+
+      const { data } = await supabase
+        .from("messages")
+        .insert({
+          property_id: propertyId,
+          conversation_id: conversationId,
+          sender_type: "agent",
+          content: fallback,
+          content_type: "text",
+          status: "sent",
+          external_message_id: externalId ?? null,
+          stored_at: new Date().toISOString(),
+          sent_at: new Date().toISOString(),
+          metadata: {
+            channel,
+            ai_generated: true,
+            ai_fallback: true,
+            ai_confidence: result.confidence,
+            ai_knowledge_base_id: primary.id,
+          },
+        })
+        .select("id")
+        .single()
+
+      await supabase
+        .from("conversations")
+        .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", conversationId)
+        .eq("property_id", propertyId)
+
+      return {
+        action: "sent",
+        messageId: data?.id,
+        reason: `fallback:${result.reason ?? "no_answer"}`,
+        confidence: result.confidence,
+      }
+    }
     return { action: "skipped", reason: result.reason ?? "no_answer", confidence: result.confidence }
   }
 
