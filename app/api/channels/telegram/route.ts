@@ -4,7 +4,12 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { maskSecret, type TelegramChannelRow } from "@/lib/telegram/types"
 import { encryptTelegramCredentialsForWrite } from "@/lib/telegram/channel-secrets"
-import { getTelegramMe, setTelegramWebhook, deleteTelegramWebhook } from "@/lib/telegram/client"
+import {
+  getTelegramMe,
+  setTelegramWebhook,
+  deleteTelegramWebhook,
+  getTelegramWebhookInfo,
+} from "@/lib/telegram/client"
 import { decryptTelegramCredentials } from "@/lib/telegram/channel-secrets"
 
 /**
@@ -41,9 +46,18 @@ function serializeChannel(row: TelegramChannelRow) {
   }
 }
 
-function webhookUrlFor(channelId: string): string {
-  const base = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "")
-  return `${base}/api/channels/telegram/webhook/${channelId}`
+function webhookUrlFor(request: NextRequest, channelId: string): string {
+  // Prefer the canonical host of the incoming request. This avoids registering
+  // the webhook on a host that platform-level rules redirect (e.g. non-www ->
+  // www 307): Telegram does NOT follow redirects and would silently never
+  // deliver updates. When the admin browses www.<domain>, the request host is
+  // already canonical. Fall back to NEXT_PUBLIC_APP_URL if headers are absent.
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host")
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https"
+  const base = forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : process.env.NEXT_PUBLIC_APP_URL || ""
+  return `${base.replace(/\/+$/, "")}/api/channels/telegram/webhook/${channelId}`
 }
 
 export async function GET(request: NextRequest) {
@@ -173,7 +187,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Register the webhook now that we have the channel id for the URL.
-    const webhookResult = await setTelegramWebhook(effectiveToken, webhookUrlFor(row.id), webhookSecret)
+    const webhookResult = await setTelegramWebhook(effectiveToken, webhookUrlFor(request, row.id), webhookSecret)
     if (!webhookResult.success) {
       await supabase
         .from("messaging_channels")
@@ -254,6 +268,58 @@ export async function PATCH(request: NextRequest) {
         .single()
       if (error) throw error
       return NextResponse.json({ channel: serializeChannel(data as TelegramChannelRow) })
+    }
+
+    if (action === "reset_webhook") {
+      // Re-register the webhook using the CANONICAL host of this request. Fixes
+      // bots whose webhook was set on a redirecting host (non-www) that
+      // Telegram won't follow. Also returns Telegram's getWebhookInfo so the
+      // operator can see the live delivery status.
+      const creds = decryptTelegramCredentials(typedTarget.credentials)
+      const token = creds?.bot_token as string | undefined
+      if (!token) {
+        return NextResponse.json({ error: "Bot token mancante: ricollega il bot" }, { status: 400 })
+      }
+
+      // Ensure a webhook secret exists (older rows may lack one).
+      let secret = creds?.webhook_secret as string | undefined
+      if (!secret) {
+        secret = randomBytes(24).toString("hex")
+        const mergedCredentials = {
+          ...(typedTarget.credentials ?? {}),
+          ...encryptTelegramCredentialsForWrite({ webhook_secret: secret }),
+        }
+        await supabase
+          .from("messaging_channels")
+          .update({ credentials: mergedCredentials, updated_at: new Date().toISOString() })
+          .eq("id", id)
+          .eq("property_id", propertyId)
+      }
+
+      const url = webhookUrlFor(request, id)
+      const setResult = await setTelegramWebhook(token, url, secret)
+      const info = await getTelegramWebhookInfo(token)
+
+      const lastError = setResult.success ? null : `Webhook non registrato: ${setResult.error}`
+      await supabase
+        .from("messaging_channels")
+        .update({ last_error: lastError, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .eq("property_id", propertyId)
+
+      return NextResponse.json({
+        ok: setResult.success,
+        registeredUrl: url,
+        error: setResult.success ? undefined : setResult.error,
+        webhookInfo: info.success
+          ? {
+              url: info.url,
+              pendingUpdateCount: info.pendingUpdateCount,
+              lastErrorMessage: info.lastErrorMessage,
+              ipAddress: info.ipAddress,
+            }
+          : { error: info.error },
+      })
     }
 
     return NextResponse.json({ error: "Azione non supportata" }, { status: 400 })
