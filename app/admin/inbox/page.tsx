@@ -150,6 +150,18 @@ interface Conversation {
   last_message_at: string
   unread_count: number
   is_starred: boolean
+  /**
+   * Conversation metadata passed straight through by the repository. Carries
+   * `staff_handoff` when the AI assistant promised the guest a callback: that
+   * promise is only kept if an operator can spot the request here.
+   */
+  metadata?: {
+    staff_handoff?: {
+      requested_at?: string
+      contact?: { name?: string | null; email?: string | null; phone?: string | null }
+      manubot_task_id?: string | null
+    } | null
+  } | null
   contact: Contact | null
   /** Sender denormalised on the conversation, for mail with no CRM contact. */
   contact_email?: string | null
@@ -3258,6 +3270,23 @@ export default function InboxPage() {
                         {conv.contact?.name || conv.contact?.email || conv.contact?.phone || "Sconosciuto"}
                       </span>
                       <div className="flex-1 min-w-0 flex items-baseline gap-1 max-w-full">
+                        {/*
+                          When the assistant promised the guest a callback, the
+                          operator must be able to see it at a glance: the
+                          promise is only kept if someone picks this up.
+                        */}
+                        {conv.metadata?.staff_handoff && (
+                          <span
+                            className="flex-shrink-0 rounded bg-ha-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ha-warning-soft-foreground"
+                            title={`Richiesta di contatto raccolta dall'assistente${
+                              conv.metadata.staff_handoff.contact?.name
+                                ? ` — ${conv.metadata.staff_handoff.contact.name}`
+                                : ""
+                            }`}
+                          >
+                            Staff richiesto
+                          </span>
+                        )}
                         {/*
                           The subject must win the space fight. Both spans used to
                           shrink equally, so a long preview squeezed the subject

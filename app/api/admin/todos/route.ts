@@ -125,7 +125,10 @@ export async function POST(request: NextRequest) {
         assigned_to: assigned_to || null,
         due_date: due_date || null,
         tags: tags || [],
-        send_to_manubot: send_to_manubot || false,
+        // `send_to_manubot` NON è una colonna di `todos` (misurato: PostgREST
+        // risponde "Could not find the 'send_to_manubot' column"), quindi
+        // includerla faceva fallire OGNI creazione di attività con un 500.
+        // L'intenzione di inoltrare resta registrata da `external_source`.
         external_source: send_to_manubot ? "manubot" : null,
       })
       .select()

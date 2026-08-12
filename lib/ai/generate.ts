@@ -1,7 +1,9 @@
 import "server-only"
-import { generateText } from "ai"
+import { generateObject } from "ai"
+import { z } from "zod"
 import { CHAT_MODEL, DEFAULT_CONFIDENCE_THRESHOLD } from "./config"
 import { attachSourceMeta, retrieveContext, type RetrievedChunk } from "./retrieval"
+import type { HandoffContact } from "./handoff"
 
 export interface ConversationTurn {
   role: "user" | "assistant"
@@ -13,7 +15,47 @@ export interface GenerateReplyResult {
   confidence: number
   usedChunks: RetrievedChunk[]
   reason?: "no_match" | "low_confidence" | "ok" | "conversational"
+  /** The guest asked to be put in touch with a human. */
+  staffRequested: boolean
+  /** Contact details gathered anywhere in the conversation. */
+  contact: HandoffContact
 }
+
+/**
+ * Structured reply.
+ *
+ * The handoff signal comes from the model itself rather than from keyword
+ * matching on the text: phrasings like "ok mi metta in contatto", "preferisco
+ * parlare con qualcuno" or a plain "sì" after an offer have no reliable
+ * keyword, and a keyword list would also fire on sentences that merely mention
+ * the staff.
+ */
+const replySchema = z.object({
+  reply: z.string().describe("Il messaggio da inviare al cliente."),
+  staff_requested: z
+    .boolean()
+    .describe(
+      "true se il cliente ha chiesto o accettato di essere messo in contatto con una persona dello staff, oppure se la richiesta richiede per forza un intervento umano. false per semplici domande informative.",
+    ),
+  contact: z
+    .object({
+      first_name: z
+        .string()
+        .nullable()
+        .describe(
+          "Solo il nome di battesimo. Se il cliente scrive nome e cognome insieme (es. 'Mario Rossi'), qui va 'Mario'. null se non l'ha indicato.",
+        ),
+      last_name: z
+        .string()
+        .nullable()
+        .describe(
+          "Solo il cognome. Se il cliente scrive 'Mario Rossi', qui va 'Rossi'. null se non l'ha indicato.",
+        ),
+      email: z.string().nullable().describe("Email del cliente se l'ha indicata, altrimenti null."),
+      phone: z.string().nullable().describe("Telefono del cliente se l'ha indicato, altrimenti null."),
+    })
+    .describe("Dati di contatto raccolti in QUALSIASI punto della conversazione, non solo nell'ultimo messaggio."),
+})
 
 /**
  * Resolved AI config for a reply. `baseIds` scopes retrieval across every
@@ -62,6 +104,54 @@ function mergeChunks(a: RetrievedChunk[], b: RetrievedChunk[]): RetrievedChunk[]
   return [...best.values()].sort((x, y) => y.similarity - x.similarity).slice(0, MERGED_CONTEXT_MAX_CHUNKS)
 }
 
+/**
+ * Safety net over the model's extraction.
+ *
+ * Measured: given "Mario Rossi, mario.rossi@example.com, 3351234567" the model
+ * returned first_name "Mario" and last_name null, so the assistant asked again
+ * for a surname the guest had already written. The instruction in the schema
+ * helps but cannot be trusted on its own, so a full name arriving in a single
+ * field is split here: the last token becomes the surname.
+ */
+function normalizeContact(raw: {
+  first_name: string | null
+  last_name: string | null
+  email: string | null
+  phone: string | null
+}): HandoffContact {
+  const trim = (v: string | null) => {
+    const t = v?.trim()
+    return t ? t : null
+  }
+  let firstName = trim(raw.first_name)
+  let lastName = trim(raw.last_name)
+
+  if (!lastName && firstName) {
+    const parts = firstName.split(/\s+/).filter(Boolean)
+    if (parts.length >= 2) {
+      lastName = parts.slice(1).join(" ")
+      firstName = parts[0]
+    }
+  }
+
+  return { firstName, lastName, email: trim(raw.email), phone: trim(raw.phone) }
+}
+
+/**
+ * Shared rule for both regimes.
+ *
+ * The assistant used to promise "la metto in contatto con lo staff" with no
+ * contact details and nothing registered anywhere. Now the details are the
+ * precondition: without a way to reach the guest, the staff cannot answer, so
+ * the promise must not be made yet.
+ */
+const STAFF_HANDOFF_RULE = [
+  "- CONTATTO CON LO STAFF: se il cliente chiede (o accetta) di essere messo in contatto con una persona, PRIMA raccogli nome, cognome, email e telefono.",
+  "  Chiedi in UNA sola frase i dati che mancano, senza rielencare quelli che ti ha già dato.",
+  "  NON dire MAI di aver inoltrato la richiesta, di averla presa in carico o che lo staff risponderà: la conferma viene aggiunta dal sistema solo quando la richiesta è stata registrata davvero.",
+  "  Quando hai già nome, cognome e un recapito, limitati a un breve ringraziamento senza promesse e senza richiedere dati che il cliente ti ha già dato.",
+].join("\n")
+
 function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boolean): string {
   const persona =
     config.persona?.trim() ||
@@ -82,6 +172,7 @@ function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boole
       "- COERENZA: ciò che hai già detto in questa conversazione resta valido. Non contraddirlo e non negarlo. Se il cliente chiede di approfondire un argomento che hai già trattato, riprendi il filo di quel discorso.",
       "- LINK: quando il cliente chiede dove prenotare o dove trovare qualcosa, fornisci l'indirizzo web completo indicato nella riga '(fonte: ...)' della sezione pertinente. Non inventare MAI un indirizzo che non sia scritto qui sotto, e non limitarti a dire che lo indirizzerai: dai il link.",
       "- Se hai proposto due alternative e il cliente risponde in modo ambiguo (es. 'sì grazie'), chiedi quale preferisce invece di scegliere al posto suo.",
+      STAFF_HANDOFF_RULE,
       "- Sii breve e diretto; adatto a messaggistica (Telegram/WhatsApp) o email.",
       "",
       "BASE DI CONOSCENZA:",
@@ -103,6 +194,7 @@ function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boole
     "- Se il cliente chiede un'informazione che non hai MAI dato e che non è nelle INFORMAZIONI DISPONIBILI, ammettilo in una frase senza giri di parole e proponi di far intervenire un membro dello staff.",
     "- LINK: se una fonte pertinente riporta un indirizzo web nella riga '(fonte: ...)' e il cliente chiede dove prenotare o dove trovare qualcosa, forniscilo per intero. Non inventare MAI un indirizzo che non sia scritto qui sotto.",
     "- Se hai proposto due alternative e il cliente risponde in modo ambiguo (es. 'sì grazie'), chiedi quale preferisce invece di scegliere al posto suo.",
+    STAFF_HANDOFF_RULE,
     "- Non dire mai che stai consultando documenti, basi di conoscenza o frammenti.",
     "- Massimo 2-3 frasi, tono cordiale, adatto alla messaggistica.",
     "",
@@ -163,8 +255,9 @@ export async function generateReply(
     })
     .join("\n\n")
 
-  const { text } = await generateText({
+  const { object } = await generateObject({
     model: CHAT_MODEL,
+    schema: replySchema,
     system: buildSystemPrompt(config, context, grounded),
     messages: [
       ...history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
@@ -172,13 +265,17 @@ export async function generateReply(
     ],
   })
 
-  const answer = text.trim()
+  const contact = normalizeContact(object.contact)
+
+  const answer = object.reply.trim()
   if (!answer) {
     return {
       answer: null,
       confidence: topSimilarity,
       usedChunks: contextChunks,
       reason: chunks.length === 0 ? "no_match" : "low_confidence",
+      staffRequested: object.staff_requested,
+      contact,
     }
   }
 
@@ -187,5 +284,7 @@ export async function generateReply(
     confidence: topSimilarity,
     usedChunks: contextChunks,
     reason: grounded ? "ok" : "conversational",
+    staffRequested: object.staff_requested,
+    contact,
   }
 }
