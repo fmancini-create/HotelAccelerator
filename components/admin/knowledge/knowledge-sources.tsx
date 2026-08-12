@@ -69,21 +69,34 @@ function StatusBadge({ status }: { status: KnowledgeSource["status"] }) {
   )
 }
 
-export function KnowledgeSources({ initial }: { initial: KnowledgeSource[] }) {
-  const [sources, setSources] = useState<KnowledgeSource[]>(initial)
+export function KnowledgeSources({
+  knowledgeBaseId,
+  initial,
+}: {
+  knowledgeBaseId: string
+  initial?: KnowledgeSource[]
+}) {
+  const [sources, setSources] = useState<KnowledgeSource[]>(initial ?? [])
   const [submitting, setSubmitting] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/ai/knowledge", { credentials: "include" })
+      const res = await fetch(`/api/admin/ai/knowledge?knowledgeBaseId=${encodeURIComponent(knowledgeBaseId)}`, {
+        credentials: "include",
+      })
       if (!res.ok) return
       const { sources: fresh } = await res.json()
       setSources(fresh)
     } catch {
       // silent; polling will retry
     }
-  }, [])
+  }, [knowledgeBaseId])
+
+  // Reload the source list whenever the selected base changes.
+  useEffect(() => {
+    refresh()
+  }, [refresh])
 
   // Poll while any source is still pending/processing.
   useEffect(() => {
@@ -109,7 +122,7 @@ export function KnowledgeSources({ initial }: { initial: KnowledgeSource[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, knowledgeBaseId }),
       })
       if (!res.ok) throw new Error((await res.json()).error || "Errore")
       toast({ title: "Fonte aggiunta", description: "Indicizzazione avviata." })
@@ -134,7 +147,7 @@ export function KnowledgeSources({ initial }: { initial: KnowledgeSource[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ url, maxPages }),
+        body: JSON.stringify({ url, maxPages, knowledgeBaseId }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Errore")

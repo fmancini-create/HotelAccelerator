@@ -129,9 +129,9 @@ export async function POST(request: NextRequest) {
         // Best-effort read receipt.
         await markWhatsAppRead(typedChannel.config, typedChannel.credentials, msg.externalId)
 
-        // AI knowledge assistant (gated per-tenant via ai_agent_settings). The
-        // inbound message opens WhatsApp's 24h window, so a free-form reply is
-        // deliverable here.
+        // AI knowledge assistant (gated per-channel via the knowledge bases
+        // linked to this channel). The inbound message opens WhatsApp's 24h
+        // window, so a free-form reply is deliverable here.
         if (result.conversationId) {
           try {
             const outcome = await runAutopilot({
@@ -139,6 +139,7 @@ export async function POST(request: NextRequest) {
               propertyId: typedChannel.property_id,
               conversationId: result.conversationId,
               channel: "whatsapp",
+              channelId: typedChannel.id,
               incomingText: msg.body,
               send: async (text) => {
                 const sent = await sendWhatsAppText(

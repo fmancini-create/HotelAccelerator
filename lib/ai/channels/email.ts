@@ -61,6 +61,7 @@ export async function processEmailAiTasks(
         propertyId,
         conversationId: task.conversationId,
         channel: "email",
+        channelId,
         incomingText: toPlainText(task.body, task.contentType),
         send: async (text) => {
           const html = `<div style="font-family: Arial, sans-serif; font-size: 14px;">${text.replace(

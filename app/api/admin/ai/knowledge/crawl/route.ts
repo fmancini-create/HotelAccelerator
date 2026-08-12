@@ -18,6 +18,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "URL non valido" }, { status: 400 })
     }
 
+    const knowledgeBaseId = typeof body.knowledgeBaseId === "string" ? body.knowledgeBaseId : null
+    if (!knowledgeBaseId) {
+      return NextResponse.json({ error: "Base di conoscenza mancante" }, { status: 400 })
+    }
+
     const requested = Number(body.maxPages)
     const maxPages = Number.isFinite(requested) ? Math.min(Math.max(Math.trunc(requested), 1), MAX_PAGES) : 50
 
@@ -32,11 +37,24 @@ export async function POST(request: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // Skip URLs already present for this tenant to avoid duplicates.
+    // Ensure the base belongs to this tenant.
+    const { data: base } = await supabase
+      .from("knowledge_bases")
+      .select("id")
+      .eq("id", knowledgeBaseId)
+      .eq("property_id", propertyId)
+      .maybeSingle()
+    if (!base) {
+      return NextResponse.json({ error: "Base di conoscenza non trovata" }, { status: 404 })
+    }
+
+    // Skip URLs already present in THIS base to avoid duplicates (the same page
+    // may legitimately live in different bases).
     const { data: existing } = await supabase
       .from("knowledge_sources")
       .select("url")
       .eq("property_id", propertyId)
+      .eq("knowledge_base_id", knowledgeBaseId)
       .eq("type", "url")
     const existingUrls = new Set(
       ((existing ?? []) as { url: string | null }[]).map((r) => r.url).filter(Boolean),
@@ -52,6 +70,7 @@ export async function POST(request: NextRequest) {
       .insert(
         toCreate.map((u) => ({
           property_id: propertyId,
+          knowledge_base_id: knowledgeBaseId,
           type: "url" as const,
           url: u,
           title: null,

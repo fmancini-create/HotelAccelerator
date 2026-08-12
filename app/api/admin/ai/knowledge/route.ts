@@ -11,13 +11,19 @@ export async function GET(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
+    const baseId = request.nextUrl.searchParams.get("knowledgeBaseId")
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("knowledge_sources")
-      .select("id, type, title, url, file_url, status, error, chunk_count, last_indexed_at, created_at, updated_at")
+      .select(
+        "id, type, title, url, file_url, status, error, chunk_count, last_indexed_at, created_at, updated_at, knowledge_base_id",
+      )
       .eq("property_id", propertyId)
       .order("created_at", { ascending: false })
 
+    if (baseId) query = query.eq("knowledge_base_id", baseId)
+
+    const { data, error } = await query
     if (error) throw new Error(error.message)
     return NextResponse.json({ sources: data ?? [] })
   } catch (error) {
@@ -37,6 +43,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Tipo di fonte non valido" }, { status: 400 })
     }
 
+    const knowledgeBaseId = typeof body.knowledgeBaseId === "string" ? body.knowledgeBaseId : null
+    if (!knowledgeBaseId) {
+      return NextResponse.json({ error: "Base di conoscenza mancante" }, { status: 400 })
+    }
+
     // Validate per-type required fields.
     if ((type === "text" || type === "conversation") && !body.content?.trim()) {
       return NextResponse.json({ error: "Il contenuto testuale è obbligatorio" }, { status: 400 })
@@ -49,10 +60,23 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceClient()
+
+    // Ensure the base belongs to this tenant before attaching a source to it.
+    const { data: base } = await supabase
+      .from("knowledge_bases")
+      .select("id")
+      .eq("id", knowledgeBaseId)
+      .eq("property_id", propertyId)
+      .maybeSingle()
+    if (!base) {
+      return NextResponse.json({ error: "Base di conoscenza non trovata" }, { status: 404 })
+    }
+
     const { data, error } = await supabase
       .from("knowledge_sources")
       .insert({
         property_id: propertyId,
+        knowledge_base_id: knowledgeBaseId,
         type,
         title: typeof body.title === "string" ? body.title.slice(0, 300) : null,
         url: type === "url" ? body.url : null,

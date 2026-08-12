@@ -70,8 +70,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         anyInbound = true
 
         // Deterministic commands (welcome/slash) + AI knowledge assistant.
-        // The AI path has its own per-tenant gating (ai_agent_settings), so we
-        // always enter here when we have a live conversation.
+        // The AI path is gated per-channel by the knowledge bases linked to it,
+        // so we always enter here when we have a live conversation.
         if (result.conversationId && result.contactId) {
           await maybeAutopilotReply(supabase, typedChannel, msg.chatId, msg.body, {
             conversationId: result.conversationId,
@@ -148,12 +148,13 @@ async function maybeAutopilotReply(
       }
     }
 
-    // 2) AI knowledge assistant (own gating via ai_agent_settings).
+    // 2) AI knowledge assistant (gated per-channel via linked knowledge bases).
     const outcome = await runAutopilot({
       supabase,
       propertyId: channel.property_id,
       conversationId: ctx.conversationId,
       channel: "telegram",
+      channelId: channel.id,
       incomingText: inboundText,
       send: async (text) => {
         const sent = await sendTelegramText(channel.credentials, chatId, text)

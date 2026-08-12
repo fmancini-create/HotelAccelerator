@@ -1,8 +1,7 @@
 import "server-only"
 import { generateText } from "ai"
-import { CHAT_MODEL } from "./config"
+import { CHAT_MODEL, DEFAULT_CONFIDENCE_THRESHOLD } from "./config"
 import { retrieveContext, type RetrievedChunk } from "./retrieval"
-import { getAiSettings, type AiAgentSettings } from "./settings"
 
 export interface ConversationTurn {
   role: "user" | "assistant"
@@ -16,16 +15,29 @@ export interface GenerateReplyResult {
   reason?: "no_match" | "low_confidence" | "ok"
 }
 
-function buildSystemPrompt(settings: AiAgentSettings, context: string): string {
+/**
+ * Resolved AI config for a reply. `baseIds` scopes retrieval across every
+ * knowledge base linked to the channel; persona/language/threshold come from
+ * the primary base.
+ */
+export interface ReplyConfig {
+  baseIds: string[]
+  persona?: string | null
+  language?: string
+  confidenceThreshold?: number
+}
+
+function buildSystemPrompt(config: ReplyConfig, context: string): string {
   const persona =
-    settings.persona?.trim() ||
+    config.persona?.trim() ||
     "Sei l'assistente virtuale di una struttura ricettiva. Rispondi in modo cortese, professionale e conciso."
+  const language = config.language || "it"
 
   return [
     persona,
     "",
     "REGOLE FONDAMENTALI:",
-    `- Rispondi SEMPRE nella lingua del cliente (lingua predefinita: ${settings.language}).`,
+    `- Rispondi SEMPRE nella lingua del cliente (lingua predefinita: ${language}).`,
     "- Usa ESCLUSIVAMENTE le informazioni presenti nella BASE DI CONOSCENZA qui sotto.",
     "- Se la base di conoscenza non contiene la risposta, NON inventare: dillo educatamente e proponi di mettere in contatto con lo staff.",
     "- Non citare l'esistenza della 'base di conoscenza' né dei 'frammenti': rispondi in modo naturale.",
@@ -40,19 +52,19 @@ function buildSystemPrompt(settings: AiAgentSettings, context: string): string {
  * Generate a grounded reply for an incoming customer message.
  *
  * Returns `answer: null` (with a reason) when there is no relevant knowledge or
- * the best match is below the tenant's confidence threshold — the caller then
- * decides whether to stay silent, post the fallback, or leave it to a human.
- * This is the guardrail against the AI inventing answers.
+ * the best match is below the confidence threshold — the caller then decides
+ * whether to stay silent, post the fallback, or leave it to a human. This is
+ * the guardrail against the AI inventing answers.
  */
 export async function generateReply(
-  propertyId: string,
+  config: ReplyConfig,
   incomingMessage: string,
   history: ConversationTurn[] = [],
-  settingsOverride?: AiAgentSettings,
 ): Promise<GenerateReplyResult> {
-  const settings = settingsOverride ?? (await getAiSettings(propertyId))
+  const threshold =
+    typeof config.confidenceThreshold === "number" ? config.confidenceThreshold : DEFAULT_CONFIDENCE_THRESHOLD
 
-  const chunks = await retrieveContext(propertyId, incomingMessage, {
+  const chunks = await retrieveContext(config.baseIds, incomingMessage, {
     minSimilarity: 0, // fetch top matches, then judge with threshold below
   })
 
@@ -61,7 +73,7 @@ export async function generateReply(
   if (chunks.length === 0) {
     return { answer: null, confidence: 0, usedChunks: [], reason: "no_match" }
   }
-  if (topSimilarity < settings.confidence_threshold) {
+  if (topSimilarity < threshold) {
     return { answer: null, confidence: topSimilarity, usedChunks: chunks, reason: "low_confidence" }
   }
 
@@ -69,7 +81,7 @@ export async function generateReply(
 
   const { text } = await generateText({
     model: CHAT_MODEL,
-    system: buildSystemPrompt(settings, context),
+    system: buildSystemPrompt(config, context),
     messages: [
       ...history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
       { role: "user" as const, content: incomingMessage },

@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { createServiceClient } from "@/lib/supabase/server"
-import { generateReply } from "@/lib/ai/generate"
-import { getAiSettings } from "@/lib/ai/settings"
+import { generateReply, type ReplyConfig } from "@/lib/ai/generate"
+import { getBasesForChannel, getKnowledgeBases } from "@/lib/ai/knowledge-bases"
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -49,6 +49,41 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceClient()
+
+    // Resolve which knowledge bases power this draft: use the bases linked to
+    // the conversation's channel; fall back to every base of the property when
+    // the conversation has no channel or the channel has no bases linked.
+    const { data: conversation } = await supabase
+      .from("conversations")
+      .select("channel_id")
+      .eq("id", conversationId)
+      .eq("property_id", propertyId)
+      .maybeSingle()
+
+    let config: ReplyConfig | null = null
+    const channelId = (conversation as { channel_id: string | null } | null)?.channel_id ?? null
+    if (channelId) {
+      const { primary, baseIds } = await getBasesForChannel(channelId)
+      if (primary && baseIds.length > 0) {
+        config = {
+          baseIds,
+          persona: primary.persona,
+          language: primary.language,
+          confidenceThreshold: primary.confidence_threshold,
+        }
+      }
+    }
+    if (!config) {
+      const bases = await getKnowledgeBases(propertyId)
+      const primary = bases[0] ?? null
+      config = {
+        baseIds: bases.map((b) => b.id),
+        persona: primary?.persona ?? null,
+        language: primary?.language ?? "it",
+        confidenceThreshold: primary?.confidence_threshold,
+      }
+    }
+
     const { data: history } = await supabase
       .from("messages")
       .select("sender_type, content, status, stored_at")
@@ -75,8 +110,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Nessun messaggio del cliente a cui rispondere" }, { status: 400 })
     }
 
-    const settings = await getAiSettings(propertyId)
-    const result = await generateReply(propertyId, incoming, turns, settings)
+    const result = await generateReply(config, incoming, turns)
 
     if (!result.answer) {
       return NextResponse.json(
