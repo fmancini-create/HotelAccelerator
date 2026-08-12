@@ -1,20 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { toast } from "@/components/ui/use-toast"
-import { Ban, Hand, Bot, Send, MessagesSquare, Mail, Loader2 } from "lucide-react"
+import { Ban, Hand, Bot, Loader2, AlertCircle } from "lucide-react"
 
 export type AiMode = "disabled" | "on_request" | "autopilot"
-export interface AiSettings {
+
+export interface KnowledgeBaseBehavior {
+  id: string
+  name: string
+  description: string | null
   mode: AiMode
-  channels: { telegram: boolean; whatsapp: boolean; email: boolean }
   persona: string | null
   language: string
   confidence_threshold: number
@@ -25,7 +27,7 @@ const MODES: { id: AiMode; title: string; description: string; icon: typeof Ban 
   {
     id: "disabled",
     title: "Disabilitato",
-    description: "L'IA non interviene sulle conversazioni.",
+    description: "L'IA non interviene sulle conversazioni dei canali che usano questa base.",
     icon: Ban,
   },
   {
@@ -42,30 +44,52 @@ const MODES: { id: AiMode; title: string; description: string; icon: typeof Ban 
   },
 ]
 
-const CHANNELS: { id: keyof AiSettings["channels"]; label: string; icon: typeof Send }[] = [
-  { id: "telegram", label: "Telegram", icon: Send },
-  { id: "whatsapp", label: "WhatsApp", icon: MessagesSquare },
-  { id: "email", label: "Email", icon: Mail },
-]
-
-export function AiSettingsCard({ initial }: { initial: AiSettings }) {
-  const [settings, setSettings] = useState<AiSettings>(initial)
+export function AiSettingsCard({
+  base,
+  onSaved,
+}: {
+  base: KnowledgeBaseBehavior
+  onSaved?: (base: KnowledgeBaseBehavior) => void
+}) {
+  const [form, setForm] = useState<KnowledgeBaseBehavior>(base)
+  const [saved, setSaved] = useState<KnowledgeBaseBehavior>(base)
   const [saving, setSaving] = useState(false)
 
-  const update = <K extends keyof AiSettings>(key: K, value: AiSettings[K]) =>
-    setSettings((s) => ({ ...s, [key]: value }))
+  // Reset the editor when the selected base changes.
+  useEffect(() => {
+    setForm(base)
+    setSaved(base)
+  }, [base])
+
+  const dirty = JSON.stringify(form) !== JSON.stringify(saved)
+
+  const update = <K extends keyof KnowledgeBaseBehavior>(key: K, value: KnowledgeBaseBehavior[K]) =>
+    setForm((s) => ({ ...s, [key]: value }))
 
   const save = async () => {
     setSaving(true)
     try {
-      const res = await fetch("/api/admin/ai/settings", {
-        method: "PUT",
+      const res = await fetch(`/api/admin/ai/knowledge-bases/${form.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(settings),
+        body: JSON.stringify({
+          name: form.name,
+          description: form.description,
+          mode: form.mode,
+          persona: form.persona,
+          language: form.language,
+          confidence_threshold: form.confidence_threshold,
+          fallback_message: form.fallback_message,
+        }),
       })
       if (!res.ok) throw new Error((await res.json()).error || "Errore di salvataggio")
-      toast({ title: "Impostazioni salvate", description: "La configurazione dell'assistente IA è stata aggiornata." })
+      const data = await res.json().catch(() => null)
+      const persisted = (data?.base as KnowledgeBaseBehavior | undefined) ?? form
+      setForm(persisted)
+      setSaved(persisted)
+      onSaved?.(persisted)
+      toast({ title: "Base aggiornata", description: "Il comportamento della base è stato salvato." })
     } catch (err) {
       toast({
         title: "Errore",
@@ -77,20 +101,60 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
     }
   }
 
-  const confidencePct = Math.round(settings.confidence_threshold * 100)
+  const confidencePct = Math.round(form.confidence_threshold * 100)
 
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-foreground">Comportamento dell&apos;assistente</CardTitle>
-        <CardDescription>Scegli come l&apos;IA deve gestire le conversazioni in arrivo.</CardDescription>
+        <CardTitle className="text-foreground">Comportamento della base</CardTitle>
+        <CardDescription>
+          Nome, tono e modalità di questa base. I canali collegati a questa base come primaria erediteranno queste
+          impostazioni.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+        {/* Name + description */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="base-name" className="text-foreground">
+              Nome della base
+            </Label>
+            <Input
+              id="base-name"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="Es. Reception, Ristorante, SPA"
+              maxLength={200}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="base-desc" className="text-foreground">
+              Descrizione (opzionale)
+            </Label>
+            <Input
+              id="base-desc"
+              value={form.description ?? ""}
+              onChange={(e) => update("description", e.target.value)}
+              placeholder="A cosa serve questa base"
+              maxLength={1000}
+            />
+          </div>
+        </div>
+
+        {form.mode !== saved.mode && (
+          <div className="flex items-center gap-2 rounded-lg border border-ha-warning/40 bg-ha-warning/10 px-3 py-2 text-sm text-foreground">
+            <AlertCircle className="h-4 w-4 shrink-0 text-ha-warning" />
+            <span>
+              Hai selezionato una nuova modalità ma non è ancora attiva. Premi <strong>Salva</strong> per applicarla.
+            </span>
+          </div>
+        )}
+
         {/* Mode selector */}
         <div className="grid gap-3 sm:grid-cols-3">
           {MODES.map((mode) => {
             const Icon = mode.icon
-            const active = settings.mode === mode.id
+            const active = form.mode === mode.id
             return (
               <button
                 key={mode.id}
@@ -117,33 +181,6 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
           })}
         </div>
 
-        {/* Channels */}
-        <div className="flex flex-col gap-3">
-          <Label className="text-foreground">Canali attivi</Label>
-          <p className="text-sm text-muted-foreground -mt-1">
-            Su quali canali l&apos;IA può rispondere (usando la stessa base di conoscenza).
-          </p>
-          <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
-            {CHANNELS.map((ch) => {
-              const Icon = ch.icon
-              return (
-                <div key={ch.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 sm:flex-1">
-                  <span className="flex items-center gap-2 text-sm text-foreground">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                    {ch.label}
-                  </span>
-                  <Switch
-                    checked={settings.channels[ch.id]}
-                    onCheckedChange={(v) => update("channels", { ...settings.channels, [ch.id]: v })}
-                    disabled={settings.mode === "disabled"}
-                    className="data-[state=checked]:bg-ha-success"
-                  />
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
         {/* Persona */}
         <div className="flex flex-col gap-2">
           <Label htmlFor="persona" className="text-foreground">
@@ -151,7 +188,7 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
           </Label>
           <Textarea
             id="persona"
-            value={settings.persona ?? ""}
+            value={form.persona ?? ""}
             onChange={(e) => update("persona", e.target.value)}
             placeholder="Es. Sei l'assistente cordiale dell'Hotel Belvedere. Rispondi con tono caloroso e professionale, dando del Lei."
             rows={3}
@@ -167,7 +204,7 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
             </Label>
             <Input
               id="language"
-              value={settings.language}
+              value={form.language}
               onChange={(e) => update("language", e.target.value)}
               placeholder="it"
               maxLength={10}
@@ -203,7 +240,7 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
           </Label>
           <Textarea
             id="fallback"
-            value={settings.fallback_message ?? ""}
+            value={form.fallback_message ?? ""}
             onChange={(e) => update("fallback_message", e.target.value)}
             placeholder="Es. Grazie per il messaggio! Un membro del nostro staff ti risponderà a breve."
             rows={2}
@@ -211,10 +248,20 @@ export function AiSettingsCard({ initial }: { initial: AiSettings }) {
           />
         </div>
 
-        <div className="flex justify-end">
-          <Button onClick={save} disabled={saving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <div className="flex items-center justify-end gap-3">
+          {dirty && (
+            <span className="flex items-center gap-1.5 text-sm text-ha-warning">
+              <AlertCircle className="h-4 w-4" />
+              Modifiche non salvate
+            </span>
+          )}
+          <Button
+            onClick={save}
+            disabled={saving || !dirty}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Salva impostazioni
+            {dirty ? "Salva" : "Salvato"}
           </Button>
         </div>
       </CardContent>

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/use-toast"
 import {
@@ -68,21 +69,34 @@ function StatusBadge({ status }: { status: KnowledgeSource["status"] }) {
   )
 }
 
-export function KnowledgeSources({ initial }: { initial: KnowledgeSource[] }) {
-  const [sources, setSources] = useState<KnowledgeSource[]>(initial)
+export function KnowledgeSources({
+  knowledgeBaseId,
+  initial,
+}: {
+  knowledgeBaseId: string
+  initial?: KnowledgeSource[]
+}) {
+  const [sources, setSources] = useState<KnowledgeSource[]>(initial ?? [])
   const [submitting, setSubmitting] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/ai/knowledge", { credentials: "include" })
+      const res = await fetch(`/api/admin/ai/knowledge?knowledgeBaseId=${encodeURIComponent(knowledgeBaseId)}`, {
+        credentials: "include",
+      })
       if (!res.ok) return
       const { sources: fresh } = await res.json()
       setSources(fresh)
     } catch {
       // silent; polling will retry
     }
-  }, [])
+  }, [knowledgeBaseId])
+
+  // Reload the source list whenever the selected base changes.
+  useEffect(() => {
+    refresh()
+  }, [refresh])
 
   // Poll while any source is still pending/processing.
   useEffect(() => {
@@ -108,7 +122,7 @@ export function KnowledgeSources({ initial }: { initial: KnowledgeSource[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, knowledgeBaseId }),
       })
       if (!res.ok) throw new Error((await res.json()).error || "Errore")
       toast({ title: "Fonte aggiunta", description: "Indicizzazione avviata." })
@@ -118,6 +132,42 @@ export function KnowledgeSources({ initial }: { initial: KnowledgeSource[] }) {
       toast({
         title: "Errore",
         description: err instanceof Error ? err.message : "Impossibile aggiungere la fonte",
+        variant: "destructive",
+      })
+      return false
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const crawlSite = async (url: string, maxPages: number) => {
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/admin/ai/knowledge/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ url, maxPages, knowledgeBaseId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Errore")
+      if (data.created === 0) {
+        toast({
+          title: "Nessuna nuova pagina",
+          description: `${data.discovered} pagine trovate, già tutte in coda o indicizzate.`,
+        })
+      } else {
+        toast({
+          title: "Scansione avviata",
+          description: `${data.created} pagine aggiunte su ${data.discovered} trovate. Indicizzazione in corso.`,
+        })
+      }
+      await refresh()
+      return true
+    } catch (err) {
+      toast({
+        title: "Errore",
+        description: err instanceof Error ? err.message : "Scansione del sito fallita",
         variant: "destructive",
       })
       return false
@@ -154,7 +204,13 @@ export function KnowledgeSources({ initial }: { initial: KnowledgeSource[] }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <AddSourceCard submitting={submitting} onText={createSource} onUrl={createSource} onPdf={createSource} />
+      <AddSourceCard
+        submitting={submitting}
+        onText={createSource}
+        onUrl={createSource}
+        onPdf={createSource}
+        onCrawl={crawlSite}
+      />
 
       <Card className="bg-card border-border">
         <CardHeader>
@@ -228,15 +284,19 @@ function AddSourceCard({
   onText,
   onUrl,
   onPdf,
+  onCrawl,
 }: {
   submitting: boolean
   onText: (p: Record<string, unknown>) => Promise<boolean>
   onUrl: (p: Record<string, unknown>) => Promise<boolean>
   onPdf: (p: Record<string, unknown>) => Promise<boolean>
+  onCrawl: (url: string, maxPages: number) => Promise<boolean>
 }) {
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [url, setUrl] = useState("")
+  const [crawlAll, setCrawlAll] = useState(true)
+  const [maxPages, setMaxPages] = useState(50)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
 
@@ -251,7 +311,9 @@ function AddSourceCard({
 
   const submitUrl = async () => {
     if (!url.trim()) return
-    const ok = await onUrl({ type: "url", url: url.trim(), title: title.trim() || null })
+    const ok = crawlAll
+      ? await onCrawl(url.trim(), maxPages)
+      : await onUrl({ type: "url", url: url.trim(), title: title.trim() || null })
     if (ok) {
       setUrl("")
       setTitle("")
@@ -334,23 +396,58 @@ function AddSourceCard({
           <TabsContent value="url" className="mt-4 flex flex-col gap-3">
             <div className="flex flex-col gap-2">
               <Label htmlFor="url-input" className="text-foreground">
-                URL della pagina
+                {crawlAll ? "Indirizzo del sito" : "URL della pagina"}
               </Label>
               <Input
                 id="url-input"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://www.tuohotel.it/servizi"
+                placeholder={crawlAll ? "https://www.tuohotel.it" : "https://www.tuohotel.it/servizi"}
                 type="url"
               />
-              <p className="text-xs text-muted-foreground">
-                Leggeremo il testo della pagina e lo aggiungeremo alla conoscenza.
-              </p>
             </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="crawl-all" className="text-foreground">
+                  Scansiona tutte le pagine del dominio
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Troviamo automaticamente le pagine del sito (tramite sitemap o link interni) e le
+                  aggiungiamo tutte, senza inserirle a mano.
+                </p>
+              </div>
+              <Switch id="crawl-all" checked={crawlAll} onCheckedChange={setCrawlAll} />
+            </div>
+
+            {crawlAll && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="max-pages" className="text-foreground">
+                  Numero massimo di pagine
+                </Label>
+                <Input
+                  id="max-pages"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={maxPages}
+                  onChange={(e) => setMaxPages(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
+                  className="w-32"
+                />
+                <p className="text-xs text-muted-foreground">Fino a 100 pagine per scansione.</p>
+              </div>
+            )}
+
+            {!crawlAll && (
+              <p className="text-xs text-muted-foreground">
+                Leggeremo il testo di questa singola pagina e lo aggiungeremo alla conoscenza.
+              </p>
+            )}
+
             <div className="flex justify-end">
               <Button onClick={submitUrl} disabled={submitting || !url.trim()}>
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Aggiungi pagina
+                {crawlAll ? "Scansiona il sito" : "Aggiungi pagina"}
               </Button>
             </div>
           </TabsContent>

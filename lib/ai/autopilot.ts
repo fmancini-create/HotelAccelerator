@@ -1,13 +1,18 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { generateReply, type ConversationTurn } from "./generate"
-import { getAiSettings, isChannelEnabled, type AiChannel } from "./settings"
+import { getBasesForChannel } from "./knowledge-bases"
+
+export type AiChannel = "telegram" | "whatsapp" | "email"
 
 export interface RunAutopilotArgs {
   supabase: SupabaseClient
   propertyId: string
   conversationId: string
+  /** Channel type, used only for message metadata/logging. */
   channel: AiChannel
+  /** The specific messaging_channels row id — drives which knowledge bases are used. */
+  channelId: string
   incomingText: string
   /**
    * Delivers the reply on the channel. Only invoked in `autopilot` mode.
@@ -28,7 +33,8 @@ export interface RunAutopilotResult {
 /**
  * Single source of truth for AI replies across every channel.
  *
- * Behavior is driven entirely by the tenant's ai_agent_settings:
+ * Behavior is driven by the knowledge bases linked to the channel. The primary
+ * base (position 0) sets the mode:
  *   - mode 'disabled'  -> never acts
  *   - mode 'on_request'-> saves a DRAFT reply for an operator to approve
  *   - mode 'autopilot' -> sends the reply automatically (via `send`) and logs it
@@ -37,19 +43,35 @@ export interface RunAutopilotResult {
  * nothing (skipped) rather than inventing a reply.
  */
 export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilotResult> {
-  const { supabase, propertyId, conversationId, channel, incomingText, send } = args
+  const { supabase, propertyId, conversationId, channel, channelId, incomingText, send } = args
 
-  const settings = await getAiSettings(propertyId)
-  if (!isChannelEnabled(settings, channel)) {
-    return { action: "skipped", reason: "channel_disabled" }
-  }
   if (!incomingText?.trim()) {
     return { action: "skipped", reason: "empty_message" }
   }
 
+  // Resolve the knowledge bases linked to this specific channel. The primary
+  // base (position 0) drives behavior; retrieval spans all linked bases.
+  const { primary, baseIds } = await getBasesForChannel(channelId)
+  if (!primary || baseIds.length === 0) {
+    return { action: "skipped", reason: "no_base_linked" }
+  }
+  const mode = primary.mode
+  if (mode === "disabled") {
+    return { action: "skipped", reason: "base_disabled" }
+  }
+
   const history = await loadHistory(supabase, conversationId, propertyId)
 
-  const result = await generateReply(propertyId, incomingText, history, settings)
+  const result = await generateReply(
+    {
+      baseIds,
+      persona: primary.persona,
+      language: primary.language,
+      confidenceThreshold: primary.confidence_threshold,
+    },
+    incomingText,
+    history,
+  )
 
   if (!result.answer) {
     return { action: "skipped", reason: result.reason ?? "no_answer", confidence: result.confidence }
@@ -60,10 +82,11 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     ai_generated: true,
     ai_confidence: result.confidence,
     ai_source_ids: result.usedChunks.map((c) => c.source_id),
+    ai_knowledge_base_id: primary.id,
   }
 
   // ON REQUEST: store a draft for operator approval; do not deliver.
-  if (settings.mode === "on_request") {
+  if (mode === "on_request") {
     const { data, error } = await supabase
       .from("messages")
       .insert({
@@ -87,7 +110,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   }
 
   // AUTOPILOT: deliver, then persist as a sent agent message.
-  if (settings.mode === "autopilot") {
+  if (mode === "autopilot") {
     if (!send) return { action: "skipped", reason: "no_sender" }
     let externalId: string | undefined
     try {
