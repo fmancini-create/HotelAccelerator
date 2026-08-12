@@ -163,6 +163,14 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
       ai_handoff_manubot_task_id: handoff.manubotTaskId ?? null,
       ai_handoff_errors: handoff.errors.length > 0 ? handoff.errors : null,
     }
+
+    // The promise is added HERE, by the code that knows whether the request was
+    // actually registered — not by the model. The model was measured promising
+    // a callback while still asking for a surname the guest had already given,
+    // and it has no way of knowing whether the task was really created.
+    if (handoff.registered) {
+      result.answer = `${result.answer ?? ""}\n\nHo passato la sua richiesta al nostro staff, che la ricontatterà al più presto.`.trim()
+    }
   }
 
   const baseMetadata = {

@@ -39,17 +39,16 @@ const replySchema = z.object({
     ),
   contact: z
     .object({
-      first_name: z
+      // One field, copied verbatim. Asking the model to split was measured
+      // losing data: given "Mario Rossi" it returned first_name "Mario" and
+      // dropped "Rossi" entirely, so the assistant kept asking for a surname
+      // the guest had already written. Splitting is trivial for code and
+      // apparently not for the model, so code does it (see normalizeContact).
+      full_name: z
         .string()
         .nullable()
         .describe(
-          "Solo il nome di battesimo. Se il cliente scrive nome e cognome insieme (es. 'Mario Rossi'), qui va 'Mario'. null se non l'ha indicato.",
-        ),
-      last_name: z
-        .string()
-        .nullable()
-        .describe(
-          "Solo il cognome. Se il cliente scrive 'Mario Rossi', qui va 'Rossi'. null se non l'ha indicato.",
+          "Il nome del cliente COPIATO ESATTAMENTE come lo ha scritto, nome e cognome insieme se li ha scritti entrambi (es. 'Mario Rossi'). Non dividere e non omettere nulla. null se non lo ha indicato.",
         ),
       email: z.string().nullable().describe("Email del cliente se l'ha indicata, altrimenti null."),
       phone: z.string().nullable().describe("Telefono del cliente se l'ha indicato, altrimenti null."),
@@ -114,8 +113,7 @@ function mergeChunks(a: RetrievedChunk[], b: RetrievedChunk[]): RetrievedChunk[]
  * field is split here: the last token becomes the surname.
  */
 function normalizeContact(raw: {
-  first_name: string | null
-  last_name: string | null
+  full_name: string | null
   email: string | null
   phone: string | null
 }): HandoffContact {
@@ -123,18 +121,18 @@ function normalizeContact(raw: {
     const t = v?.trim()
     return t ? t : null
   }
-  let firstName = trim(raw.first_name)
-  let lastName = trim(raw.last_name)
 
-  if (!lastName && firstName) {
-    const parts = firstName.split(/\s+/).filter(Boolean)
-    if (parts.length >= 2) {
-      lastName = parts.slice(1).join(" ")
-      firstName = parts[0]
-    }
+  const full = trim(raw.full_name)
+  const parts = full ? full.split(/\s+/).filter(Boolean) : []
+
+  return {
+    firstName: parts[0] ?? null,
+    // Everything after the first token: handles "Maria Teresa De Rossi" without
+    // guessing where the surname starts.
+    lastName: parts.length >= 2 ? parts.slice(1).join(" ") : null,
+    email: trim(raw.email),
+    phone: trim(raw.phone),
   }
-
-  return { firstName, lastName, email: trim(raw.email), phone: trim(raw.phone) }
 }
 
 /**
