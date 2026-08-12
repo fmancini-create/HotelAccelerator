@@ -3,7 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getTelegramChannelById, parseTelegramUpdate } from "@/lib/telegram/channels"
 import { TelegramProcessor } from "@/lib/telegram/processor"
 import { sendTelegramText } from "@/lib/telegram/client"
-import { computeAutopilotReply, requestManubotReply } from "@/lib/telegram/commands"
+import { computeAutopilotReply } from "@/lib/telegram/commands"
+import { runAutopilot } from "@/lib/ai/autopilot"
 import type { TelegramChannelRow } from "@/lib/telegram/types"
 
 // Webhook is called by Telegram servers, not the browser. Authenticity is
@@ -68,8 +69,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       if (result.success && !result.isDuplicate) {
         anyInbound = true
 
-        // Autopilot: rule-based reply (commands) + future ManuBot brain seam.
-        if (typedChannel.config?.autopilot_enabled && result.conversationId && result.contactId) {
+        // Deterministic commands (welcome/slash) + AI knowledge assistant.
+        // The AI path has its own per-tenant gating (ai_agent_settings), so we
+        // always enter here when we have a live conversation.
+        if (result.conversationId && result.contactId) {
           await maybeAutopilotReply(supabase, typedChannel, msg.chatId, msg.body, {
             conversationId: result.conversationId,
             contactId: result.contactId,
@@ -93,9 +96,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 }
 
 /**
- * Compute an autopilot reply, send it via Telegram, and store it as an agent
- * message so it shows up in the operator inbox thread. Best-effort: reply
- * failures never break the inbound pipeline.
+ * Handle an inbound Telegram message with, in order:
+ *   1) deterministic commands (welcome / slash) — only when the channel's
+ *      autopilot flag is on, preserving existing behavior;
+ *   2) the AI knowledge assistant (runAutopilot), which is gated independently
+ *      by the tenant's ai_agent_settings (disabled / on_request / autopilot).
+ *
+ * Best-effort: reply failures never break the inbound pipeline.
  */
 async function maybeAutopilotReply(
   supabase: ReturnType<typeof createServiceClient>,
@@ -105,55 +112,62 @@ async function maybeAutopilotReply(
   ctx: { conversationId: string; contactId: string },
 ) {
   try {
-    // 1) Deterministic rules (slash commands / welcome).
-    const decision = computeAutopilotReply(inboundText, channel)
-    let replyText = decision.reply
-
-    // 2) Future: ManuBot conversational brain for non-command messages.
-    if (!replyText) {
-      replyText = await requestManubotReply({
-        propertyId: channel.property_id,
-        channel,
-        conversationId: ctx.conversationId,
-        contactId: ctx.contactId,
-        text: inboundText,
-      })
+    // 1) Deterministic rules (slash commands / welcome), if channel autopilot on.
+    if (channel.config?.autopilot_enabled) {
+      const decision = computeAutopilotReply(inboundText, channel)
+      if (decision.reply) {
+        const sent = await sendTelegramText(channel.credentials, chatId, decision.reply)
+        if (!sent.success) {
+          await supabase
+            .from("messaging_channels")
+            .update({ last_error: sent.error ?? "Errore invio autopilot" })
+            .eq("id", channel.id)
+          return
+        }
+        await supabase.from("messages").insert({
+          property_id: channel.property_id,
+          conversation_id: ctx.conversationId,
+          sender_type: "agent",
+          content: decision.reply,
+          content_type: "text",
+          external_message_id: sent.externalMessageId ? `tg-out:${chatId}:${sent.externalMessageId}` : null,
+          received_at: new Date().toISOString(),
+          stored_at: new Date().toISOString(),
+          status: "sent",
+          metadata: { channel: "telegram", chat_id: chatId, autopilot: true, reason: decision.reason },
+        })
+        await supabase
+          .from("messaging_channels")
+          .update({ last_outbound_at: new Date().toISOString(), last_error: null })
+          .eq("id", channel.id)
+        await supabase
+          .from("conversations")
+          .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq("id", ctx.conversationId)
+        return // command handled; don't also run the AI
+      }
     }
 
-    if (!replyText) return // stay silent -> operator handles it in the inbox
-
-    const sent = await sendTelegramText(channel.credentials, chatId, replyText)
-    if (!sent.success) {
-      await supabase
-        .from("messaging_channels")
-        .update({ last_error: sent.error ?? "Errore invio autopilot" })
-        .eq("id", channel.id)
-      return
-    }
-
-    // Store the outbound autopilot reply in the conversation thread.
-    await supabase.from("messages").insert({
-      property_id: channel.property_id,
-      conversation_id: ctx.conversationId,
-      sender_type: "agent",
-      content: replyText,
-      content_type: "text",
-      external_message_id: sent.externalMessageId ? `tg-out:${chatId}:${sent.externalMessageId}` : null,
-      received_at: new Date().toISOString(),
-      stored_at: new Date().toISOString(),
-      status: "sent",
-      metadata: { channel: "telegram", chat_id: chatId, autopilot: true, reason: decision.reason },
+    // 2) AI knowledge assistant (own gating via ai_agent_settings).
+    const outcome = await runAutopilot({
+      supabase,
+      propertyId: channel.property_id,
+      conversationId: ctx.conversationId,
+      channel: "telegram",
+      incomingText: inboundText,
+      send: async (text) => {
+        const sent = await sendTelegramText(channel.credentials, chatId, text)
+        if (!sent.success) throw new Error(sent.error ?? "Errore invio Telegram")
+        return { externalId: sent.externalMessageId ? `tg-out:${chatId}:${sent.externalMessageId}` : undefined }
+      },
     })
 
-    await supabase
-      .from("messaging_channels")
-      .update({ last_outbound_at: new Date().toISOString(), last_error: null })
-      .eq("id", channel.id)
-
-    await supabase
-      .from("conversations")
-      .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", ctx.conversationId)
+    if (outcome.action === "sent") {
+      await supabase
+        .from("messaging_channels")
+        .update({ last_outbound_at: new Date().toISOString(), last_error: null })
+        .eq("id", channel.id)
+    }
   } catch (e) {
     console.error("[Telegram autopilot] error:", e)
   }
