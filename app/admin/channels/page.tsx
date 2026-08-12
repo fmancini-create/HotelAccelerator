@@ -70,7 +70,7 @@ const CHANNEL_CATEGORIES = [
         color: "bg-sky-500",
         configPath: "/admin/channels/telegram",
         available: true,
-        comingSoon: true,
+        comingSoon: false,
       },
     ],
   },
@@ -218,6 +218,14 @@ export default function ChannelsPage() {
         data: Array<{ id: string; is_active: boolean; config: { phone_number_id?: string } }> | null
       }
 
+      const { data: tgChannels } = (await supabase
+        .from("messaging_channels")
+        .select("id, is_active, config")
+        .eq("property_id", adminUser.property_id)
+        .eq("channel_type", "telegram")) as {
+        data: Array<{ id: string; is_active: boolean; config: { bot_id?: string | number } }> | null
+      }
+
       // Initialize all channel statuses
       const statuses: Record<string, ChannelStatus> = {}
       ALL_CHANNELS.forEach((ch) => {
@@ -243,6 +251,14 @@ export default function ChannelsPage() {
         enabled: waConfigured.some((c) => c.is_active),
         configured: waConfigured.length > 0,
         activeConnections: waConfigured.filter((c) => c.is_active).length,
+      }
+
+      const tgConfigured = (tgChannels || []).filter((c) => c.config?.bot_id)
+      statuses.telegram = {
+        id: "telegram",
+        enabled: tgConfigured.some((c) => c.is_active),
+        configured: tgConfigured.length > 0,
+        activeConnections: tgConfigured.filter((c) => c.is_active).length,
       }
 
       setChannelStatuses(statuses)
