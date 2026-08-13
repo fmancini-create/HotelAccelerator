@@ -124,17 +124,27 @@ const CHANNEL_CATEGORIES = [
   {
     id: "voice",
     name: "Voce",
-    description: "Canali vocali con trascrizione AI",
+    // Non prometto "trascrizione AI": richiede l'audio della chiamata, che
+    // passa da un bridge esterno e in questo progetto non esiste.
+    description: "Centralino collegato al CRM",
     channels: [
       {
         id: "phone",
-        name: "Telefono IP",
-        description: "Chiamate VoIP con trascrizione AI",
+        name: "Telefono IP (3CX)",
+        // La vecchia descrizione promise "trascrizione AI", che NON esiste:
+        // trascrivere richiede l'audio, che passa dal bridge e qui non c'e'.
+        // Descrivo cio' che la pagina fa davvero.
+        description: "Chiamate dal CRM e riconoscimento del chiamante",
         icon: Phone,
         color: "bg-purple-500",
         configPath: "/admin/channels/phone",
         available: true,
-        comingSoon: true,
+        // Il centralino ORA e' collegabile: la pagina di configurazione esiste
+        // e le rotte 3CX sono attive. Lasciando comingSoon:true la scheda
+        // mostrava un pulsante "Notificami" SPENTO invece del collegamento
+        // (riga ~394), quindi la pagina era irraggiungibile dal menu': avevo
+        // rifatto la stanza lasciando la porta chiusa a chiave.
+        comingSoon: false,
       },
     ],
   },
@@ -259,6 +269,49 @@ export default function ChannelsPage() {
         enabled: tgConfigured.some((c) => c.is_active),
         configured: tgConfigured.length > 0,
         activeConnections: tgConfigured.filter((c) => c.is_active).length,
+      }
+
+      // Centralino: NON interrogo telephony_integrations dal browser. Quella
+      // tabella ha RLS attiva SENZA policy (le credenziali del centralino non
+      // devono essere leggibili dal client), quindi una lettura con chiave
+      // anonima tornerebbe ZERO RIGHE IN SILENZIO: la scheda direbbe "Non
+      // configurato" anche a centralino collegato. Passo dalla rotta server.
+      try {
+        const phoneRes = await fetch("/api/telephony/3cx", { cache: "no-store" })
+        if (phoneRes.ok) {
+          // Nomi dei campi PRESI DALLA ROTTA (snake_case), non indovinati:
+          // avevo scritto baseUrl/hasClientSecret/isActive e la scheda avrebbe
+          // detto "Non configurato" per sempre. Un tipo scritto a mano che
+          // mente non viene bocciato da tsc.
+          const phoneData = (await phoneRes.json()) as {
+            integration?: {
+              is_active?: boolean
+              base_url?: string | null
+              has_credentials?: { client_secret?: boolean }
+              last_check_status?: string | null
+            } | null
+          }
+          const integration = phoneData.integration
+          // "Configurato" solo con indirizzo E secret presenti: con uno dei due
+          // mancanti nessuna chiamata potrebbe partire, quindi dichiararlo
+          // configurato sarebbe una risposta sbagliata.
+          const configured = Boolean(integration?.base_url && integration?.has_credentials?.client_secret)
+          // "Attivo" solo se l'ULTIMA VERIFICA e' andata a buon fine: con
+          // credenziali piene ma connessione fallita, dire "Attivo" sarebbe una
+          // risposta sbagliata data per valida (la pagina di dettaglio usa lo
+          // stesso criterio, last_check_status === "ok").
+          const active = configured && integration?.is_active !== false && integration?.last_check_status === "ok"
+          statuses.phone = {
+            id: "phone",
+            enabled: active,
+            configured,
+            activeConnections: active ? 1 : 0,
+          }
+        }
+      } catch (phoneError) {
+        // Rete irraggiungibile: lascio lo stato iniziale (non configurato)
+        // invece di inventare un "attivo".
+        console.error("[v0] stato centralino non leggibile:", phoneError)
       }
 
       setChannelStatuses(statuses)
