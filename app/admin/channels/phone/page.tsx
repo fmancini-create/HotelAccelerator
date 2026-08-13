@@ -282,25 +282,16 @@ export default function PhoneChannelPage() {
               </ol>
               <div className="mt-4 rounded-md border border-border bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
-                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrazioni, prima
-                  di pensare alla licenza verificate queste due cose, nell&apos;ordine:
+                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrazioni, la
+                  causa è quasi sempre il <strong>ruolo dell&apos;utente</strong>: la voce è riservata al{" "}
+                  <strong>Proprietario del sistema</strong> (System Owner) e resta invisibile a
+                  &quot;Amministratore di sistema&quot; e ruoli inferiori, anche con licenza corretta. Controllate in
+                  Utenti → il vostro utente → Ruolo.
                 </p>
-                <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
-                  <li className="text-pretty leading-relaxed">
-                    <strong className="text-foreground">1. Console aperta come app (PWA).</strong> L&apos;app installata
-                    conserva una copia del menù: se in alto compare &quot;Aggiornamento app disponibile&quot;, quella
-                    copia è vecchia. Aprite la console in una <strong>normale finestra del browser</strong> e
-                    ricontrollate.
-                  </li>
-                  <li className="text-pretty leading-relaxed">
-                    <strong className="text-foreground">2. Ruolo dell&apos;utente.</strong> La voce è visibile solo a
-                    chi entra come <strong>System Owner</strong>. Con ruoli inferiori non compare, anche a licenza
-                    corretta.
-                  </li>
-                </ul>
                 <p className="mt-2 text-xs text-muted-foreground text-pretty leading-relaxed">
-                  Solo se entrambe sono a posto guardate la licenza: il Call Control richiede Enterprise da almeno 8
-                  chiamate simultanee, e la licenza non deve essere in eccesso di interni.
+                  Se il ruolo è già Proprietario del sistema, resta la licenza: il Call Control richiede Enterprise da
+                  almeno 8 chiamate simultanee, non in eccesso di interni. Sui centralini forniti da un partner il
+                  ruolo di proprietario può essere in mano al partner: in quel caso va chiesto a loro.
                 </p>
               </div>
             </CardContent>
