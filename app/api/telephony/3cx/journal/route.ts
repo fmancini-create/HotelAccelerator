@@ -64,6 +64,15 @@ export async function POST(request: NextRequest) {
   const expected = inboundSecretOf(row)
   if (!row || !expected || !secretMatches(token, expected)) return unauthorized()
 
+  // Canale spento dalla scheda /admin/channels: non registro la chiamata.
+  // Altrimenti "Spento" fermerebbe il riconoscimento del chiamante ma il
+  // registro continuerebbe a riempirsi: mezzo interruttore. Il controllo sta
+  // DOPO la verifica del segreto, per non rivelare dall'esterno quali strutture
+  // hanno il centralino disattivato.
+  if (!row.is_active) {
+    return NextResponse.json({ error: "Canale telefono disattivato" }, { status: 403 })
+  }
+
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return NextResponse.json({ error: "Corpo della richiesta non valido." }, { status: 400 })
 
