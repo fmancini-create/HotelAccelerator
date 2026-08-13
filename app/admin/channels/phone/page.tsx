@@ -169,8 +169,13 @@ export default function PhoneChannelPage() {
                     id="client-id"
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
+                    placeholder="900"
                     autoComplete="off"
                   />
+                  <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                    Non è un codice che 3CX vi consegna: è un <strong>numero che scegliete voi</strong> quando create
+                    l&apos;applicazione API (es. 900). Riscrivete qui lo stesso numero.
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="extension">Interno da cui chiamare</Label>
@@ -181,11 +186,17 @@ export default function PhoneChannelPage() {
                     placeholder="100"
                     autoComplete="off"
                   />
+                  <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                    Diverso dal Client ID: è l&apos;interno <strong>di una persona reale</strong>, il telefono che
+                    squilla quando si avvia una chiamata dal CRM.
+                  </p>
                 </div>
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="client-secret">Client Secret</Label>
+                <Label htmlFor="client-secret">
+                  Client Secret <span className="font-normal text-muted-foreground">(in 3CX si chiama &quot;API key&quot;)</span>
+                </Label>
                 <Input
                   id="client-secret"
                   type="password"
@@ -198,6 +209,11 @@ export default function PhoneChannelPage() {
                   }
                   autoComplete="new-password"
                 />
+                <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                  Nella console 3CX non esiste una voce chiamata &quot;Client Secret&quot;: il valore da incollare qui è
+                  la <strong>API key</strong> che appare dopo aver salvato l&apos;applicazione. Viene mostrata{" "}
+                  <strong>una volta sola</strong>: se la perdete, va creata una nuova applicazione.
+                </p>
               </div>
 
               <div className="flex items-center gap-3">
@@ -249,10 +265,12 @@ export default function PhoneChannelPage() {
             <CardContent>
               <ol className="space-y-3 text-sm">
                 {[
-                  "Apri Admin Console → Integrations → API.",
-                  "Crea una nuova applicazione: 3CX genera Client ID e Client Secret.",
-                  "Assegna all'app il permesso di controllo chiamate (Call Control), altrimenti l'accesso riesce ma le chiamate vengono rifiutate.",
-                  "Incolla i due valori qui sopra e indica l'interno da cui volete chiamare.",
+                  "Nella console di amministrazione 3CX apri Integrations → API, poi premi Aggiungi (Add).",
+                  "Scrivi tu il Client ID: un numero libero non ancora usato da nessun interno, per esempio 900. 3CX NON te lo fornisce, lo decidi tu.",
+                  "Spunta 3CX Call Control API Access e imposta il ruolo System Owner: senza la spunta l'accesso riesce ma le chiamate vengono rifiutate; con ruoli come User o Receptionist non è possibile comandare gli interni altrui.",
+                  "Nell'elenco degli interni da monitorare aggiungi l'interno da cui volete chiamare (es. 100). Se non è elencato, il centralino rifiuta la chiamata per permessi anche con tutto il resto corretto.",
+                  "Salva: solo adesso 3CX mostra la API key, ed è il valore che qui chiamiamo Client Secret. Appare UNA volta sola: copiala subito, perché riaprendo la pagina non è più leggibile e va creata una nuova applicazione.",
+                  "Torna qui, incolla la API key nel campo Client Secret, riscrivi lo stesso Client ID che hai scelto e indica l'interno.",
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
@@ -262,6 +280,14 @@ export default function PhoneChannelPage() {
                   </li>
                 ))}
               </ol>
+              <div className="mt-4 rounded-md border border-border bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrations, non
+                  c&apos;è nulla da cercare altrove: il Call Control richiede una licenza Enterprise da almeno 8
+                  chiamate simultanee e l&apos;accesso come System Owner. Se la licenza è in eccesso di interni,
+                  sistemate prima quello e ricontrollate il menù.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
