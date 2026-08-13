@@ -282,10 +282,25 @@ export default function PhoneChannelPage() {
               </ol>
               <div className="mt-4 rounded-md border border-border bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
-                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrations, non
-                  c&apos;è nulla da cercare altrove: il Call Control richiede una licenza Enterprise da almeno 8
-                  chiamate simultanee e l&apos;accesso come System Owner. Se la licenza è in eccesso di interni,
-                  sistemate prima quello e ricontrollate il menù.
+                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrazioni, prima
+                  di pensare alla licenza verificate queste due cose, nell&apos;ordine:
+                </p>
+                <ul className="mt-2 space-y-1.5 text-xs text-muted-foreground">
+                  <li className="text-pretty leading-relaxed">
+                    <strong className="text-foreground">1. Console aperta come app (PWA).</strong> L&apos;app installata
+                    conserva una copia del menù: se in alto compare &quot;Aggiornamento app disponibile&quot;, quella
+                    copia è vecchia. Aprite la console in una <strong>normale finestra del browser</strong> e
+                    ricontrollate.
+                  </li>
+                  <li className="text-pretty leading-relaxed">
+                    <strong className="text-foreground">2. Ruolo dell&apos;utente.</strong> La voce è visibile solo a
+                    chi entra come <strong>System Owner</strong>. Con ruoli inferiori non compare, anche a licenza
+                    corretta.
+                  </li>
+                </ul>
+                <p className="mt-2 text-xs text-muted-foreground text-pretty leading-relaxed">
+                  Solo se entrambe sono a posto guardate la licenza: il Call Control richiede Enterprise da almeno 8
+                  chiamate simultanee, e la licenza non deve essere in eccesso di interni.
                 </p>
               </div>
             </CardContent>
