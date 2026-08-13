@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { timingSafeEqual } from "crypto"
 import { createServiceClient } from "@/lib/supabase/server"
-import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
+import { authenticateInbound, syntheticCallId } from "@/lib/telephony/inbound-auth"
 import { phoneMatchKey } from "@/lib/telephony/threecx-client"
 
 /**
@@ -13,15 +12,10 @@ import { phoneMatchKey } from "@/lib/telephony/threecx-client"
  * contatti su 850 hanno un numero in rubrica).
  */
 
-function unauthorized() {
-  return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-}
-
-function secretMatches(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
+function errorFor(status: 401 | 403 | 500) {
+  if (status === 401) return NextResponse.json({ error: "Non autorizzato" }, { status })
+  if (status === 403) return NextResponse.json({ error: "Canale telefono disattivato" }, { status })
+  return NextResponse.json({ error: "Errore interno" }, { status })
 }
 
 function toIsoOrNull(value: unknown): string | null {
@@ -47,39 +41,45 @@ function toSeconds(value: unknown): number | null {
   return null
 }
 
+/** Primo valore di testo utile fra piu' nomi possibili dello stesso campo. */
+function pick(body: Record<string, unknown>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = body[k]
+    if (typeof v === "string" && v.trim() !== "") return v.trim()
+  }
+  return ""
+}
+
 export async function POST(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const propertyId = searchParams.get("property")?.trim() || ""
-  const token = searchParams.get("token")?.trim() || ""
-
-  if (!propertyId || !token) return unauthorized()
-
-  let row
-  try {
-    row = await loadTelephonyRow(propertyId)
-  } catch {
-    return NextResponse.json({ error: "Errore interno" }, { status: 500 })
-  }
-
-  const expected = inboundSecretOf(row)
-  if (!row || !expected || !secretMatches(token, expected)) return unauthorized()
-
-  // Canale spento dalla scheda /admin/channels: non registro la chiamata.
-  // Altrimenti "Spento" fermerebbe il riconoscimento del chiamante ma il
-  // registro continuerebbe a riempirsi: mezzo interruttore. Il controllo sta
-  // DOPO la verifica del segreto, per non rivelare dall'esterno quali strutture
-  // hanno il centralino disattivato.
-  if (!row.is_active) {
-    return NextResponse.json({ error: "Canale telefono disattivato" }, { status: 403 })
-  }
+  const auth = await authenticateInbound(request)
+  if (!auth.ok) return errorFor(auth.status)
+  const propertyId = auth.propertyId
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return NextResponse.json({ error: "Corpo della richiesta non valido." }, { status: 400 })
 
-  const number = typeof body.number === "string" ? body.number : typeof body.caller === "string" ? body.caller : ""
-  const rawDirection = typeof body.direction === "string" ? body.direction.toLowerCase() : ""
+  // Nomi accettati in piu' varianti: il nostro template usa `number`/`agent`,
+  // quello Scidoo `phone`/`callDir`. Leggerne uno solo avrebbe prodotto
+  // registrazioni con numero vuoto, senza alcun errore visibile.
+  const number = pick(body, "number", "phone", "caller")
+  const rawDirection = pick(body, "direction", "callDir", "call_direction").toLowerCase()
+  // 3CX manda "Outbound"/"Inbound"; con un valore inatteso resta "inbound", che
+  // e' il caso di gran lunga piu' frequente in hotel.
   const direction = rawDirection.includes("out") ? "outbound" : "inbound"
-  const externalId = typeof body.call_id === "string" && body.call_id.trim() !== "" ? body.call_id.trim() : null
+  const extension = pick(body, "extension", "agent")
+  const startedAtRaw = pick(body, "started_at", "callStart")
+
+  // 3CX non espone alcun identificativo di chiamata nei template CRM
+  // (verificato: nel set di variabili non esiste un [CallID]). Se mi limitassi a
+  // leggerlo, `external_call_id` sarebbe SEMPRE vuoto e la protezione dai
+  // doppioni piu' sotto non entrerebbe mai in funzione. Quando manca, ne
+  // ricostruisco uno deterministico dai dati della chiamata.
+  const providedId = pick(body, "call_id", "callId")
+  const externalId =
+    providedId ||
+    (number && startedAtRaw
+      ? syntheticCallId({ number, extension, startedAt: startedAtRaw, direction })
+      : null)
 
   const supabase = createServiceClient()
 
@@ -106,11 +106,25 @@ export async function POST(request: NextRequest) {
     contact_id: contactId,
     direction,
     counterpart_number: number || null,
-    extension: typeof body.extension === "string" ? body.extension : typeof body.agent === "string" ? body.agent : null,
-    agent_name: typeof body.agent_name === "string" ? body.agent_name : null,
-    status: typeof body.status === "string" ? body.status : "completed",
-    started_at: toIsoOrNull(body.started_at) ?? new Date().toISOString(),
-    ended_at: toIsoOrNull(body.ended_at),
+    extension: extension || null,
+    agent_name: pick(body, "agent_name", "agent") || null,
+    // 3CX comunica l'esito in `CallType` ("Missed", "Answered"...). Prima si
+    // leggeva solo un campo `status` che il centralino non manda mai: TUTTE le
+    // chiamate, comprese quelle perse, finivano nel registro come "completed" —
+    // e in hotel la chiamata persa e' proprio quella da richiamare.
+    status: (() => {
+      const explicit = pick(body, "status")
+      if (explicit) return explicit
+      const type = pick(body, "call_type", "callType").toLowerCase()
+      if (type.includes("miss") || type.includes("pers")) return "missed"
+      if (type.includes("unans") || type.includes("norisp")) return "no_answer"
+      return "completed"
+    })(),
+    started_at: toIsoOrNull(startedAtRaw) ?? new Date().toISOString(),
+    ended_at: toIsoOrNull(pick(body, "ended_at", "callEnd")),
+    // L'istante di risposta arriva dal template ma NON viene salvato: la tabella
+    // `phone_calls` non ha una colonna per contenerlo (schema verificato, non
+    // supposto). Scriverla avrebbe fatto fallire l'inserimento di OGNI chiamata.
     duration_seconds: toSeconds(body.duration),
     external_call_id: externalId,
     notes: typeof body.notes === "string" ? body.notes.slice(0, 1000) : null,

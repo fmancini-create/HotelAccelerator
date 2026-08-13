@@ -29,7 +29,8 @@ export default function PhoneChannelPage() {
   const [clientSecret, setClientSecret] = useState("")
   const [extension, setExtension] = useState("")
   const [result, setResult] = useState<{ ok: boolean; message: string; extensions?: string[] } | null>(null)
-  const [urls, setUrls] = useState<{ lookup_url: string; journal_url: string } | null>(null)
+  const [apiKey, setApiKey] = useState("")
+  const [preparing, setPreparing] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -89,7 +90,9 @@ export default function PhoneChannelPage() {
           message: `Connessione riuscita: il centralino risponde e l'app ha i permessi di controllo chiamate.`,
           extensions: list,
         })
-        void loadUrls()
+        // Il salvataggio delle credenziali genera anche la chiave del
+        // collegamento CRM: la mostro subito, senza un secondo passaggio.
+        void prepareCrmLink()
       } else {
         setResult({ ok: false, message: `Dati salvati, ma la connessione non funziona: ${data.error}` })
       }
@@ -100,10 +103,25 @@ export default function PhoneChannelPage() {
     }
   }
 
-  async function loadUrls() {
-    const res = await fetch("/api/telephony/3cx/inbound-urls")
-    if (!res.ok) return
-    setUrls(await res.json())
+  async function prepareCrmLink() {
+    setPreparing(true)
+    try {
+      const res = await fetch("/api/telephony/3cx/crm-link", { method: "POST" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.api_key) {
+        // Un errore silenzioso qui lascerebbe il pulsante fermo senza spiegazione:
+        // riuso la stessa striscia di esito del resto della pagina.
+        setResult({
+          ok: false,
+          message: data?.error || "Non è stato possibile preparare il collegamento.",
+        })
+        return
+      }
+      setApiKey(String(data.api_key))
+      await load()
+    } finally {
+      setPreparing(false)
+    }
   }
 
   async function copy(label: string, value: string) {
@@ -282,61 +300,96 @@ export default function PhoneChannelPage() {
               </ol>
               <div className="mt-4 rounded-md border border-border bg-muted/50 p-3">
                 <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
-                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrations, non
-                  c&apos;è nulla da cercare altrove: il Call Control richiede una licenza Enterprise da almeno 8
-                  chiamate simultanee e l&apos;accesso come System Owner. Se la licenza è in eccesso di interni,
-                  sistemate prima quello e ricontrollate il menù.
+                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrazioni, la
+                  causa è quasi sempre il <strong>ruolo dell&apos;utente</strong>: la voce è riservata al{" "}
+                  <strong>Proprietario del sistema</strong> (System Owner) e resta invisibile a
+                  &quot;Amministratore di sistema&quot; e ruoli inferiori, anche con licenza corretta. Controllate in
+                  Utenti → il vostro utente → Ruolo.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground text-pretty leading-relaxed">
+                  <strong className="text-foreground">Se il campo Ruolo è grigio, non è un guasto:</strong> in 3CX solo
+                  un Proprietario del sistema può assegnare quel ruolo, quindi nessuno può promuovere se stesso. Va
+                  chiesto a chi lo possiede già — nell&apos;elenco Utenti è la riga con ruolo Proprietario del sistema.
+                  Sui centralini forniti da un partner spesso è il partner: in alternativa può creare lui
+                  l&apos;applicazione API e passarvi i due valori.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground text-pretty leading-relaxed">
+                  Solo a ruolo corretto guardate la licenza: il Call Control richiede Enterprise da almeno 8 chiamate
+                  simultanee, non in eccesso di interni.
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          {connected && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Chiamate in arrivo: chi sta telefonando</CardTitle>
-                <CardDescription className="text-pretty">
-                  Incolla questi due indirizzi nel template CRM di 3CX. Il centralino cercherà il numero nel CRM e
-                  registrerà le telefonate, senza bisogno di altri programmi.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {!urls ? (
-                  <Button variant="outline" onClick={loadUrls}>
-                    Mostra gli indirizzi
-                  </Button>
-                ) : (
-                  <>
-                    {[
-                      { label: "Ricerca contatto", value: urls.lookup_url },
-                      { label: "Registro chiamate", value: urls.journal_url },
-                    ].map((item) => (
-                      <div key={item.label} className="grid gap-2">
-                        <Label className="text-xs uppercase tracking-wide text-muted-foreground">{item.label}</Label>
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 overflow-x-auto rounded-md border bg-muted/50 px-3 py-2 text-xs">
-                            {item.value}
-                          </code>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => copy(item.label, item.value)}
-                            aria-label={`Copia ${item.label}`}
-                          >
-                            <Copy className="h-4 w-4" aria-hidden="true" />
-                          </Button>
-                        </div>
-                        {copied === item.label && <p className="text-xs text-ha-success">Copiato.</p>}
-                      </div>
-                    ))}
+          {/* NON condizionata all'accesso riuscito all'applicazione API: questa e'
+              proprio la strada per chi non puo' crearla. Legarla a "Collegato"
+              la rendeva raggiungibile solo a chi non ne aveva bisogno. */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Chiamate in arrivo: chi sta telefonando</CardTitle>
+              <CardDescription className="text-pretty">
+                Funziona <strong>senza</strong> l&apos;applicazione API e senza il ruolo Proprietario del sistema: basta
+                caricare un file nella pagina Integrazioni → CRM. Il centralino cercherà il numero fra i vostri contatti
+                e registrerà le telefonate.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!apiKey ? (
+                <Button variant="outline" onClick={prepareCrmLink} disabled={preparing}>
+                  {preparing ? "Preparazione…" : "Prepara il collegamento"}
+                </Button>
+              ) : (
+                <>
+                  <div className="grid gap-2">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Chiave di collegamento
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 overflow-x-auto rounded-md border bg-muted/50 px-3 py-2 text-xs">
+                        {apiKey}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copy("Chiave", apiKey)}
+                        aria-label="Copia la chiave di collegamento"
+                      >
+                        <Copy className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                    {copied === "Chiave" && <p className="text-xs text-ha-success">Copiata.</p>}
                     <p className="text-xs text-muted-foreground text-pretty">
-                      Contengono una chiave di accesso: trattali come una password.
+                      Trattatela come una password. Non è scritta dentro il file: il file può essere condiviso, la
+                      chiave no.
                     </p>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          )}
+                  </div>
+
+                  <Button asChild>
+                    <a href="/api/telephony/3cx/template" download>
+                      Scarica il file per 3CX
+                    </a>
+                  </Button>
+
+                  <ol className="space-y-2 text-sm text-muted-foreground">
+                    {[
+                      "Nella console 3CX apri Integrazioni → CRM.",
+                      "Premi Aggiungi template e carica il file appena scaricato.",
+                      "Scegli HotelAccelerator nell'elenco delle soluzioni CRM.",
+                      "Incolla la chiave qui sopra nel campo Chiave di collegamento, poi Salva.",
+                      "Premi PROVA con un numero presente in rubrica: deve comparire il contatto.",
+                    ].map((step, i) => (
+                      <li key={step} className="flex gap-3 text-pretty leading-relaxed">
+                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium text-foreground">
+                          {i + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>

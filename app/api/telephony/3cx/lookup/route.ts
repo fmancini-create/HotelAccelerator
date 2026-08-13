@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { timingSafeEqual } from "crypto"
 import { createServiceClient } from "@/lib/supabase/server"
-import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
+import { authenticateInbound } from "@/lib/telephony/inbound-auth"
 import { phoneMatchKey } from "@/lib/telephony/threecx-client"
 
 /**
@@ -19,44 +18,35 @@ import { phoneMatchKey } from "@/lib/telephony/threecx-client"
  * caricata. Il confronto e' a tempo costante.
  */
 
-function unauthorized() {
-  // Messaggio volutamente generico: non rivelo se la struttura esiste.
-  return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+/** Messaggi volutamente generici: non rivelano se la struttura esiste. */
+function errorFor(status: 401 | 403 | 500) {
+  if (status === 401) return NextResponse.json({ error: "Non autorizzato" }, { status })
+  if (status === 403) return NextResponse.json({ error: "Canale telefono disattivato" }, { status })
+  return NextResponse.json({ error: "Errore interno" }, { status })
 }
 
-function secretMatches(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
+/**
+ * La tabella `contacts` ha un unico campo `name`, mentre 3CX mostra nome e
+ * cognome separati: senza divisione l'operatore vedrebbe tutto nel solo campo
+ * nome. L'ultima parola fa da cognome, il resto da nome.
+ */
+function splitName(full: string): { firstname: string; lastname: string } {
+  const parts = full.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { firstname: "", lastname: "" }
+  if (parts.length === 1) return { firstname: parts[0], lastname: "" }
+  return { firstname: parts.slice(0, -1).join(" "), lastname: parts[parts.length - 1] }
 }
 
 export async function GET(request: NextRequest) {
+  const auth = await authenticateInbound(request)
+  if (!auth.ok) return errorFor(auth.status)
+  const propertyId = auth.propertyId
+
   const { searchParams } = new URL(request.url)
-  const propertyId = searchParams.get("property")?.trim() || ""
-  const token = searchParams.get("token")?.trim() || ""
-  const number = searchParams.get("number")?.trim() || ""
-
-  if (!propertyId || !token) return unauthorized()
-
-  let row
-  try {
-    row = await loadTelephonyRow(propertyId)
-  } catch {
-    return NextResponse.json({ error: "Errore interno" }, { status: 500 })
-  }
-
-  const expected = inboundSecretOf(row)
-  if (!row || !expected || !secretMatches(token, expected)) return unauthorized()
-
-  // Canale spento dalla scheda /admin/channels: NON rispondo con i dati dei
-  // contatti. Senza questo controllo l'interruttore "Spento" sarebbe una bugia,
-  // perche' il riconoscimento del chiamante continuerebbe a funzionare.
-  // Il controllo sta DOPO la verifica del segreto, altrimenti si potrebbe
-  // sondare dall'esterno quali strutture hanno il centralino disattivato.
-  if (!row.is_active) {
-    return NextResponse.json({ error: "Canale telefono disattivato" }, { status: 403 })
-  }
+  // `number` e' il nome usato dal nostro template; `phone` e' quello del
+  // template Scidoo. Accettare entrambi evita che un template scritto a mano
+  // trovi sempre "nessun contatto" per un semplice nome di parametro diverso.
+  const number = (searchParams.get("number") || searchParams.get("phone") || "").trim()
 
   const key = phoneMatchKey(number)
   if (!key) {
@@ -99,5 +89,24 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  return NextResponse.json({ found: contacts.length > 0, contacts })
+  // 3CX legge percorsi SEMPLICI (`contact.id`), non elementi di un elenco: con
+  // la sola forma `contacts[]` la regola di riconoscimento del template non
+  // trova mai nulla e ogni chiamante resta sconosciuto. Espongo quindi anche il
+  // primo risultato come oggetto piatto, con gli stessi nomi di campo del
+  // template Scidoo gia' funzionante su questo centralino. L'elenco resta per
+  // gli altri consumatori.
+  const first = contacts[0]
+  const contact = first
+    ? {
+        id: first.id,
+        ...splitName(first.name),
+        company: first.company,
+        email: first.email,
+        businessphone: first.phone,
+        mobilephone: first.phone,
+        url: first.url,
+      }
+    : null
+
+  return NextResponse.json({ found: contacts.length > 0, contact, contacts })
 }
