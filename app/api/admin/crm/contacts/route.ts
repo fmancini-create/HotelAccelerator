@@ -18,6 +18,21 @@ export async function GET(request: NextRequest) {
 
     const segment = searchParams.get("segment")
     const vip = searchParams.get("vip")
+
+    // Il filtro per segmento era LETTO e mai applicato: la dashboard invia
+    // `segment=<id>` e riceveva in risposta TUTTI i contatti, presentati come se
+    // fossero i membri di quel segmento — una risposta sbagliata in silenzio,
+    // peggio di un errore. I segmenti sono dinamici (`contact_segments.conditions`,
+    // nessuna tabella di appartenenza) e in questo progetto non esiste alcun
+    // valutatore di quelle condizioni, quindi applicarlo qui richiederebbe di
+    // inventare un linguaggio di regole: preferisco dichiarare il limite.
+    // Oggi irraggiungibile (0 segmenti definiti), ma la trappola resta disarmata.
+    if (segment && segment !== "all") {
+      return NextResponse.json(
+        { error: "Filtro per segmento non ancora supportato: i segmenti dinamici non sono valutati." },
+        { status: 400 },
+      )
+    }
     const search = searchParams.get("search")
     const limit = Number.parseInt(searchParams.get("limit") || "50")
     const offset = Number.parseInt(searchParams.get("offset") || "0")
