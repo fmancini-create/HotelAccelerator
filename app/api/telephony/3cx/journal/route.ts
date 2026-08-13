@@ -83,8 +83,10 @@ export async function POST(request: NextRequest) {
       .from("contacts")
       .select("id")
       .eq("property_id", propertyId)
-      .not("phone", "is", null)
-      .ilike("phone", `%${key}%`)
+      // Confronto su cifre da entrambi i lati: con la stringa grezza un numero
+      // scritto '+39 335 804 6836' non veniva collegato al contatto e la
+      // chiamata finiva nel registro come "sconosciuta".
+      .like("phone_digits", `%${key}%`)
       .limit(1)
       .maybeSingle()
     if (match?.id) contactId = String(match.id)

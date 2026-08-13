@@ -58,16 +58,18 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = createServiceClient()
-  // Confronto sulle ultime cifre: i numeri in rubrica sono scritti a mano
-  // (`+39 055 ...`, `055...`), quindi un confronto esatto non troverebbe nulla.
+  // Confronto su CIFRE da entrambi i lati (`phone_digits` e' una colonna
+  // generata). Confrontare la chiave normalizzata con la stringa grezza era un
+  // difetto misurato: su 6 formati realistici 4 NON venivano trovati
+  // ('+39 335 8046836', '335/8046836', '335-8046836', ...) e il contatto
+  // compariva come sconosciuto pur essendo in rubrica.
   const { data, error } = await supabase
     .from("contacts")
     // `contacts` ha un'unica colonna `name`: non esistono first_name/last_name
     // (verificato sullo schema, non supposto).
     .select("id, name, email, phone, company, vip_level")
     .eq("property_id", propertyId)
-    .not("phone", "is", null)
-    .ilike("phone", `%${key}%`)
+    .like("phone_digits", `%${key}%`)
     .limit(5)
 
   if (error) {

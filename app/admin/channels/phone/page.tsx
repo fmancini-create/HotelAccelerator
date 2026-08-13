@@ -153,10 +153,13 @@ export default function PhoneChannelPage() {
                   id="base-url"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://miohotel.3cx.eu"
+                  placeholder="https://ibarroncisrl.my3cx.it"
                   autoComplete="off"
                 />
-                <p className="text-xs text-muted-foreground">Senza percorsi finali: solo il dominio, con https.</p>
+                <p className="text-xs text-muted-foreground">
+                  Solo il dominio (FQDN) con https, senza percorsi finali. Lo trovi nella dashboard 3CX alla voce
+                  {" "}&quot;3CX FQDN&quot;.
+                </p>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2 sm:gap-4">
