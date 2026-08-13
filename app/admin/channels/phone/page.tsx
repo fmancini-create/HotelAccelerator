@@ -194,7 +194,9 @@ export default function PhoneChannelPage() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="client-secret">Client Secret</Label>
+                <Label htmlFor="client-secret">
+                  Client Secret <span className="font-normal text-muted-foreground">(in 3CX si chiama &quot;API key&quot;)</span>
+                </Label>
                 <Input
                   id="client-secret"
                   type="password"
@@ -207,6 +209,11 @@ export default function PhoneChannelPage() {
                   }
                   autoComplete="new-password"
                 />
+                <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                  Nella console 3CX non esiste una voce chiamata &quot;Client Secret&quot;: il valore da incollare qui è
+                  la <strong>API key</strong> che appare dopo aver salvato l&apos;applicazione. Viene mostrata{" "}
+                  <strong>una volta sola</strong>: se la perdete, va creata una nuova applicazione.
+                </p>
               </div>
 
               <div className="flex items-center gap-3">
@@ -260,9 +267,10 @@ export default function PhoneChannelPage() {
                 {[
                   "Nella console di amministrazione 3CX apri Integrations → API, poi premi Aggiungi (Add).",
                   "Scrivi tu il Client ID: un numero libero non ancora usato da nessun interno, per esempio 900. 3CX NON te lo fornisce, lo decidi tu.",
-                  "Spunta l'accesso Call Control (3CX Call Control API Access) e imposta il ruolo System Owner: senza la spunta l'accesso riesce ma le chiamate vengono rifiutate.",
-                  "Salva: solo adesso 3CX genera il Client Secret e lo mostra UNA volta sola. Copialo subito, perché riaprendo la pagina non è più leggibile e va rifatta l'applicazione.",
-                  "Torna qui, incolla il Secret, riscrivi lo stesso Client ID che hai scelto e indica l'interno da cui volete chiamare.",
+                  "Spunta 3CX Call Control API Access e imposta il ruolo System Owner: senza la spunta l'accesso riesce ma le chiamate vengono rifiutate; con ruoli come User o Receptionist non è possibile comandare gli interni altrui.",
+                  "Nell'elenco degli interni da monitorare aggiungi l'interno da cui volete chiamare (es. 100). Se non è elencato, il centralino rifiuta la chiamata per permessi anche con tutto il resto corretto.",
+                  "Salva: solo adesso 3CX mostra la API key, ed è il valore che qui chiamiamo Client Secret. Appare UNA volta sola: copiala subito, perché riaprendo la pagina non è più leggibile e va creata una nuova applicazione.",
+                  "Torna qui, incolla la API key nel campo Client Secret, riscrivi lo stesso Client ID che hai scelto e indica l'interno.",
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">

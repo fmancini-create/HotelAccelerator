@@ -252,7 +252,17 @@ export async function makeCall(
       }
     }
     if (res.status === 403) {
-      return { ok: false, status: 403, error: "L'app API non ha il permesso di originare chiamate su questo interno." }
+      // Causa quasi sempre questa, verificata sulla documentazione: l'interno
+      // non e' fra quelli selezionati nell'app API, oppure il ruolo assegnato
+      // (User, Receptionist) non consente di comandare interni altrui. Dirlo
+      // qui evita di far cercare il guasto nelle credenziali, che sono valide.
+      return {
+        ok: false,
+        status: 403,
+        error:
+          `Il centralino ha negato la chiamata sull'interno ${extension}. Nella console 3CX, in Integrations → API, ` +
+          `verificate che questo interno sia nell'elenco di quelli monitorati dall'applicazione e che il ruolo sia System Owner.`,
+      }
     }
     if (!res.ok) {
       const detail = await readBodySafely(res)
