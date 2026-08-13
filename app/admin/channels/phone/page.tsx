@@ -169,8 +169,13 @@ export default function PhoneChannelPage() {
                     id="client-id"
                     value={clientId}
                     onChange={(e) => setClientId(e.target.value)}
+                    placeholder="900"
                     autoComplete="off"
                   />
+                  <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                    Non è un codice che 3CX vi consegna: è un <strong>numero che scegliete voi</strong> quando create
+                    l&apos;applicazione API (es. 900). Riscrivete qui lo stesso numero.
+                  </p>
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="extension">Interno da cui chiamare</Label>
@@ -181,6 +186,10 @@ export default function PhoneChannelPage() {
                     placeholder="100"
                     autoComplete="off"
                   />
+                  <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                    Diverso dal Client ID: è l&apos;interno <strong>di una persona reale</strong>, il telefono che
+                    squilla quando si avvia una chiamata dal CRM.
+                  </p>
                 </div>
               </div>
 
@@ -249,10 +258,11 @@ export default function PhoneChannelPage() {
             <CardContent>
               <ol className="space-y-3 text-sm">
                 {[
-                  "Apri Admin Console → Integrations → API.",
-                  "Crea una nuova applicazione: 3CX genera Client ID e Client Secret.",
-                  "Assegna all'app il permesso di controllo chiamate (Call Control), altrimenti l'accesso riesce ma le chiamate vengono rifiutate.",
-                  "Incolla i due valori qui sopra e indica l'interno da cui volete chiamare.",
+                  "Nella console di amministrazione 3CX apri Integrations → API, poi premi Aggiungi (Add).",
+                  "Scrivi tu il Client ID: un numero libero non ancora usato da nessun interno, per esempio 900. 3CX NON te lo fornisce, lo decidi tu.",
+                  "Spunta l'accesso Call Control (3CX Call Control API Access) e imposta il ruolo System Owner: senza la spunta l'accesso riesce ma le chiamate vengono rifiutate.",
+                  "Salva: solo adesso 3CX genera il Client Secret e lo mostra UNA volta sola. Copialo subito, perché riaprendo la pagina non è più leggibile e va rifatta l'applicazione.",
+                  "Torna qui, incolla il Secret, riscrivi lo stesso Client ID che hai scelto e indica l'interno da cui volete chiamare.",
                 ].map((step, i) => (
                   <li key={i} className="flex gap-3">
                     <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
@@ -262,6 +272,14 @@ export default function PhoneChannelPage() {
                   </li>
                 ))}
               </ol>
+              <div className="mt-4 rounded-md border border-border bg-muted/50 p-3">
+                <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                  <strong className="text-foreground">Se la voce API non compare</strong> nel menù Integrations, non
+                  c&apos;è nulla da cercare altrove: il Call Control richiede una licenza Enterprise da almeno 8
+                  chiamate simultanee e l&apos;accesso come System Owner. Se la licenza è in eccesso di interni,
+                  sistemate prima quello e ricontrollate il menù.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
