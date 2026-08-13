@@ -3,6 +3,7 @@ import { randomBytes } from "crypto"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { requireAreaApi } from "@/lib/auth/area-access"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { loadTelephonyRow, maskSecret, encryptForWrite, type TelephonyRow } from "@/lib/telephony/config"
 import { normalizeBaseUrl, testConnection } from "@/lib/telephony/threecx-client"
 import { decryptSecretIfNeeded } from "@/lib/crypto/secrets"
@@ -39,14 +40,18 @@ function serialize(row: TelephonyRow | null) {
 
 export async function GET(request: NextRequest) {
   try {
-    const decision = await requireAreaApi("channels", request)
-    if (!decision.allowed) {
-      return NextResponse.json({ error: "Accesso non consentito a questa area." }, { status: 403 })
-    }
+    // Area "settings": l'elenco delle aree valide (lib/platform/areas.ts) NON
+    // contiene "channels" — con una chiave inesistente la guardia negherebbe
+    // sempre, rendendo la pagina inutilizzabile. Configurare il centralino e'
+    // un'impostazione di struttura, quindi "settings" e' la chiave giusta.
+    await requireAreaApi("settings", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const row = await loadTelephonyRow(propertyId)
     return NextResponse.json({ integration: serialize(row) })
   } catch (error) {
+    // In modalita' "enforce" la guardia LANCIA: senza questo, un diniego di
+    // permesso diventerebbe un 500 "server rotto" invece di un 403.
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
     return NextResponse.json({ error: message }, { status })
@@ -64,10 +69,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const decision = await requireAreaApi("channels", request)
-    if (!decision.allowed) {
-      return NextResponse.json({ error: "Accesso non consentito a questa area." }, { status: 403 })
-    }
+    await requireAreaApi("settings", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json().catch(() => null)
     const baseUrlRaw = typeof body?.base_url === "string" ? body.base_url : ""
@@ -151,6 +153,7 @@ export async function POST(request: NextRequest) {
       extensions: check.extensions,
     })
   } catch (error) {
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
     return NextResponse.json({ error: message }, { status })
@@ -159,10 +162,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const decision = await requireAreaApi("channels", request)
-    if (!decision.allowed) {
-      return NextResponse.json({ error: "Accesso non consentito a questa area." }, { status: 403 })
-    }
+    await requireAreaApi("settings", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = createServiceClient()
     const { error } = await supabase
@@ -173,6 +173,7 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (error) {
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore"
     return NextResponse.json({ error: message }, { status: 500 })
   }

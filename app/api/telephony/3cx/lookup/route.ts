@@ -74,8 +74,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 
-  const contacts = (data ?? []).map((c) => {
-    const row = c as Record<string, unknown>
+  const contacts = ((data ?? []) as Record<string, unknown>[]).map((row) => {
     const fullName = typeof row.name === "string" ? row.name.trim() : ""
     return {
       id: String(row.id),

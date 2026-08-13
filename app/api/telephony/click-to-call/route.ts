@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { requireAreaApi } from "@/lib/auth/area-access"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { loadTelephonyRow, toThreeCxConfig } from "@/lib/telephony/config"
 import { makeCall } from "@/lib/telephony/threecx-client"
 
@@ -16,10 +17,10 @@ import { makeCall } from "@/lib/telephony/threecx-client"
 
 export async function POST(request: NextRequest) {
   try {
-    const decision = await requireAreaApi("crm", request)
-    if (!decision.allowed) {
-      return NextResponse.json({ error: "Accesso non consentito a questa area." }, { status: 403 })
-    }
+    // "crm" e' una chiave d'area valida (verificata in lib/platform/areas.ts).
+    // In "enforce" questa chiamata LANCIA in caso di diniego: il catch finale
+    // lo traduce in 403 invece del 500 generico.
+    await requireAreaApi("crm", request)
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const body = await request.json().catch(() => null)
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
       message: `Chiamata avviata: risponde prima il tuo interno ${extension}, poi il centralino compone il numero.`,
     })
   } catch (error) {
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
     return NextResponse.json({ error: message }, { status })

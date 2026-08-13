@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { requireAreaApi } from "@/lib/auth/area-access"
+import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
 
 /**
@@ -13,10 +14,7 @@ import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
  */
 export async function GET(request: NextRequest) {
   try {
-    const decision = await requireAreaApi("channels", request)
-    if (!decision.allowed) {
-      return NextResponse.json({ error: "Accesso non consentito a questa area." }, { status: 403 })
-    }
+    await requireAreaApi("settings", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const row = await loadTelephonyRow(propertyId)
     const secret = inboundSecretOf(row)
@@ -40,6 +38,7 @@ export async function GET(request: NextRequest) {
       journal_url: `${root}/api/telephony/3cx/journal?${query}`,
     })
   } catch (error) {
+    if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
     return NextResponse.json({ error: message }, { status })

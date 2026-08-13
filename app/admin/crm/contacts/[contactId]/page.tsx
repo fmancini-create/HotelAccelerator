@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
+import { CallButton } from "@/components/telephony/call-button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -220,9 +221,12 @@ export default function ContactDetailPage({ params }: { params: Promise<{ contac
             </CardHeader>
             <CardContent className="space-y-4">
               {contact.phone && (
-                <div className="flex items-center gap-3">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{contact.phone}</span>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <span>{contact.phone}</span>
+                  </div>
+                  <CallButton destination={contact.phone} contactId={contact.id} />
                 </div>
               )}
               {contact.company && (
