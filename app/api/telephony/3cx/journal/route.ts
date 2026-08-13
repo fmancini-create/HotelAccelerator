@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { authenticateInbound, syntheticCallId } from "@/lib/telephony/inbound-auth"
 import { phoneMatchKey } from "@/lib/telephony/threecx-client"
+import { findUserIdByExtension, findUserIdByEmail } from "@/lib/telephony/user-extension"
 
 /**
  * Endpoint richiamato DA 3CX a fine chiamata ("ReportCall" nel template CRM):
@@ -101,12 +102,24 @@ export async function POST(request: NextRequest) {
     if (match?.id) contactId = String(match.id)
   }
 
+  // Dall'interno alla persona: 3CX dice quale apparecchio ha gestito la
+  // chiamata, non chi e' nel gestionale. Senza questa traduzione il registro
+  // resterebbe un elenco di numeri di interno, e "le chiamate di Maria" non
+  // sarebbero interrogabili.
+  // Prima per interno (`[Agent]` in 3CX E' il numero di interno: verificato,
+  // non supposto), poi per email dell'operatore: cosi' il registro ha un autore
+  // anche per chi non ha ancora un interno assegnato.
+  const userId =
+    (await findUserIdByExtension(supabase, propertyId, extension)) ??
+    (await findUserIdByEmail(supabase, propertyId, pick(body, "agent_email")))
+
   const record = {
     property_id: propertyId,
     contact_id: contactId,
     direction,
     counterpart_number: number || null,
     extension: extension || null,
+    user_id: userId,
     agent_name: pick(body, "agent_name", "agent") || null,
     // 3CX comunica l'esito in `CallType` ("Missed", "Answered"...). Prima si
     // leggeva solo un campo `status` che il centralino non manda mai: TUTTE le
