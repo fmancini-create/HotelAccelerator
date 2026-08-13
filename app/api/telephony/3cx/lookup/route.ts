@@ -49,6 +49,15 @@ export async function GET(request: NextRequest) {
   const expected = inboundSecretOf(row)
   if (!row || !expected || !secretMatches(token, expected)) return unauthorized()
 
+  // Canale spento dalla scheda /admin/channels: NON rispondo con i dati dei
+  // contatti. Senza questo controllo l'interruttore "Spento" sarebbe una bugia,
+  // perche' il riconoscimento del chiamante continuerebbe a funzionare.
+  // Il controllo sta DOPO la verifica del segreto, altrimenti si potrebbe
+  // sondare dall'esterno quali strutture hanno il centralino disattivato.
+  if (!row.is_active) {
+    return NextResponse.json({ error: "Canale telefono disattivato" }, { status: 403 })
+  }
+
   const key = phoneMatchKey(number)
   if (!key) {
     // Numero assente o troppo corto (interni, chiamate anonime): risposta
