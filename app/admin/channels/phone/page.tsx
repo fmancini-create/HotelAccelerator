@@ -289,9 +289,15 @@ export default function PhoneChannelPage() {
                   Utenti → il vostro utente → Ruolo.
                 </p>
                 <p className="mt-2 text-xs text-muted-foreground text-pretty leading-relaxed">
-                  Se il ruolo è già Proprietario del sistema, resta la licenza: il Call Control richiede Enterprise da
-                  almeno 8 chiamate simultanee, non in eccesso di interni. Sui centralini forniti da un partner il
-                  ruolo di proprietario può essere in mano al partner: in quel caso va chiesto a loro.
+                  <strong className="text-foreground">Se il campo Ruolo è grigio, non è un guasto:</strong> in 3CX solo
+                  un Proprietario del sistema può assegnare quel ruolo, quindi nessuno può promuovere se stesso. Va
+                  chiesto a chi lo possiede già — nell&apos;elenco Utenti è la riga con ruolo Proprietario del sistema.
+                  Sui centralini forniti da un partner spesso è il partner: in alternativa può creare lui
+                  l&apos;applicazione API e passarvi i due valori.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground text-pretty leading-relaxed">
+                  Solo a ruolo corretto guardate la licenza: il Call Control richiede Enterprise da almeno 8 chiamate
+                  simultanee, non in eccesso di interni.
                 </p>
               </div>
             </CardContent>
