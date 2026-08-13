@@ -5,6 +5,7 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { loadTelephonyRow, toThreeCxConfig } from "@/lib/telephony/config"
 import { makeCall } from "@/lib/telephony/threecx-client"
+import { resolveIdentity, getMyExtension } from "@/lib/telephony/user-extension"
 
 /**
  * Origina una chiamata dall'interno dell'operatore verso un numero.
@@ -26,7 +27,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => null)
     const destinationRaw = typeof body?.destination === "string" ? body.destination.trim() : ""
     const contactId = typeof body?.contact_id === "string" && body.contact_id.trim() !== "" ? body.contact_id.trim() : null
-    const extensionOverride = typeof body?.extension === "string" ? body.extension.trim() : ""
+    // L'interno NON si accetta piu' dal corpo della richiesta: si deduce dalla
+    // sessione. Prima chiunque poteva indicarne uno qualsiasi e far partire la
+    // telefonata dal telefono di un collega, che risultava anche l'autore
+    // della chiamata nel registro.
 
     if (!destinationRaw) {
       return NextResponse.json({ error: "Numero da chiamare mancante." }, { status: 400 })
@@ -47,15 +51,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const extension = extensionOverride || row?.default_extension || ""
-    if (!extension) {
+    const supabase = createServiceClient()
+
+    // L'interno di CHI sta chiamando. `default_extension` resta solo come
+    // ripiego per le strutture con un unico apparecchio condiviso: se ogni
+    // persona ha il suo interno, la chiamata parte dal suo telefono e il
+    // registro sa a chi attribuirla.
+    const identity = await resolveIdentity(request)
+    const mine = await getMyExtension(supabase, identity)
+
+    if (!mine.ok && mine.reason === "cannot_call") {
       return NextResponse.json(
-        { error: "Nessun interno impostato: indica l'interno da cui chiamare nella configurazione del centralino." },
-        { status: 409 },
+        { error: "Il tuo interno è assegnato solo per ricevere: le chiamate in uscita non sono abilitate." },
+        { status: 403 },
       )
     }
 
-    const supabase = createServiceClient()
+    const extension = mine.ok ? mine.extension : row?.default_extension || ""
+    const callerUserId = mine.ok ? identity.userId : null
+
+    if (!extension) {
+      return NextResponse.json(
+        {
+          error:
+            "Nessun interno assegnato al tuo utente: chiedi a un amministratore di assegnartelo in Canali → Telefono IP.",
+        },
+        { status: 409 },
+      )
+    }
 
     // ISOLAMENTO: il contatto va verificato NELLA struttura autenticata. Senza
     // questo controllo un id altrui, passato a mano, verrebbe scritto nel nostro
@@ -85,6 +108,8 @@ export async function POST(request: NextRequest) {
         direction: "outbound",
         counterpart_number: destination,
         extension,
+        user_id: callerUserId,
+        agent_name: identity.fullName,
         status: "failed",
         started_at: new Date().toISOString(),
         notes: result.error.slice(0, 500),
@@ -99,6 +124,8 @@ export async function POST(request: NextRequest) {
       direction: "outbound",
       counterpart_number: destination,
       extension,
+      user_id: callerUserId,
+      agent_name: identity.fullName,
       status: "initiated",
       started_at: new Date().toISOString(),
       external_call_id: result.callId,
