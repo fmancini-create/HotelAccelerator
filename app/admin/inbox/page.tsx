@@ -30,7 +30,6 @@ import {
   ChevronRight,
   ChevronLeft,
   MailOpen,
-  Bug,
   MessageCircle,
   Phone,
   ArrowUpDown,
@@ -2536,16 +2535,17 @@ export default function InboxPage() {
                     onClick={() => setStatusFilter(item.id)}
                   />
                 ))}
-                <div className="my-2 mx-4 border-t border-[#c4c7c5]" />
-                <div className="flex items-center gap-2 pl-4 pr-2">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowDebugPanel(!showDebugPanel)} title="Debug">
-                    <Bug className="h-4 w-4 text-[#444746]" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={performInitialSmartSync} title="Sincronizza nuovi messaggi">
-                    <RefreshCw className={`h-4 w-4 text-[#444746] ${isLoading ? "animate-spin" : ""}`} />
-                  </Button>
-                  {lastSyncStatus && <span className="text-xs text-muted-foreground truncate">{lastSyncStatus}</span>}
-                </div>
+                {/* Rimossi i due pulsanti senza etichetta che stavano qui sotto una linea
+                    di separazione, in fondo alla colonna delle cartelle:
+                    - il "baco" apriva il pannello di diagnostica tecnico, che resta
+                      raggiungibile dal menu con un'etichetta leggibile ("Mostra/Nascondi
+                      pannello diagnostica"): e' uno strumento tecnico, non un comando d'uso
+                      quotidiano da tenere fra le cartelle;
+                    - la sincronizzazione era un doppione esatto del pulsante identico in
+                      cima all'elenco dei messaggi (che copre sia Gmail sia questa
+                      modalita'), dove uno la cerca davvero.
+                    Erano inoltre privi di testo per i lettori di schermo. L'avviso di esito
+                    della sincronizzazione e' stato spostato accanto al pulsante superstite. */}
               </>
             )}
           </nav>
@@ -2589,7 +2589,17 @@ export default function InboxPage() {
               title={inboxMode === "gmail" ? "Ricarica Gmail" : "Sincronizza nuovi messaggi"}
             >
               <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
+              <span className="sr-only">{inboxMode === "gmail" ? "Ricarica Gmail" : "Sincronizza nuovi messaggi"}</span>
             </Button>
+            {/* Esito della sincronizzazione (anche gli errori, es. "Nessun canale Gmail
+                attivo configurato"). Prima era mostrato solo accanto al pulsante duplicato
+                in fondo alla colonna delle cartelle: rimuovendo quel blocco senza spostare
+                questo avviso, un errore di sincronizzazione sarebbe diventato invisibile. */}
+            {lastSyncStatus && (
+              <span className="ml-2 text-xs text-muted-foreground truncate max-w-[220px]" role="status">
+                {lastSyncStatus}
+              </span>
+            )}
             {/* Sort dropdown (Gmail + Smart) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -2787,11 +2797,13 @@ export default function InboxPage() {
                 <span className="text-[13px] text-[#5f6368] tabular-nums mr-2">
                   {gmailThreads.length > 0 ? `${(gmailCurrentPage - 1) * 100 + 1}–${(gmailCurrentPage - 1) * 100 + gmailThreads.length} di ${gmailDebugInfo?.rawThreadsCount || gmailThreads.length}` : "0"}
                 </span>
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading}>
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading} title="Pagina precedente">
                   <ChevronLeft className="h-5 w-5 text-[#5f6368]" />
+                  <span className="sr-only">Pagina precedente</span>
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading} title="Pagina successiva">
                   <ChevronRight className="h-5 w-5 text-[#5f6368]" />
+                  <span className="sr-only">Pagina successiva</span>
                 </Button>
               </div>
             )}
@@ -3265,8 +3277,9 @@ export default function InboxPage() {
                           {isForwarding ? "Inoltra" : "Invia"}
                         </Button>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}>
+                          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} title="Allega file">
                             <Paperclip className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Allega file</span>
                           </Button>
                           <Button
                             variant="ghost"
