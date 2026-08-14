@@ -20,6 +20,16 @@ import { resolveIdentity, normalizeExtension } from "@/lib/telephony/user-extens
 
 const SCAN = 2000
 
+/**
+ * Tipi delle righe lette: il client qui non e' tipizzato sullo schema, quindi
+ * senza dichiararli ogni campo sarebbe `any` e un nome di colonna sbagliato
+ * passerebbe il controllo dei tipi per restituire `undefined` a runtime.
+ */
+type RigaChiamata = { extension: string | null; status: string | null; started_at: string | null }
+type RigaEtichetta = { extension: string; label: string; kind: string }
+type RigaAssegnazione = { extension: string; user_id: string }
+type RigaUtente = { id: string; name: string | null }
+
 async function elenco(propertyId: string) {
   const supabase = createServiceClient()
 
@@ -34,21 +44,24 @@ async function elenco(propertyId: string) {
     supabase.from("telephony_user_extensions").select("extension, user_id").eq("property_id", propertyId),
   ])
 
-  const idUtenti = [...new Set((assegnati.data ?? []).map((r) => String(r.user_id)).filter(Boolean))]
+  const righeAssegnate = (assegnati.data ?? []) as RigaAssegnazione[]
+  const idUtenti = [...new Set(righeAssegnate.map((r) => String(r.user_id)).filter(Boolean))]
   const { data: utenti } = idUtenti.length
     ? await supabase.from("admin_users").select("id, name").eq("property_id", propertyId).in("id", idUtenti)
-    : { data: [] as Array<{ id: string; name: string | null }> }
+    : { data: [] as RigaUtente[] }
 
-  const nome = new Map((utenti ?? []).map((u) => [u.id, u.name ?? null]))
+  const nome = new Map(((utenti ?? []) as RigaUtente[]).map((u) => [u.id, u.name ?? null] as const))
   const persona = new Map(
-    (assegnati.data ?? []).map((r) => [String(r.extension), nome.get(String(r.user_id)) ?? null]),
+    righeAssegnate.map((r) => [String(r.extension), nome.get(String(r.user_id)) ?? null] as const),
   )
   const etichetta = new Map(
-    (etichette.data ?? []).map((e) => [String(e.extension), { label: String(e.label), kind: String(e.kind) }]),
+    ((etichette.data ?? []) as RigaEtichetta[]).map(
+      (e) => [String(e.extension), { label: String(e.label), kind: String(e.kind) }] as const,
+    ),
   )
 
   const visti = new Map<string, { calls: number; missed: number; last: string | null }>()
-  for (const r of chiamate.data ?? []) {
+  for (const r of (chiamate.data ?? []) as RigaChiamata[]) {
     const ext = r.extension ? String(r.extension) : ""
     if (!ext) continue
     const acc = visti.get(ext) ?? { calls: 0, missed: 0, last: null }
@@ -77,9 +90,18 @@ async function elenco(propertyId: string) {
     .sort((a, b) => b.calls - a.calls || a.extension.localeCompare(b.extension))
 }
 
+/**
+ * L'area e' "calls", la STESSA della pagina del registro, non "users".
+ *
+ * Con "users" (riservata agli amministratori) un membro con il solo permesso
+ * "Telefonate" avrebbe visto il pulsante "Interni" e ricevuto un 403: un
+ * comando morto, che e' peggio di un comando assente. Dare un nome a un
+ * apparecchio non concede accesso a nulla e non espone dati personali, quindi
+ * non giustifica un'area piu' ristretta di quella della pagina che lo mostra.
+ */
 export async function GET(request: NextRequest) {
   try {
-    await requireAreaApi("users", request)
+    await requireAreaApi("calls", request)
     const identity = await resolveIdentity(request)
     return NextResponse.json({ extensions: await elenco(identity.propertyId), scanned: SCAN })
   } catch (error) {
@@ -96,7 +118,8 @@ const TIPI = new Set(["shared", "group", "service", "other"])
 
 export async function PUT(request: NextRequest) {
   try {
-    await requireAreaApi("users", request)
+    // Stessa area della GET e della pagina: vedi la nota sopra.
+    await requireAreaApi("calls", request)
     const identity = await resolveIdentity(request)
     const supabase = createServiceClient()
 

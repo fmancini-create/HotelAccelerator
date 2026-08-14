@@ -139,7 +139,11 @@ export async function POST(request: NextRequest) {
       // solo valore non puo' essere dimenticato da un filtro o da un conteggio.
       const type = pick(body, "call_type", "callType").toLowerCase().replace(/[^a-z]/g, "")
       if (type.includes("miss") || type.includes("pers")) return "missed"
-      if (type.includes("notanswer") || type.includes("noanswer") || type.includes("norisp")) return "missed"
+      // Le varianti italiane cercate sono "norisp"/"nonrisp" e MAI "risposta":
+      // in italiano "Risposta" significa che qualcuno HA risposto, quindi
+      // cercarla marcherebbe come persa proprio la chiamata andata a buon fine.
+      if (type.includes("notanswer") || type.includes("noanswer")) return "missed"
+      if (type.includes("norisp") || type.includes("nonrisp")) return "missed"
       return "completed"
     })(),
     started_at: toIsoOrNull(startedAtRaw) ?? new Date().toISOString(),

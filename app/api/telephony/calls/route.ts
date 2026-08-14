@@ -34,6 +34,27 @@ const MAX_LIMIT = 100
  */
 const EXTENSION_SCAN = 2000
 
+/**
+ * Forma delle righe lette. Dichiarata a mano perche' il client Supabase qui non
+ * e' tipizzato sullo schema: senza questi tipi ogni campo sarebbe `any` e un
+ * nome di colonna sbagliato passerebbe il controllo dei tipi per poi restituire
+ * `undefined` a runtime, cioe' una colonna vuota in pagina senza alcun errore.
+ */
+type RigaChiamata = {
+  id: string
+  direction: string | null
+  status: string | null
+  counterpart_number: string | null
+  extension: string | null
+  started_at: string | null
+  duration_seconds: number | null
+  contact_id: string | null
+  user_id: string | null
+}
+type RigaContatto = { id: string; name: string | null; company: string | null }
+type RigaUtente = { id: string; name: string | null }
+type RigaEtichetta = { extension: string; label: string; kind: string }
+
 function toInt(value: string | null, fallback: number): number {
   const n = Number.parseInt(value ?? "", 10)
   return Number.isFinite(n) ? n : fallback
@@ -84,21 +105,49 @@ export async function GET(request: NextRequest) {
     const direction = params.get("direction")
     const status = params.get("status")
     const extension = params.get("extension")
-    // Solo cifre: i numeri sono salvati senza spazi ne' prefissi decorativi, e
-    // una ricerca che passasse "+39 " non troverebbe mai nulla.
+    // Solo cifre: i numeri sono salvati senza spazi ne' segni, e cercare
+    // "335 804 6836" con gli spazi non troverebbe mai nulla.
     const ricerca = (params.get("q") ?? "").replace(/\D/g, "")
+    /**
+     * Il prefisso internazionale va cercato ANCHE senza prefisso.
+     *
+     * Misurato: "3358046836" trovava 2 chiamate, "+39 3358046836" ZERO, perche'
+     * togliendo i simboli resta "393358046836" mentre in archivio il numero e'
+     * salvato come lo manda il centralino, cioe' senza "39". Chi incolla un
+     * numero da WhatsApp o da una email lo incolla quasi sempre col prefisso:
+     * la ricerca sarebbe sembrata rotta proprio nell'uso piu' comune.
+     *
+     * Si cercano entrambe le forme invece di scegliere: il prefisso puo' essere
+     * presente in archivio per le chiamate dall'estero, e scartarlo sempre
+     * renderebbe irraggiungibili quelle.
+     */
+    const varianti = (() => {
+      if (!ricerca) return [] as string[]
+      const v = new Set<string>([ricerca])
+      const senzaPrefisso = ricerca.replace(/^(?:0039|39)/, "")
+      // Almeno 4 cifre residue: togliendo "39" da "39" o da "391" resterebbe un
+      // frammento che somiglia a tutto e restituirebbe mezzo registro.
+      if (senzaPrefisso.length >= 4) v.add(senzaPrefisso)
+      return [...v]
+    })()
 
     const conFiltri = <T extends Record<string, unknown>>(query: T): T => {
       let q = query as unknown as {
         eq: (c: string, v: unknown) => typeof q
         is: (c: string, v: unknown) => typeof q
         like: (c: string, v: string) => typeof q
+        or: (f: string) => typeof q
         gte: (c: string, v: string) => typeof q
       }
       if (direction === "inbound" || direction === "outbound") q = q.eq("direction", direction)
       if (status === "missed" || status === "completed") q = q.eq("status", status)
       if (extension) q = q.eq("extension", extension)
-      if (ricerca) q = q.like("counterpart_number", `%${ricerca}%`)
+      if (varianti.length === 1) q = q.like("counterpart_number", `%${varianti[0]}%`)
+      else if (varianti.length > 1) {
+        // Le varianti sono solo cifre, quindi non possono contenere la virgola
+        // che separa le condizioni ne' altri caratteri da proteggere.
+        q = q.or(varianti.map((v) => `counterpart_number.like.%${v}%`).join(","))
+      }
       if (params.get("today") === "1") q = q.gte("started_at", inizioGiornataItaliana().toISOString())
       return q as unknown as T
     }
@@ -143,7 +192,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Non è stato possibile leggere il registro." }, { status: 500 })
     }
 
-    const calls = righe.data ?? []
+    const calls = (righe.data ?? []) as RigaChiamata[]
 
     // Letture separate invece di un embed PostgREST: fra `phone_calls` e
     // `contacts`/`admin_users` l'embed fallirebbe in silenzio se la FK non e'
@@ -160,14 +209,20 @@ export async function GET(request: NextRequest) {
         : Promise.resolve({ data: [] as Array<{ id: string; name: string | null }> }),
     ])
 
-    const nomeContatto = new Map((contatti.data ?? []).map((c) => [c.id, c]))
-    const nomeUtente = new Map((utenti.data ?? []).map((u) => [u.id, u.name ?? null]))
+    const nomeContatto = new Map(
+      ((contatti.data ?? []) as RigaContatto[]).map((c) => [c.id, c] as const),
+    )
+    const nomeUtente = new Map(
+      ((utenti.data ?? []) as RigaUtente[]).map((u) => [u.id, u.name ?? null] as const),
+    )
     const etichetta = new Map(
-      (etichette.data ?? []).map((e) => [String(e.extension), { label: String(e.label), kind: String(e.kind) }]),
+      ((etichette.data ?? []) as RigaEtichetta[]).map(
+        (e) => [String(e.extension), { label: String(e.label), kind: String(e.kind) }] as const,
+      ),
     )
 
     const conteggioInterni = new Map<string, number>()
-    for (const r of scansione.data ?? []) {
+    for (const r of (scansione.data ?? []) as Array<{ extension: string | null }>) {
       const ext = r.extension ? String(r.extension) : ""
       if (!ext) continue
       conteggioInterni.set(ext, (conteggioInterni.get(ext) ?? 0) + 1)
