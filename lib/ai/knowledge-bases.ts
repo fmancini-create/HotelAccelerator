@@ -171,18 +171,27 @@ export async function getBasesForChannel(channelId: string): Promise<ResolvedCha
   return { bases, primary: bases[0] ?? null, baseIds: bases.map((b) => b.id) }
 }
 
-/** Replace the ordered list of bases linked to a channel (index = position). */
-export async function setChannelBases(channelId: string, orderedBaseIds: string[]): Promise<void> {
+/**
+ * Replace the ordered list of bases linked to a channel (index = position).
+ *
+ * Delegates to the `set_channel_knowledge_bases` database function so the
+ * delete + insert happen in a SINGLE transaction. Doing it in two separate
+ * statements from here meant that a failing insert left the channel with zero
+ * bases: the assistant silently stopped answering while the error only said
+ * "salvataggio fallito". The function also drops duplicate ids (the primary
+ * key would reject them) and re-checks that channel and bases belong to the
+ * same property.
+ */
+export async function setChannelBases(
+  channelId: string,
+  orderedBaseIds: string[],
+  propertyId: string,
+): Promise<void> {
   const supabase = createServiceClient()
-  const { error: delError } = await supabase.from("channel_knowledge_bases").delete().eq("channel_id", channelId)
-  if (delError) throw new Error(`Reset associazioni canale fallito: ${delError.message}`)
-
-  if (orderedBaseIds.length === 0) return
-  const rows = orderedBaseIds.map((baseId, index) => ({
-    channel_id: channelId,
-    knowledge_base_id: baseId,
-    position: index,
-  }))
-  const { error } = await supabase.from("channel_knowledge_bases").insert(rows)
+  const { error } = await supabase.rpc("set_channel_knowledge_bases", {
+    p_channel_id: channelId,
+    p_property_id: propertyId,
+    p_base_ids: orderedBaseIds,
+  })
   if (error) throw new Error(`Salvataggio associazioni canale fallito: ${error.message}`)
 }
