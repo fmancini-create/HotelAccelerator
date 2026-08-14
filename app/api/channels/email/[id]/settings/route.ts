@@ -34,7 +34,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .maybeSingle()
 
     return NextResponse.json({
-      sync_enabled: data?.sync_enabled ?? true,
+      // `=== true` e non `?? true`: la colonna e' annullabile con valore
+      // predefinito `false` e il servizio periodico seleziona solo
+      // `sync_enabled = true`. Con `?? true` una riga nulla mostrava
+      // l'interruttore ACCESO mentre la casella non veniva mai sincronizzata.
+      sync_enabled: data?.sync_enabled === true,
       push_enabled: data?.push_enabled ?? false,
       is_default: data?.is_default ?? false,
       notifications_enabled: channelSettings?.settings?.notifications_enabled ?? true,
