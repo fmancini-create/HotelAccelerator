@@ -98,7 +98,7 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    await setChannelBases(channelId, baseIds)
+    await setChannelBases(channelId, baseIds, propertyId)
     return NextResponse.json({ ok: true })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
