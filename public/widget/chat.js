@@ -223,7 +223,10 @@
       testo(conf.placeholder) +
       '" aria-label="Scrivi un messaggio" maxlength="4000"><button type="submit">Invia</button></form>' +
       "</div>" +
-      '<button class="b" aria-label="' +
+      // L'etichetta dice cosa FA il pulsante, non solo di chi e': con il solo
+      // nome dell'hotel un lettore di schermo annuncia "Hotel Belvedere,
+      // pulsante" e chi non vede l'icona non sa che apre una chat.
+      '<button class="b" aria-label="Apri la chat con ' +
       testo(conf.title) +
       '" aria-expanded="false">' +
       svg(conf.icon, Math.round(conf.buttonSize * 0.42)) +
@@ -279,6 +282,9 @@
       aperto = true
       pannello.classList.add("on")
       pulsante.setAttribute("aria-expanded", "true")
+      // A chat aperta lo stesso pulsante la chiude: l'etichetta deve seguire,
+      // altrimenti annuncia "Apri" un'azione che invece chiude.
+      pulsante.setAttribute("aria-label", "Chiudi la chat")
       input.focus()
 
       if (!conversazione) {
@@ -322,6 +328,7 @@
       aperto = false
       pannello.classList.remove("on")
       pulsante.setAttribute("aria-expanded", "false")
+      pulsante.setAttribute("aria-label", "Apri la chat con " + conf.title)
       if (sondaggio) {
         clearInterval(sondaggio)
         sondaggio = null

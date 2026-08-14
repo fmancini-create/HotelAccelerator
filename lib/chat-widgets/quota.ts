@@ -90,10 +90,10 @@ export async function incrementaWidgetExtra(propertyId: string, delta: number): 
   return nuoviExtra
 }
 
-/** Prezzo di un widget aggiuntivo, in centesimi. Vive qui perche' il valore che
- *  conta e' quello che il server manda a Stripe: un prezzo scritto nel pannello
- *  sarebbe modificabile da chi apre gli strumenti del browser. */
-export const PREZZO_WIDGET_EXTRA_CENTESIMI = 900 // 9 euro al mese
+// Il prezzo vive in `./pricing` perche' lo usa anche il pannello, che non puo'
+// importare questo modulo (`server-only`). Riesportato qui per comodita' di chi
+// lavora lato server.
+export { PREZZO_WIDGET_EXTRA_CENTESIMI } from "./pricing"
 
 export interface EsitoAcquisto {
   /** true se questo pagamento ha aggiunto il widget adesso. */

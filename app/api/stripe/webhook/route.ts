@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { createServiceClient } from "@/lib/supabase/server"
+import { registraAcquistoWidget } from "@/lib/chat-widgets/quota"
 import { getFattureInCloudClient } from "@/lib/fattureincloud"
 import { getPlanById, formatPrice } from "@/lib/stripe-products"
 import { incrementExtraNumbers } from "@/lib/whatsapp/quota"
@@ -97,6 +98,47 @@ async function handleCheckoutCompleted(
       {
         property_id: propertyId,
         plan_id: "addon-whatsapp-extra-number",
+        plan_type: "addon",
+        stripe_customer_id: (session.customer as string | null) ?? null,
+        stripe_subscription_id: (session.subscription as string | null) ?? null,
+        status: "active",
+        current_period_start: new Date().toISOString(),
+      },
+      { onConflict: "property_id,plan_id" },
+    )
+    return
+  }
+
+  // Widget chat aggiuntivo: il pagamento alza SOLO la quota, non crea il widget.
+  // Il cliente lo crea dal pannello quando vuole, cosi' non si ritrova una chat
+  // senza nome e senza basi collegata a un sito.
+  if (kind === "chat_widget_extra") {
+    if (!propertyId) {
+      console.error("[Stripe Webhook] chat_widget_extra senza propertyId")
+      return
+    }
+    const qty = Math.max(1, parseInt(quantity || "1", 10))
+    // `registraAcquistoWidget` alza la quota una volta sola: Stripe puo'
+    // recapitare due volte lo stesso evento, e senza questa difesa il cliente
+    // riceverebbe due widget avendone pagato uno.
+    const esito = await registraAcquistoWidget({
+      propertyId,
+      stripeSessionId: session.id,
+      stripeSubscriptionId: (session.subscription as string | null) ?? null,
+      quantity: qty,
+      amountCents: session.amount_total ?? null,
+    })
+
+    if (esito.giaRegistrato) {
+      console.log(`[Stripe Webhook] widget chat: evento ${session.id} gia' contato, nessun widget aggiunto`)
+      return
+    }
+    console.log(`[Stripe Webhook] +${qty} widget chat per ${propertyId} (extra ora ${esito.extra})`)
+
+    await supabase.from("stripe_subscriptions").upsert(
+      {
+        property_id: propertyId,
+        plan_id: "addon-chat-widget-extra",
         plan_type: "addon",
         stripe_customer_id: (session.customer as string | null) ?? null,
         stripe_subscription_id: (session.subscription as string | null) ?? null,

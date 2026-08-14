@@ -40,6 +40,7 @@ import {
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ChatWidgetEditor } from "@/components/admin/chat-widget-editor"
 import { normalizzaAspetto } from "@/lib/chat-widgets/appearance"
+import { PREZZO_WIDGET_EXTRA_CENTESIMI } from "@/lib/chat-widgets/pricing"
 
 interface WidgetInElenco {
   id: string
@@ -82,6 +83,30 @@ export default function ChatWidgetsPage() {
   const [creazioneInCorso, setCreazioneInCorso] = useState(false)
   const [erroreCreazione, setErroreCreazione] = useState<string | null>(null)
   const [quotaEsaurita, setQuotaEsaurita] = useState(false)
+  const [acquistoInCorso, setAcquistoInCorso] = useState(false)
+
+  /**
+   * Porta l'admin al pagamento di Stripe per un widget in più.
+   *
+   * Non crea il widget: il pagamento alza soltanto la quota, poi il widget lo
+   * crea lui dando nome, basi e aspetto. Creare una chat anonima al posto suo
+   * significherebbe metterne una in linea senza che nessuno l'abbia configurata.
+   */
+  const acquistaWidget = async () => {
+    setAcquistoInCorso(true)
+    setErrore(null)
+    try {
+      const r = await fetch("/api/admin/chat-widgets/checkout", { method: "POST" })
+      const dati = await r.json()
+      if (!r.ok || !dati.url) throw new Error(dati.error || "Pagamento non avviato")
+      window.location.href = dati.url
+    } catch (e) {
+      // Lo stato torna attivo solo in caso di errore: se il rimando funziona la
+      // pagina cambia, e riabilitare il pulsante inviterebbe a pagare due volte.
+      setErrore(e instanceof Error ? e.message : "Pagamento non avviato")
+      setAcquistoInCorso(false)
+    }
+  }
 
   const [daEliminare, setDaEliminare] = useState<WidgetInElenco | null>(null)
   const [eliminazioneInCorso, setEliminazioneInCorso] = useState(false)
@@ -222,14 +247,26 @@ export default function ChatWidgetsPage() {
           </div>
         )}
 
+        {/* Colori dai token del tema, non fissi: `ha-warning-soft` esiste già nel
+            progetto e resta leggibile anche in tema scuro. */}
         {quota && !quota.puoCrearne && widgets.length > 0 && (
-          <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="mb-6 rounded-lg border border-ha-warning-soft bg-ha-warning-soft p-4 text-sm text-ha-warning-soft-foreground">
             <p className="font-medium">Hai usato tutti i widget disponibili ({quota.limite} attivi).</p>
             <p className="mt-1 text-pretty">
               Il piano ne include {quota.inclusi}
-              {quota.extra > 0 && `, più ${quota.extra} acquistati`}. Per aggiungerne un altro puoi acquistare un widget
-              extra, oppure spegnere o eliminare uno di quelli esistenti: i widget spenti non occupano un posto.
+              {quota.extra > 0 && `, più ${quota.extra} acquistati`}. Puoi acquistarne un altro, oppure spegnere o
+              eliminare uno di quelli esistenti: i widget spenti non occupano un posto.
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 gap-2 bg-transparent"
+              onClick={acquistaWidget}
+              disabled={acquistoInCorso}
+            >
+              {acquistoInCorso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {`Acquista un widget (${(PREZZO_WIDGET_EXTRA_CENTESIMI / 100).toFixed(0)} € al mese)`}
+            </Button>
           </div>
         )}
 
@@ -383,14 +420,30 @@ export default function ChatWidgetsPage() {
             </div>
             {erroreCreazione && (
               <div
-                className={`flex items-start gap-2 rounded-md border p-3 text-sm ${
+                className={`flex flex-col gap-2 rounded-md border p-3 text-sm ${
                   quotaEsaurita
-                    ? "border-amber-300 bg-amber-50 text-amber-900"
+                    ? "border-ha-warning-soft bg-ha-warning-soft text-ha-warning-soft-foreground"
                     : "border-destructive/30 bg-destructive/5 text-destructive"
                 }`}
               >
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                <span className="text-pretty">{erroreCreazione}</span>
+                <span className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span className="text-pretty">{erroreCreazione}</span>
+                </span>
+                {/* Senza questo pulsante il messaggio sarebbe un vicolo cieco:
+                    dice che il limite è raggiunto e non offre alcuna via d'uscita. */}
+                {quotaEsaurita && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start gap-2 bg-transparent"
+                    onClick={acquistaWidget}
+                    disabled={acquistoInCorso}
+                  >
+                    {acquistoInCorso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    {`Acquistane uno (${(PREZZO_WIDGET_EXTRA_CENTESIMI / 100).toFixed(0)} € al mese)`}
+                  </Button>
+                )}
               </div>
             )}
           </div>
