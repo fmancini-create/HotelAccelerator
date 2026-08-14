@@ -2886,6 +2886,20 @@ export default function InboxPage() {
                             <Trash2 className="h-4 w-4 text-muted-foreground" />
                             <span className="sr-only">Sposta nel cestino</span>
                           </Button>
+                          {/* Ultimo gestore che era rimasto senza pulsante: aprire un
+                              messaggio lo segna come letto, e senza questo comando non
+                              c'era modo di rimetterlo fra i non letti per riprenderlo poi. */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Segna come non letto" : "Caricamento in corso…"}
+                            onClick={() => handleGmailMarkAsRead(selectedGmailThread, true)}
+                          >
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Segna come non letto</span>
+                          </Button>
                         </>
                       ) : selectedConversation ? (
                         <>
