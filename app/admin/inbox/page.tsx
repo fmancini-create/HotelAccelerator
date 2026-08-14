@@ -570,6 +570,12 @@ export default function InboxPage() {
   const [showCcField, setShowCcField] = useState(false)
   const [showBccField, setShowBccField] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
+  // Firma dell'operatore. Viene accodata dal SERVER al momento dell'invio: qui
+  // si legge solo per MOSTRARLA sotto al testo, come fa Gmail, cosi' non si
+  // scrive alla cieca senza sapere cosa partira' davvero.
+  // `undefined` = non ancora caricata, `null` = caricata e assente.
+  const [signatureHtml, setSignatureHtml] = useState<string | null | undefined>(undefined)
+
   // Rich-text toolbar + canned (predefined) responses
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [cannedResponses, setCannedResponses] = useState<
@@ -1114,6 +1120,32 @@ export default function InboxPage() {
       loadGmailChannels()
     }
   }, [authLoading, adminUser, loadGmailChannels])
+
+  // Carica la firma dell'operatore una sola volta, per mostrarla in fondo alla
+  // risposta. `adminUser.id` e' opzionale nel tipo: senza questa guardia si
+  // chiamerebbe la rotta con "undefined" al posto dell'identificativo.
+  useEffect(() => {
+    if (authLoading || !adminUser?.id) return
+    let annullato = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/admin/users/${adminUser.id}/signature`)
+        if (!res.ok) {
+          // Nessuna firma leggibile non e' un guasto da mostrare: il messaggio
+          // si invia comunque, quindi si degrada in silenzio.
+          if (!annullato) setSignatureHtml(null)
+          return
+        }
+        const data = await res.json()
+        if (!annullato) setSignatureHtml(data.signature_html || data.signature || null)
+      } catch {
+        if (!annullato) setSignatureHtml(null)
+      }
+    })()
+    return () => {
+      annullato = true
+    }
+  }, [authLoading, adminUser?.id])
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
@@ -3094,6 +3126,26 @@ export default function InboxPage() {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
   }}
   />
+                      {/* La firma la aggiunge il server all'invio: mostrarla qui
+                          rende visibile cio' che partira' davvero. Non e'
+                          modificabile, per non far credere che si possa
+                          correggere solo per questo messaggio: si cambia in
+                          Utenti. Reso solo quando c'e' davvero, cosi' chi non
+                          l'ha impostata non vede uno spazio vuoto inspiegabile. */}
+                      {signatureHtml ? (
+                        <div className="px-3 pb-3">
+                          <div className="border-t border-dashed border-border pt-2">
+                            <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Firma aggiunta automaticamente
+                            </p>
+                            <div
+                              className="ha-signature text-sm text-muted-foreground [&_a]:underline [&_img]:max-h-16 [&_img]:w-auto"
+                              // Ripulito dal server (in scrittura e in lettura).
+                              dangerouslySetInnerHTML={{ __html: signatureHtml }}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between px-3 py-2 border-t border-border">
                         <Button
                           onClick={handleSendReply}
