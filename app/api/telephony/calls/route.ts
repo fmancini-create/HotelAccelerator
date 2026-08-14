@@ -188,7 +188,7 @@ export async function GET(request: NextRequest) {
     ])
 
     if (righe.error) {
-      console.log("[v0] registro chiamate: lettura non riuscita", righe.error.message)
+      console.error("[telefonate] registro chiamate: lettura non riuscita", righe.error.message)
       return NextResponse.json({ error: "Non è stato possibile leggere il registro." }, { status: 500 })
     }
 
@@ -272,7 +272,7 @@ export async function GET(request: NextRequest) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     const message = error instanceof Error ? error.message : ""
     if (message === "Non autenticato") return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
-    console.log("[v0] registro chiamate: errore", message)
+    console.error("[telefonate] registro chiamate: errore", message)
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }

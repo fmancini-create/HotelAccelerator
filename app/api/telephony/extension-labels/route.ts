@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
     if (error instanceof Error && error.message === "Non autenticato") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
     }
-    console.log("[v0] etichette interni: errore", error instanceof Error ? error.message : "")
+    console.error("[telefonate] etichette interni: errore", error instanceof Error ? error.message : "")
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
@@ -159,7 +159,7 @@ export async function PUT(request: NextRequest) {
       { onConflict: "property_id,extension" },
     )
     if (error) {
-      console.log("[v0] etichette interni: salvataggio non riuscito", error.message)
+      console.error("[telefonate] etichette interni: salvataggio non riuscito", error.message)
       return NextResponse.json({ error: "Salvataggio non riuscito." }, { status: 500 })
     }
 
@@ -169,7 +169,7 @@ export async function PUT(request: NextRequest) {
     if (error instanceof Error && error.message === "Non autenticato") {
       return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
     }
-    console.log("[v0] etichette interni: errore", error instanceof Error ? error.message : "")
+    console.error("[telefonate] etichette interni: errore", error instanceof Error ? error.message : "")
     return NextResponse.json({ error: "Errore interno" }, { status: 500 })
   }
 }
