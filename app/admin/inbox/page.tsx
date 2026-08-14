@@ -570,6 +570,12 @@ export default function InboxPage() {
   const [showCcField, setShowCcField] = useState(false)
   const [showBccField, setShowBccField] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
+  // Firma dell'operatore. Viene accodata dal SERVER al momento dell'invio: qui
+  // si legge solo per MOSTRARLA sotto al testo, come fa Gmail, cosi' non si
+  // scrive alla cieca senza sapere cosa partira' davvero.
+  // `undefined` = non ancora caricata, `null` = caricata e assente.
+  const [signatureHtml, setSignatureHtml] = useState<string | null | undefined>(undefined)
+
   // Rich-text toolbar + canned (predefined) responses
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [cannedResponses, setCannedResponses] = useState<
@@ -1114,6 +1120,32 @@ export default function InboxPage() {
       loadGmailChannels()
     }
   }, [authLoading, adminUser, loadGmailChannels])
+
+  // Carica la firma dell'operatore una sola volta, per mostrarla in fondo alla
+  // risposta. `adminUser.id` e' opzionale nel tipo: senza questa guardia si
+  // chiamerebbe la rotta con "undefined" al posto dell'identificativo.
+  useEffect(() => {
+    if (authLoading || !adminUser?.id) return
+    let annullato = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/admin/users/${adminUser.id}/signature`)
+        if (!res.ok) {
+          // Nessuna firma leggibile non e' un guasto da mostrare: il messaggio
+          // si invia comunque, quindi si degrada in silenzio.
+          if (!annullato) setSignatureHtml(null)
+          return
+        }
+        const data = await res.json()
+        if (!annullato) setSignatureHtml(data.signature_html || data.signature || null)
+      } catch {
+        if (!annullato) setSignatureHtml(null)
+      }
+    })()
+    return () => {
+      annullato = true
+    }
+  }, [authLoading, adminUser?.id])
 
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
@@ -2795,9 +2827,116 @@ export default function InboxPage() {
               <div className="flex flex-col h-full">
                 {/* Subject header */}
                 <div className="px-6 py-4 border-b border-border overflow-hidden">
-                  <h1 className="text-xl font-normal text-[#202124] truncate">
-                    {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
-                  </h1>
+                  <div className="flex items-start justify-between gap-3">
+                    <h1 className="text-xl font-normal text-[#202124] truncate">
+                      {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
+                    </h1>
+                    {/* Azioni sulla conversazione aperta.
+                        I gestori esistevano gia' ed erano scritti proprio per questa vista
+                        (azzerano la selezione dopo l'azione), ma nessun pulsante li chiamava:
+                        da qui non si poteva ne' archiviare ne' eliminare senza tornare alla
+                        lista e usare le caselle di selezione. */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {inboxMode === "gmail" && selectedGmailThread ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={selectedGmailThread.isStarred ? "Togli stella" : "Aggiungi stella"}
+                            onClick={() => handleGmailStarToggle(selectedGmailThread)}
+                          >
+                            <Star className={`h-4 w-4 ${selectedGmailThread.isStarred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground"}`} />
+                            <span className="sr-only">{selectedGmailThread.isStarred ? "Togli stella" : "Aggiungi stella"}</span>
+                          </Button>
+                          {gmailLabelId === "SPAM" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              /* I gestori Gmail richiedono il thread completamente caricato:
+                                 disabilitare e' piu' chiaro di un messaggio d'errore dopo il clic. */
+                              disabled={!isThreadReady}
+                              title={isThreadReady ? "Non è spam" : "Caricamento in corso…"}
+                              onClick={() => handleGmailNotSpam(selectedGmailThread)}
+                            >
+                              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                              <span className="sr-only">Non è spam</span>
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Archivia" : "Caricamento in corso…"}
+                            onClick={() => handleGmailArchive(selectedGmailThread)}
+                          >
+                            <Archive className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Archivia</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Sposta nel cestino" : "Caricamento in corso…"}
+                            onClick={() => handleGmailTrash(selectedGmailThread)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Sposta nel cestino</span>
+                          </Button>
+                          {/* Ultimo gestore che era rimasto senza pulsante: aprire un
+                              messaggio lo segna come letto, e senza questo comando non
+                              c'era modo di rimetterlo fra i non letti per riprenderlo poi. */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Segna come non letto" : "Caricamento in corso…"}
+                            onClick={() => handleGmailMarkAsRead(selectedGmailThread, true)}
+                          >
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Segna come non letto</span>
+                          </Button>
+                        </>
+                      ) : selectedConversation ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={selectedConversation.is_starred ? "Togli stella" : "Aggiungi stella"}
+                            onClick={() => handleToggleStar(selectedConversation)}
+                          >
+                            <Star className={`h-4 w-4 ${selectedConversation.is_starred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground"}`} />
+                            <span className="sr-only">{selectedConversation.is_starred ? "Togli stella" : "Aggiungi stella"}</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Archivia"
+                            onClick={() => handleArchive(selectedConversation.id)}
+                          >
+                            <Archive className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Archivia</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Segna come spam"
+                            onClick={() => handleMarkAsSpam(selectedConversation.id)}
+                          >
+                            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Segna come spam</span>
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">Posta in arrivo</span>
                   </div>
@@ -2842,9 +2981,11 @@ export default function InboxPage() {
                                     contextTitle={selectedConversation?.contact?.name || selectedConversation?.subject || undefined}
                                   />
                                 )}
-                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
-                                  <Star className="h-4 w-4 text-muted-foreground" />
-                                </Button>
+                                {/* La stella per-messaggio e' stata rimossa: era priva di
+                                    gestore (un clic non faceva nulla) e non poteva funzionare,
+                                    perche' la stella e' memorizzata per CONVERSAZIONE
+                                    (`conversations.is_starred`), non per messaggio. La stella
+                                    che funziona e' nell'intestazione del thread, qui sotto. */}
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5 truncate">a {message.to || "me"}</div>
@@ -3094,6 +3235,26 @@ export default function InboxPage() {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
   }}
   />
+                      {/* La firma la aggiunge il server all'invio: mostrarla qui
+                          rende visibile cio' che partira' davvero. Non e'
+                          modificabile, per non far credere che si possa
+                          correggere solo per questo messaggio: si cambia in
+                          Utenti. Reso solo quando c'e' davvero, cosi' chi non
+                          l'ha impostata non vede uno spazio vuoto inspiegabile. */}
+                      {signatureHtml ? (
+                        <div className="px-3 pb-3">
+                          <div className="border-t border-dashed border-border pt-2">
+                            <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Firma aggiunta automaticamente
+                            </p>
+                            <div
+                              className="ha-signature text-sm text-muted-foreground [&_a]:underline [&_img]:max-h-16 [&_img]:w-auto"
+                              // Ripulito dal server (in scrittura e in lettura).
+                              dangerouslySetInnerHTML={{ __html: signatureHtml }}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between px-3 py-2 border-t border-border">
                         <Button
                           onClick={handleSendReply}

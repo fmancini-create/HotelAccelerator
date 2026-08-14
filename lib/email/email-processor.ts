@@ -40,6 +40,7 @@ type ConversationState = {
   unread_count?: number | null
   last_message_at?: string | null
   status?: string | null
+  contact_name?: string | null
 }
 
 export function deriveInboundConversationState(
@@ -47,6 +48,7 @@ export function deriveInboundConversationState(
   receivedAtIso: string,
   isUnread: boolean,
   labelIds?: string[],
+  senderName?: string | null,
 ): Record<string, unknown> {
   const isLatestMessage =
     !conversation.last_message_at ||
@@ -60,6 +62,23 @@ export function deriveInboundConversationState(
   }
 
   if (!isLatestMessage) return update
+
+  // Come Gmail: il nome mostrato e' quello dell'ULTIMO messaggio, non quello
+  // del primo. Senza questo, un mittente che si rinomina (SafetyCulture ->
+  // Mitti, 11/08/2026) resta per sempre col vecchio nome, e chi confronta le
+  // due caselle crede che il messaggio non sia arrivato.
+  //
+  // Sta DOPO la guardia `isLatestMessage` di proposito: "Importa storico"
+  // scarica i messaggi dal piu' recente al piu' vecchio, quindi senza guardia
+  // il primo messaggio vecchio importato riscriverebbe il nome all'indietro.
+  //
+  // Nota: qui si aggiorna solo la copia denormalizzata usata dai mittenti
+  // automatici. Le conversazioni legate a un contatto CRM mostrano il nome
+  // della rubrica (vedi `resolveContact`), che resta intoccato.
+  const trimmedSenderName = senderName?.trim()
+  if (trimmedSenderName && trimmedSenderName !== conversation.contact_name) {
+    update.contact_name = trimmedSenderName
+  }
 
   if (labelIds) {
     update.gmail_labels = labelIds
@@ -178,7 +197,7 @@ export class EmailProcessor {
       // conversation timestamp/state backwards. Unread count still includes
       // every unread message in the thread.
       const conversationUpdate: Record<string, unknown> = {
-        ...deriveInboundConversationState(conversation, receivedAtIso, isUnread, email.labelIds),
+        ...deriveInboundConversationState(conversation, receivedAtIso, isUnread, email.labelIds, senderName),
         updated_at: new Date().toISOString(),
       }
 
@@ -230,7 +249,7 @@ export class EmailProcessor {
     if (email.threadId) {
       const { data: byThreadCandidates, error: byThreadError } = await this.supabase
         .from("conversations")
-        .select("id, unread_count, internal_thread_id, last_message_at, status")
+        .select("id, unread_count, internal_thread_id, last_message_at, status, contact_name")
         .eq("property_id", propertyId)
         .eq("gmail_thread_id", email.threadId)
         .order("created_at", { ascending: true })
@@ -267,7 +286,7 @@ export class EmailProcessor {
     if (email.inReplyTo) {
       const { data: byReplyTo } = await this.supabase
         .from("messages")
-        .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id, last_message_at, status)")
+        .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id, last_message_at, status, contact_name)")
         .eq("external_message_id", email.inReplyTo)
         .eq("property_id", propertyId)
         .maybeSingle()
@@ -284,7 +303,7 @@ export class EmailProcessor {
         // Check last 3 references
         const { data: byRef } = await this.supabase
           .from("messages")
-          .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id, last_message_at, status)")
+          .select("conversation_id, conversations!inner(id, unread_count, internal_thread_id, last_message_at, status, contact_name)")
           .eq("external_message_id", refId)
           .eq("property_id", propertyId)
           .maybeSingle()
@@ -303,7 +322,7 @@ export class EmailProcessor {
     if (normalizedSubject) {
       let bySubjectQuery = this.supabase
         .from("conversations")
-        .select("id, unread_count, internal_thread_id, last_message_at, status")
+        .select("id, unread_count, internal_thread_id, last_message_at, status, contact_name")
         .eq("property_id", propertyId)
         .eq("normalized_subject", normalizedSubject)
         .eq("channel", "email")
@@ -340,7 +359,7 @@ export class EmailProcessor {
         unread_count: 0,
         last_message_at: email.receivedAt.toISOString(),
       })
-      .select("id, unread_count, internal_thread_id, last_message_at, status")
+      .select("id, unread_count, internal_thread_id, last_message_at, status, contact_name")
       .single()
 
     if (error) throw error
