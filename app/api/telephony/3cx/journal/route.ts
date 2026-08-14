@@ -128,16 +128,29 @@ export async function POST(request: NextRequest) {
     status: (() => {
       const explicit = pick(body, "status")
       if (explicit) return explicit
-      const type = pick(body, "call_type", "callType").toLowerCase()
+      // Valori che 3CX puo' mandare in `CallType`: Inbound, Outbound, Missed,
+      // Notanswered (documentati). Il controllo precedente cercava "unans", che
+      // in "notanswered" NON esiste ("notanswered" contiene "answer", non
+      // "unans"): ogni chiamata squillata e mai risposta cadeva nel ramo finale
+      // e veniva registrata come "completed".
+      //
+      // "Missed" e "Notanswered" restano uniti sotto "missed": per l'albergo
+      // significano la stessa cosa (nessuno ha risposto, da richiamare) e un
+      // solo valore non puo' essere dimenticato da un filtro o da un conteggio.
+      const type = pick(body, "call_type", "callType").toLowerCase().replace(/[^a-z]/g, "")
       if (type.includes("miss") || type.includes("pers")) return "missed"
-      if (type.includes("unans") || type.includes("norisp")) return "no_answer"
+      // Le varianti italiane cercate sono "norisp"/"nonrisp" e MAI "risposta":
+      // in italiano "Risposta" significa che qualcuno HA risposto, quindi
+      // cercarla marcherebbe come persa proprio la chiamata andata a buon fine.
+      if (type.includes("notanswer") || type.includes("noanswer")) return "missed"
+      if (type.includes("norisp") || type.includes("nonrisp")) return "missed"
       return "completed"
     })(),
     started_at: toIsoOrNull(startedAtRaw) ?? new Date().toISOString(),
     ended_at: toIsoOrNull(pick(body, "ended_at", "callEnd")),
-    // L'istante di risposta arriva dal template ma NON viene salvato: la tabella
+    // L'istante di risposta NON arriva piu' dal template e non va aggiunto qui:
     // `phone_calls` non ha una colonna per contenerlo (schema verificato, non
-    // supposto). Scriverla avrebbe fatto fallire l'inserimento di OGNI chiamata.
+    // supposto) e in 3CX quel valore esiste solo per le chiamate risposte.
     duration_seconds: toSeconds(body.duration),
     external_call_id: externalId,
     notes: typeof body.notes === "string" ? body.notes.slice(0, 1000) : null,

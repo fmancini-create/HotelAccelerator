@@ -47,6 +47,10 @@ export const PLATFORM_AREAS: PlatformArea[] = [
 
   // --- Operative areas (grantable to members) ---
   { key: "crm", label: "CRM", group: "operative", href: "/admin/crm" },
+  // Registro delle telefonate del centralino. Concedibile e NON riservata agli
+  // amministratori: le chiamate senza risposta servono a chi sta alla reception,
+  // mentre la configurazione del centralino resta in Canali (solo admin).
+  { key: "calls", label: "Telefonate", group: "operative", href: "/admin/calls" },
   { key: "todos", label: "Todos", group: "operative", href: "/admin/todos" },
   { key: "photos", label: "Foto", group: "operative", href: "/admin/photos" },
   { key: "gallery", label: "Gallery", group: "operative", href: "/admin/gallery" },

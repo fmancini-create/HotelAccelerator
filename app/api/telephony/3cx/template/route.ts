@@ -93,6 +93,13 @@ export async function GET(request: NextRequest) {
       .map(([type, value]) => `        <Output Type="${type}" Passes="0" Value="${xmlEscape(value)}" />`)
       .join("\n")
 
+    // NON reintrodurre `[CallEstablishedTimeUTC]` (l'istante di risposta) fra i
+    // valori inviati a `ReportCall`: la documentazione 3CX avverte che esiste
+    // solo per le chiamate a cui qualcuno ha risposto, quindi senza una
+    // condizione fa fallire l'invio proprio sulle chiamate PERSE, che in hotel
+    // sono quelle da richiamare. Oltretutto il registro lo scartava comunque:
+    // `phone_calls` non ha una colonna dove metterlo. Era rischio senza
+    // beneficio.
     const xml = `<?xml version="1.0" encoding="utf-8"?>
 <Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="IT" Name="HotelAccelerator" Version="1" SupportsEmojis="true" SupportsTranscription="false" ListPageSize="0">
   <Number Prefix="AsIs" MaxLength="" />
@@ -133,7 +140,6 @@ ${contactOutputs}
           <Value Key="agent_email" If="" SkipIf="" Passes="1" Type="String">[AgentEmail]</Value>
           <Value Key="duration" If="" SkipIf="" Passes="1" Type="String">[Duration]</Value>
           <Value Key="started_at" If="" SkipIf="" Passes="2" Type="String">[[CallStartTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
-          <Value Key="answered_at" If="" SkipIf="" Passes="2" Type="String">[[CallEstablishedTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
           <Value Key="ended_at" If="" SkipIf="" Passes="2" Type="String">[[CallEndTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
         </PostValues>
         <QueryParams />

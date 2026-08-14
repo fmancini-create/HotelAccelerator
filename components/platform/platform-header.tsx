@@ -41,6 +41,7 @@ import {
   Sparkles,
   Tag,
   Users,
+  PhoneCall,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -129,6 +130,7 @@ const PRIMARY_NAV: NavItem[] = [
 
 // Secondary sections accessible via the "Altro" dropdown.
 const MORE_NAV: NavItem[] = [
+  { href: "/admin/calls", label: "Telefonate", icon: PhoneCall, module: "inbox", area: "calls" },
   { href: "/admin/photos", label: "Foto", icon: ImageIcon, area: "photos" },
   { href: "/admin/gallery", label: "Gallery", icon: ImageIcon, area: "gallery" },
   { href: "/admin/categories", label: "Categorie", icon: Tag, area: "categories" },

@@ -922,6 +922,17 @@ export default function InboxPage() {
       // Optimistically remove archived/trashed/spam threads from the visible list
       if (action === "archive" || action === "trash" || action === "spam") {
         setGmailThreads((prev) => prev.filter((t) => !threadIds.includes(t.id)))
+        // Se il messaggio APERTO e' fra quelli spostati, il dettaglio va chiuso:
+        // altrimenti resterebbe visibile a schermo un messaggio che non e' piu'
+        // nella posta in arrivo, con i pulsanti "Rispondi" ancora attivi.
+        setSelectedGmailThread((aperto) => {
+          if (aperto && threadIds.includes(aperto.id)) {
+            setGmailMessages([])
+            setIsThreadReady(false)
+            return null
+          }
+          return aperto
+        })
       }
       const results = await Promise.allSettled(
         threadIds.map((id) =>
@@ -1678,8 +1689,14 @@ export default function InboxPage() {
   }
 
   // Bulk actions for the unified list (archive = resolved, spam, mark as read)
-  const handleConversationBulkAction = async (action: "archive" | "spam" | "markAsRead" | "markAsUnread") => {
-    const ids = Array.from(selectedConversationIds)
+  const handleConversationBulkAction = async (
+    action: "archive" | "spam" | "markAsRead" | "markAsUnread",
+    // Bersaglio esplicito. Serve per agire sul messaggio APERTO quando non c'e'
+    // nessuna casella spuntata: la selezione veniva letta solo qui dentro,
+    // quindi passare degli id da fuori non avrebbe avuto alcun effetto.
+    idsArg?: string[],
+  ) => {
+    const ids = idsArg ?? Array.from(selectedConversationIds)
     if (ids.length === 0) return
     try {
       // Single bulk call: the server updates all rows at once and then pushes
@@ -2729,37 +2746,89 @@ export default function InboxPage() {
                 Works in both Gmail mode and unified (smart) mode, for "Tutti i
                 canali" and any single channel. */}
             {(() => {
-              const count = inboxMode === "gmail" ? selectedGmailThreadIds.size : selectedConversationIds.size
-              const disabled = count === 0
-              // Se TUTTI gli elementi selezionati sono già letti, il pulsante
+              const gmail = inboxMode === "gmail"
+              const count = gmail ? selectedGmailThreadIds.size : selectedConversationIds.size
+
+              /**
+               * Chi subisce l'azione: le caselle spuntate se ce ne sono, ALTRIMENTI
+               * il messaggio aperto.
+               *
+               * Prima i tre pulsanti guardavano solo le caselle spuntate: chi
+               * apriva un messaggio e cercava "Archivia" lo trovava spento, e
+               * l'unica via era tornare all'elenco e spuntare la casella di un
+               * messaggio che aveva davanti agli occhi. Un pulsante visibile ma
+               * inerte non spiega cosa manca, quindi sembra guasto.
+               *
+               * In Gmail si attende che il messaggio sia caricato (`isThreadReady`),
+               * la stessa condizione già usata dalle azioni del dettaglio: agire
+               * su un messaggio ancora in caricamento veniva rifiutato dal server.
+               */
+              const apertoId = gmail
+                ? isThreadReady
+                  ? (selectedGmailThread?.id ?? null)
+                  : null
+                : (selectedConversation?.id ?? null)
+              const suApertoSolo = count === 0 && apertoId !== null
+              const bersaglio: string[] =
+                count > 0
+                  ? gmail
+                    ? Array.from(selectedGmailThreadIds)
+                    : Array.from(selectedConversationIds)
+                  : apertoId
+                    ? [apertoId]
+                    : []
+              const disabled = bersaglio.length === 0
+              // In Gmail un messaggio aperto ma non ancora caricato spegne i
+              // pulsanti: va detto perche', altrimenti sembrano guasti.
+              const inCaricamento = gmail && count === 0 && !!selectedGmailThread && !isThreadReady
+
+              // Se TUTTI i destinatari dell'azione sono già letti, il pulsante
               // offre l'azione inversa: "Segna come da leggere".
               const allSelectedRead =
-                count > 0 &&
-                (inboxMode === "gmail"
-                  ? gmailThreads
-                      .filter((t) => selectedGmailThreadIds.has(t.id))
-                      .every((t) => !t.isUnread)
-                  : conversations
-                      .filter((c) => selectedConversationIds.has(c.id))
-                      .every((c) => (c.unread_count ?? 0) === 0))
+                bersaglio.length > 0 &&
+                (gmail
+                  ? bersaglio.every((id) => {
+                      const inElenco = gmailThreads.find((t) => t.id === id)
+                      // Il messaggio aperto puo' non essere piu' nell'elenco
+                      // (altro filtro, altra pagina): si ricade sul suo stato.
+                      return !(inElenco ?? (selectedGmailThread?.id === id ? selectedGmailThread : null))?.isUnread
+                    })
+                  : bersaglio.every((id) => {
+                      const inElenco = conversations.find((c) => c.id === id)
+                      const rif = inElenco ?? (selectedConversation?.id === id ? selectedConversation : null)
+                      return (rif?.unread_count ?? 0) === 0
+                    }))
               const readAction: "markAsRead" | "markAsUnread" = allSelectedRead ? "markAsUnread" : "markAsRead"
               const run = (action: "archive" | "spam" | "markAsRead" | "markAsUnread") => {
                 if (disabled) return
-                if (inboxMode === "gmail") {
-                  handleGmailBulkAction(action, Array.from(selectedGmailThreadIds))
+                if (gmail) {
+                  handleGmailBulkAction(action, bersaglio)
                 } else {
-                  handleConversationBulkAction(action)
+                  handleConversationBulkAction(action, bersaglio)
                 }
               }
+              const suffisso = (verbo: string) =>
+                inCaricamento
+                  ? "Caricamento del messaggio in corso…"
+                  : disabled
+                    ? `${verbo}: apri un messaggio o selezionane almeno uno`
+                    : suApertoSolo
+                      ? `${verbo} il messaggio aperto`
+                      : `${verbo} i messaggi selezionati (${bersaglio.length})`
               return (
                 <div className="flex items-center gap-1 ml-1">
-                  {count > 0 && (
+                  {count > 0 ? (
                     <span className="text-[13px] text-[#5f6368] tabular-nums mr-1">{count} sel.</span>
-                  )}
+                  ) : suApertoSolo ? (
+                    // Il bersaglio va detto: gli stessi pulsanti, nella stessa
+                    // posizione, agiscono ora su cose diverse.
+                    <span className="hidden md:inline text-[13px] text-[#5f6368] mr-1">questo messaggio</span>
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    title={suffisso("Archivia")}
                     className="text-xs h-7 bg-transparent gap-1"
                     onClick={() => run("archive")}
                   >
@@ -2770,6 +2839,7 @@ export default function InboxPage() {
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    title={suffisso("Segnala come spam")}
                     className="text-xs h-7 bg-transparent gap-1"
                     onClick={() => run("spam")}
                   >
@@ -2780,6 +2850,7 @@ export default function InboxPage() {
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    title={suffisso(allSelectedRead ? "Segna come da leggere" : "Segna come letto")}
                     className="text-xs h-7 bg-transparent gap-1"
                     onClick={() => run(readAction)}
                   >
