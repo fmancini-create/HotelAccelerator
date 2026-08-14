@@ -34,6 +34,10 @@
 export const PUBLIC_API_PREFIXES: string[] = [
   // Widget e script serviti sui siti dei clienti (visitatori anonimi).
   "/api/chat/widget",
+  // Widget chat multipli: l'autorizzazione e' la chiave pubblica nell'URL, non
+  // una sessione. Il `property_id` si ricava dalla chiave e non viene mai letto
+  // dal corpo della richiesta.
+  "/api/public/chat-widget",
   "/api/messages/impression",
   "/api/messages/rules",
   "/api/public/embed",

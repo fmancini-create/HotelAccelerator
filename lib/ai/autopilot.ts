@@ -4,7 +4,7 @@ import { generateReply, type ConversationTurn } from "./generate"
 import { contactIsComplete, registerStaffHandoff } from "./handoff"
 import { getBasesForChannel } from "./knowledge-bases"
 
-export type AiChannel = "telegram" | "whatsapp" | "email"
+export type AiChannel = "telegram" | "whatsapp" | "email" | "chat"
 
 export interface RunAutopilotArgs {
   supabase: SupabaseClient

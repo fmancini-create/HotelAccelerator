@@ -188,7 +188,10 @@ export function ChatWidgetEditor({
     }
   }
 
-  const snippet = `<script src="${typeof window !== "undefined" ? window.location.origin : ""}/api/widget/loader.js" data-widget-key="${chiave}" async></script>`
+  // Il percorso deve corrispondere al file realmente servito (public/widget/chat.js):
+  // il pannello precedente faceva copiare uno snippet che puntava a un file mai
+  // esistito, quindi la chat non compariva su nessun sito.
+  const snippet = `<script src="${typeof window !== "undefined" ? window.location.origin : ""}/widget/chat.js" data-widget-key="${chiave}" async></script>`
 
   async function copiaSnippet() {
     await navigator.clipboard.writeText(snippet)
