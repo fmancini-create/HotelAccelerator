@@ -322,7 +322,11 @@ export default function EmailChannelsClient() {
       if (response.ok) {
         const data = await response.json()
         setSettings({
-          autoSync: data.sync_enabled ?? true,
+          // Allineato al servizio periodico, che sincronizza solo se il valore
+          // e' esattamente `true`: mostrare l'interruttore acceso "per
+          // benevolenza" farebbe credere attiva una sincronizzazione che non
+          // avviene.
+          autoSync: data.sync_enabled === true,
           notifications: data.notifications_enabled ?? true,
           autoContacts: data.auto_create_contacts ?? false,
           syncAttachments: data.save_attachments ?? true,
@@ -1275,6 +1279,20 @@ export default function EmailChannelsClient() {
                   <Settings className="h-5 w-5" />
                   Impostazioni Sincronizzazione
                 </CardTitle>
+                {/* Queste impostazioni valgono per UNA casella, non per tutte:
+                    senza dirlo, con piu' caselle collegate sembra che
+                    l'attivazione non venga salvata, mentre in realta' si sta
+                    guardando una casella diversa da quella modificata. */}
+                <CardDescription>
+                  {selectedChannel ? (
+                    <>
+                      Valgono solo per <span className="font-medium text-foreground">{selectedChannel.email_address}</span>
+                      {channels.length > 1 ? " — ogni casella ha le proprie impostazioni." : "."}
+                    </>
+                  ) : (
+                    "Seleziona una casella per vedere le sue impostazioni."
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">
