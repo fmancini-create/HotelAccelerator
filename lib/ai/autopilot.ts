@@ -2,7 +2,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { generateReply, type ConversationTurn } from "./generate"
 import { contactIsComplete, registerStaffHandoff } from "./handoff"
-import { getBasesForChannel } from "./knowledge-bases"
+import { getBasesForChannel, type AiMode } from "./knowledge-bases"
 
 export type AiChannel = "telegram" | "whatsapp" | "email" | "chat"
 

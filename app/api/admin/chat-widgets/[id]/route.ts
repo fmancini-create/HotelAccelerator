@@ -37,6 +37,7 @@ interface CorpoModifica {
   siteUrl?: string | null
   isActive?: boolean
   appearance?: Record<string, unknown>
+  unattendedAutopilot?: boolean
   primaryBaseId?: string | null
   additionalBaseIds?: string[]
 }
@@ -89,6 +90,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       siteUrl: body.siteUrl,
       isActive: body.isActive,
       appearance: body.appearance,
+      unattendedAutopilot: typeof body.unattendedAutopilot === "boolean" ? body.unattendedAutopilot : undefined,
     })
 
     // Le basi si salvano solo se il corpo le menziona: un PATCH del solo colore

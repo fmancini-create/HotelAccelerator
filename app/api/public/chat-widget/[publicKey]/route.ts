@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getChatWidgetByPublicKey } from "@/lib/chat-widgets/repository"
 import { jsonCors, rispostaPreflight } from "@/lib/chat-widgets/cors"
 import { runAutopilot } from "@/lib/ai/autopilot"
+import { operatoreAttivo } from "@/lib/operators/presence"
 
 export const dynamic = "force-dynamic"
 
@@ -191,6 +192,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ pub
     // la consegna E' la riga in `messages`, che il widget legge con `messages`.
     // Va comunque passata, perche' in modalita' autopilot l'autopilot rifiuta di
     // agire senza un mezzo di consegna ("no_sender").
+    // Regola richiesta: se nessun operatore e' collegato, l'assistente risponde
+    // da solo anche quando la modalita' configurata e' "su richiesta". Senza
+    // questo, un messaggio arrivato di notte resterebbe una bozza in attesa di
+    // un'approvazione che nessuno puo' dare.
+    const nessunOperatore = widget.unattendedAutopilot ? !(await operatoreAttivo(propertyId)) : false
+
     let stato: "sent" | "draft" | "skipped" = "skipped"
     try {
       const esito = await runAutopilot({
@@ -201,6 +208,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pub
         channelId: widget.id,
         incomingText: testo,
         send: async () => {},
+        // `runAutopilot` ignora l'override se la base e' spenta: una struttura
+        // che ha disattivato l'IA la vuole disattivata anche fuori orario.
+        modeOverride: nessunOperatore ? "autopilot" : undefined,
       })
       stato = esito.action
     } catch (e) {

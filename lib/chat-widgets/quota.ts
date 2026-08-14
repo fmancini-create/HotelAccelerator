@@ -89,3 +89,63 @@ export async function incrementaWidgetExtra(propertyId: string, delta: number): 
 
   return nuoviExtra
 }
+
+/** Prezzo di un widget aggiuntivo, in centesimi. Vive qui perche' il valore che
+ *  conta e' quello che il server manda a Stripe: un prezzo scritto nel pannello
+ *  sarebbe modificabile da chi apre gli strumenti del browser. */
+export const PREZZO_WIDGET_EXTRA_CENTESIMI = 900 // 9 euro al mese
+
+export interface EsitoAcquisto {
+  /** true se questo pagamento ha aggiunto il widget adesso. */
+  applicato: boolean
+  /** true se era gia' stato registrato (evento Stripe recapitato due volte). */
+  giaRegistrato: boolean
+  extra: number
+}
+
+/**
+ * Registra un acquisto e alza la quota UNA VOLTA SOLA.
+ *
+ * Stripe recapita di nuovo un evento quando non riceve conferma, e lo stesso
+ * pagamento puo' quindi arrivare piu' volte. Senza una difesa, ogni recapito
+ * regalerebbe un widget: per questo l'incremento avviene solo se l'inserimento
+ * della sessione riesce. Il vincolo di unicita' nel database, e non un controllo
+ * "esiste gia'?" in codice, e' cio' che rende la difesa affidabile anche se due
+ * recapiti arrivano nello stesso istante.
+ */
+export async function registraAcquistoWidget(dati: {
+  propertyId: string
+  stripeSessionId: string
+  stripeSubscriptionId?: string | null
+  quantity?: number
+  amountCents?: number | null
+}): Promise<EsitoAcquisto> {
+  const supabase = createServiceClient()
+  const quantita = Math.max(1, Math.floor(dati.quantity ?? 1))
+
+  const { error } = await supabase.from("chat_widget_purchases").insert({
+    property_id: dati.propertyId,
+    stripe_session_id: dati.stripeSessionId,
+    stripe_subscription_id: dati.stripeSubscriptionId ?? null,
+    quantity: quantita,
+    amount_cents: dati.amountCents ?? null,
+  })
+
+  if (error) {
+    // 23505 = violazione di unicita': lo stesso pagamento era gia' stato
+    // contato. Non e' un guasto, ed e' importante NON risollevarlo: un errore
+    // farebbe ritentare Stripe all'infinito su un evento in realta' concluso.
+    if (error.code === "23505") {
+      const { data } = await supabase
+        .from("chat_widget_quota")
+        .select("extra_widgets")
+        .eq("property_id", dati.propertyId)
+        .maybeSingle()
+      return { applicato: false, giaRegistrato: true, extra: data?.extra_widgets ?? 0 }
+    }
+    throw new Error(`Registrazione acquisto widget fallita: ${error.message}`)
+  }
+
+  const extra = await incrementaWidgetExtra(dati.propertyId, quantita)
+  return { applicato: true, giaRegistrato: false, extra }
+}

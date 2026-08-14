@@ -82,6 +82,9 @@ export function ChatWidgetEditor({
   const [basi, setBasi] = useState<BaseConoscenza[]>([])
   const [basePrimaria, setBasePrimaria] = useState<string>("")
   const [basiAggiuntive, setBasiAggiuntive] = useState<string[]>([])
+  // Acceso di partenza: e' il predefinito lato server, e mostrarne uno diverso
+  // farebbe credere all'admin di aver spento qualcosa che invece e' attivo.
+  const [autopilotSenzaOperatore, setAutopilotSenzaOperatore] = useState(true)
 
   const inputLogo = useRef<HTMLInputElement>(null)
   const [caricoLogo, setCaricoLogo] = useState(false)
@@ -106,6 +109,7 @@ export function ChatWidgetEditor({
         setAttivo(datiWidget.widget.isActive)
         setChiave(datiWidget.widget.publicKey)
         setAspetto(normalizzaAspetto(datiWidget.widget.appearance))
+        setAutopilotSenzaOperatore(datiWidget.widget.unattendedAutopilot !== false)
         setBasePrimaria(datiWidget.primaryBaseId ?? "")
         setBasiAggiuntive(datiWidget.additionalBaseIds ?? [])
         setBasi(datiBasi.bases ?? [])
@@ -160,6 +164,7 @@ export function ChatWidgetEditor({
           siteUrl: sito || null,
           isActive: attivo,
           appearance: aspetto,
+          unattendedAutopilot: autopilotSenzaOperatore,
           primaryBaseId: basePrimaria || null,
           additionalBaseIds: basiAggiuntive,
         }),
@@ -603,6 +608,41 @@ export function ChatWidgetEditor({
                 </CardContent>
               </Card>
             )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Quando nessun operatore è collegato</CardTitle>
+                <CardDescription>
+                  Se al pannello non c&apos;è nessuno, una risposta in attesa di approvazione resta ferma fino al mattino.
+                  Con questa opzione attiva l&apos;assistente risponde da solo, anche se la base è impostata su
+                  &quot;Propone la risposta&quot;.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-muted/50">
+                  <Switch
+                    checked={autopilotSenzaOperatore}
+                    onCheckedChange={(v) => {
+                      setAutopilotSenzaOperatore(v)
+                      setSalvato(false)
+                    }}
+                  />
+                  <span className="flex flex-col gap-1">
+                    <span className="text-sm font-medium text-foreground">Rispondi comunque fuori orario</span>
+                    <span className="text-sm text-muted-foreground">
+                      {autopilotSenzaOperatore
+                        ? "Chi scrive di notte riceve subito una risposta dall'assistente."
+                        : "Fuori orario le chat restano in attesa di un operatore."}
+                    </span>
+                  </span>
+                </label>
+                {primaria?.mode === "disabled" && (
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    {`La base "${primaria.name}" ha l'assistente disattivato: in quel caso resta disattivato anche fuori orario.`}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ---------------------------------------------------------------- */}

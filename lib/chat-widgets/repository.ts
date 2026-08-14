@@ -23,6 +23,15 @@ export interface ChatWidget {
   publicKey: string
   isActive: boolean
   appearance: WidgetAppearance
+  /**
+   * Quando nessun operatore e' collegato, l'assistente risponde da solo.
+   *
+   * Acceso di fabbrica: un visitatore che scrive di notte deve ricevere una
+   * risposta, non restare in attesa di un'approvazione che nessuno dara'.
+   * L'admin di struttura puo' spegnerlo se preferisce il silenzio alla risposta
+   * automatica.
+   */
+  unattendedAutopilot: boolean
   createdAt: string
 }
 
@@ -45,6 +54,9 @@ function rigaAWidget(r: RigaCanale): ChatWidget {
     publicKey: String(config.public_key ?? ""),
     isActive: r.is_active,
     appearance: normalizzaAspetto(config.appearance),
+    // Assente = acceso: i widget creati prima di questa opzione devono
+    // comportarsi come il predefinito, non restare muti a sorpresa.
+    unattendedAutopilot: config.unattended_autopilot !== false,
     createdAt: r.created_at,
   }
 }
@@ -138,6 +150,7 @@ export interface ModificaWidget {
   siteUrl?: string | null
   isActive?: boolean
   appearance?: Partial<WidgetAppearance>
+  unattendedAutopilot?: boolean
 }
 
 export async function updateChatWidget(
@@ -155,6 +168,8 @@ export async function updateChatWidget(
     public_key: attuale.publicKey || generaChiavePubblica(),
     site_url: patch.siteUrl !== undefined ? patch.siteUrl?.trim() || null : attuale.siteUrl,
     appearance: patch.appearance ? normalizzaAspetto({ ...attuale.appearance, ...patch.appearance }) : attuale.appearance,
+    unattended_autopilot:
+      patch.unattendedAutopilot !== undefined ? patch.unattendedAutopilot : attuale.unattendedAutopilot,
   }
 
   const aggiornamento: Record<string, unknown> = { config, updated_at: new Date().toISOString() }
@@ -188,6 +203,10 @@ export async function rigeneraChiaveWidget(widgetId: string, propertyId: string)
         public_key: generaChiavePubblica(),
         site_url: attuale.siteUrl,
         appearance: attuale.appearance,
+        // Va riportato anche qui: questa scrittura sostituisce la configurazione
+        // intera, quindi ometterlo riporterebbe l'impostazione al predefinito
+        // ogni volta che si rigenera la chiave.
+        unattended_autopilot: attuale.unattendedAutopilot,
       },
       updated_at: new Date().toISOString(),
     })

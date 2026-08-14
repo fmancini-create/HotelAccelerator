@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { PlatformShell } from "@/components/platform/platform-shell"
 import { ClientToaster } from "@/components/admin/client-toaster"
+import { OperatorPresenceBeacon } from "@/components/admin/operator-presence-beacon"
 
 export const metadata: Metadata = {
   title: {
@@ -23,6 +24,9 @@ export default function AdminLayout({
     <PlatformShell>
       {children}
       <ClientToaster />
+      {/* Montato nel layout, non nelle singole pagine: un operatore che lavora
+          in inbox e' presente anche se non ha aperto la pagina dei widget. */}
+      <OperatorPresenceBeacon />
     </PlatformShell>
   )
 }
