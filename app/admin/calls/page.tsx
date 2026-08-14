@@ -66,11 +66,35 @@ function durata(secondi: number | null): string {
 }
 
 /** Numero leggibile: le cifre restano intatte, cambia solo la spaziatura. */
+/**
+ * Il numero come lo legge una persona.
+ *
+ * Il centralino consegna lo stesso numero in forme diverse: la stessa utenza
+ * arrivava sia come "3358046836" sia come "03358046836" (lo zero e' il prefisso
+ * di selezione della linea esterna, non parte del numero). Con due regole di
+ * spaziatura diverse le due righe si leggevano come "335 804 6836" e
+ * "0335 8046836", cioe' sembravano DUE persone diverse pur essendo lo stesso
+ * cliente, gia' riconosciuto come lo stesso contatto in rubrica.
+ *
+ * Lo zero iniziale si toglie SOLO davanti a un cellulare (in Italia i cellulari
+ * iniziano sempre per 3): nei numeri fissi lo zero e' parte del prefisso urbano
+ * e togliendolo si otterrebbe un numero inesistente.
+ */
 function numeroLeggibile(n: string | null): string {
   if (!n) return "Numero sconosciuto"
   const cifre = n.replace(/\D/g, "")
-  if (cifre.length === 10 && cifre.startsWith("3")) return `${cifre.slice(0, 3)} ${cifre.slice(3, 6)} ${cifre.slice(6)}`
-  if (cifre.length === 11 && cifre.startsWith("0")) return `${cifre.slice(0, 4)} ${cifre.slice(4)}`
+  // Si toglie il prefisso italiano (+39 / 0039) e lo zero di selezione, ma SOLO
+  // quando cio' che resta e' un cellulare italiano di 10 cifre che inizia per 3.
+  // Un numero estero (+33, +44...) resta come e' arrivato: raggrupparlo con le
+  // regole italiane suggerirebbe una struttura che quel numero non ha.
+  const candidati = [
+    cifre,
+    cifre.replace(/^0039/, ""),
+    cifre.replace(/^39/, ""),
+    cifre.replace(/^0/, ""),
+  ]
+  const cellulare = candidati.find((c) => c.length === 10 && c.startsWith("3"))
+  if (cellulare) return `${cellulare.slice(0, 3)} ${cellulare.slice(3, 6)} ${cellulare.slice(6)}`
   return n
 }
 
@@ -307,7 +331,9 @@ export default function CallsPage() {
                               {c.contact.name}
                             </Link>
                           ) : (
-                            <span className="tabular-nums">{numeroLeggibile(c.number)}</span>
+                            <span className="tabular-nums" title={c.number ?? undefined}>
+                              {numeroLeggibile(c.number)}
+                            </span>
                           )}
                           {persa && (
                             <Badge variant="destructive" className="text-xs">
@@ -317,7 +343,9 @@ export default function CallsPage() {
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {c.contact?.name && c.number ? (
-                            <span className="tabular-nums">{numeroLeggibile(c.number)}</span>
+                            <span className="tabular-nums" title={c.number}>
+                              {numeroLeggibile(c.number)}
+                            </span>
                           ) : (
                             <span>{inArrivo ? "In arrivo" : "In uscita"}</span>
                           )}
