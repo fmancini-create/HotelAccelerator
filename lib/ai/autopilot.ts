@@ -20,6 +20,18 @@ export interface RunAutopilotArgs {
    * Should return the provider message id when available (for idempotency).
    */
   send?: (text: string) => Promise<{ externalId?: string } | void>
+  /**
+   * Forza la modalita' ignorando quella della base primaria.
+   *
+   * Serve al caso "nessun operatore collegato": una bozza che aspetta
+   * un'approvazione lascia l'ospite senza risposta finche' qualcuno non torna
+   * alla scrivania. Chi chiama decide, perche' la regola di presenza non e'
+   * competenza dell'assistente.
+   *
+   * `disabled` non viene mai scavalcato: se la struttura ha spento l'IA, la
+   * vuole spenta anche di notte, e sovrascriverlo sarebbe disobbedire.
+   */
+  modeOverride?: Exclude<AiMode, "disabled">
 }
 
 export type AutopilotAction = "sent" | "draft" | "skipped"
@@ -56,7 +68,10 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   if (!primary || baseIds.length === 0) {
     return { action: "skipped", reason: "no_base_linked" }
   }
-  const mode = primary.mode
+  // L'override si applica DOPO aver letto la base ma solo se la base non e'
+  // spenta: l'ordine conta, perche' altrimenti una struttura che ha disattivato
+  // l'assistente se lo vedrebbe riaccendere appena esce l'ultimo operatore.
+  const mode = primary.mode === "disabled" ? "disabled" : (args.modeOverride ?? primary.mode)
   if (mode === "disabled") {
     return { action: "skipped", reason: "base_disabled" }
   }

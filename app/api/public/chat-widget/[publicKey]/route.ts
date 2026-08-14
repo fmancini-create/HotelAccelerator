@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic"
  *    altro hotel.
  * 2) Si usa il service client perche' `conversations`/`messages` sono chiuse al
  *    ruolo `anon`; per questo ogni query qui filtra a mano per `property_id` e
- *    per `channel_id`, che e' l'unico isolamento rimasto.
+ *    per il widget di provenienza, che e' l'unico isolamento rimasto.
  * 3) Ogni azione su una conversazione esistente ne verifica l'appartenenza a
  *    QUESTO widget: senza quel controllo un id di conversazione indovinato
  *    permetterebbe di leggere la chat di un altro ospite.
@@ -45,16 +45,28 @@ export async function POST(request: Request, { params }: { params: Promise<{ pub
     visitor?: { name?: string; email?: string; language?: string; page_url?: string; user_agent?: string }
   }
 
-  /** Conversazione appartenente a questo widget, o null. */
+  /**
+   * Conversazione appartenente a questo widget, o null.
+   *
+   * Il legame col widget sta in `metadata.messaging_channel_id`, la convenzione
+   * gia' usata da Telegram e WhatsApp. NON si usa la colonna `conversations.
+   * channel_id`: il nome inganna, ma la sua chiave esterna punta a
+   * `email_channels`, quindi scrivervi l'id di un widget viene rifiutato dal
+   * database.
+   */
   const conversazioneDelWidget = async (conversationId: string) => {
     const { data } = await supabase
       .from("conversations")
-      .select("id")
+      .select("id, metadata")
       .eq("id", conversationId)
       .eq("property_id", propertyId)
-      .eq("channel_id", widget.id)
+      .eq("channel", "chat")
       .maybeSingle()
-    return data?.id ?? null
+    if (!data) return null
+    const diQuestoWidget = (data.metadata as Record<string, unknown> | null)?.messaging_channel_id
+    // Il controllo di appartenenza resta obbligatorio: senza, un id di
+    // conversazione indovinato aprirebbe la chat di un altro ospite.
+    return diQuestoWidget === widget.id ? data.id : null
   }
 
   if (body.action === "start") {
@@ -84,17 +96,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ pub
       .insert({
         property_id: propertyId,
         channel: "chat",
-        // Questo legame e' il punto centrale: dice DA QUALE widget arriva la
-        // chat, e quindi quali basi di conoscenza deve usare l'IA e quale sito
-        // vede l'operatore in inbox. Senza, le chat erano canale-cieche.
-        channel_id: widget.id,
         contact_id: contactId,
         contact_name: visitatore.name?.trim() || null,
         contact_email: emailPulita,
         status: "open",
         subject: `Chat dal sito · ${widget.name}`,
         metadata: {
-          widget_id: widget.id,
+          channel: "chat",
+          // Questo legame e' il punto centrale: dice DA QUALE widget arriva la
+          // chat, e quindi quali basi di conoscenza deve usare l'IA e quale sito
+          // vede l'operatore in inbox. Senza, le chat erano canale-cieche.
+          // Il nome della chiave segue Telegram e WhatsApp, cosi' chi legge le
+          // conversazioni trova lo stesso campo su tutti i canali.
+          messaging_channel_id: widget.id,
           widget_name: widget.name,
           page_url: visitatore.page_url ?? null,
           user_agent: visitatore.user_agent ?? null,
@@ -104,6 +118,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ pub
       .single()
 
     if (error || !conversation) {
+      // La causa va registrata: un errore inghiottito costringe a indovinare.
+      // Al visitatore resta un messaggio generico, perche' il dettaglio tecnico
+      // non gli serve e non va esposto su un sito pubblico.
+      console.error("[v0] widget chat: apertura conversazione fallita:", error?.message ?? "nessun dato")
       return jsonCors({ error: "Non è stato possibile aprire la conversazione" }, { status: 500 })
     }
 
