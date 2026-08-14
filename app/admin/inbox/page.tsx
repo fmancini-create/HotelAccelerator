@@ -2827,9 +2827,102 @@ export default function InboxPage() {
               <div className="flex flex-col h-full">
                 {/* Subject header */}
                 <div className="px-6 py-4 border-b border-border overflow-hidden">
-                  <h1 className="text-xl font-normal text-[#202124] truncate">
-                    {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
-                  </h1>
+                  <div className="flex items-start justify-between gap-3">
+                    <h1 className="text-xl font-normal text-[#202124] truncate">
+                      {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
+                    </h1>
+                    {/* Azioni sulla conversazione aperta.
+                        I gestori esistevano gia' ed erano scritti proprio per questa vista
+                        (azzerano la selezione dopo l'azione), ma nessun pulsante li chiamava:
+                        da qui non si poteva ne' archiviare ne' eliminare senza tornare alla
+                        lista e usare le caselle di selezione. */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {inboxMode === "gmail" && selectedGmailThread ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={selectedGmailThread.isStarred ? "Togli stella" : "Aggiungi stella"}
+                            onClick={() => handleGmailStarToggle(selectedGmailThread)}
+                          >
+                            <Star className={`h-4 w-4 ${selectedGmailThread.isStarred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground"}`} />
+                            <span className="sr-only">{selectedGmailThread.isStarred ? "Togli stella" : "Aggiungi stella"}</span>
+                          </Button>
+                          {gmailLabelId === "SPAM" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              /* I gestori Gmail richiedono il thread completamente caricato:
+                                 disabilitare e' piu' chiaro di un messaggio d'errore dopo il clic. */
+                              disabled={!isThreadReady}
+                              title={isThreadReady ? "Non è spam" : "Caricamento in corso…"}
+                              onClick={() => handleGmailNotSpam(selectedGmailThread)}
+                            >
+                              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                              <span className="sr-only">Non è spam</span>
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Archivia" : "Caricamento in corso…"}
+                            onClick={() => handleGmailArchive(selectedGmailThread)}
+                          >
+                            <Archive className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Archivia</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Sposta nel cestino" : "Caricamento in corso…"}
+                            onClick={() => handleGmailTrash(selectedGmailThread)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Sposta nel cestino</span>
+                          </Button>
+                        </>
+                      ) : selectedConversation ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={selectedConversation.is_starred ? "Togli stella" : "Aggiungi stella"}
+                            onClick={() => handleToggleStar(selectedConversation)}
+                          >
+                            <Star className={`h-4 w-4 ${selectedConversation.is_starred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground"}`} />
+                            <span className="sr-only">{selectedConversation.is_starred ? "Togli stella" : "Aggiungi stella"}</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Archivia"
+                            onClick={() => handleArchive(selectedConversation.id)}
+                          >
+                            <Archive className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Archivia</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Segna come spam"
+                            onClick={() => handleMarkAsSpam(selectedConversation.id)}
+                          >
+                            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Segna come spam</span>
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">Posta in arrivo</span>
                   </div>
@@ -2874,9 +2967,11 @@ export default function InboxPage() {
                                     contextTitle={selectedConversation?.contact?.name || selectedConversation?.subject || undefined}
                                   />
                                 )}
-                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
-                                  <Star className="h-4 w-4 text-muted-foreground" />
-                                </Button>
+                                {/* La stella per-messaggio e' stata rimossa: era priva di
+                                    gestore (un clic non faceva nulla) e non poteva funzionare,
+                                    perche' la stella e' memorizzata per CONVERSAZIONE
+                                    (`conversations.is_starred`), non per messaggio. La stella
+                                    che funziona e' nell'intestazione del thread, qui sotto. */}
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5 truncate">a {message.to || "me"}</div>
