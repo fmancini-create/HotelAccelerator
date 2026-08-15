@@ -21,7 +21,12 @@ export function InLavorazioneBadge({ label, compatto = false }: { label: string;
       title={`In lavorazione da ${label}`}
     >
       <Lock className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
-      <span className="truncate">In lavorazione da {label}</span>
+      {/* Nell'elenco stretto la frase intera mangiava lo spazio e troncava il
+          nome, cioe' l'unica cosa che l'operatore deve leggere: chi ce l'ha.
+          Lo spazio va al nome, il lucchetto dice "occupato" e la frase per
+          intero resta nel titolo e per i lettori di schermo. */}
+      <span className="sr-only">In lavorazione da </span>
+      <span className="truncate">{compatto ? label : `In lavorazione da ${label}`}</span>
     </span>
   )
 }
