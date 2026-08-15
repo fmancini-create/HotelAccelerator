@@ -1359,6 +1359,30 @@ export default function InboxPage() {
     if (fallimentiConsecutiviRef.current >= 2) setGuastoAggiornamento(true)
   }, [])
 
+  // Quante conversazioni si stanno tenendo in elenco.
+  //
+  // L'elenco chiedeva sempre il predefinito (50) e non passava mai `offset`:
+  // con oltre 7.000 conversazioni aperte, la 51esima era irraggiungibile e
+  // nulla lo diceva. Si cresce di 50 alla volta invece di paginare con
+  // `offset` perche' l'ordinamento "intelligente" riordina in base ai non
+  // letti e all'ultimo messaggio: una pagina successiva calcolata a scorrimento
+  // salterebbe o duplicherebbe righe ogni volta che arriva un messaggio.
+  // Primo caricamento leggero come prima (50), ma passo ampio: con un passo da
+  // 50 servivano 19 clic per arrivare in fondo, che e' un altro modo di rendere
+  // irraggiungibili le conversazioni piu' vecchie.
+  const LIMITE_INIZIALE = 50
+  const PASSO_ELENCO = 200
+  const MASSIMO_ELENCO = 1000
+  const [limiteElenco, setLimiteElenco] = useState(LIMITE_INIZIALE)
+  // Il ricarico automatico (poll e realtime) legge il riferimento, non lo stato:
+  // cosi' non perde la profondita' raggiunta e non va riagganciato a ogni "carica altre".
+  const limiteElencoRef = useRef(LIMITE_INIZIALE)
+  // Quale vista corrisponde alla profondita' attuale (filtro, ricerca, canali,
+  // struttura): se cambia, si riparte dalle prime righe.
+  const contestoElencoRef = useRef<string | null>(null)
+  const [altreConversazioniPossibili, setAltreConversazioniPossibili] = useState(false)
+  const [caricandoAltre, setCaricandoAltre] = useState(false)
+
   const loadConversations = useCallback(async (opts?: { automatico?: boolean }) => {
     // Realtime, polling and user actions can all request a refresh. Never let
     // them fan out into concurrent copies of this relatively expensive query.
@@ -1386,6 +1410,19 @@ export default function InboxPage() {
       // Unified inbox: only constrain by channel when a specific one is selected.
       if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
       queryParams.set("mode", "smart")
+      // Cambiare vista riparte dalle prime 50: la profondita' raggiunta vale per
+      // l'elenco che si stava scorrendo, non per un filtro diverso, altrimenti
+      // aprire "Archiviate" scaricherebbe 1.000 righe senza che nessuno le abbia
+      // chieste. Il confronto sta qui, in un punto solo: farlo in un effetto a
+      // parte significherebbe dipendere dall'ordine di esecuzione degli effetti.
+      const contesto = JSON.stringify([statusFilter, searchQuery, inboxSort, channelFilter])
+      if (contestoElencoRef.current !== contesto) {
+        contestoElencoRef.current = contesto
+        limiteElencoRef.current = LIMITE_INIZIALE
+        setLimiteElenco(LIMITE_INIZIALE)
+      }
+      const limiteRichiesto = limiteElencoRef.current
+      queryParams.set("limit", String(limiteRichiesto))
       if (searchQuery) queryParams.set("search", searchQuery)
       // Smart mode: "smart" is the legacy priority sort, others map 1:1 to DB ORDER BY
       queryParams.set("sort", inboxSort)
@@ -1412,7 +1449,12 @@ export default function InboxPage() {
       }
 
       const data = await res.json()
-      setConversations(data.conversations || [])
+      const ricevute = data.conversations || []
+      setConversations(ricevute)
+      // Se ne sono arrivate quante ne erano state chieste, e' probabile che ce
+      // ne siano altre: si offre "carica altre" invece di far credere che
+      // l'elenco finisca li'. `limite.troncato` e' il tetto del server.
+      setAltreConversazioniPossibili(ricevute.length >= limiteRichiesto && limiteRichiesto < MASSIMO_ELENCO)
       fallimentiConsecutiviRef.current = 0
       cicliDaSaltareRef.current = 0
       setGuastoAggiornamento(false)
@@ -1424,6 +1466,21 @@ export default function InboxPage() {
       setIsLoading(false)
     }
   }, [statusFilter, searchQuery, inboxSort, channelFilter])
+
+  const caricaAltreConversazioni = useCallback(async () => {
+    if (caricandoAltre) return
+    setCaricandoAltre(true)
+    const nuovo = Math.min(limiteElencoRef.current + PASSO_ELENCO, MASSIMO_ELENCO)
+    // Il riferimento va aggiornato PRIMA della chiamata: `loadConversations` lo
+    // legge subito, e lo stato di React non sarebbe ancora cambiato.
+    limiteElencoRef.current = nuovo
+    setLimiteElenco(nuovo)
+    try {
+      await loadConversations()
+    } finally {
+      setCaricandoAltre(false)
+    }
+  }, [caricandoAltre, loadConversations])
 
   // Database is the UI source of truth; Gmail ingestion is owned by server
   // webhook/cron jobs, with an explicit manual sync available to the operator.
@@ -3912,6 +3969,29 @@ export default function InboxPage() {
                     </div>
                     )
                   })}
+                  {altreConversazioniPossibili ? (
+                    <div className="p-3 border-b border-border">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={caricaAltreConversazioni}
+                        disabled={caricandoAltre}
+                      >
+                        {caricandoAltre ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Carica altre conversazioni
+                      </Button>
+                    </div>
+                  ) : limiteElenco >= MASSIMO_ELENCO ? (
+                    // Il tetto va detto, non subito in silenzio: chi ha migliaia
+                    // di conversazioni deve sapere che alle precedenti si arriva
+                    // con la ricerca, non credere che l'elenco finisca qui.
+                    <div className="px-3 py-4 text-center">
+                      <p className="text-xs text-muted-foreground text-pretty">
+                        Caricate le {MASSIMO_ELENCO} conversazioni piu&apos; recenti. Per le precedenti usa la ricerca.
+                      </p>
+                    </div>
+                  ) : null}
                 </>
               )
             )
