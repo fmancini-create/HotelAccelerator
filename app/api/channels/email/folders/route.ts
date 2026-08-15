@@ -47,12 +47,24 @@ export async function GET(request: NextRequest) {
     // esistenti e non serve una riga per ogni cartella.
     const { data: salvate } = await supabase
       .from("email_labels")
-      .select("channel_id, gmail_id, visible_in_inbox")
+      .select("channel_id, gmail_id, name, visible_in_inbox")
       .eq("property_id", propertyId)
 
     const visibilita = new Map<string, boolean>()
+    // Le cartelle di cui esiste una scelta salvata, per casella. Servono se Gmail
+    // non risponde: senza di esse una cartella spenta resterebbe invisibile
+    // nell'elenco e quindi impossibile da riaccendere — un vicolo cieco.
+    const salvatePerCasella = new Map<string, { id: string; name: string; visible: boolean }[]>()
     for (const riga of salvate || []) {
       visibilita.set(`${riga.channel_id}:${riga.gmail_id}`, riga.visible_in_inbox !== false)
+      if (!riga.channel_id || riga.gmail_id === SENZA_CARTELLA) continue
+      const elenco = salvatePerCasella.get(riga.channel_id) ?? []
+      elenco.push({
+        id: riga.gmail_id,
+        name: riga.name || riga.gmail_id,
+        visible: riga.visible_in_inbox !== false,
+      })
+      salvatePerCasella.set(riga.channel_id, elenco)
     }
 
     // Conversazioni CON cartella registrata: sono poche (centinaia), quindi si
@@ -103,16 +115,38 @@ export async function GET(request: NextRequest) {
 
         // I nomi delle cartelle esistono solo su Gmail: nel database si conserva
         // l'id (`Label_123`), che da solo non dice niente all'operatore.
-        const { data: datiGmail, error: erroreGmail } = await gmailFetch(casella.id, "labels")
+        // `gmailFetch` non si limita a restituire l'errore: puo' LANCIARE (token
+        // illeggibile, configurazione mancante). Senza questo try una sola
+        // casella difettosa farebbe fallire l'intera pagina, comprese le altre
+        // quattro che funzionano.
+        let datiGmail: any = null
+        let erroreGmail: string | null = null
+        try {
+          const esito = await gmailFetch(casella.id, "labels")
+          datiGmail = esito.data
+          erroreGmail = esito.error
+        } catch (e) {
+          erroreGmail = e instanceof Error ? e.message : "Cartelle non leggibili da Gmail"
+        }
 
         if (erroreGmail || !datiGmail) {
           // Una casella che non risponde non deve far fallire le altre: si
           // dichiara il problema e si mostra comunque cio' che si sa.
+          // Si mostrano comunque le cartelle con una scelta salvata: sono le
+          // sole che possono essere spente, quindi devono restare riaccendibili
+          // anche quando Gmail non risponde.
+          const daSalvate = (salvatePerCasella.get(casella.id) ?? []).map((riga) => ({
+            ...riga,
+            type: "user" as const,
+            conversazioni: conteggi.get(`${casella.id}:${riga.id}`) ?? 0,
+            senzaCartella: false,
+          }))
+
           return {
             id: casella.id,
             email_address: casella.email_address,
             errore: typeof erroreGmail === "string" ? erroreGmail : "Cartelle non leggibili da Gmail",
-            folders: [voceSenzaCartella],
+            folders: [voceSenzaCartella, ...daSalvate],
             conteggiTagliati,
           }
         }
