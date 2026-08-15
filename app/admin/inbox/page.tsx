@@ -1377,6 +1377,9 @@ export default function InboxPage() {
   // Il ricarico automatico (poll e realtime) legge il riferimento, non lo stato:
   // cosi' non perde la profondita' raggiunta e non va riagganciato a ogni "carica altre".
   const limiteElencoRef = useRef(LIMITE_INIZIALE)
+  // Quale vista corrisponde alla profondita' attuale (filtro, ricerca, canali,
+  // struttura): se cambia, si riparte dalle prime righe.
+  const contestoElencoRef = useRef<string | null>(null)
   const [altreConversazioniPossibili, setAltreConversazioniPossibili] = useState(false)
   const [caricandoAltre, setCaricandoAltre] = useState(false)
 
@@ -1407,6 +1410,17 @@ export default function InboxPage() {
       // Unified inbox: only constrain by channel when a specific one is selected.
       if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
       queryParams.set("mode", "smart")
+      // Cambiare vista riparte dalle prime 50: la profondita' raggiunta vale per
+      // l'elenco che si stava scorrendo, non per un filtro diverso, altrimenti
+      // aprire "Archiviate" scaricherebbe 1.000 righe senza che nessuno le abbia
+      // chieste. Il confronto sta qui, in un punto solo: farlo in un effetto a
+      // parte significherebbe dipendere dall'ordine di esecuzione degli effetti.
+      const contesto = JSON.stringify([statusFilter, searchQuery, inboxSort, channelFilter])
+      if (contestoElencoRef.current !== contesto) {
+        contestoElencoRef.current = contesto
+        limiteElencoRef.current = LIMITE_INIZIALE
+        setLimiteElenco(LIMITE_INIZIALE)
+      }
       const limiteRichiesto = limiteElencoRef.current
       queryParams.set("limit", String(limiteRichiesto))
       if (searchQuery) queryParams.set("search", searchQuery)
