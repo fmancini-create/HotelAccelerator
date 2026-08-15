@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import Link from "next/link"
-import { ArrowLeft, Brain, Mail, MessageSquare, Phone, Plus, Trash2, AlertTriangle } from "lucide-react"
+import { Brain, Mail, MessageSquare, Phone, Plus, Trash2, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
@@ -131,7 +130,7 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
-        <AdminHeader />
+        <AdminHeader title="Cervello del gruppo" backHref="/admin/users" backLabel="Gruppi di lavoro" />
         <main className="mx-auto max-w-4xl px-4 py-8">
           <p className="text-sm text-muted-foreground">Caricamento…</p>
         </main>
@@ -141,16 +140,14 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
 
   return (
     <div className="min-h-screen bg-background">
-      <AdminHeader />
+      <AdminHeader
+        title={groupName ? `Cervello: ${groupName}` : "Cervello del gruppo"}
+        subtitle="Cosa leggere dalle conversazioni di questo reparto, e cosa ricavarne"
+        backHref="/admin/users"
+        backLabel="Gruppi di lavoro"
+      />
       <main className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
         <div className="flex flex-col gap-3">
-          <Link
-            href="/admin/users"
-            className="flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Gruppi di lavoro
-          </Link>
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
               <Brain className="h-5 w-5 text-primary" aria-hidden="true" />

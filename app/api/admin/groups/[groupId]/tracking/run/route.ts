@@ -66,8 +66,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Il calendario si ricalcola solo se qualcosa e' stato scritto: una prova a
     // vuoto non deve toccare i numeri che l'operatore sta guardando.
+    //
+    // Si guarda anche `calls`, non solo `withDemand`: le chiamate finiscono nel
+    // calendario come volume del centralino, e con la sola condizione sulle
+    // richieste una passata di sole telefonate avrebbe scritto le estrazioni
+    // lasciando il calendario indietro, senza che nulla lo segnalasse.
     let calendar: { days: number; rows: number; extractions: number } | null = null
-    if (!dryRun && report.withDemand > 0) {
+    if (!dryRun && (report.withDemand > 0 || report.calls > 0)) {
       calendar = await rebuildDemandCalendar(supabase, propertyId)
     }
 

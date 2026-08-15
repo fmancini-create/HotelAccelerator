@@ -160,18 +160,23 @@ export async function runTrackingForGroup(
     errors: [],
   }
 
+  // Le già fatte si leggono PRIMA di scegliere le conversazioni, così il tetto
+  // per giro viene speso su lavoro nuovo: l'ordinamento parte dalle più
+  // recenti, che sono anche le prime a essere state analizzate.
+  const done = await loadAlreadyDone(supabase, config.group_id, config.version)
+
   const conversations = await listScopedConversations(supabase, config.property_id, sources, {
     since: opts.since,
     limit: opts.limit ?? 200,
+    skipIds: done.conversations,
   })
   report.scanned = conversations.length
-
-  const done = await loadAlreadyDone(supabase, config.group_id, config.version)
+  report.alreadyDone = done.conversations.size + done.calls.size
 
   for (const conv of conversations) {
     try {
-      // Già estratta a questa versione: si salta PRIMA di leggere i messaggi e
-      // prima di chiamare il modello. Ripetere una passata deve costare zero.
+      // Difesa residua: il selettore le ha già escluse, ma tra la lettura delle
+      // già fatte e questo punto un'altra passata può averne aggiunte.
       if (done.conversations.has(conv.id)) {
         report.alreadyDone++
         continue
