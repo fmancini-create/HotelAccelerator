@@ -37,13 +37,13 @@ function valorizzato(v: string | null | undefined): boolean {
  * Restituisce `null` quando il numero non e' riconoscibile (troppo corto) o non
  * risulta in rubrica: e' un esito valido, non un errore.
  */
-export async function trovaAnagraficaPerNumero(
+export async function trovaCandidatiPerNumero(
   supabase: SupabaseClient,
   propertyId: string,
   numero: string,
-): Promise<AnagraficaTrovata | null> {
+): Promise<AnagraficaTrovata[]> {
   const chiave = phoneMatchKey(numero)
-  if (!chiave) return null
+  if (!chiave) return []
 
   const { data, error } = await supabase
     .from("contacts")
@@ -52,16 +52,29 @@ export async function trovaAnagraficaPerNumero(
     .like("phone_digits", `%${chiave}%`)
     .limit(10)
 
-  if (error || !data || data.length === 0) return null
+  if (error || !data) return []
+  return data as unknown as AnagraficaTrovata[]
+}
 
-  const candidati = data as unknown as AnagraficaTrovata[]
-  if (candidati.length === 1) return candidati[0]
+/**
+ * Sceglie fra piu' candidati: vince la scheda curata da una persona sopra quella
+ * creata dal canale, altrimenti il doppione automatico continuerebbe a coprire
+ * la scheda vera.
+ *
+ * Scegliere non vuol dire nascondere: quando i candidati curati sono piu' di uno
+ * la scelta e' un'ipotesi, e chi la fa deve dichiararla (vedi `segnalazione`).
+ */
+export function scegliAnagrafica(candidati: AnagraficaTrovata[]): AnagraficaTrovata | null {
+  if (candidati.length === 0) return null
+  return candidati.find((c) => c.source !== "whatsapp") ?? candidati[0]
+}
 
-  // Piu' anagrafiche con lo stesso numero: vince quella curata da una persona
-  // sopra quella creata dal canale, altrimenti il doppione automatico
-  // continuerebbe a coprire la scheda vera.
-  const curata = candidati.find((c) => c.source !== "whatsapp")
-  return curata ?? candidati[0]
+export async function trovaAnagraficaPerNumero(
+  supabase: SupabaseClient,
+  propertyId: string,
+  numero: string,
+): Promise<AnagraficaTrovata | null> {
+  return scegliAnagrafica(await trovaCandidatiPerNumero(supabase, propertyId, numero))
 }
 
 /**
@@ -73,16 +86,16 @@ export async function trovaAnagraficaPerNumero(
  * e' l'unico dato che collega la conversazione alla scheda esistente; da quel
  * momento il numero viene salvato e il riconoscimento funziona da solo.
  */
-export async function trovaAnagraficaPerEmail(
+export async function trovaCandidatiPerEmail(
   supabase: SupabaseClient,
   propertyId: string,
   email: string,
   escludiId?: string,
-): Promise<AnagraficaTrovata | null> {
+): Promise<AnagraficaTrovata[]> {
   const pulita = String(email || "").trim()
   // Le email vuote in rubrica sono stringhe `""`, non NULL: senza questo
   // controllo `ilike` su stringa vuota aggancerebbe centinaia di schede.
-  if (!valorizzato(pulita)) return null
+  if (!valorizzato(pulita)) return []
 
   let query = supabase
     .from("contacts")
@@ -94,11 +107,125 @@ export async function trovaAnagraficaPerEmail(
   if (escludiId) query = query.neq("id", escludiId)
 
   const { data, error } = await query
-  if (error || !data || data.length === 0) return null
+  if (error || !data) return []
+  return data as unknown as AnagraficaTrovata[]
+}
 
-  const candidati = data as unknown as AnagraficaTrovata[]
-  const curata = candidati.find((c) => c.source !== "whatsapp")
-  return curata ?? candidati[0]
+export async function trovaAnagraficaPerEmail(
+  supabase: SupabaseClient,
+  propertyId: string,
+  email: string,
+  escludiId?: string,
+): Promise<AnagraficaTrovata | null> {
+  return scegliAnagrafica(await trovaCandidatiPerEmail(supabase, propertyId, email, escludiId))
+}
+
+/**
+ * Segnalazione all'operatore su cosa il sistema ha fatto (o non ha osato fare)
+ * con l'anagrafica.
+ *
+ * Due casi, entrambi da mostrare:
+ *  - `ambigua`: piu' schede curate sono compatibili con chi scrive (in questo CRM
+ *    ci sono quattro "Filippo Mancini" con email diverse). Il sistema NON unisce
+ *    di sua iniziativa: un'anagrafica fusa male e' peggio di due separate.
+ *  - `collegata`: il sistema ha agganciato la conversazione a una scheda esistente
+ *    e le ha salvato il numero. E' una modifica al CRM decisa da una macchina,
+ *    quindi deve restare visibile e non silenziosa.
+ */
+export type TipoSegnalazione = "ambigua" | "collegata"
+
+export interface SchedaCandidata {
+  id: string
+  nome: string | null
+  email: string | null
+}
+
+export interface Segnalazione {
+  tipo: TipoSegnalazione
+  /** Frase pronta, cosi' l'elenco non deve ricomporla. */
+  testo: string
+  candidate?: SchedaCandidata[]
+  anagrafica_id?: string
+  numero_salvato?: boolean
+  rilevata_il: string
+}
+
+function scheda(c: AnagraficaTrovata): SchedaCandidata {
+  return { id: c.id, nome: valorizzato(c.name) ? (c.name as string).trim() : null, email: c.email }
+}
+
+/**
+ * Decide se i candidati sono davvero ambigui.
+ *
+ * Le schede create dal canale non contano: sono i doppioni che il riconoscimento
+ * deve superare, non alternative fra cui scegliere. Segnalare quelle vorrebbe
+ * dire un badge su ogni conversazione, e un avviso che compare sempre non viene
+ * piu' letto.
+ */
+export function segnalazioneAmbiguita(
+  candidati: AnagraficaTrovata[],
+  /** Completa la frase "N anagrafiche corrispondono ...": va passato articolato
+   * ("al numero +39...", "all'email x@y"), non nudo. */
+  comeTrovati: string,
+): Segnalazione | null {
+  const curate = candidati.filter((c) => c.source !== "whatsapp")
+  if (curate.length < 2) return null
+
+  const nomi = curate
+    .map((c) => (valorizzato(c.name) ? (c.name as string).trim() : c.email))
+    .filter(Boolean)
+    .slice(0, 4)
+
+  return {
+    tipo: "ambigua",
+    testo: `${curate.length} anagrafiche corrispondono a ${comeTrovati} (${nomi.join(", ")}): il collegamento non è stato deciso automaticamente.`,
+    candidate: curate.map(scheda),
+    rilevata_il: new Date().toISOString(),
+  }
+}
+
+/**
+ * Scrive la segnalazione sulla conversazione.
+ *
+ * Lettura-e-riscrittura come in `handoff.ts`: in `metadata` vive anche
+ * `messaging_channel_id`, che governa l'accesso ai canali. Sovrascrivere
+ * l'oggetto intero spegnerebbe quel filtro.
+ *
+ * Non riscrive se la segnalazione presente e' equivalente: un avviso che si
+ * rigenera a ogni messaggio sposterebbe in continuazione la data e farebbe
+ * sembrare nuovo un fatto vecchio.
+ */
+export async function registraSegnalazione(
+  supabase: SupabaseClient,
+  propertyId: string,
+  conversationId: string,
+  segnalazione: Segnalazione,
+): Promise<boolean> {
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("metadata")
+    .eq("id", conversationId)
+    .eq("property_id", propertyId)
+    .maybeSingle()
+
+  const precedenti = (conv?.metadata as Record<string, unknown> | null) ?? {}
+  const attuale = precedenti.crm_segnalazione as Segnalazione | undefined
+  if (attuale && attuale.tipo === segnalazione.tipo && attuale.testo === segnalazione.testo) return false
+
+  const { error } = await supabase
+    .from("conversations")
+    .update({
+      metadata: { ...precedenti, crm_segnalazione: segnalazione },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", conversationId)
+    .eq("property_id", propertyId)
+
+  if (error) {
+    console.log(`[v0] segnalazione anagrafica non registrata: ${error.message}`)
+    return false
+  }
+  return true
 }
 
 export interface EsitoUnione {

@@ -169,6 +169,18 @@ interface Conversation {
       contact?: { name?: string | null; email?: string | null; phone?: string | null }
       manubot_task_id?: string | null
     } | null
+    /**
+     * Cosa ha fatto il riconoscimento anagrafica: `ambigua` quando piu' schede
+     * curate corrispondono a chi scrive e nessuno ha deciso, `collegata` quando
+     * il sistema ha agganciato la conversazione a una scheda esistente. Una
+     * modifica al CRM decisa da una macchina non deve restare invisibile.
+     */
+    crm_segnalazione?: {
+      tipo?: "ambigua" | "collegata"
+      testo?: string
+      candidate?: { id: string; nome?: string | null; email?: string | null }[]
+      numero_salvato?: boolean
+    } | null
   } | null
   contact: Contact | null
   /** Sender denormalised on the conversation, for mail with no CRM contact. */
@@ -3906,6 +3918,27 @@ export default function InboxPage() {
                             }`}
                           >
                             Staff richiesto
+                          </span>
+                        )}
+                        {/*
+                          Riconoscimento anagrafica: "da verificare" quando piu'
+                          schede corrispondono e la scelta spetta a una persona,
+                          "collegata" quando il sistema ha modificato il CRM da
+                          se'. In entrambi i casi l'operatore deve poterlo vedere
+                          dall'elenco, senza aprire la conversazione.
+                        */}
+                        {conv.metadata?.crm_segnalazione?.tipo && (
+                          <span
+                            className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                              conv.metadata.crm_segnalazione.tipo === "ambigua"
+                                ? "bg-ha-warning-soft text-ha-warning-soft-foreground"
+                                : "bg-ha-info-soft text-ha-info-soft-foreground"
+                            }`}
+                            title={conv.metadata.crm_segnalazione.testo || "Segnalazione anagrafica"}
+                          >
+                            {conv.metadata.crm_segnalazione.tipo === "ambigua"
+                              ? "Anagrafica da verificare"
+                              : "Anagrafica collegata"}
                           </span>
                         )}
                         {/*

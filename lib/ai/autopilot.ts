@@ -4,12 +4,16 @@ import { generateReply, type ConversationTurn } from "./generate"
 import { contactIsComplete, registerStaffHandoff } from "./handoff"
 import { getBasesForChannel, type AiMode } from "./knowledge-bases"
 import {
-  trovaAnagraficaPerNumero,
-  trovaAnagraficaPerEmail,
+  trovaCandidatiPerNumero,
+  trovaCandidatiPerEmail,
+  scegliAnagrafica,
+  segnalazioneAmbiguita,
+  registraSegnalazione,
   collegaConversazioneAdAnagrafica,
   datiNotiDaAnagrafica,
   type AnagraficaTrovata,
   type DatiNoti,
+  type Segnalazione,
 } from "@/lib/crm/contact-identity"
 
 export type AiChannel = "telegram" | "whatsapp" | "email" | "chat"
@@ -90,6 +94,12 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   // a un mittente che era gia' in rubrica, e su WhatsApp chiedeva il numero da
   // cui stava leggendo il messaggio.
   const identita = await caricaIdentita(supabase, propertyId, conversationId)
+
+  // Il numero risponde a piu' schede curate: il sistema ne usa una per
+  // rispondere, ma dichiara di non aver deciso il collegamento.
+  if (identita.ambiguita) {
+    await registraSegnalazione(supabase, propertyId, conversationId, identita.ambiguita)
+  }
 
   const result = await generateReply(
     {
@@ -181,24 +191,44 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   let unioneMeta: Record<string, unknown> | undefined
   const emailDichiarata = result.contact?.email?.trim() || null
   if (emailDichiarata && identita.numero) {
-    const esistente = await trovaAnagraficaPerEmail(supabase, propertyId, emailDichiarata, identita.anagrafica?.id)
-    if (esistente) {
-      const esito = await collegaConversazioneAdAnagrafica({
-        supabase,
-        propertyId,
-        conversationId,
-        anagrafica: esistente,
-        numero: identita.numero,
-        // Il doppione creato dal canale viene marcato come unito, non cancellato.
-        anagraficaDaUnireId: identita.anagrafica?.source === "whatsapp" ? identita.anagrafica.id : null,
-      })
-      if (esito.collegata) {
-        unioneMeta = {
-          crm_anagrafica_collegata_id: esito.anagraficaId,
-          crm_anagrafica_nome: esito.nome,
-          crm_numero_salvato: esito.numeroSalvato ?? false,
+    const candidati = await trovaCandidatiPerEmail(supabase, propertyId, emailDichiarata, identita.anagrafica?.id)
+    const ambiguita = segnalazioneAmbiguita(candidati, `all'email ${emailDichiarata}`)
+
+    if (ambiguita) {
+      // Piu' schede curate con la stessa email: il sistema non sceglie. Unire a
+      // caso e' peggio che lasciare separato, quindi decide una persona.
+      await registraSegnalazione(supabase, propertyId, conversationId, ambiguita)
+      unioneMeta = { crm_anagrafica_ambigua: true }
+    } else {
+      const esistente = scegliAnagrafica(candidati)
+      if (esistente) {
+        const esito = await collegaConversazioneAdAnagrafica({
+          supabase,
+          propertyId,
+          conversationId,
+          anagrafica: esistente,
+          numero: identita.numero,
+          // Il doppione creato dal canale viene marcato come unito, non cancellato.
+          anagraficaDaUnireId: identita.anagrafica?.source === "whatsapp" ? identita.anagrafica.id : null,
+        })
+        if (esito.collegata) {
+          unioneMeta = {
+            crm_anagrafica_collegata_id: esito.anagraficaId,
+            crm_anagrafica_nome: esito.nome,
+            crm_numero_salvato: esito.numeroSalvato ?? false,
+          }
+          identita.anagrafica = esistente
+          // Il CRM e' stato modificato da una macchina: l'operatore lo deve vedere.
+          await registraSegnalazione(supabase, propertyId, conversationId, {
+            tipo: "collegata",
+            testo: esito.numeroSalvato
+              ? `Conversazione collegata a ${esito.nome ?? "un'anagrafica esistente"} e numero salvato in rubrica.`
+              : `Conversazione collegata a ${esito.nome ?? "un'anagrafica esistente"}.`,
+            anagrafica_id: esito.anagraficaId,
+            numero_salvato: esito.numeroSalvato ?? false,
+            rilevata_il: new Date().toISOString(),
+          })
         }
-        identita.anagrafica = esistente
       }
     }
   }
@@ -345,6 +375,8 @@ interface Identita {
   datiNoti: DatiNoti | null
   anagrafica: AnagraficaTrovata | null
   numero: string | null
+  /** Piu' schede curate rispondono a questo numero: decide una persona. */
+  ambiguita: Segnalazione | null
 }
 
 /**
@@ -392,12 +424,15 @@ async function caricaIdentita(
 
   // Anagrafica creata dal canale (nome "FM", nessuna email): non e' un
   // riconoscimento. Si tenta il riconoscimento vero sul numero.
+  let ambiguita: Segnalazione | null = null
   if (numero && (!anagrafica || anagrafica.source === "whatsapp")) {
-    const riconosciuta = await trovaAnagraficaPerNumero(supabase, propertyId, numero)
+    const candidati = await trovaCandidatiPerNumero(supabase, propertyId, numero)
+    ambiguita = segnalazioneAmbiguita(candidati, `al numero +${numero}`)
+    const riconosciuta = scegliAnagrafica(candidati)
     if (riconosciuta && riconosciuta.source !== "whatsapp") anagrafica = riconosciuta
   }
 
-  return { datiNoti: datiNotiDaAnagrafica(anagrafica, numero, nomeProfilo), anagrafica, numero }
+  return { datiNoti: datiNotiDaAnagrafica(anagrafica, numero, nomeProfilo), anagrafica, numero, ambiguita }
 }
 
 /**
