@@ -25,5 +25,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-# Scratch space for local verification (never committed)
-.v0-tmp/
+# Scratch space for local verification (never committed).
+# La regola era `.v0-tmp/` esatta: una cartella `.v0-tmp-demand/` NON era
+# coperta e una sonda di misura e' finita dentro un commit. Il glob copre
+# qualunque suffisso.
+.v0-tmp*/

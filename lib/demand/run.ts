@@ -89,6 +89,48 @@ async function saveExtraction(
   throw new Error(error.message)
 }
 
+/**
+ * Cosa è già stato estratto per questo gruppo a questa versione.
+ *
+ * Serve a NON pagare due volte. L'indice UNIQUE impedisce il doppione, ma lo
+ * scopre solo al momento della scrittura: il modello era già stato chiamato e
+ * il denaro già speso. Misurato sulla seconda passata: 0 righe nuove e lo
+ * stesso costo della prima. Su 3.769 conversazioni sarebbero stati $4,92
+ * buttati a ogni ripetizione.
+ *
+ * Questo controllo è una difesa del portafoglio, non dell'unicità: due passate
+ * simultanee lo supererebbero entrambe, ed è per quello che l'indice resta.
+ */
+async function loadAlreadyDone(
+  supabase: SupabaseClient,
+  groupId: string,
+  configVersion: number,
+): Promise<{ conversations: Set<string>; calls: Set<string> }> {
+  const conversations = new Set<string>()
+  const calls = new Set<string>()
+  const PAGE = 1000
+  let offset = 0
+
+  // Supabase tronca a 1000 righe anche chiedendone di più: si pagina sempre.
+  for (;;) {
+    const { data, error } = await supabase
+      .from("conversation_extractions")
+      .select("conversation_id, phone_call_id")
+      .eq("group_id", groupId)
+      .eq("config_version", configVersion)
+      .range(offset, offset + PAGE - 1)
+    if (error) throw new Error(`Lettura estrazioni già fatte: ${error.message}`)
+    const batch = data ?? []
+    for (const r of batch) {
+      if (r.conversation_id) conversations.add(r.conversation_id as string)
+      if (r.phone_call_id) calls.add(r.phone_call_id as string)
+    }
+    if (batch.length < PAGE) break
+    offset += PAGE
+  }
+  return { conversations, calls }
+}
+
 export async function runTrackingForGroup(
   supabase: SupabaseClient,
   config: TrackingConfigRow,
@@ -124,8 +166,17 @@ export async function runTrackingForGroup(
   })
   report.scanned = conversations.length
 
+  const done = await loadAlreadyDone(supabase, config.group_id, config.version)
+
   for (const conv of conversations) {
     try {
+      // Già estratta a questa versione: si salta PRIMA di leggere i messaggi e
+      // prima di chiamare il modello. Ripetere una passata deve costare zero.
+      if (done.conversations.has(conv.id)) {
+        report.alreadyDone++
+        continue
+      }
+
       const base = {
         property_id: config.property_id,
         group_id: config.group_id,
@@ -136,6 +187,10 @@ export async function runTrackingForGroup(
       // --- Livello 1: sorgenti strutturate, lette con regole ---
       const structured = structuredSourceOf(conv.contact_email)
       if (structured) {
+        if (opts.dryRun) {
+          report.byRules++
+          continue
+        }
         const { data: msgs } = await supabase
           .from("messages")
           .select("content")
@@ -180,6 +235,10 @@ export async function runTrackingForGroup(
 
       // --- Livello 2: mittenti automatici, esclusi senza spendere ---
       if (shouldSkipAsNoise(conv.contact_email)) {
+        if (opts.dryRun) {
+          report.skippedNoise++
+          continue
+        }
         const res = await saveExtraction(supabase, {
           ...base,
           kind: "nessuna_domanda",
@@ -268,6 +327,17 @@ export async function runTrackingForGroup(
   })
   for (const call of calls) {
     try {
+      if (done.calls.has(call.id)) {
+        report.alreadyDone++
+        continue
+      }
+      // Una "passata a vuoto" che scrive nel database non è a vuoto. Prima
+      // questo ciclo ignorava dryRun e inseriva 40 righe di chiamate: la prova
+      // successiva le trovava già fatte e sembrava tutto normale.
+      if (opts.dryRun) {
+        report.calls++
+        continue
+      }
       const day = call.started_at ? String(call.started_at).slice(0, 10) : null
       const res = await saveExtraction(supabase, {
         property_id: config.property_id,
@@ -296,10 +366,13 @@ export async function runTrackingForGroup(
     }
   }
 
-  await supabase
-    .from("group_tracking_configs")
-    .update({ last_run_at: new Date().toISOString() })
-    .eq("id", config.id)
+  // Nemmeno la data dell'ultima passata: a vuoto non è successo niente.
+  if (!opts.dryRun) {
+    await supabase
+      .from("group_tracking_configs")
+      .update({ last_run_at: new Date().toISOString() })
+      .eq("id", config.id)
+  }
 
   return report
 }

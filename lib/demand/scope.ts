@@ -8,8 +8,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
  * non dedotta dallo schema:
  *
  *   - EMAIL: `conversations.channel_id` punta alla casella ed è popolato su
- *     7.372 conversazioni su 7.372. Si seleziona per casella, che è anche il
- *     modo in cui l'admin ragiona ("il Front Office legge info@").
+ *     TUTTE le conversazioni email (misurato: 7.375 su 7.375, zero nulle). Si
+ *     seleziona per casella, che è anche il modo in cui l'admin ragiona ("il
+ *     Front Office legge info@").
  *
  *   - MESSAGGISTICA: `channel_id` è NULL su tutte e 9 le conversazioni, e
  *     `metadata.messaging_channel_id` è assente su 2; dei 5 id presenti, 3
@@ -124,14 +125,19 @@ export async function listScopedConversations(
   return out.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)))
 }
 
+/**
+ * Le colonne sono quelle vere di `phone_calls`, lette dalla tabella e non
+ * dedotte: non esistono `from_number`/`to_number`, il numero dell'altra parte
+ * sta in `counterpart_number` e l'interno in `extension`.
+ */
 export interface PhoneCallRow {
   id: string
   started_at: string | null
   direction: string | null
   status: string | null
   duration_seconds: number | null
-  from_number: string | null
-  to_number: string | null
+  counterpart_number: string | null
+  extension: string | null
 }
 
 /**
@@ -150,7 +156,7 @@ export async function listScopedCalls(
   if (!sources.include_phone) return []
   let q = supabase
     .from("phone_calls")
-    .select("id, started_at, direction, status, duration_seconds, from_number, to_number")
+    .select("id, started_at, direction, status, duration_seconds, counterpart_number, extension")
     .eq("property_id", propertyId)
     .order("started_at", { ascending: false, nullsFirst: false })
     .limit(opts.limit ?? 500)

@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS group_tracking_configs (
   group_id     uuid NOT NULL REFERENCES user_groups(id) ON DELETE CASCADE,
   is_enabled   boolean NOT NULL DEFAULT false,
   preset       text NOT NULL DEFAULT 'libero',
-  sources      jsonb NOT NULL DEFAULT '{"email_channel_ids":[],"messaging_channel_ids":[],"include_phone":false}'::jsonb,
+  sources      jsonb NOT NULL DEFAULT '{"email_channel_ids":[],"messaging_kinds":[],"include_phone":false}'::jsonb,
   fields       jsonb NOT NULL DEFAULT '[]'::jsonb,
   version      integer NOT NULL DEFAULT 1,
   last_run_at  timestamptz,
@@ -37,7 +37,7 @@ COMMENT ON TABLE group_tracking_configs IS
 COMMENT ON COLUMN group_tracking_configs.version IS
   'Sale a ogni modifica dei campi. Una estrazione fatta con la configurazione vecchia non va confusa con una nuova: senza questo non si saprebbe piu'' a quale domanda risponde un dato.';
 COMMENT ON COLUMN group_tracking_configs.sources IS
-  'Caselle email e canali di messaggistica assegnati, piu'' include_phone. Serve perche'' le email si legano al canale via conversations.channel_id e la messaggistica via metadata: due vie diverse.';
+  'Caselle email (email_channel_ids), TIPI di canale di messaggistica (messaging_kinds) e include_phone. Due vie diverse perche'' misurate diverse: channel_id e'' popolato su tutte le 7.375 email, mentre sulla messaggistica e'' sempre nullo e 3 dei 5 id in metadata puntano a canali che non esistono piu''.';
 
 CREATE INDEX IF NOT EXISTS idx_gtc_property ON group_tracking_configs(property_id);
 

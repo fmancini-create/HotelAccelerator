@@ -112,6 +112,100 @@ describe("parseScidoo", () => {
   })
 })
 
+/**
+ * Scidoo scrive agli ospiti nella loro lingua. Un lettore solo italiano leggeva
+ * 335 conferme su 704: mancavano 369 prenotazioni, il 52%, e il calendario
+ * avrebbe mostrato una domanda dimezzata senza dire perche'.
+ *
+ * I corpi qui sotto sono ritagliati dalle email reali, emoji comprese: sono
+ * proprio i caratteri accanto all'etichetta che possono far fallire un regex.
+ */
+describe("parseScidoo in piu' lingue", () => {
+  it("inglese: Arrival / Departure / Guests", () => {
+    const r = parseScidoo(
+      "Eymundsson Kristjan Svanur this is your booking confirmation - Villa I Barronci",
+      "📌 Booking reference: 32116 👥 Guests: 2 People person(s) 📅 Arrival: Thursday 27 August 2026 📅 Departure: Saturday 29 August 2026",
+    )
+    expect(r).not.toBeNull()
+    expect(r!.referenceDate).toBe("2026-08-27")
+    expect(r!.payload.partenza).toBe("2026-08-29")
+    expect(r!.payload.ospiti).toBe(2)
+    expect(r!.payload.notti).toBe(2)
+    expect(r!.externalRef).toBe("32116")
+    expect(r!.payload.esito).toBe("confermata")
+  })
+
+  it("tedesco: Anreise / Abreise / Gaste con umlaut", () => {
+    const r = parseScidoo(
+      "Hampel Santo Frank Dies ist Ihre Buchungsbestätigung - Villa I Barronci",
+      "📌 Buchungsnummer: 32103 👥 Gäste: 3 Personen Person(en) 📅 Anreise: Mittwoch 21 Oktober 2026 📅 Abreise: Dienstag 27 Oktober 2026",
+    )
+    expect(r).not.toBeNull()
+    expect(r!.referenceDate).toBe("2026-10-21")
+    expect(r!.payload.ospiti).toBe(3)
+    expect(r!.payload.notti).toBe(6)
+    expect(r!.externalRef).toBe("32103")
+    expect(r!.payload.esito).toBe("confermata")
+  })
+
+  /**
+   * Il francese mette uno spazio PRIMA dei due punti ("Arrivée : Mercredi").
+   * Senza il `\s*` prima di `:` le 33 email francesi non si leggono: non e' una
+   * precauzione teorica, e' il motivo per cui erano tutte mute.
+   */
+  it("francese: spazio prima dei due punti", () => {
+    const r = parseScidoo(
+      "Mohamed Diabate ceci est votre confirmation de réservation - Villa I Barronci",
+      "📌 Numéro de réservation : 32086 👥 Nombre de personnes : 2 Personnes 📅 Arrivée : Mercredi 7 Octobre 2026 📅 Départ : Jeudi 8 Octobre 2026",
+    )
+    expect(r).not.toBeNull()
+    expect(r!.referenceDate).toBe("2026-10-07")
+    expect(r!.payload.ospiti).toBe(2)
+    expect(r!.payload.notti).toBe(1)
+    expect(r!.externalRef).toBe("32086")
+    expect(r!.payload.esito).toBe("confermata")
+  })
+
+  it("legge i mesi accentati di tutte e quattro le lingue", () => {
+    const casi: Array<[string, string]> = [
+      ["Arrivée : Vendredi 22 Janvier 2027", "2027-01-22"],
+      ["Anreise: Montag 2 März 2026", "2026-03-02"],
+      ["Arrivée : Samedi 8 Août 2026", "2026-08-08"],
+      ["Arrivée : Mardi 1 Décembre 2026", "2026-12-01"],
+      ["Arrivée : Lundi 14 Février 2027", "2027-02-14"],
+      // settembre italiano (due t) e septembre francese (una p) sono due voci
+      ["Arrivo: Lunedi 14 Settembre 2026", "2026-09-14"],
+      ["Arrivée : Lundi 14 Septembre 2026", "2026-09-14"],
+    ]
+    for (const [riga, atteso] of casi) {
+      const r = parseScidoo("booking confirmation", riga)
+      expect(r, riga).not.toBeNull()
+      expect(r!.referenceDate, riga).toBe(atteso)
+    }
+  })
+
+  it("riconosce l'annullamento nelle altre lingue", () => {
+    const corpoEn = "📅 Arrival: Thursday 27 August 2026"
+    expect(parseScidoo("Booking cancellation - Villa I Barronci", corpoEn)!.payload.esito).toBe("annullata")
+    expect(parseScidoo("Stornierung Ihrer Buchung", corpoEn)!.payload.esito).toBe("annullata")
+    expect(parseScidoo("Votre réservation a été annulée", corpoEn)!.payload.esito).toBe("annullata")
+  })
+
+  /**
+   * 171 email Scidoo su 876 non sono prenotazioni: codici OTP, auguri di
+   * Pasqua, Vinitaly, thread interni sulla stampante. Devono restare mute,
+   * altrimenti il calendario si riempie di domanda che nessuno ha chiesto.
+   */
+  it("lascia mute le email che non sono prenotazioni", () => {
+    expect(parseScidoo("Codice OTP Scidoo - Villa I Barronci Resort & Spa", "Il tuo codice e' 448122")).toBeNull()
+    expect(parseScidoo("Happy Easter", "Buona Pasqua da tutti noi!")).toBeNull()
+    expect(parseScidoo("Vinitaly 2026", "Ci vediamo a Verona dal 12 al 15 aprile.")).toBeNull()
+    expect(
+      parseScidoo("Re: Fw:Re: Villa I Barronci : disposizioni per reinstallazione pc", "Il pc va reinstallato."),
+    ).toBeNull()
+  })
+})
+
 describe("structuredSourceOf", () => {
   it("riconosce le due sorgenti strutturate", () => {
     expect(structuredSourceOf("no-reply@myrestoo.net")).toBe("myrestoo")
