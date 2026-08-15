@@ -7,6 +7,11 @@ import type {
 } from "@/lib/types/inbox-read.types"
 import { RateLimitError } from "@/lib/errors"
 import { buildPreview } from "@/lib/inbox/html-to-preview"
+import {
+  SENZA_CARTELLA,
+  condizioniCartelleNascoste,
+  type CartelleNascoste,
+} from "@/lib/inbox/folder-visibility"
 
 function handleSupabaseError(error: any): never {
   if (error && typeof error === "object") {
@@ -62,6 +67,35 @@ function resolveContact(conv: any) {
 
 export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
+
+  /**
+   * Cartelle Gmail che l'utente ha spento, raggruppate per casella.
+   *
+   * Si leggono solo le righe spente: le cartelle mai toccate non hanno riga, e
+   * "assente" deve valere "visibile" o aggiungere questa funzione avrebbe
+   * svuotato l'inbox di tutti.
+   */
+  private async cartelleNascoste(propertyId: string): Promise<Map<string, CartelleNascoste>> {
+    const { data, error } = await this.supabase
+      .from("email_labels")
+      .select("channel_id, gmail_id")
+      .eq("property_id", propertyId)
+      .eq("visible_in_inbox", false)
+
+    // Un errore qui non deve togliere l'inbox: senza questa informazione si
+    // mostra tutto, che e' il comportamento di prima.
+    if (error) return new Map()
+
+    const perCasella = new Map<string, CartelleNascoste>()
+    for (const riga of data || []) {
+      if (!riga.channel_id) continue
+      const voce = perCasella.get(riga.channel_id) ?? { etichette: [], senzaCartella: false }
+      if (riga.gmail_id === SENZA_CARTELLA) voce.senzaCartella = true
+      else voce.etichette.push(riga.gmail_id)
+      perCasella.set(riga.channel_id, voce)
+    }
+    return perCasella
+  }
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
     const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access, ids } = options
@@ -211,6 +245,22 @@ export class InboxReadRepository {
     // Apply per-user channel restriction (ANDed with any other filters above).
     if (restrictOrFilter) {
       query = query.or(restrictOrFilter)
+    }
+
+    // Cartelle spente dall'utente. Si salta in due casi, perche' una richiesta
+    // esplicita vale piu' di un nascondimento predefinito:
+    //  - `ids`: si sta aprendo UNA conversazione per id (es. dalle bozze), e
+    //    renderla irraggiungibile per la sua cartella sarebbe un vicolo cieco;
+    //  - una cartella scelta a mano in modalita' Gmail: l'utente la sta
+    //    guardando, quindi nasconderla renderebbe la voce inutilizzabile.
+    const cartellaScelta = mode === "gmail" && gmail_label && gmail_label !== "ALL"
+    if (!(ids && ids.length > 0) && !cartellaScelta) {
+      const nascoste = await this.cartelleNascoste(propertyId)
+      for (const condizione of condizioniCartelleNascoste(nascoste)) {
+        // Un `.or()` per condizione: i gruppi si combinano in AND, mentre
+        // unirli in uno solo li metterebbe in OR e non nasconderebbe nulla.
+        query = query.or(condizione)
+      }
     }
 
     const { data, error } = await query

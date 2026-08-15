@@ -60,41 +60,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Sync label settings
-export async function POST(request: NextRequest) {
-  try {
-    const { channel_id, property_id, labels } = await request.json()
-
-    if (!channel_id || !property_id || !labels) {
-      return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 })
-    }
-
-    const access = await getChannelAccess(request)
-    if (!(await canAccessEmailChannel(access, property_id, channel_id))) {
-      return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
-    }
-    const supabase = access.supabase
-
-    // Delete existing label settings
-    await supabase.from("email_labels").delete().eq("channel_id", channel_id).eq("property_id", property_id)
-
-    // Insert new label settings
-    const labelRecords = labels.map((label: { id: string; name: string; sync_enabled: boolean }) => ({
-      property_id,
-      channel_id,
-      gmail_label_id: label.id,
-      name: label.name,
-      sync_enabled: label.sync_enabled,
-    }))
-
-    if (labelRecords.length > 0) {
-      const { error } = await supabase.from("email_labels").insert(labelRecords)
-      if (error) throw error
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Error saving labels:", error)
-    return NextResponse.json({ error: "Errore salvataggio" }, { status: 500 })
-  }
-}
+// La POST che stava qui scriveva su colonne inesistenti (`gmail_label_id`,
+// `sync_enabled`) e non aveva chiamanti: cancellava le righe della casella e poi
+// falliva l'inserimento, quindi l'unico effetto possibile era perdere dati.
+// Le scelte di visibilita' si salvano dalla PATCH di `[id]/labels`.
