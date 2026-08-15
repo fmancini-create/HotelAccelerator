@@ -1,6 +1,9 @@
 import "server-only"
 import { createServiceClient } from "@/lib/supabase/server"
 import { MINUTI_PRESENZA } from "@/lib/operators/presence"
+import { scegliScadenza, type RigaScadenza, type ScadenzaRisolta } from "@/lib/inbox/lock-settings-core"
+
+export type { ScadenzaRisolta }
 
 /**
  * Quanto resta "in lavorazione" un messaggio quando l'operatore smette di
@@ -26,23 +29,8 @@ export const SECONDI_INATTIVITA_PREDEFINITI = MINUTI_PRESENZA * 60
 export const SECONDI_INATTIVITA_MIN = 30
 export const SECONDI_INATTIVITA_MAX = 86400
 
-export interface ScadenzaRisolta {
-  secondi: number
-  /** Da dove viene il valore: serve a spiegarlo nel pannello, altrimenti
-   *  l'amministratore vede un numero e non sa chi lo ha deciso. */
-  origine: "operatore" | "gruppo" | "struttura" | "predefinito"
-}
-
-/**
- * Risolve la scadenza per un operatore preciso.
- *
- * Ordine: operatore -> gruppo -> struttura -> valore di fabbrica.
- *
- * Se l'operatore appartiene a piu' gruppi con valori diversi vince il piu'
- * LUNGO. La scelta e' voluta: il valore alto e' quello piu' protettivo per chi
- * sta scrivendo, e prendere il piu' corto significherebbe togliere in silenzio
- * una tolleranza che un altro gruppo gli aveva concesso.
- */
+/** Risolve la scadenza per un operatore preciso leggendo le impostazioni della
+ *  struttura; l'ordine di precedenza e' spiegato in `lock-settings-core`. */
 export async function risolviScadenzaBlocco(
   propertyId: string,
   adminUserId: string | null,
@@ -62,34 +50,24 @@ export async function risolviScadenzaBlocco(
     return { secondi: SECONDI_INATTIVITA_PREDEFINITI, origine: "predefinito" }
   }
 
-  const tutte = righe ?? []
+  // La forma della riga e' dichiarata qui perche' i tipi generati di Supabase
+  // non conoscono ancora queste tabelle: senza questo il compilatore non sa
+  // cosa contengono le righe lette.
+  const tutte = (righe ?? []) as RigaScadenza[]
 
-  // 1) Decisione esplicita su questo operatore: vince su tutto.
-  if (adminUserId) {
-    const suo = tutte.find((r) => r.user_id === adminUserId)
-    if (suo) return { secondi: suo.idle_seconds, origine: "operatore" }
+  // I gruppi si leggono solo se c'e' almeno una riga di gruppo da confrontare:
+  // altrimenti sarebbe una lettura in piu' a ogni battito, per nulla.
+  let gruppi: string[] = []
+  if (adminUserId && tutte.some((r) => r.group_id !== null)) {
+    const { data: appartenenze } = await supabase
+      .from("user_group_members")
+      .select("group_id")
+      .eq("user_id", adminUserId)
+    gruppi = ((appartenenze ?? []) as { group_id: string }[]).map((a) => a.group_id)
   }
 
-  // 2) Gruppi a cui appartiene.
-  if (adminUserId) {
-    const perGruppo = tutte.filter((r) => r.group_id !== null)
-    if (perGruppo.length > 0) {
-      const { data: appartenenze } = await supabase
-        .from("user_group_members")
-        .select("group_id")
-        .eq("user_id", adminUserId)
-
-      const suoi = new Set((appartenenze ?? []).map((a: { group_id: string }) => a.group_id))
-      const valori = perGruppo.filter((r) => suoi.has(r.group_id as string)).map((r) => r.idle_seconds)
-      if (valori.length > 0) return { secondi: Math.max(...valori), origine: "gruppo" }
-    }
-  }
-
-  // 3) Valore della struttura.
-  const struttura = tutte.find((r) => r.group_id === null && r.user_id === null)
-  if (struttura) return { secondi: struttura.idle_seconds, origine: "struttura" }
-
-  return { secondi: SECONDI_INATTIVITA_PREDEFINITI, origine: "predefinito" }
+  // La decisione vive nel modulo puro, dove e' provabile da un controllo.
+  return scegliScadenza(tutte, adminUserId, gruppi, SECONDI_INATTIVITA_PREDEFINITI)
 }
 
 /** Tutte le impostazioni di una struttura, per il pannello del superadmin. */

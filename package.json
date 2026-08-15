@@ -11,6 +11,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "check:area-guard": "tsx scripts/check-area-guard.mjs",
+    "check:inbox-collaboration": "tsx scripts/check-inbox-collaboration.mjs",
     "test:area-guard": "tsx scripts/test-area-guard.mjs",
     "simulate:area-guard": "tsx scripts/simulate-area-guard.mjs",
     "typecheck": "tsc --noEmit",
