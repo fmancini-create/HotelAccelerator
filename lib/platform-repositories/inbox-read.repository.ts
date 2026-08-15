@@ -64,7 +64,7 @@ export class InboxReadRepository {
   constructor(private supabase: SupabaseClient) {}
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access } = options
+    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access, ids } = options
 
     // Per-user channel access enforcement (restricted, non-admin users).
     // Build an OR filter so the user only sees conversations of their channels:
@@ -114,7 +114,15 @@ export class InboxReadRepository {
       .eq("property_id", propertyId)
       .range(offset, offset + limit - 1)
 
-    if (mode === "gmail") {
+    if (ids && ids.length > 0) {
+      // Conversazioni chieste per id (vista "Bozze"): si apre un messaggio che
+      // puo' stare fuori dalla pagina caricata, in un altro stato o sotto un'altra
+      // etichetta Gmail. Ne' lo stato ne' l'etichetta vanno applicati, o una bozza
+      // su una conversazione risolta resterebbe irraggiungibile: comanda l'id.
+      // Il filtro per struttura e quello per canali assegnati restano invariati,
+      // quindi un id di un'altra struttura o di un canale non concesso non esce.
+      query = query.in("id", ids)
+    } else if (mode === "gmail") {
       // Gmail Mirror mode: filter by Gmail labels
       query = query.eq("channel", "email")
 

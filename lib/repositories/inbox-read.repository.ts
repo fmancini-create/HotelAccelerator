@@ -19,7 +19,7 @@ export class InboxReadRepository {
    * No business logic - just data fetching
    */
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, limit = 50, offset = 0, search } = options
+    const { status = "open", channel, limit = 50, offset = 0, search, ids } = options
 
     let query = this.supabase
       .from("conversations")
@@ -45,7 +45,14 @@ export class InboxReadRepository {
       .order("last_message_at", { ascending: false })
       .range(offset, offset + limit - 1)
 
-    if (status !== "all") {
+    // Richiesta di conversazioni precise (vista "Bozze": si apre un messaggio
+    // che puo' essere fuori dalla pagina caricata, e anche in uno stato diverso
+    // da quello selezionato). Lo stato non va applicato, o una bozza su una
+    // conversazione risolta resterebbe irraggiungibile: e' l'id che comanda.
+    // Il filtro per struttura resta sopra, quindi l'isolamento non cambia.
+    if (ids && ids.length > 0) {
+      query = query.in("id", ids)
+    } else if (status !== "all") {
       query = query.eq("status", status)
     }
 

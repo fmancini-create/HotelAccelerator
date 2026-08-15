@@ -71,6 +71,10 @@ export class InboxWriteRepository {
     senderId: string | null,
     contentType: string,
     attachments: string[],
+    // Nome di chi invia, congelato adesso: `senderId` da solo non basta a
+    // mostrare "Inviato da" (non punta a una tabella, e un collaboratore che
+    // lascia l'azienda lascerebbe la colonna vuota).
+    senderName?: string | null,
   ) {
     const { data, error } = await this.supabase
       .from("messages")
@@ -80,6 +84,7 @@ export class InboxWriteRepository {
         content,
         sender_type: senderType,
         sender_id: senderId,
+        sender_name: senderName ?? null,
         content_type: contentType,
         attachments,
       })

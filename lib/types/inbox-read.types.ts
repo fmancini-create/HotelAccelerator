@@ -178,6 +178,14 @@ export interface ConversationListOptions {
   limit?: number
   offset?: number
   search?: string
+  /**
+   * Conversazioni richieste per id. Serve alla vista "Bozze": la bozza puo'
+   * stare su una conversazione fuori dalla pagina caricata o in uno stato
+   * diverso da quello selezionato, e senza questo non sarebbe apribile. Quando
+   * e' presente vince sullo stato; il filtro per struttura e i controlli
+   * d'accesso restano invariati.
+   */
+  ids?: string[]
   filter?: "all" | "action_needed" | "high_priority"
   mode?: "smart" | "gmail"
   gmail_label?: GmailLabel

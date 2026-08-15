@@ -101,7 +101,10 @@ export class InboxWriteService {
     return { bookingData: command.bookingData }
   }
 
-  async sendMessage(command: SendMessageCommand, actorId?: string) {
+  // `actorLabel` e' il nome da mostrare nella colonna "Inviato da". Va congelato
+  // qui perche' `actorId` e' vuoto per i super amministratori (che non hanno una
+  // scheda operatore) e diventerebbe illeggibile per chi lascia l'azienda.
+  async sendMessage(command: SendMessageCommand, actorId?: string, actorLabel?: string | null) {
     const conversation = await this.repository.getConversation(command.conversationId, command.propertyId)
     if (!conversation) {
       throw new NotFoundError("Conversation not found")
@@ -162,6 +165,7 @@ export class InboxWriteService {
       actorId || null,
       "text",
       [],
+      actorLabel ?? null,
     )
     await this.repository.updateLastMessageAt(command.conversationId, command.propertyId)
     await logCommand({

@@ -5,6 +5,8 @@ import { getValidGmailToken } from "@/lib/gmail-client"
 import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
+import { richiediOperatore } from "@/lib/inbox/identity"
+import { registraAttivita, cancellaBozza, rilasciaBlocco } from "@/lib/inbox/collaboration"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = await params
@@ -169,6 +171,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       captureOutboundRecipients(supabase, channelData.property_id, recipients).catch((e) =>
         console.error("[v0] auto-capture reply failed", e),
       )
+    }
+
+    // Stessa chiusura del ciclo del multicanale, sul bersaglio 'gmail_thread':
+    // il thread vive su Google, ma la lavorazione e' nostra e va chiusa qui,
+    // altrimenti resterebbe offuscato ai colleghi anche dopo la risposta.
+    // La cronologia dell'invio la registriamo comunque: la cartella "Inviata" di
+    // Gmail dice che l'email e' partita dalla casella, non QUALE operatore l'ha
+    // scritta, che e' esattamente l'informazione richiesta.
+    if (channelData.property_id) {
+      const bersaglio = { kind: "gmail_thread" as const, key: threadId }
+      const operatore = await richiediOperatore(request)
+      await registraAttivita({
+        propertyId: channelData.property_id,
+        bersaglio,
+        titolare: operatore.titolare,
+        azione: "message_sent",
+        dettagli: { messageId: sendData.id, canale: "gmail", destinatari: finalToList },
+      })
+      await cancellaBozza(channelData.property_id, bersaglio)
+      await rilasciaBlocco({ propertyId: channelData.property_id, bersaglio, titolare: operatore.titolare })
     }
 
     return NextResponse.json({
