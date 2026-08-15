@@ -32,6 +32,24 @@ function handleSupabaseError(error: any): never {
 }
 
 /**
+ * Quanti id si possono mettere in un solo indirizzo.
+ *
+ * Ogni uuid pesa 37 caratteri nell'indirizzo: 400 id fanno 15.018 caratteri e
+ * la richiesta muore con `UND_ERR_HEADERS_OVERFLOW` prima di partire (misurato:
+ * 300 id = 11.318 caratteri passano, 400 no). 150 tiene l'indirizzo intorno ai
+ * 5.700 caratteri, con margine ampio anche se un domani si aggiungono filtri.
+ */
+const ID_PER_LOTTO = 150
+
+function inLotti<T>(elenco: T[], dimensione = ID_PER_LOTTO): T[][] {
+  const lotti: T[][] = []
+  for (let i = 0; i < elenco.length; i += dimensione) {
+    lotti.push(elenco.slice(i, i + dimensione))
+  }
+  return lotti
+}
+
+/**
  * Pull the bare address out of a From header.
  *
  * Headers arrive as `"Villa I Barronci Resort & Spa" <reservation@scidoo.com>`,
@@ -273,38 +291,70 @@ export class InboxReadRepository {
       return []
     }
 
-    const { data: lastMessages, error: msgError } = await this.supabase
-      .from("messages")
-      .select("id, content, sender_type, created_at, conversation_id, metadata")
-      .in("conversation_id", conversationIds)
-      .eq("property_id", propertyId)
-      .order("created_at", { ascending: false })
-
-    if (msgError) handleSupabaseError(msgError)
-
     const subjectById = new Map<string, string | null>((data || []).map((c) => [c.id as string, c.subject as string]))
 
-    const lastMessageMap = new Map()
-    lastMessages?.forEach((msg) => {
-      if (!lastMessageMap.has(msg.conversation_id)) {
-        lastMessageMap.set(msg.conversation_id, {
-          id: msg.id,
-          // The list only ever needs one line of readable text. `content` is
-          // the raw mail body - typically a full HTML document tens of KB long
-          // - and shipping one per row meant megabytes of markup crossing the
-          // wire for a page that shows 50 rows. It went unnoticed while the
-          // field was never rendered.
-          preview: buildPreview(msg.content, subjectById.get(msg.conversation_id)),
-          sender_type: msg.sender_type,
-          created_at: msg.created_at,
-          // Address the message actually came from. `conversations.contact_email`
-          // is null on a few rows (3 of 6876 here, but Scidoo's booking mails
-          // are among them), and there the "waiting for a reply" badge had no
-          // address to judge and appeared on an automated sender.
-          from_address: extractAddress((msg.metadata as any)?.from),
-        })
+    // Ultimo messaggio di ogni conversazione: a LOTTI e in DUE passaggi.
+    //
+    // Prima era una sola richiesta con tutti gli id nell'indirizzo e il corpo
+    // incluso. Due guasti misurati su questi dati:
+    //  - oltre ~300 id l'indirizzo superava il tetto degli header e la richiesta
+    //    moriva (`UND_ERR_HEADERS_OVERFLOW`, visto come "fetch failed"): il
+    //    limite di 300 non era una scelta di prodotto, era un incidente;
+    //  - `content` e' il corpo grezzo dell'email, e si scaricava per OGNI
+    //    messaggio di ogni conversazione: 3,8 MB per una pagina di 50 righe,
+    //    quando serve una riga sola per conversazione.
+    //
+    // Passaggio 1, senza corpo: serve solo sapere QUALE messaggio e' l'ultimo.
+    const ultimoPerConversazione = new Map<string, any>()
+    for (const lotto of inLotti(conversationIds)) {
+      const { data: leggeri, error: msgError } = await this.supabase
+        .from("messages")
+        .select("id, sender_type, created_at, conversation_id, metadata")
+        .in("conversation_id", lotto)
+        .eq("property_id", propertyId)
+        .order("created_at", { ascending: false })
+
+      if (msgError) handleSupabaseError(msgError)
+
+      for (const msg of leggeri || []) {
+        // I messaggi arrivano dal piu' recente: il primo di ogni conversazione
+        // e' il suo ultimo. L'ordine vale dentro il lotto, e ogni conversazione
+        // sta in un lotto solo, quindi lo spezzettamento non altera l'esito.
+        if (!ultimoPerConversazione.has(msg.conversation_id)) {
+          ultimoPerConversazione.set(msg.conversation_id, msg)
+        }
       }
-    })
+    }
+
+    // Passaggio 2: il corpo dei soli messaggi che finiscono davvero in elenco.
+    const corpoPerMessaggio = new Map<string, string | null>()
+    const idUltimi = Array.from(ultimoPerConversazione.values()).map((m) => m.id as string)
+    for (const lotto of inLotti(idUltimi)) {
+      const { data: corpi, error: corpoError } = await this.supabase
+        .from("messages")
+        .select("id, content")
+        .in("id", lotto)
+        .eq("property_id", propertyId)
+
+      if (corpoError) handleSupabaseError(corpoError)
+      for (const riga of corpi || []) corpoPerMessaggio.set(riga.id as string, riga.content as string | null)
+    }
+
+    const lastMessageMap = new Map()
+    for (const [conversationId, msg] of ultimoPerConversazione) {
+      lastMessageMap.set(conversationId, {
+        id: msg.id,
+        // In elenco serve una riga leggibile, non il documento HTML completo.
+        preview: buildPreview(corpoPerMessaggio.get(msg.id as string) ?? null, subjectById.get(conversationId)),
+        sender_type: msg.sender_type,
+        created_at: msg.created_at,
+        // Address the message actually came from. `conversations.contact_email`
+        // is null on a few rows (3 of 6876 here, but Scidoo's booking mails
+        // are among them), and there the "waiting for a reply" badge had no
+        // address to judge and appeared on an automated sender.
+        from_address: extractAddress((msg.metadata as any)?.from),
+      })
+    }
 
     // Resolve the origin account of each conversation (which mailbox / which
     // WhatsApp number). Email conversations point to email_channels via
