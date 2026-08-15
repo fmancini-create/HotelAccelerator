@@ -89,6 +89,38 @@ async function saveExtraction(
   throw new Error(error.message)
 }
 
+async function claimModelExtraction(
+  supabase: SupabaseClient,
+  groupId: string,
+  conversationId: string,
+  configVersion: number,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("claim_demand_extraction", {
+    p_group_id: groupId,
+    p_target_type: "conversation",
+    p_target_id: conversationId,
+    p_config_version: configVersion,
+    p_lease_seconds: 300,
+  })
+  if (error) throw new Error(`Claim estrazione: ${error.message}`)
+  return data === true
+}
+
+async function releaseModelExtraction(
+  supabase: SupabaseClient,
+  groupId: string,
+  conversationId: string,
+  configVersion: number,
+): Promise<void> {
+  const { error } = await supabase.rpc("release_demand_extraction_claim", {
+    p_group_id: groupId,
+    p_target_type: "conversation",
+    p_target_id: conversationId,
+    p_config_version: configVersion,
+  })
+  if (error) console.error("[v0][demand] rilascio claim fallito:", error.message)
+}
+
 /**
  * Cosa è già stato estratto per questo gruppo a questa versione.
  *
@@ -289,37 +321,46 @@ export async function runTrackingForGroup(
         continue
       }
 
-      const out = await extractWithModel({
-        subject: conv.subject,
-        transcript: transcript.text,
-        fields,
-        groupName,
-        presetLabel,
-        today,
-      })
+      const claimed = await claimModelExtraction(supabase, config.group_id, conv.id, config.version)
+      if (!claimed) {
+        report.alreadyDone++
+        continue
+      }
+      try {
+        const out = await extractWithModel({
+          subject: conv.subject,
+          transcript: transcript.text,
+          fields,
+          groupName,
+          presetLabel,
+          today,
+        })
 
-      const cost = costMicroUsd(out.tokensIn, out.tokensOut)
-      report.tokensIn += out.tokensIn
-      report.tokensOut += out.tokensOut
-      report.costMicroUsd += cost
+        const cost = costMicroUsd(out.tokensIn, out.tokensOut)
+        report.tokensIn += out.tokensIn
+        report.tokensOut += out.tokensOut
+        report.costMicroUsd += cost
 
-      const res = await saveExtraction(supabase, {
-        ...base,
-        kind: out.containsDemand ? "domanda" : "nessuna_domanda",
-        reference_date: out.containsDemand ? referenceDateOf(out.data, refField) : null,
-        payload: out.containsDemand ? out.data : { motivo: "nessuna_domanda_rilevata" },
-        confidence: out.confidence,
-        method: "modello",
-        model: "openai/gpt-5.4-mini",
-        tokens_in: out.tokensIn,
-        tokens_out: out.tokensOut,
-        cost_micro_usd: cost,
-        truncated: transcript.truncated,
-      })
-      if (res === "already") report.alreadyDone++
-      else {
-        report.byModel++
-        if (out.containsDemand) report.withDemand++
+        const res = await saveExtraction(supabase, {
+          ...base,
+          kind: out.containsDemand ? "domanda" : "nessuna_domanda",
+          reference_date: out.containsDemand ? referenceDateOf(out.data, refField) : null,
+          payload: out.containsDemand ? out.data : { motivo: "nessuna_domanda_rilevata" },
+          confidence: out.confidence,
+          method: "modello",
+          model: "openai/gpt-5.4-mini",
+          tokens_in: out.tokensIn,
+          tokens_out: out.tokensOut,
+          cost_micro_usd: cost,
+          truncated: transcript.truncated,
+        })
+        if (res === "already") report.alreadyDone++
+        else {
+          report.byModel++
+          if (out.containsDemand) report.withDemand++
+        }
+      } finally {
+        await releaseModelExtraction(supabase, config.group_id, conv.id, config.version)
       }
     } catch (e) {
       report.failed++

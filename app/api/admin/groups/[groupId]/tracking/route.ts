@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { TRACKING_PRESETS, isValidFieldKey, type TrackingField, type FieldType } from "@/lib/demand/fields"
+import { MESSAGING_KINDS } from "@/lib/demand/scope"
 
 const FIELD_TYPES: FieldType[] = ["text", "date", "number", "enum", "boolean"]
 
@@ -138,9 +139,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       )
     }
 
+    const requestedEmailIds = Array.isArray(body?.sources?.email_channel_ids)
+      ? body.sources.email_channel_ids.filter((id: unknown): id is string => typeof id === "string")
+      : []
+    const { data: allowedEmailRows } = requestedEmailIds.length
+      ? await supabase.from("email_channels").select("id").eq("property_id", propertyId).in("id", requestedEmailIds)
+      : { data: [] as Array<{ id: string }> }
+    const allowedEmailIds = new Set((allowedEmailRows ?? []).map((row: { id: string }) => row.id))
     const sources = {
-      email_channel_ids: Array.isArray(body?.sources?.email_channel_ids) ? body.sources.email_channel_ids : [],
-      messaging_kinds: Array.isArray(body?.sources?.messaging_kinds) ? body.sources.messaging_kinds : [],
+      email_channel_ids: Array.from(new Set(requestedEmailIds.filter((id: string) => allowedEmailIds.has(id)))),
+      messaging_kinds: Array.isArray(body?.sources?.messaging_kinds)
+        ? Array.from(new Set(body.sources.messaging_kinds.filter((kind: unknown) =>
+            typeof kind === "string" && MESSAGING_KINDS.includes(kind as (typeof MESSAGING_KINDS)[number]),
+          )))
+        : [],
       include_phone: Boolean(body?.sources?.include_phone),
     }
 

@@ -9,7 +9,6 @@ import {
   scegliAnagrafica,
   segnalazioneAmbiguita,
   registraSegnalazione,
-  collegaConversazioneAdAnagrafica,
   datiNotiDaAnagrafica,
   type AnagraficaTrovata,
   type DatiNoti,
@@ -185,9 +184,9 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   // contatto con lo staff" a ManuBot task exists and the conversation is
   // flagged in the inbox. Registering after sending would leave a window where
   // the promise is already made and nothing backs it.
-  // Il cliente dichiara un'email che corrisponde a una scheda in rubrica: la
-  // conversazione viene collegata a QUELLA scheda e il numero le viene salvato,
-  // cosi' dalla volta dopo il riconoscimento avviene sul numero da solo.
+  // Un'email dichiarata in chat non prova l'identita': puo' appartenere a
+  // un'altra persona. Il sistema propone il candidato, ma non modifica mai il
+  // CRM senza conferma umana.
   let unioneMeta: Record<string, unknown> | undefined
   const emailDichiarata = result.contact?.email?.trim() || null
   if (emailDichiarata && identita.numero) {
@@ -202,33 +201,13 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     } else {
       const esistente = scegliAnagrafica(candidati)
       if (esistente) {
-        const esito = await collegaConversazioneAdAnagrafica({
-          supabase,
-          propertyId,
-          conversationId,
-          anagrafica: esistente,
-          numero: identita.numero,
-          // Il doppione creato dal canale viene marcato come unito, non cancellato.
-          anagraficaDaUnireId: identita.anagrafica?.source === "whatsapp" ? identita.anagrafica.id : null,
+        unioneMeta = { crm_anagrafica_da_confermare_id: esistente.id }
+        await registraSegnalazione(supabase, propertyId, conversationId, {
+          tipo: "da_confermare",
+          testo: `L'email dichiarata corrisponde a ${esistente.name ?? esistente.email ?? "un'anagrafica esistente"}. Confermare manualmente il collegamento prima di modificare il CRM.`,
+          candidate: [{ id: esistente.id, nome: esistente.name ?? null, email: esistente.email ?? null }],
+          rilevata_il: new Date().toISOString(),
         })
-        if (esito.collegata) {
-          unioneMeta = {
-            crm_anagrafica_collegata_id: esito.anagraficaId,
-            crm_anagrafica_nome: esito.nome,
-            crm_numero_salvato: esito.numeroSalvato ?? false,
-          }
-          identita.anagrafica = esistente
-          // Il CRM e' stato modificato da una macchina: l'operatore lo deve vedere.
-          await registraSegnalazione(supabase, propertyId, conversationId, {
-            tipo: "collegata",
-            testo: esito.numeroSalvato
-              ? `Conversazione collegata a ${esito.nome ?? "un'anagrafica esistente"} e numero salvato in rubrica.`
-              : `Conversazione collegata a ${esito.nome ?? "un'anagrafica esistente"}.`,
-            anagrafica_id: esito.anagraficaId,
-            numero_salvato: esito.numeroSalvato ?? false,
-            rilevata_il: new Date().toISOString(),
-          })
-        }
       }
     }
   }

@@ -132,7 +132,7 @@ export async function trovaAnagraficaPerEmail(
  *    e le ha salvato il numero. E' una modifica al CRM decisa da una macchina,
  *    quindi deve restare visibile e non silenziosa.
  */
-export type TipoSegnalazione = "ambigua" | "collegata"
+export type TipoSegnalazione = "ambigua" | "da_confermare" | "collegata"
 
 export interface SchedaCandidata {
   id: string
