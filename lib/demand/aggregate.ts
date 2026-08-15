@@ -27,8 +27,19 @@ interface ExtractionForAggregate {
   group_id: string
   reference_date: string | null
   kind: string
+  channel: string | null
   payload: Record<string, unknown>
 }
+
+/**
+ * Le etichette del breakdown sono prefissate perché nello stesso oggetto
+ * convivono due classificazioni diverse: il CANALE da cui è arrivata la
+ * richiesta (`canale:email`) e il TIPO di richiesta (`tipo:prenotazione_camera`).
+ * Senza prefisso "email" e "domanda" starebbero allo stesso livello e chi legge
+ * non potrebbe sommarli senza sbagliare.
+ */
+export const TAG_CANALE = "canale:"
+export const TAG_TIPO = "tipo:"
 
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v
@@ -43,11 +54,13 @@ interface Bucket {
 
 type Key = string // groupId|date|metric
 
-function bump(map: Map<Key, Bucket>, groupId: string, date: string, metric: string, by: number, tag?: string) {
+function bump(map: Map<Key, Bucket>, groupId: string, date: string, metric: string, by: number, tags: string[] = []) {
   const k = `${groupId}|${date}|${metric}`
   const cur = map.get(k) ?? { value: 0, breakdown: {} }
   cur.value += by
-  if (tag) cur.breakdown[tag] = (cur.breakdown[tag] ?? 0) + by
+  for (const tag of tags) {
+    if (tag) cur.breakdown[tag] = (cur.breakdown[tag] ?? 0) + by
+  }
   map.set(k, cur)
 }
 
@@ -71,7 +84,7 @@ export async function rebuildDemandCalendar(
   for (;;) {
     let q = supabase
       .from("conversation_extractions")
-      .select("group_id, reference_date, kind, payload")
+      .select("group_id, reference_date, kind, channel, payload")
       .eq("property_id", propertyId)
       .not("reference_date", "is", null)
       .order("reference_date", { ascending: true })
@@ -93,17 +106,19 @@ export async function rebuildDemandCalendar(
     if (!date) continue
     const p = r.payload ?? {}
 
+    const canale = `${TAG_CANALE}${r.channel ?? "sconosciuto"}`
+
     if (r.kind === "chiamata") {
-      bump(map, r.group_id, date, METRICS.chiamate, 1, String(p.direzione ?? "sconosciuta"))
+      bump(map, r.group_id, date, METRICS.chiamate, 1, [canale, `direzione:${p.direzione ?? "sconosciuta"}`])
       if (p.stato === "missed" || p.stato === "no_answer") {
-        bump(map, r.group_id, date, METRICS.chiamate_perse, 1)
+        bump(map, r.group_id, date, METRICS.chiamate_perse, 1, [canale])
       }
       continue
     }
 
     if (r.kind === "nessuna_domanda" || r.kind === "formato_non_riconosciuto") continue
 
-    bump(map, r.group_id, date, METRICS.richieste, 1, r.kind)
+    bump(map, r.group_id, date, METRICS.richieste, 1, [canale, `${TAG_TIPO}${r.kind}`])
 
     const ospiti = num(p.ospiti) ?? num(p.persone) ?? num(p.invitati)
     if (ospiti !== null) bump(map, r.group_id, date, METRICS.ospiti, ospiti)
@@ -113,7 +128,7 @@ export async function rebuildDemandCalendar(
 
     const esito = typeof p.esito === "string" ? p.esito : null
     if (esito === "confermata") bump(map, r.group_id, date, METRICS.confermate, 1)
-    if (esito === "persa" || esito === "annullata") bump(map, r.group_id, date, METRICS.perse, 1, esito)
+    if (esito === "persa" || esito === "annullata") bump(map, r.group_id, date, METRICS.perse, 1, [`esito:${esito}`])
   }
 
   const payload = Array.from(map.entries()).map(([k, v]) => {

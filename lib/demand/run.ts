@@ -182,6 +182,10 @@ export async function runTrackingForGroup(
         group_id: config.group_id,
         conversation_id: conv.id,
         config_version: config.version,
+        // Il canale si porta dietro fin qui perché la pagina ripartisce le
+        // sorgenti per canale (Email, WhatsApp, Telefono): senza questo dato
+        // quella colonna resterebbe a zero accanto a numeri veri.
+        channel: conv.channel ?? null,
       }
 
       // --- Livello 1: sorgenti strutturate, lette con regole ---
@@ -344,6 +348,7 @@ export async function runTrackingForGroup(
         group_id: config.group_id,
         phone_call_id: call.id,
         config_version: config.version,
+        channel: "phone",
         kind: "chiamata",
         reference_date: day,
         payload: {
