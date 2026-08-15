@@ -44,6 +44,7 @@ import {
   BookText,
   Database,
   Plus,
+  Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -3121,6 +3122,14 @@ export default function InboxPage() {
               descendants (e.g. Tailwind `sr-only` spans in each row). Without it
               those abs spans anchor to <html>, inflating document height and
               producing a second, page-level scrollbar. */}
+          {/* Richieste di passaggio ricevute: fuori dall'area che scorre, o
+              scorrendo l'elenco l'operatore perderebbe di vista la richiesta di
+              un collega che sta aspettando una risposta. */}
+          <RichiestePassaggio
+            richieste={richiesteDaGestire}
+            inCorso={passaggioInCorso}
+            onRispondi={handleRispondiPassaggio}
+          />
           <div className="relative flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
             {(selectedGmailThread || selectedConversation) ? (
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
