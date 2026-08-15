@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { normalizeWhatsAppNumber } from "./client"
+import { trovaAnagraficaPerNumero } from "@/lib/crm/contact-identity"
 
 /**
  * Normalized inbound WhatsApp message extracted from the Meta webhook payload.
@@ -62,7 +63,17 @@ export class WhatsAppProcessor {
       const name = msg.fromName?.trim() || `+${phone}`
 
       const contact = await this.findOrCreateContact(propertyId, phone, name)
-      const conversation = await this.findOrCreateConversation(propertyId, channelId, contact.id, phone, name)
+      // Se l'anagrafica e' stata riconosciuta, in elenco va il SUO nome: "FM" e'
+      // l'etichetta del profilo WhatsApp scelta dal mittente, non il nome che
+      // avete in rubrica.
+      const nomeMostrato = contact.name?.trim() || name
+      const conversation = await this.findOrCreateConversation(
+        propertyId,
+        channelId,
+        contact.id,
+        phone,
+        nomeMostrato,
+      )
 
       const { data: message, error: msgError } = await this.supabase
         .from("messages")
@@ -128,26 +139,24 @@ export class WhatsAppProcessor {
   }
 
   /**
-   * Find-or-create a contact keyed by phone. WhatsApp contacts have no email,
-   * so we match on whatsapp_id first, then phone. Existing contacts are never
-   * mutated (consistent with the email auto-capture immutability policy).
+   * Trova-o-crea l'anagrafica di un numero WhatsApp.
+   *
+   * Il riconoscimento avviene sulle cifre (vedi `trovaAnagraficaPerNumero`), non
+   * per uguaglianza di stringa. Le anagrafiche esistenti non vengono modificate
+   * qui: il numero viene salvato solo quando il cliente dichiara un'email che
+   * corrisponde a una scheda in rubrica, cioe' con una conferma.
    */
-  private async findOrCreateContact(propertyId: string, phone: string, name: string) {
-    const { data: byWa } = await this.supabase
-      .from("contacts")
-      .select("id")
-      .eq("property_id", propertyId)
-      .eq("whatsapp_id", phone)
-      .maybeSingle()
-    if (byWa) return byWa
-
-    const { data: byPhone } = await this.supabase
-      .from("contacts")
-      .select("id")
-      .eq("property_id", propertyId)
-      .eq("phone", phone)
-      .maybeSingle()
-    if (byPhone) return byPhone
+  private async findOrCreateContact(
+    propertyId: string,
+    phone: string,
+    name: string,
+  ): Promise<{ id: string; name?: string | null }> {
+    // Riconoscimento sulle CIFRE, come fa il centralino: l'uguaglianza esatta
+    // fra il numero del webhook (`393358046836`) e un numero scritto a mano in
+    // rubrica (`+39 335 8046836`) non riesce mai, e ogni messaggio creava una
+    // scheda nuova accanto a quella che c'era gia'.
+    const riconosciuta = await trovaAnagraficaPerNumero(this.supabase, propertyId, phone)
+    if (riconosciuta) return { id: riconosciuta.id, name: riconosciuta.name }
 
     const { data: created, error } = await this.supabase
       .from("contacts")
@@ -158,7 +167,7 @@ export class WhatsAppProcessor {
         whatsapp_id: phone,
         source: "whatsapp",
       })
-      .select("id")
+      .select("id, name")
       .single()
 
     if (error) {
@@ -166,7 +175,7 @@ export class WhatsAppProcessor {
       if (error.code === "23505") {
         const { data: again } = await this.supabase
           .from("contacts")
-          .select("id")
+          .select("id, name")
           .eq("property_id", propertyId)
           .eq("whatsapp_id", phone)
           .maybeSingle()
