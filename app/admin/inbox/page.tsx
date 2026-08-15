@@ -492,6 +492,52 @@ export default function InboxPage() {
   // "ripresa la bozza di Marco" invece di far comparire testo dal nulla.
   const [bozzaAutore, setBozzaAutore] = useState<string | null>(null)
 
+  // Il testo nel campo e il messaggio in lavorazione, tenuti in un riferimento.
+  // Servono quando si cambia messaggio: i gestori di selezione sono definiti
+  // molto piu' su in questo file, e leggere lo stato direttamente da loro
+  // catturerebbe il valore vecchio, salvando una bozza gia' superata.
+  const replyTextRef = useRef("")
+  const bersaglioAttivoRef = useRef<{ kind: "conversation" | "gmail_thread"; key: string } | null>(null)
+  // Messaggio per cui la presa in carico e' gia' stata chiesta: `onChange` scatta
+  // a ogni tasto premuto, e senza questo partirebbe una richiesta per lettera.
+  const presaTentataRef = useRef<string | null>(null)
+
+  /** Recupera la bozza condivisa di un messaggio appena aperto. Non sovrascrive
+   *  quello che l'operatore ha gia' nel campo: sarebbe cancellargli il lavoro. */
+  const recuperaBozza = useCallback(
+    async (bersaglio: { kind: "conversation" | "gmail_thread"; key: string }) => {
+      const bozza = await leggiBozzaCondivisa(bersaglio)
+      if (!bozza) {
+        setBozzaAutore(null)
+        return
+      }
+      setReplyText((corrente) => (corrente.trim() ? corrente : bozza.body))
+      setBozzaAutore(bozza.autore)
+    },
+    [leggiBozzaCondivisa],
+  )
+
+  /** Il messaggio e' stato spedito: il campo si svuota e con lui l'avviso della
+   *  bozza, che altrimenti resterebbe appeso a un testo gia' partito. Il blocco
+   *  e la bozza sul server li chiude la rotta di invio. */
+  const azzeraDopoInvio = useCallback(() => {
+    setReplyText("")
+    setBozzaAutore(null)
+    replyTextRef.current = ""
+    presaTentataRef.current = null
+  }, [])
+
+  /** Si sta lasciando un messaggio per aprirne un altro: la bozza va messa in
+   *  salvo e il blocco liberato subito. Senza questo, il messaggio precedente
+   *  resterebbe occupato ai colleghi fino alla scadenza, pur non essendo
+   *  piu' aperto da nessuno. */
+  const lasciaMessaggioPrecedente = useCallback(async () => {
+    const precedente = bersaglioAttivoRef.current
+    if (!precedente) return
+    bersaglioAttivoRef.current = null
+    await sospendiLavorazione(precedente, replyTextRef.current)
+  }, [sospendiLavorazione])
+
   // ── Gmail State ──
   const [gmailThreads, setGmailThreads] = useState<GmailThread[]>([])
   const [gmailLoading, setGmailLoading] = useState(false)
@@ -815,6 +861,13 @@ export default function InboxPage() {
   const handleSelectGmailThread = useCallback(async (thread: GmailThread) => {
     console.log(`[v0] v771: handleSelectGmailThread START - thread.id=${thread.id}`)
 
+    // Chiude la lavorazione del messaggio che si stava guardando prima, poi
+    // recupera l'eventuale bozza condivisa di questo.
+    await lasciaMessaggioPrecedente()
+    presaTentataRef.current = null
+    setBozzaAutore(null)
+    void recuperaBozza({ kind: "gmail_thread", key: thread.id })
+
     // Reset state for new selection
     setIsThreadReady(false)
     setGmailMessages([])
@@ -881,7 +934,7 @@ export default function InboxPage() {
     } finally {
       setGmailThreadLoading(false)
     }
-  }, [])
+  }, [lasciaMessaggioPrecedente, recuperaBozza])
 
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
@@ -1625,12 +1678,19 @@ export default function InboxPage() {
   }, [inboxMode, messages, selectedConversationId, markMessagesAsRead])
 
   const handleSelectConversation = useCallback(async (conv: Conversation) => {
+    // Chiude la lavorazione del messaggio precedente e recupera la bozza
+    // condivisa di questo, prima di caricare i contenuti.
+    await lasciaMessaggioPrecedente()
+    presaTentataRef.current = null
+    setBozzaAutore(null)
+    void recuperaBozza({ kind: "conversation", key: conv.id })
+
     setSelectedConversation(conv)
     setSelectedConversationId(conv.id)
     setMessages([])
     // Load messages for this conversation
     await loadMessages(conv.id, true)
-  }, [loadMessages])
+  }, [loadMessages, lasciaMessaggioPrecedente, recuperaBozza])
 
   const handleToggleStar = async (conv: Conversation, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -1953,12 +2013,22 @@ export default function InboxPage() {
     return selectedConversation ? ({ kind: "conversation" as const, key: selectedConversation.id }) : null
   }, [inboxMode, selectedGmailThread, selectedConversation])
 
+  // I riferimenti seguono lo stato. L'aggiornamento avviene dopo il rendering,
+  // quindi quando si apre un altro messaggio il gestore legge ancora il
+  // bersaglio precedente: e' esattamente quello che serve per metterne in salvo
+  // la bozza prima di cambiare.
+  useEffect(() => {
+    replyTextRef.current = replyText
+  }, [replyText])
+  useEffect(() => {
+    bersaglioAttivoRef.current = bersaglioCorrente()
+  }, [bersaglioCorrente])
+
   // Presa in carico alla prima battuta.
   //
   // Scatta sullo SCRIVERE, non sull'aprire: chi scorre l'inbox per dare
   // un'occhiata bloccherebbe ogni messaggio che apre, e in pochi minuti l'elenco
   // risulterebbe tutto occupato da lui. Il segnale che conta e' "sto rispondendo".
-  const presaTentataRef = useRef<string | null>(null)
   const assicuraPresaInCarico = useCallback(() => {
     const b = bersaglioCorrente()
     if (!b) return
@@ -1979,21 +2049,6 @@ export default function InboxPage() {
       if (b) salvaBozzaCondivisa(b, testo)
     },
     [bersaglioCorrente, salvaBozzaCondivisa],
-  )
-
-  /** Recupera la bozza condivisa di un messaggio appena aperto. Non sovrascrive
-   *  quello che l'operatore ha gia' nel campo: sarebbe cancellargli il lavoro. */
-  const recuperaBozza = useCallback(
-    async (bersaglio: { kind: "conversation" | "gmail_thread"; key: string }) => {
-      const bozza = await leggiBozzaCondivisa(bersaglio)
-      if (!bozza) {
-        setBozzaAutore(null)
-        return
-      }
-      setReplyText((corrente) => (corrente.trim() ? corrente : bozza.body))
-      setBozzaAutore(bozza.autore)
-    },
-    [leggiBozzaCondivisa],
   )
 
   const handleSendReply = async () => {
@@ -2023,7 +2078,7 @@ export default function InboxPage() {
             }),
           })
           if (res.ok) {
-            setReplyText("")
+            azzeraDopoInvio()
             setIsForwarding(false)
             setShowReplyBox(false)
           } else {
@@ -2042,7 +2097,7 @@ export default function InboxPage() {
             }),
           })
           if (res.ok) {
-            setReplyText("")
+            azzeraDopoInvio()
             setIsForwarding(false)
             setShowReplyBox(false)
             await loadMessages(selectedConversation.id, false)
@@ -2069,7 +2124,7 @@ export default function InboxPage() {
           }),
         })
         if (res.ok) {
-          setReplyText("")
+          azzeraDopoInvio()
           setReplyCc("")
           setReplyBcc("")
           setShowCcField(false)
@@ -2093,7 +2148,7 @@ export default function InboxPage() {
           }),
         })
         if (res.ok) {
-          setReplyText("")
+          azzeraDopoInvio()
           await loadMessages(selectedConversation.id, false)
           // Update conversations list to reflect potential unread count changes or last message
           loadConversations()
@@ -3377,6 +3432,14 @@ export default function InboxPage() {
       </DropdownMenuContent>
     </DropdownMenu>
   </div>
+  {bozzaAutore && (
+  // Il testo nel campo non e' stato scritto da chi sta guardando: dirlo evita
+  // che venga spedito credendolo proprio, o cancellato credendolo un residuo.
+  <div className="flex items-center gap-2 border-b border-ha-warning-soft-foreground/20 bg-ha-warning-soft px-3 py-1.5 text-xs text-ha-warning-soft-foreground">
+  <FileText className="h-3.5 w-3.5 flex-shrink-0" />
+  <span>Bozza iniziata da {bozzaAutore}. Le modifiche sono visibili a tutti.</span>
+  </div>
+  )}
   <Textarea
   ref={replyTextareaRef}
   placeholder={isForwarding ? "Aggiungi un messaggio e inoltra..." : "Scrivi una risposta..."}
