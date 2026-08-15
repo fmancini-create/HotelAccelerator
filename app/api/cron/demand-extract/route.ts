@@ -34,12 +34,31 @@ const PER_GROUP = 40
 const COST_CAP_MICRO_USD = 500_000
 
 export async function GET(request: NextRequest) {
+  // Difesa a chiusura, non ad apertura. Lo schema usato dagli altri cron
+  // (`if (cronSecret) { ...verifica... }`) lascia la rotta APERTA quando la
+  // variabile non e' impostata — e qui e' stato misurato: `CRON_SECRET` non
+  // c'e'. Su una rotta che chiama un modello a pagamento, aperta significa che
+  // un estraneo puo' far spendere denaro chiamandola in continuazione.
+  //
+  // Quindi: senza segreto si passa solo in sviluppo locale, dove la rotta non
+  // e' raggiungibile da fuori. In produzione senza segreto si risponde 401 e il
+  // motivo e' scritto nella risposta, cosi' il guasto si legge subito invece di
+  // sembrare un cron che "non trova lavoro".
   const cronSecret = process.env.CRON_SECRET
+  const host = (request.headers.get("host") || "").split(":")[0].trim().toLowerCase()
+  const isLocalDev =
+    process.env.NODE_ENV === "development" && (host === "localhost" || host === "127.0.0.1")
+
   if (cronSecret) {
-    const auth = request.headers.get("authorization")
-    if (auth !== `Bearer ${cronSecret}`) {
+    if (request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+  } else if (!isLocalDev) {
+    console.error("[v0][demand-extract] CRON_SECRET non impostata: rotta chiusa per prudenza")
+    return NextResponse.json(
+      { error: "CRON_SECRET non impostata: estrazione disattivata" },
+      { status: 401 },
+    )
   }
 
   const startedAt = Date.now()
