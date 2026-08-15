@@ -1344,6 +1344,12 @@ export default function InboxPage() {
     // them fan out into concurrent copies of this relatively expensive query.
     if (conversationsLoadInFlightRef.current) return
 
+    // "Bozze" non e' uno stato dei messaggi: chiederlo al server significherebbe
+    // filtrare su un valore che non esiste, ricevere zero risultati e svuotare
+    // l'elenco. Si lascia intatto quello gia' caricato, cosi' aprire una bozza
+    // su un messaggio in vista resta immediato.
+    if (statusFilter === "bozze") return
+
     // `automatico` e' passato esplicitamente solo da poll e realtime. Chi
     // chiama in risposta a un gesto dell'operatore (o passa un evento) non
     // entra qui e non viene mai frenato.
@@ -3630,7 +3636,11 @@ export default function InboxPage() {
                   try {
                     const res = await fetch(`/api/inbox/conversations?ids=${bozza.bersaglio.key}&mode=smart`)
                     const dati = await res.json().catch(() => ({}))
-                    const conv = dati?.conversations?.[0]
+                    // Si cerca l'id chiesto invece di prendere il primo elemento:
+                    // la risposta viene riordinata a valle, e prendere il primo
+                    // aprirebbe in silenzio il messaggio sbagliato invece di
+                    // segnalare che quello giusto non e' arrivato.
+                    const conv = (dati?.conversations ?? []).find((c: any) => c.id === bozza.bersaglio.key)
                     if (conv) {
                       setStatusFilter("open")
                       setConversations((prev) => (prev.some((c) => c.id === conv.id) ? prev : [conv, ...prev]))
