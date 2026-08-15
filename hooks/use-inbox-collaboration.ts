@@ -29,8 +29,24 @@ const MS_SONDAGGIO_ELENCO = 12_000
  * Il battito e' necessario perche' la scadenza e' a inattivita': senza, il
  * blocco morirebbe mentre l'operatore e' ancora nel mezzo di una risposta lunga.
  */
+/** Una bozza in sospeso, come la vede la vista "Bozze". */
+export interface BozzaInSospeso {
+  chiave: string
+  bersaglio: Bersaglio
+  body: string
+  /** Chi l'ha iniziata: e' il nome che l'operatore cerca per capire di chi e'. */
+  creataDa: string | null
+  /** Chi l'ha toccata per ultimo: puo' essere un altro, la bozza e' condivisa. */
+  aggiornataDa: string | null
+  aggiornataIl: string
+  /** Contesto del messaggio: senza, la riga non dice a cosa si riferisce. */
+  oggetto: string | null
+  interlocutore: string | null
+}
+
 export function useInboxCollaboration(attivo: boolean) {
   const [lavorazioni, setLavorazioni] = useState<Map<string, LavorazioneInCorso>>(new Map())
+  const [bozze, setBozze] = useState<BozzaInSospeso[]>([])
   const [mioBersaglio, setMioBersaglio] = useState<Bersaglio | null>(null)
 
   // Riferimenti e non stato: cambiano spesso e non devono ridisegnare l'elenco.
@@ -58,12 +74,41 @@ export function useInboxCollaboration(attivo: boolean) {
     }
   }, [])
 
+  /** Elenco delle bozze in sospeso della struttura. Sta qui e non nella pagina
+   *  perche' le bozze cambiano quando i colleghi scrivono, non quando si
+   *  ricarica l'elenco dei messaggi: segue lo stesso sondaggio delle lavorazioni. */
+  const aggiornaBozze = useCallback(async () => {
+    try {
+      const res = await fetch("/api/inbox/collaboration/draft", { cache: "no-store" })
+      if (!res.ok) return
+      const dati = await res.json()
+      setBozze(
+        (dati.drafts ?? []).map((b: any) => ({
+          chiave: chiaveBersaglio(b.bersaglio),
+          bersaglio: b.bersaglio,
+          body: b.body ?? "",
+          creataDa: b.createdByLabel ?? null,
+          aggiornataDa: b.updatedByLabel ?? null,
+          aggiornataIl: b.updatedAt,
+          oggetto: b.oggetto ?? null,
+          interlocutore: b.interlocutore ?? null,
+        })),
+      )
+    } catch {
+      // Come sopra: una bozza non elencata e' un fastidio, un'inbox bloccata no.
+    }
+  }, [])
+
   useEffect(() => {
     if (!attivo) return
-    aggiornaElenco()
-    const t = setInterval(aggiornaElenco, MS_SONDAGGIO_ELENCO)
+    const giro = () => {
+      aggiornaElenco()
+      aggiornaBozze()
+    }
+    giro()
+    const t = setInterval(giro, MS_SONDAGGIO_ELENCO)
     return () => clearInterval(t)
-  }, [attivo, aggiornaElenco])
+  }, [attivo, aggiornaElenco, aggiornaBozze])
 
   /** Prende in carico e avvia il battito. Restituisce chi lo tiene se occupato. */
   const prendi = useCallback(
@@ -208,5 +253,16 @@ export function useInboxCollaboration(attivo: boolean) {
     [rilascia],
   )
 
-  return { lavorazioni, mioBersaglio, prendi, rilascia, aggiornaElenco, salvaBozza, leggiBozza, sospendi }
+  return {
+    lavorazioni,
+    bozze,
+    mioBersaglio,
+    prendi,
+    rilascia,
+    aggiornaElenco,
+    aggiornaBozze,
+    salvaBozza,
+    leggiBozza,
+    sospendi,
+  }
 }

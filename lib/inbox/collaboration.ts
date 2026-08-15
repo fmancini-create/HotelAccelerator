@@ -304,6 +304,13 @@ export interface Bozza {
   updatedAt: string
 }
 
+/** Una bozza come compare nella vista "Bozze": oltre al testo porta il contesto
+ *  del messaggio a cui appartiene, altrimenti la riga non sarebbe identificabile. */
+export interface BozzaElencata extends Bozza {
+  oggetto: string | null
+  interlocutore: string | null
+}
+
 function componiBozza(riga: any): Bozza {
   return {
     bersaglio: { kind: riga.target_kind, key: riga.target_key },
@@ -401,7 +408,7 @@ export async function leggiBozza(propertyId: string, bersaglio: Bersaglio): Prom
   return data ? componiBozza(data) : null
 }
 
-export async function leggiBozzeStruttura(propertyId: string): Promise<Bozza[]> {
+export async function leggiBozzeStruttura(propertyId: string): Promise<BozzaElencata[]> {
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from("conversation_drafts")
@@ -412,7 +419,34 @@ export async function leggiBozzeStruttura(propertyId: string): Promise<Bozza[]> 
     console.error("[v0] bozze inbox: lettura fallita:", error.message)
     return []
   }
-  return (data ?? []).map(componiBozza)
+  const bozze: Bozza[] = (data ?? []).map(componiBozza)
+  if (bozze.length === 0) return []
+
+  // Senza oggetto e interlocutore la riga direbbe solo "bozza di Giulia", e
+  // l'operatore non saprebbe a quale messaggio appartiene: e' l'informazione
+  // che rende la vista utilizzabile invece che curiosa.
+  const idConversazioni = bozze.filter((b) => b.bersaglio.kind === "conversation").map((b) => b.bersaglio.key)
+
+  const contesto = new Map<string, { oggetto: string | null; interlocutore: string | null }>()
+  if (idConversazioni.length > 0) {
+    const { data: conv } = await supabase
+      .from("conversations")
+      .select("id, subject, contact_name, contact_email")
+      .eq("property_id", propertyId)
+      .in("id", idConversazioni)
+    for (const c of conv ?? []) {
+      contesto.set(String(c.id), {
+        oggetto: c.subject ?? null,
+        interlocutore: c.contact_name ?? c.contact_email ?? null,
+      })
+    }
+  }
+
+  return bozze.map((b) => ({
+    ...b,
+    oggetto: contesto.get(b.bersaglio.key)?.oggetto ?? null,
+    interlocutore: contesto.get(b.bersaglio.key)?.interlocutore ?? null,
+  }))
 }
 
 /** Cancella la bozza dopo un invio riuscito: tenerla darebbe l'impressione che

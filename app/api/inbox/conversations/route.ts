@@ -44,6 +44,10 @@ export async function GET(request: NextRequest) {
       limit: Number.parseInt(searchParams.get("limit") || "50"),
       offset: Number.parseInt(searchParams.get("offset") || "0"),
       search: searchParams.get("search") || undefined,
+      // Conversazioni precise, per aprire una bozza che sta fuori dalla pagina
+      // caricata. Restano dentro `propertyId` e dentro `access`: chiedere un id
+      // di un'altra struttura o di un canale non assegnato non restituisce nulla.
+      ids: searchParams.get("ids")?.split(",").filter(Boolean) || undefined,
       filter: (searchParams.get("filter") as any) || undefined,
       mode,
       gmail_label: gmailLabel || undefined,

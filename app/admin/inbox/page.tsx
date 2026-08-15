@@ -64,6 +64,8 @@ import { formatInboxTimestamp, formatInboxTimestampFull, formatWaitingSince } fr
 import { EmailKpiBar } from "@/components/admin/email-kpi-bar"
 import { AiDraftPanel } from "@/components/admin/inbox/ai-draft-panel"
 import { AddToKnowledgeButton } from "@/components/admin/inbox/add-to-knowledge-button"
+import { VistaBozze } from "@/components/admin/inbox/vista-bozze"
+import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -483,6 +485,8 @@ export default function InboxPage() {
   // porta di servizio aperta.
   const {
     lavorazioni,
+    bozze: bozzeInSospeso,
+    aggiornaBozze,
     prendi: prendiInCarico,
     salvaBozza: salvaBozzaCondivisa,
     leggiBozza: leggiBozzaCondivisa,
@@ -2677,6 +2681,21 @@ export default function InboxPage() {
                     onClick={() => setStatusFilter(item.id)}
                   />
                 ))}
+                {/* Le bozze in sospeso non sono uno stato del messaggio ma una
+                    tabella a parte, e l'elenco dei messaggi e' paginato: una
+                    bozza su una conversazione vecchia non comparirebbe mai
+                    scorrendo. Per questo e' una vista propria. Compare solo se
+                    ce n'e' almeno una: una cartella sempre vuota e' rumore. */}
+                {bozzeInSospeso.length > 0 && (
+                  <NavFolder
+                    id="bozze"
+                    label="Bozze"
+                    icon={FileText}
+                    isActive={statusFilter === "bozze"}
+                    unread={bozzeInSospeso.length}
+                    onClick={() => setStatusFilter("bozze")}
+                  />
+                )}
                 {/* Rimossi i due pulsanti senza etichetta che stavano qui sotto una linea
                     di separazione, in fondo alla colonna delle cartelle:
                     - il "baco" apriva il pannello di diagnostica tecnico, che resta
@@ -3591,6 +3610,39 @@ export default function InboxPage() {
                   })}
                 </>
               )
+            ) : statusFilter === "bozze" ? (
+              <VistaBozze
+                bozze={bozzeInSospeso}
+                onApri={async (bozza) => {
+                  // Si apre il messaggio col gestore di selezione, unico punto in
+                  // cui la bozza viene recuperata: duplicare qui il recupero
+                  // vorrebbe dire due comportamenti da tenere allineati.
+                  const inElenco = conversations.find((c) => c.id === bozza.bersaglio.key)
+                  if (inElenco) {
+                    setStatusFilter("open")
+                    void handleSelectConversation(inElenco)
+                    return
+                  }
+                  // Fuori dalla pagina caricata (o in un altro stato): la si
+                  // chiede per id. Senza questo il click porterebbe a una
+                  // schermata vuota, cioe' un vicolo cieco proprio nel caso per
+                  // cui la vista esiste: la bozza su un messaggio vecchio.
+                  try {
+                    const res = await fetch(`/api/inbox/conversations?ids=${bozza.bersaglio.key}&mode=smart`)
+                    const dati = await res.json().catch(() => ({}))
+                    const conv = dati?.conversations?.[0]
+                    if (conv) {
+                      setStatusFilter("open")
+                      setConversations((prev) => (prev.some((c) => c.id === conv.id) ? prev : [conv, ...prev]))
+                      void handleSelectConversation(conv)
+                    } else {
+                      toast.error("La conversazione di questa bozza non è più accessibile")
+                    }
+                  } catch {
+                    toast.error("Apertura non riuscita: riprova tra poco")
+                  }
+                }}
+              />
             ) : (
               isLoading ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
