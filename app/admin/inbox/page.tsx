@@ -81,6 +81,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useInboxCollaboration } from "@/hooks/use-inbox-collaboration"
 import { InLavorazioneBadge } from "@/components/admin/inbox/in-lavorazione-badge"
 import { chiaveBersaglio } from "@/lib/inbox/target"
+import type { Bersaglio } from "@/lib/inbox/target"
+import { useInboxTransfer } from "@/hooks/use-inbox-transfer"
+import { RichiestePassaggio } from "@/components/admin/inbox/richieste-passaggio"
 
 type InboxMode = "smart" | "gmail"
 
@@ -492,6 +495,16 @@ export default function InboxPage() {
     leggiBozza: leggiBozzaCondivisa,
     sospendi: sospendiLavorazione,
   } = useInboxCollaboration(true)
+  // Richieste di passaggio. Attive sempre, non solo in una modalita': chi tiene
+  // un messaggio puo' stare guardando l'altra vista, e una richiesta che non lo
+  // raggiunge non serve a niente.
+  const {
+    daGestire: richiesteDaGestire,
+    inCorso: passaggioInCorso,
+    chiedi: chiediPassaggio,
+    rispondi: rispondiPassaggio,
+    hoGiaChiesto,
+  } = useInboxTransfer(true)
   // Autore della bozza recuperata, quando non e' la propria: serve a dire
   // "ripresa la bozza di Marco" invece di far comparire testo dal nulla.
   const [bozzaAutore, setBozzaAutore] = useState<string | null>(null)
@@ -630,6 +643,12 @@ export default function InboxPage() {
   const [replyChannel, setReplyChannel] = useState("email")
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Messaggio che un collega sta gia' lavorando: tiene il bersaglio perche' il
+   *  pulsante "Chiedi il passaggio" deve sapere su cosa chiedere. */
+  const [bloccoRifiutato, setBloccoRifiutato] = useState<{ bersaglio: Bersaglio; label: string } | null>(null)
+  /** Esito dell'ultima richiesta, per dire A CHI e' andata: "richiesta inviata"
+   *  e basta lascerebbe l'operatore ad aspettare senza sapere da chi. */
+  const [esitoPassaggio, setEsitoPassaggio] = useState<string | null>(null)
   const [showReplyBox, setShowReplyBox] = useState(false)
   // Reply recipients (Gmail-style): To is pre-filled from thread, Cc/Bcc toggleable
   const [replyTo, setReplyTo] = useState("")
@@ -2048,10 +2067,58 @@ export default function InboxPage() {
     presaTentataRef.current = chiave
     void prendiInCarico(b).then((esito) => {
       if (!esito.ok && esito.label) {
-        setError(`Questo messaggio e' in lavorazione da ${esito.label}. Puoi chiedere il passaggio.`)
+        // Si registra il bersaglio, non solo un testo: la frase "puoi chiedere il
+        // passaggio" senza un pulsante accanto sarebbe una promessa che il
+        // pannello non mantiene, e per chiederlo serve sapere QUALE messaggio.
+        setBloccoRifiutato({ bersaglio: b, label: esito.label })
       }
     })
   }, [bersaglioCorrente, prendiInCarico])
+
+  // Il blocco rifiutato riguarda UN messaggio: cambiando conversazione la barra
+  // deve sparire, o l'operatore vedrebbe "in lavorazione da Mario" sopra un
+  // messaggio libero e non proverebbe nemmeno a rispondere.
+  useEffect(() => {
+    const b = bersaglioCorrente()
+    if (!bloccoRifiutato) return
+    if (!b || chiaveBersaglio(b) !== chiaveBersaglio(bloccoRifiutato.bersaglio)) {
+      setBloccoRifiutato(null)
+      setEsitoPassaggio(null)
+    }
+  }, [bersaglioCorrente, bloccoRifiutato])
+
+  const handleChiediPassaggio = useCallback(async () => {
+    if (!bloccoRifiutato) return
+    const esito = await chiediPassaggio(bloccoRifiutato.bersaglio)
+    if (!esito.ok) {
+      setEsitoPassaggio(esito.errore ?? "Richiesta non riuscita")
+      return
+    }
+    if (esito.giaAperta) {
+      setEsitoPassaggio("Hai già una richiesta aperta su questo messaggio.")
+      return
+    }
+    // A chi e' andata dipende dal permesso di chi tiene il messaggio, non da chi
+    // chiede: dirlo evita che l'operatore aspetti una risposta dalla persona
+    // sbagliata.
+    setEsitoPassaggio(
+      esito.destinatario === "holder"
+        ? `Richiesta inviata a ${bloccoRifiutato.label}.`
+        : "Richiesta inviata a un amministratore, perché il collega non può concedere il passaggio.",
+    )
+  }, [bloccoRifiutato, chiediPassaggio])
+
+  const handleRispondiPassaggio = useCallback(
+    async (richiestaId: string, concedi: boolean) => {
+      const esito = await rispondiPassaggio(richiestaId, concedi)
+      if (!esito.ok) {
+        toast.error(esito.errore ?? "Risposta non riuscita")
+        return
+      }
+      toast.success(concedi ? "Passaggio concesso: il messaggio è ora libero." : "Richiesta rifiutata.")
+    },
+    [rispondiPassaggio],
+  )
 
   const registraBozza = useCallback(
     (testo: string) => {
@@ -3463,6 +3530,29 @@ export default function InboxPage() {
   <div className="flex items-center gap-2 border-b border-ha-warning-soft-foreground/20 bg-ha-warning-soft px-3 py-1.5 text-xs text-ha-warning-soft-foreground">
   <FileText className="h-3.5 w-3.5 flex-shrink-0" />
   <span>Bozza iniziata da {bozzaAutore}. Le modifiche sono visibili a tutti.</span>
+  </div>
+  )}
+  {bloccoRifiutato && (
+  // Il collega sta scrivendo su questo stesso messaggio. Il campo NON viene
+  // disabilitato: il testo gia' battuto resta come bozza condivisa, e togliere
+  // la tastiera non impedirebbe la doppia risposta (quella la impedisce il
+  // vincolo sul blocco) mentre farebbe perdere quello che l'operatore ha scritto.
+  <div className="flex flex-wrap items-center gap-2 border-b border-ha-warning-soft-foreground/20 bg-ha-warning-soft px-3 py-2 text-xs text-ha-warning-soft-foreground">
+  <Users className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+  <span className="min-w-0 flex-1">
+  In lavorazione da {bloccoRifiutato.label}. {esitoPassaggio ?? "Puoi chiedere il passaggio."}
+  </span>
+  {!hoGiaChiesto(bloccoRifiutato.bersaglio) && (
+  <Button
+  size="sm"
+  variant="outline"
+  className="h-7 bg-transparent text-xs"
+  disabled={passaggioInCorso === chiaveBersaglio(bloccoRifiutato.bersaglio)}
+  onClick={handleChiediPassaggio}
+  >
+  Chiedi il passaggio
+  </Button>
+  )}
   </div>
   )}
   <Textarea
