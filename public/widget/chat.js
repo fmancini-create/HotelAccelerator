@@ -56,6 +56,9 @@
   var aperto = false
   var conf = null
   var inviati = {}
+  // Messaggi del visitatore mostrati sullo schermo ma non ancora confermati dal
+  // server: servono per riconoscerli quando tornano dal sondaggio con un id.
+  var inAttesa = []
 
   function chiama(corpo) {
     return fetch(API, {
@@ -256,6 +259,23 @@
       // Le risposte automatiche arrivano dal sondaggio: senza questo controllo
       // un messaggio comparirebbe due volte (una dall'invio, una dal sondaggio).
       if (m.id && inviati[m.id]) return
+
+      // Il messaggio del visitatore viene mostrato subito, prima che il server
+      // lo confermi e ne dia l'id. Il sondaggio gira ogni 4 secondi mentre una
+      // risposta automatica puo' tardare di piu': senza questo abbinamento il
+      // sondaggio riporta quel messaggio come "nuovo" (l'id non e' ancora noto)
+      // e il visitatore vede la propria frase scritta due volte.
+      if (m.sender_type === "customer") {
+        for (var i = 0; i < inAttesa.length; i++) {
+          if (inAttesa[i].testo === m.content) {
+            inAttesa.splice(i, 1)
+            if (m.id) inviati[m.id] = true
+            if (m.stored_at) ultimoMessaggio = m.stored_at
+            return
+          }
+        }
+      }
+
       if (m.id) inviati[m.id] = true
 
       var d = document.createElement("div")
@@ -350,6 +370,11 @@
       input.value = ""
       invio.disabled = true
       aggiungi({ content: valore, sender_type: "customer" })
+      // Registrato DOPO averlo mostrato: se lo registrassi prima, la difesa qui
+      // sopra scarterebbe proprio la riga che vogliamo far vedere. L'ordine e'
+      // sicuro perche' il sondaggio non puo' inserirsi fra due istruzioni
+      // sincrone: partira' al piu' presto al prossimo giro del browser.
+      inAttesa.push({ testo: valore })
 
       chiama({ action: "send", conversation_id: conversazione, message: valore })
         .then(function (d) {
