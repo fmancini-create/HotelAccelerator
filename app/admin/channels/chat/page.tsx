@@ -1,174 +1,213 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { useCallback, useEffect, useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Copy, Check, MessageCircle, Palette, Code, Bot, Sparkles, Eye, Globe, Zap, Mail } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  AlertCircle,
+  BookOpen,
+  Bot,
+  Globe,
+  Loader2,
+  MessageCircle,
+  MessagesSquare,
+  Plus,
+  Settings2,
+  Trash2,
+} from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { ChatWidgetEditor } from "@/components/admin/chat-widget-editor"
+import { normalizzaAspetto } from "@/lib/chat-widgets/appearance"
+import { PREZZO_WIDGET_EXTRA_CENTESIMI } from "@/lib/chat-widgets/pricing"
 
-interface ChatWidgetConfig {
-  id?: string
-  property_id: string
+interface WidgetInElenco {
+  id: string
   name: string
-  is_active: boolean
-  config: {
-    primaryColor: string
-    position: "bottom-right" | "bottom-left"
-    welcomeMessage: string
-    placeholder: string
-    aiEnabled: boolean
-    aiGreeting: string
-    offlineMessage: string
-    collectEmail: boolean
+  siteUrl: string | null
+  publicKey: string
+  isActive: boolean
+  appearance: unknown
+  conversations: number
+  primaryBase: { id: string; name: string; mode: "disabled" | "on_request" | "autopilot" } | null
+  additionalBases: { id: string; name: string }[]
+}
+
+interface Quota {
+  inclusi: number
+  extra: number
+  limite: number
+  usati: number
+  puoCrearne: boolean
+}
+
+const ETICHETTE_MODALITA: Record<"disabled" | "on_request" | "autopilot", string> = {
+  disabled: "IA spenta",
+  on_request: "Su richiesta",
+  autopilot: "Risponde da sola",
+}
+
+export default function ChatWidgetsPage() {
+  const [widgets, setWidgets] = useState<WidgetInElenco[]>([])
+  const [quota, setQuota] = useState<Quota | null>(null)
+  const [caricamento, setCaricamento] = useState(true)
+  const [errore, setErrore] = useState<string | null>(null)
+
+  // Quale widget si sta configurando. Null = si vede l'elenco.
+  const [inModifica, setInModifica] = useState<string | null>(null)
+
+  const [creazioneAperta, setCreazioneAperta] = useState(false)
+  const [nuovoNome, setNuovoNome] = useState("")
+  const [nuovoSito, setNuovoSito] = useState("")
+  const [creazioneInCorso, setCreazioneInCorso] = useState(false)
+  const [erroreCreazione, setErroreCreazione] = useState<string | null>(null)
+  const [quotaEsaurita, setQuotaEsaurita] = useState(false)
+  const [acquistoInCorso, setAcquistoInCorso] = useState(false)
+
+  /**
+   * Porta l'admin al pagamento di Stripe per un widget in più.
+   *
+   * Non crea il widget: il pagamento alza soltanto la quota, poi il widget lo
+   * crea lui dando nome, basi e aspetto. Creare una chat anonima al posto suo
+   * significherebbe metterne una in linea senza che nessuno l'abbia configurata.
+   */
+  const acquistaWidget = async () => {
+    setAcquistoInCorso(true)
+    setErrore(null)
+    try {
+      const r = await fetch("/api/admin/chat-widgets/checkout", { method: "POST" })
+      const dati = await r.json()
+      if (!r.ok || !dati.url) throw new Error(dati.error || "Pagamento non avviato")
+      window.location.href = dati.url
+    } catch (e) {
+      // Lo stato torna attivo solo in caso di errore: se il rimando funziona la
+      // pagina cambia, e riabilitare il pulsante inviterebbe a pagare due volte.
+      setErrore(e instanceof Error ? e.message : "Pagamento non avviato")
+      setAcquistoInCorso(false)
+    }
   }
-}
 
-const DEFAULT_CONFIG: ChatWidgetConfig["config"] = {
-  primaryColor: "#8b7355",
-  position: "bottom-right",
-  welcomeMessage: "Ciao! Come possiamo aiutarti?",
-  placeholder: "Scrivi un messaggio...",
-  aiEnabled: false,
-  aiGreeting: "Sono l'assistente virtuale. Posso aiutarti con informazioni su camere, disponibilità e servizi.",
-  offlineMessage: "Siamo offline. Lascia un messaggio e ti risponderemo presto.",
-  collectEmail: true,
-}
+  const [daEliminare, setDaEliminare] = useState<WidgetInElenco | null>(null)
+  const [eliminazioneInCorso, setEliminazioneInCorso] = useState(false)
 
-export default function ChatChannelPage() {
-  const [config, setConfig] = useState<ChatWidgetConfig | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [propertyId, setPropertyId] = useState<string | null>(null)
-  const [hasCMS, setHasCMS] = useState(false)
-
-  useEffect(() => {
-    fetchConfig()
+  const carica = useCallback(async () => {
+    try {
+      const risposta = await fetch("/api/admin/chat-widgets", { cache: "no-store" })
+      const dati = await risposta.json()
+      if (!risposta.ok) throw new Error(dati.error ?? "Impossibile caricare i widget")
+      setWidgets(dati.widgets ?? [])
+      setQuota(dati.quota ?? null)
+      setErrore(null)
+    } catch (e) {
+      setErrore(e instanceof Error ? e.message : "Errore di caricamento")
+    } finally {
+      setCaricamento(false)
+    }
   }, [])
 
-  const fetchConfig = async () => {
+  useEffect(() => {
+    void carica()
+  }, [carica])
+
+  const creaWidget = async () => {
+    setCreazioneInCorso(true)
+    setErroreCreazione(null)
+    setQuotaEsaurita(false)
     try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: adminUser } = await supabase.from("admin_users").select("property_id").eq("id", user.id).single()
-
-      if (!adminUser?.property_id) return
-      setPropertyId(adminUser.property_id)
-
-      const { data: cmsPages } = await supabase
-        .from("cms_pages")
-        .select("id")
-        .eq("property_id", adminUser.property_id)
-        .limit(1)
-
-      setHasCMS((cmsPages?.length || 0) > 0)
-
-      const { data: existingWidget } = await supabase
-        .from("embed_scripts")
-        .select("*")
-        .eq("property_id", adminUser.property_id)
-        .eq("script_type", "chat")
-        .single()
-
-      if (existingWidget) {
-        setConfig({
-          id: existingWidget.id,
-          property_id: existingWidget.property_id,
-          name: existingWidget.name,
-          is_active: existingWidget.is_active,
-          config: existingWidget.config || DEFAULT_CONFIG,
-        })
-      } else {
-        setConfig({
-          property_id: adminUser.property_id,
-          name: "Chat Widget",
-          is_active: false,
-          config: DEFAULT_CONFIG,
-        })
+      const risposta = await fetch("/api/admin/chat-widgets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: nuovoNome.trim(), siteUrl: nuovoSito.trim() || null }),
+      })
+      const dati = await risposta.json()
+      if (!risposta.ok) {
+        // 402 = limite raggiunto. È una condizione commerciale, non un guasto,
+        // quindi va mostrata con un tono diverso da un errore tecnico.
+        if (risposta.status === 402) setQuotaEsaurita(true)
+        throw new Error(dati.error ?? "Creazione non riuscita")
       }
-    } catch (error) {
-      console.error("Error fetching config:", error)
+      setCreazioneAperta(false)
+      setNuovoNome("")
+      setNuovoSito("")
+      await carica()
+      // Si apre subito la configurazione: un widget appena creato non risponde
+      // finché non gli si collega una base di conoscenza.
+      setInModifica(dati.widget.id)
+    } catch (e) {
+      setErroreCreazione(e instanceof Error ? e.message : "Errore")
     } finally {
-      setLoading(false)
+      setCreazioneInCorso(false)
     }
   }
 
-  const saveConfig = async () => {
-    if (!config || !propertyId) return
-    setSaving(true)
-
-    try {
-      const supabase = createClient()
-
-      if (config.id) {
-        await supabase
-          .from("embed_scripts")
-          .update({
-            name: config.name,
-            is_active: config.is_active,
-            config: config.config,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", config.id)
-      } else {
-        const { data } = await supabase
-          .from("embed_scripts")
-          .insert({
-            property_id: propertyId,
-            script_type: "chat",
-            name: config.name,
-            is_active: config.is_active,
-            config: config.config,
-          })
-          .select()
-          .single()
-
-        if (data) {
-          setConfig({ ...config, id: data.id })
-        }
-      }
-    } catch (error) {
-      console.error("Error saving config:", error)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const copySnippet = () => {
-    const snippet = `<!-- Chat Widget - Villa I Barronci -->
-<script 
-  src="${typeof window !== "undefined" ? window.location.origin : ""}/widget/chat.js" 
-  data-property-id="${propertyId}"
-  async>
-</script>
-
-<!-- Nota: Incolla questo codice prima della chiusura del tag </body> -->`
-    navigator.clipboard.writeText(snippet)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  const updateConfig = (key: keyof ChatWidgetConfig["config"], value: any) => {
-    if (!config) return
-    setConfig({
-      ...config,
-      config: { ...config.config, [key]: value },
+  const cambiaStato = async (widget: WidgetInElenco, attivo: boolean) => {
+    // Cambio immediato a schermo, ma se il server rifiuta si torna indietro:
+    // lasciare l'interruttore "acceso" su un widget spento mentirebbe.
+    setWidgets((prev) => prev.map((w) => (w.id === widget.id ? { ...w, isActive: attivo } : w)))
+    const risposta = await fetch(`/api/admin/chat-widgets/${widget.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: attivo }),
     })
+    if (!risposta.ok) {
+      const dati = await risposta.json().catch(() => ({}))
+      setWidgets((prev) => prev.map((w) => (w.id === widget.id ? { ...w, isActive: !attivo } : w)))
+      setErrore(dati.error ?? "Non è stato possibile cambiare lo stato del widget")
+      return
+    }
+    await carica()
   }
 
-  if (loading) {
+  const elimina = async () => {
+    if (!daEliminare) return
+    setEliminazioneInCorso(true)
+    try {
+      const risposta = await fetch(`/api/admin/chat-widgets/${daEliminare.id}`, { method: "DELETE" })
+      if (!risposta.ok) {
+        const dati = await risposta.json().catch(() => ({}))
+        throw new Error(dati.error ?? "Eliminazione non riuscita")
+      }
+      setDaEliminare(null)
+      await carica()
+    } catch (e) {
+      setErrore(e instanceof Error ? e.message : "Errore")
+    } finally {
+      setEliminazioneInCorso(false)
+    }
+  }
+
+  if (inModifica) {
     return (
-      <div className="min-h-full bg-muted flex items-center justify-center">
-        <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento...</div>
+      <div className="min-h-full bg-muted">
+        <AdminHeader title="Configura widget" subtitle="Grafica, testi e basi di conoscenza di questo widget" />
+        <div className="max-w-6xl mx-auto p-6">
+          <ChatWidgetEditor
+            widgetId={inModifica}
+            onIndietro={() => setInModifica(null)}
+            onAggiornato={() => void carica()}
+          />
+        </div>
       </div>
     )
   }
@@ -176,411 +215,277 @@ export default function ChatChannelPage() {
   return (
     <div className="min-h-full bg-muted">
       <AdminHeader
-        title="Chat Widget"
-        subtitle="Configura la chat in tempo reale per il tuo sito web"
+        title="Widget chat"
+        subtitle="Un widget per ogni sito: hotel, ristorante, spa. Ognuno con la sua grafica e la sua conoscenza."
         actions={
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">{config?.is_active ? "Attivo" : "Disattivato"}</span>
-              <Switch
-                checked={config?.is_active || false}
-                onCheckedChange={(checked) => setConfig(config ? { ...config, is_active: checked } : null)}
-                className="data-[state=checked]:bg-ha-success"
-              />
-            </div>
-            <Button onClick={saveConfig} disabled={saving} className="bg-ha-brand hover:bg-primary">
-              {saving ? "Salvataggio..." : "Salva"}
+            {quota && (
+              <span className="text-sm text-muted-foreground tabular-nums">
+                {quota.usati} di {quota.limite} attivi
+              </span>
+            )}
+            <Button
+              onClick={() => {
+                setErroreCreazione(null)
+                setQuotaEsaurita(false)
+                setCreazioneAperta(true)
+              }}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Nuovo widget
             </Button>
           </div>
         }
       />
 
-      <div className="max-w-4xl mx-auto p-6">
-        <Tabs defaultValue="aspetto" className="space-y-6">
-          <TabsList className="bg-card border border-border">
-            <TabsTrigger value="aspetto" className="data-[state=active]:bg-muted">
-              <Palette className="w-4 h-4 mr-2" />
-              Aspetto
-            </TabsTrigger>
-            <TabsTrigger value="messaggi" className="data-[state=active]:bg-muted">
-              <MessageCircle className="w-4 h-4 mr-2" />
-              Messaggi
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="data-[state=active]:bg-muted">
-              <Bot className="w-4 h-4 mr-2" />
-              AI
-            </TabsTrigger>
-            <TabsTrigger value="installa" className="data-[state=active]:bg-muted">
-              <Code className="w-4 h-4 mr-2" />
-              Installa
-            </TabsTrigger>
-          </TabsList>
+      <div className="max-w-5xl mx-auto p-6">
+        {errore && (
+          <div className="mb-6 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>{errore}</span>
+          </div>
+        )}
 
-          {/* Aspetto Tab - same as before */}
-          <TabsContent value="aspetto">
-            <div className="grid grid-cols-2 gap-6">
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="text-foreground text-lg">Personalizzazione</CardTitle>
-                  <CardDescription>Adatta il widget al tuo brand</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-foreground">Colore principale</Label>
-                    <div className="flex gap-3">
-                      <Input
-                        type="color"
-                        value={config?.config.primaryColor || "#8b7355"}
-                        onChange={(e) => updateConfig("primaryColor", e.target.value)}
-                        className="w-14 h-10 p-1 cursor-pointer"
-                      />
-                      <Input
-                        value={config?.config.primaryColor || "#8b7355"}
-                        onChange={(e) => updateConfig("primaryColor", e.target.value)}
-                        className="flex-1 border-border"
-                      />
-                    </div>
-                  </div>
+        {/* Colori dai token del tema, non fissi: `ha-warning-soft` esiste già nel
+            progetto e resta leggibile anche in tema scuro. */}
+        {quota && !quota.puoCrearne && widgets.length > 0 && (
+          <div className="mb-6 rounded-lg border border-ha-warning-soft bg-ha-warning-soft p-4 text-sm text-ha-warning-soft-foreground">
+            <p className="font-medium">Hai usato tutti i widget disponibili ({quota.limite} attivi).</p>
+            <p className="mt-1 text-pretty">
+              Il piano ne include {quota.inclusi}
+              {quota.extra > 0 && `, più ${quota.extra} acquistati`}. Puoi acquistarne un altro, oppure spegnere o
+              eliminare uno di quelli esistenti: i widget spenti non occupano un posto.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 gap-2 bg-transparent"
+              onClick={acquistaWidget}
+              disabled={acquistoInCorso}
+            >
+              {acquistoInCorso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              {`Acquista un widget (${(PREZZO_WIDGET_EXTRA_CENTESIMI / 100).toFixed(0)} € al mese)`}
+            </Button>
+          </div>
+        )}
 
-                  <div className="space-y-2">
-                    <Label className="text-foreground">Posizione</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant={config?.config.position === "bottom-right" ? "default" : "outline"}
-                        onClick={() => updateConfig("position", "bottom-right")}
-                        className={config?.config.position === "bottom-right" ? "bg-ha-brand" : "border-border"}
-                      >
-                        Destra
-                      </Button>
-                      <Button
-                        variant={config?.config.position === "bottom-left" ? "default" : "outline"}
-                        onClick={() => updateConfig("position", "bottom-left")}
-                        className={config?.config.position === "bottom-left" ? "bg-ha-brand" : "border-border"}
-                      >
-                        Sinistra
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-2">
-                    <div>
-                      <Label className="text-foreground">Richiedi email</Label>
-                      <p className="text-xs text-muted-foreground">Prima di iniziare la chat</p>
-                    </div>
-                    <Switch
-                      checked={config?.config.collectEmail || false}
-                      onCheckedChange={(checked) => updateConfig("collectEmail", checked)}
-                      className="data-[state=checked]:bg-ha-brand"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Preview */}
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="text-foreground text-lg flex items-center gap-2">
-                    <Eye className="w-4 h-4" />
-                    Anteprima
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="relative h-80 bg-muted rounded-lg overflow-hidden">
+        {caricamento ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" />
+            Caricamento dei widget…
+          </div>
+        ) : widgets.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-4 py-14 text-center">
+              <div className="rounded-full bg-primary/10 p-4">
+                <MessagesSquare className="h-7 w-7 text-primary" />
+              </div>
+              <div>
+                <h2 className="font-medium">Nessun widget configurato</h2>
+                <p className="text-sm text-muted-foreground mt-1 max-w-md text-pretty">
+                  Crea il primo widget, scegli la base di conoscenza che deve usare e incolla lo snippet nel tuo sito.
+                </p>
+              </div>
+              <Button onClick={() => setCreazioneAperta(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Crea il primo widget
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {widgets.map((widget) => {
+              const aspetto = normalizzaAspetto(widget.appearance)
+              return (
+                <Card key={widget.id} className={widget.isActive ? undefined : "opacity-75"}>
+                  <CardContent className="flex flex-wrap items-start gap-4 p-5">
+                    {/* Pastiglia col colore scelto: nell'elenco si riconosce a
+                        vista quale widget è quale, senza aprirli. */}
                     <div
-                      className={`absolute bottom-4 ${
-                        config?.config.position === "bottom-right" ? "right-4" : "left-4"
-                      }`}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
+                      style={{ backgroundColor: aspetto.primaryColor, color: aspetto.textColor }}
+                      aria-hidden="true"
                     >
-                      <div
-                        className="w-14 h-14 rounded-full flex items-center justify-center shadow-lg cursor-pointer"
-                        style={{ backgroundColor: config?.config.primaryColor || "#8b7355" }}
-                      >
-                        <MessageCircle className="w-6 h-6 text-white" />
+                      <MessageCircle className="h-5 w-5" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="font-medium truncate">{widget.name}</h2>
+                        {widget.isActive ? (
+                          <Badge variant="secondary" className="text-xs">
+                            Attivo
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs bg-transparent">
+                            Spento
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="mt-2 flex flex-col gap-1.5 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <Globe className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{widget.siteUrl || "Nessun sito indicato"}</span>
+                        </span>
+
+                        {/* La conoscenza collegata è l'informazione che conta:
+                            senza base primaria il widget non sa rispondere. */}
+                        <span className="flex items-start gap-1.5">
+                          <BookOpen className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                          {widget.primaryBase ? (
+                            <span className="text-pretty">
+                              <span className="text-foreground">{widget.primaryBase.name}</span>
+                              {" · "}
+                              {ETICHETTE_MODALITA[widget.primaryBase.mode]}
+                              {widget.additionalBases.length > 0 && (
+                                <> {`· anche ${widget.additionalBases.map((b) => b.name).join(", ")}`}</>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-amber-700">
+                              Nessuna base di conoscenza collegata: il widget non risponde
+                            </span>
+                          )}
+                        </span>
+
+                        <span className="flex items-center gap-1.5">
+                          <Bot className="h-3.5 w-3.5 shrink-0" />
+                          {widget.conversations === 1 ? "1 conversazione" : `${widget.conversations} conversazioni`}
+                        </span>
                       </div>
                     </div>
 
-                    <div
-                      className={`absolute bottom-20 ${
-                        config?.config.position === "bottom-right" ? "right-4" : "left-4"
-                      } w-72 bg-card rounded-lg shadow-xl overflow-hidden`}
-                    >
-                      <div
-                        className="p-4 text-white"
-                        style={{ backgroundColor: config?.config.primaryColor || "#8b7355" }}
-                      >
-                        <h4 className="font-medium">Chat</h4>
-                      </div>
-                      <div className="p-4 h-32 bg-muted">
-                        <div className="bg-card p-2 rounded-lg shadow-sm text-sm text-muted-foreground">
-                          {config?.config.welcomeMessage}
-                        </div>
-                      </div>
-                      <div className="p-3 border-t">
-                        <Input placeholder={config?.config.placeholder} disabled className="text-sm" />
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Messaggi Tab */}
-          <TabsContent value="messaggi">
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <CardTitle className="text-foreground text-lg">Messaggi predefiniti</CardTitle>
-                <CardDescription>Personalizza i testi visualizzati nella chat</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-foreground">Messaggio di benvenuto</Label>
-                  <Input
-                    value={config?.config.welcomeMessage || ""}
-                    onChange={(e) => updateConfig("welcomeMessage", e.target.value)}
-                    className="border-border"
-                    placeholder="Es: Ciao! Come possiamo aiutarti?"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-foreground">Placeholder input</Label>
-                  <Input
-                    value={config?.config.placeholder || ""}
-                    onChange={(e) => updateConfig("placeholder", e.target.value)}
-                    className="border-border"
-                    placeholder="Es: Scrivi un messaggio..."
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-foreground">Messaggio offline</Label>
-                  <Input
-                    value={config?.config.offlineMessage || ""}
-                    onChange={(e) => updateConfig("offlineMessage", e.target.value)}
-                    className="border-border"
-                    placeholder="Es: Siamo offline. Lascia un messaggio..."
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* AI Tab */}
-          <TabsContent value="ai">
-            <Card className="bg-card border-border">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-foreground text-lg flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-ha-warning-soft-foreground" />
-                      Assistente AI
-                    </CardTitle>
-                    <CardDescription>Risposte automatiche intelligenti per i tuoi clienti</CardDescription>
-                  </div>
-                  <Switch
-                    checked={config?.config.aiEnabled || false}
-                    onCheckedChange={(checked) => updateConfig("aiEnabled", checked)}
-                    className="data-[state=checked]:bg-ha-warning"
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {config?.config.aiEnabled ? (
-                  <>
-                    <div className="space-y-2">
-                      <Label className="text-foreground">Messaggio di presentazione AI</Label>
-                      <Input
-                        value={config?.config.aiGreeting || ""}
-                        onChange={(e) => updateConfig("aiGreeting", e.target.value)}
-                        className="border-border"
-                        placeholder="Es: Sono l'assistente virtuale..."
-                      />
-                    </div>
-
-                    <div className="bg-ha-warning-soft border border-ha-warning-soft rounded-lg p-4">
-                      <h4 className="font-medium text-ha-warning-soft-foreground mb-2">L'AI puo rispondere a domande su:</h4>
-                      <ul className="text-sm text-ha-warning-soft-foreground space-y-1">
-                        <li>Disponibilita camere e prezzi</li>
-                        <li>Servizi della struttura</li>
-                        <li>Come raggiungere l'hotel</li>
-                        <li>Informazioni generali</li>
-                      </ul>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-8 text-ha-brand-soft-foreground">
-                    <Bot className="w-12 h-12 mx-auto mb-4 opacity-30" />
-                    <p>Attiva l'AI per rispondere automaticamente ai clienti</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="installa">
-            {hasCMS ? (
-              /* CMS User - Simple activation */
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-ha-success-soft flex items-center justify-center">
-                      <Zap className="w-6 h-6 text-ha-success-soft-foreground" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-foreground text-lg">Attivazione Automatica</CardTitle>
-                      <CardDescription>Il tuo sito usa il nostro CMS, l'attivazione e automatica!</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-ha-success-soft border border-ha-success-soft rounded-xl p-6 text-center">
-                    <Globe className="w-16 h-16 text-ha-success-soft-foreground mx-auto mb-4" />
-                    <h3 className="text-xl font-medium text-ha-success-soft-foreground mb-2">Nessun codice da copiare!</h3>
-                    <p className="text-ha-success-soft-foreground mb-6">
-                      Il widget chat sara automaticamente visibile su tutte le pagine del tuo sito appena lo attivi.
-                    </p>
-
-                    <div className="flex items-center justify-center gap-4">
-                      <span className="text-lg text-foreground">Widget Chat</span>
+                    <div className="flex items-center gap-2 ml-auto">
                       <Switch
-                        checked={config?.is_active || false}
-                        onCheckedChange={(checked) => {
-                          setConfig(config ? { ...config, is_active: checked } : null)
-                        }}
-                        className="data-[state=checked]:bg-ha-success scale-125"
+                        checked={widget.isActive}
+                        onCheckedChange={(v) => void cambiaStato(widget, v)}
+                        aria-label={widget.isActive ? `Spegni il widget ${widget.name}` : `Accendi il widget ${widget.name}`}
                       />
-                      <span className={`text-lg font-medium ${config?.is_active ? "text-ha-success-soft-foreground" : "text-muted-foreground"}`}>
-                        {config?.is_active ? "ATTIVO" : "SPENTO"}
-                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 bg-transparent"
+                        onClick={() => setInModifica(widget.id)}
+                      >
+                        <Settings2 className="h-4 w-4" />
+                        Configura
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground hover:text-destructive"
+                        onClick={() => setDaEliminare(widget)}
+                        aria-label={`Elimina il widget ${widget.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                  </div>
-
-                  <div className="mt-6 flex items-start gap-3 text-sm text-ha-brand-soft-foreground">
-                    <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs font-medium">i</span>
-                    </div>
-                    <p>
-                      Ricorda di salvare la configurazione dopo aver modificato le impostazioni. Le modifiche saranno
-                      visibili immediatamente sul tuo sito.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              /* External Site - Code snippet */
-              <Card className="bg-card border-border">
-                <CardHeader>
-                  <CardTitle className="text-foreground text-lg">Installa sul tuo sito</CardTitle>
-                  <CardDescription>
-                    Copia questo codice e incollalo nel tuo sito web. Puoi mandarlo al tuo webmaster con le istruzioni.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Step by step */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center p-4 bg-muted rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
-                        1
-                      </div>
-                      <h4 className="font-medium text-foreground mb-1">Copia il codice</h4>
-                      <p className="text-xs text-muted-foreground">Clicca sul pulsante qui sotto</p>
-                    </div>
-                    <div className="text-center p-4 bg-muted rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
-                        2
-                      </div>
-                      <h4 className="font-medium text-foreground mb-1">Incolla nel sito</h4>
-                      <p className="text-xs text-muted-foreground">Prima di &lt;/body&gt;</p>
-                    </div>
-                    <div className="text-center p-4 bg-muted rounded-lg">
-                      <div className="w-10 h-10 rounded-full bg-ha-brand text-white flex items-center justify-center mx-auto mb-3 text-lg font-medium">
-                        3
-                      </div>
-                      <h4 className="font-medium text-foreground mb-1">Pubblica</h4>
-                      <p className="text-xs text-muted-foreground">Il widget apparira</p>
-                    </div>
-                  </div>
-
-                  {/* Code snippet */}
-                  <div className="relative">
-                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm overflow-x-auto">
-                      {`<!-- Chat Widget -->
-<script 
-  src="${typeof window !== "undefined" ? window.location.origin : ""}/widget/chat.js" 
-  data-property-id="${propertyId}"
-  async>
-</script>`}
-                    </pre>
-                    <Button size="sm" variant="secondary" className="absolute top-2 right-2" onClick={copySnippet}>
-                      {copied ? (
-                        <>
-                          <Check className="w-4 h-4 mr-1" />
-                          Copiato!
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4 mr-1" />
-                          Copia codice
-                        </>
-                      )}
-                    </Button>
-                  </div>
-
-                  {/* Email to webmaster */}
-                  <div className="bg-ha-info-soft border border-ha-info-soft rounded-lg p-4">
-                    <h4 className="font-medium text-ha-info-soft-foreground mb-2">Vuoi mandarlo al tuo webmaster?</h4>
-                    <p className="text-sm text-ha-info-soft-foreground mb-3">
-                      Abbiamo preparato un'email con tutte le istruzioni che puoi inoltrare direttamente.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-ha-info-soft text-ha-info-soft-foreground hover:bg-ha-info-soft bg-transparent"
-                      onClick={() => {
-                        const subject = encodeURIComponent("Installazione Chat Widget")
-                        const body = encodeURIComponent(`Ciao,
-
-Per favore installa questo widget chat sul nostro sito web.
-
-ISTRUZIONI:
-1. Copia il codice qui sotto
-2. Incollalo nel file HTML del sito, prima della chiusura del tag </body>
-3. Salva e pubblica
-
-CODICE:
-<!-- Chat Widget -->
-<script 
-  src="${typeof window !== "undefined" ? window.location.origin : ""}/widget/chat.js" 
-  data-property-id="${propertyId}"
-  async>
-</script>
-
-Se hai domande, contattami.
-
-Grazie!`)
-                        window.open(`mailto:?subject=${subject}&body=${body}`)
-                      }}
-                    >
-                      <Mail className="w-4 h-4 mr-2" />
-                      Prepara email per webmaster
-                    </Button>
-                  </div>
-
-                  {!config?.is_active && (
-                    <div className="bg-ha-warning-soft border border-ha-warning-soft rounded-lg p-4">
-                      <p className="text-sm text-ha-warning-soft-foreground">
-                        <strong>Nota:</strong> Il widget è attualmente disattivato. Attivalo usando lo switch in alto
-                        per renderlo visibile sul tuo sito.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
-        </Tabs>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </div>
+
+      <Dialog open={creazioneAperta} onOpenChange={setCreazioneAperta}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nuovo widget chat</DialogTitle>
+            <DialogDescription>
+              Dagli un nome che ti ricordi dove vive. Grafica e base di conoscenza si scelgono subito dopo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="nuovo-nome">Nome</Label>
+              <Input
+                id="nuovo-nome"
+                value={nuovoNome}
+                onChange={(e) => setNuovoNome(e.target.value)}
+                placeholder="Sito dell'hotel"
+                maxLength={80}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="nuovo-sito">Sito dove verrà installato (facoltativo)</Label>
+              <Input
+                id="nuovo-sito"
+                value={nuovoSito}
+                onChange={(e) => setNuovoSito(e.target.value)}
+                placeholder="https://www.miohotel.it"
+              />
+            </div>
+            {erroreCreazione && (
+              <div
+                className={`flex flex-col gap-2 rounded-md border p-3 text-sm ${
+                  quotaEsaurita
+                    ? "border-ha-warning-soft bg-ha-warning-soft text-ha-warning-soft-foreground"
+                    : "border-destructive/30 bg-destructive/5 text-destructive"
+                }`}
+              >
+                <span className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span className="text-pretty">{erroreCreazione}</span>
+                </span>
+                {/* Senza questo pulsante il messaggio sarebbe un vicolo cieco:
+                    dice che il limite è raggiunto e non offre alcuna via d'uscita. */}
+                {quotaEsaurita && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start gap-2 bg-transparent"
+                    onClick={acquistaWidget}
+                    disabled={acquistoInCorso}
+                  >
+                    {acquistoInCorso ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    {`Acquistane uno (${(PREZZO_WIDGET_EXTRA_CENTESIMI / 100).toFixed(0)} € al mese)`}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" className="bg-transparent" onClick={() => setCreazioneAperta(false)}>
+              Annulla
+            </Button>
+            <Button onClick={() => void creaWidget()} disabled={creazioneInCorso || !nuovoNome.trim()}>
+              {creazioneInCorso && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Crea widget
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={daEliminare !== null} onOpenChange={(aperto) => !aperto && setDaEliminare(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminare il widget {daEliminare?.name}?</AlertDialogTitle>
+            <AlertDialogDescription className="text-pretty">
+              Lo snippet già installato sul sito smetterà di funzionare subito.
+              {daEliminare && daEliminare.conversations > 0 && (
+                <> {`Le ${daEliminare.conversations} conversazioni ricevute restano in inbox: non vengono cancellate.`}</>
+              )}{" "}
+              Se vuoi solo sospenderlo, spegnilo: così non occupa un posto e puoi riaccenderlo quando vuoi.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-transparent">Annulla</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                void elimina()
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {eliminazioneInCorso && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Elimina definitivamente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
