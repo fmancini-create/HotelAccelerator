@@ -28,7 +28,10 @@ export interface SendMessageCommand {
   propertyId: string
   content: string
   senderType: "agent" | "contact"
-  senderId?: string
+  // Nessun `senderId` qui: l'autore non si dichiara nel comando (nessun
+  // chiamante lo faceva, e permetterlo significherebbe poter firmare una
+  // risposta col nome di un collega). Si passa a `sendMessage` come `actorId`,
+  // ricavato dalla sessione sul server.
   contentType?: string
   attachments?: string[]
   // Forwarding: when set, the message is sent to this recipient (email address

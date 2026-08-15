@@ -3,7 +3,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { InboxWriteService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
-import { leggiOperatore } from "@/lib/inbox/identity"
+import { richiediOperatore } from "@/lib/inbox/identity"
+import { registraAttivita, cancellaBozza, rilasciaBlocco } from "@/lib/inbox/collaboration"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ conversationId: string }> }) {
   try {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // l'autore dal secondo parametro (`actorId`), che nessuno passava, mentre il
     // campo del corpo veniva ignorato. Per questo in tutto l'archivio i
     // messaggi inviati risultavano senza autore.
-    const operatore = await leggiOperatore(request)
+    const operatore = await richiediOperatore(request)
 
     const message = await service.sendMessage(
       {
@@ -37,9 +38,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         forwardTo: forward_to,
         forwardSubject: forward_subject,
       },
-      operatore.adminUserId ?? undefined,
-      operatore.label,
+      operatore.titolare.adminUserId ?? undefined,
+      operatore.titolare.label,
     )
+
+    // Il messaggio e' partito: la lavorazione e' finita. Va chiuso il ciclo,
+    // altrimenti il messaggio resterebbe offuscato per i colleghi anche dopo la
+    // risposta, e la bozza appena spedita ricomparirebbe come da completare.
+    const bersaglio = { kind: "conversation" as const, key: conversationId }
+    await registraAttivita({
+      propertyId,
+      bersaglio,
+      titolare: operatore.titolare,
+      azione: "message_sent",
+      dettagli: { messageId: message.id, canale: "multicanale", inoltrato_a: forward_to ?? null },
+    })
+    await cancellaBozza(propertyId, bersaglio)
+    await rilasciaBlocco({ propertyId, bersaglio, titolare: operatore.titolare })
 
     return NextResponse.json({ message })
   } catch (error) {

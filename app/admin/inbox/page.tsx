@@ -76,6 +76,9 @@ import {
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useInboxCollaboration } from "@/hooks/use-inbox-collaboration"
+import { InLavorazioneBadge } from "@/components/admin/inbox/in-lavorazione-badge"
+import { chiaveBersaglio } from "@/lib/inbox/target"
 
 type InboxMode = "smart" | "gmail"
 
@@ -472,6 +475,22 @@ export default function InboxPage() {
   // Default to the unified ("smart") inbox so all channels (Email, WhatsApp,
   // Telegram, Chat) are visible together. "gmail" is the Gmail-only mirror view.
   const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
+
+  // ── Lavorazione condivisa ──
+  // Chi sta scrivendo cosa, in questa struttura. Vale per entrambe le modalita':
+  // un messaggio preso in carico nell'inbox unificata deve risultare occupato
+  // anche a chi guarda la vista Gmail, altrimenti la protezione avrebbe una
+  // porta di servizio aperta.
+  const {
+    lavorazioni,
+    prendi: prendiInCarico,
+    salvaBozza: salvaBozzaCondivisa,
+    leggiBozza: leggiBozzaCondivisa,
+    sospendi: sospendiLavorazione,
+  } = useInboxCollaboration(true)
+  // Autore della bozza recuperata, quando non e' la propria: serve a dire
+  // "ripresa la bozza di Marco" invece di far comparire testo dal nulla.
+  const [bozzaAutore, setBozzaAutore] = useState<string | null>(null)
 
   // ── Gmail State ──
   const [gmailThreads, setGmailThreads] = useState<GmailThread[]>([])
@@ -1926,6 +1945,57 @@ export default function InboxPage() {
     requestAnimationFrame(() => replyTextareaRef.current?.focus())
   }
 
+  // Quale messaggio si sta lavorando adesso, nella modalita' attiva.
+  const bersaglioCorrente = useCallback(() => {
+    if (inboxMode === "gmail") {
+      return selectedGmailThread ? ({ kind: "gmail_thread" as const, key: selectedGmailThread.id }) : null
+    }
+    return selectedConversation ? ({ kind: "conversation" as const, key: selectedConversation.id }) : null
+  }, [inboxMode, selectedGmailThread, selectedConversation])
+
+  // Presa in carico alla prima battuta.
+  //
+  // Scatta sullo SCRIVERE, non sull'aprire: chi scorre l'inbox per dare
+  // un'occhiata bloccherebbe ogni messaggio che apre, e in pochi minuti l'elenco
+  // risulterebbe tutto occupato da lui. Il segnale che conta e' "sto rispondendo".
+  const presaTentataRef = useRef<string | null>(null)
+  const assicuraPresaInCarico = useCallback(() => {
+    const b = bersaglioCorrente()
+    if (!b) return
+    const chiave = chiaveBersaglio(b)
+    // Una sola richiesta per messaggio: `onChange` scatta a ogni tasto premuto.
+    if (presaTentataRef.current === chiave) return
+    presaTentataRef.current = chiave
+    void prendiInCarico(b).then((esito) => {
+      if (!esito.ok && esito.label) {
+        setError(`Questo messaggio e' in lavorazione da ${esito.label}. Puoi chiedere il passaggio.`)
+      }
+    })
+  }, [bersaglioCorrente, prendiInCarico])
+
+  const registraBozza = useCallback(
+    (testo: string) => {
+      const b = bersaglioCorrente()
+      if (b) salvaBozzaCondivisa(b, testo)
+    },
+    [bersaglioCorrente, salvaBozzaCondivisa],
+  )
+
+  /** Recupera la bozza condivisa di un messaggio appena aperto. Non sovrascrive
+   *  quello che l'operatore ha gia' nel campo: sarebbe cancellargli il lavoro. */
+  const recuperaBozza = useCallback(
+    async (bersaglio: { kind: "conversation" | "gmail_thread"; key: string }) => {
+      const bozza = await leggiBozzaCondivisa(bersaglio)
+      if (!bozza) {
+        setBozzaAutore(null)
+        return
+      }
+      setReplyText((corrente) => (corrente.trim() ? corrente : bozza.body))
+      setBozzaAutore(bozza.autore)
+    },
+    [leggiBozzaCondivisa],
+  )
+
   const handleSendReply = async () => {
     if (!replyText.trim()) return
 
@@ -3311,7 +3381,16 @@ export default function InboxPage() {
   ref={replyTextareaRef}
   placeholder={isForwarding ? "Aggiungi un messaggio e inoltra..." : "Scrivi una risposta..."}
   value={replyText}
-  onChange={(e) => setReplyText(e.target.value)}
+  onChange={(e) => {
+  setReplyText(e.target.value)
+  // Prende in carico appena c'e' del testo vero: uno spazio battuto per
+  // sbaglio non e' "sto rispondendo".
+  if (e.target.value.trim()) assicuraPresaInCarico()
+  // La bozza si salva anche quando si cancella tutto: se un operatore svuota il
+  // campo, la bozza condivisa deve svuotarsi con lui, non restare congelata su
+  // un testo che nessuno vuole piu' inviare.
+  registraBozza(e.target.value)
+  }}
   className="min-h-[120px] border-0 focus-visible:ring-0 resize-none"
   autoFocus
   onKeyDown={(e) => {
@@ -3396,11 +3475,15 @@ export default function InboxPage() {
                   </div>
                 ) : (
                 <>
-                  {sortedGmailThreads.map((thread) => (
+                  {sortedGmailThreads.map((thread) => {
+                    // Stessa regola del multicanale, su bersaglio 'gmail_thread'.
+                    const lavorazione = lavorazioni.get(chiaveBersaglio({ kind: "gmail_thread", key: thread.id }))
+                    const occupatoDaAltri = Boolean(lavorazione && !lavorazione.mio)
+                    return (
                     <div
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
+                      className={`relative flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
                         (selectedGmailThread as GmailThread | null)?.id === thread.id
                           ? "bg-[#d3e3fd]"
                           : thread.isUnread
@@ -3435,8 +3518,14 @@ export default function InboxPage() {
                       <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-muted-foreground"}`}>
                         {format(new Date(thread.date), "d MMM", { locale: it })}
                       </span>
+                      {occupatoDaAltri && lavorazione && (
+                        <div className="absolute inset-0 flex items-center justify-end gap-2 bg-background/60 pr-3 pointer-events-none">
+                          <InLavorazioneBadge label={lavorazione.label} compatto />
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </>
               )
             ) : (
@@ -3449,11 +3538,17 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <>
-                  {conversations.map((conv) => (
+                  {conversations.map((conv) => {
+                    // Lavorazione di un collega su questa conversazione. La
+                    // propria non conta: offuscare a un operatore il messaggio
+                    // che sta scrivendo lui stesso sarebbe assurdo.
+                    const lavorazione = lavorazioni.get(chiaveBersaglio({ kind: "conversation", key: conv.id }))
+                    const occupatoDaAltri = Boolean(lavorazione && !lavorazione.mio)
+                    return (
                     <div
                       key={conv.id}
                       onClick={() => handleSelectConversation(conv)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group min-w-0 ${
+                      className={`relative flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group min-w-0 ${
                         (selectedConversation as Conversation | null)?.id === conv.id
                           ? "bg-[#d3e3fd]"
                           : conv.unread_count > 0
@@ -3579,8 +3674,20 @@ export default function InboxPage() {
                           ) : null
                         })()}
                       </span>
+                      {occupatoDaAltri && lavorazione && (
+                        // Velo semitrasparente invece di attenuare la riga:
+                        // attenuando il contenitore si attenuerebbe anche
+                        // l'etichetta, cioe' l'unica cosa che deve restare
+                        // leggibile. Non intercetta i clic (`pointer-events-none`)
+                        // perche' il collega deve poter aprire per chiedere il
+                        // passaggio: sbarrare l'accesso sarebbe un vicolo cieco.
+                        <div className="absolute inset-0 flex items-center justify-end gap-2 bg-background/60 pr-3 pointer-events-none">
+                          <InLavorazioneBadge label={lavorazione.label} compatto />
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </>
               )
             )
