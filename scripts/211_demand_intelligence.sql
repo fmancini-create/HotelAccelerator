@@ -113,15 +113,20 @@ COMMENT ON TABLE demand_calendar_days IS
   'Domanda aggregata per giorno. Materializzata per non ricalcolare 7.400 conversazioni a ogni apertura e per avere un dato stabile da spedire a Santaddeo.';
 
 -- group_id puo' essere NULL (totale di struttura). In un UNIQUE normale due
--- NULL sono considerati diversi e si creerebbero righe doppie: si normalizza
--- il NULL con COALESCE, che funziona su qualunque versione di Postgres.
+-- NULL sono considerati diversi e si creerebbero righe doppie.
+--
+-- La prima versione normalizzava il NULL con COALESCE: quell'indice e'
+-- FUNZIONALE e ON CONFLICT pretende le colonne esatte, quindi lo scarta.
+-- Il ricalcolo avrebbe inserito righe nuove invece di aggiornare, raddoppiando
+-- in silenzio il totale di struttura a ogni passata. NULLS NOT DISTINCT dice
+-- la stessa cosa restando un indice su colonne.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_demand_day
   ON demand_calendar_days(
     property_id,
-    COALESCE(group_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    group_id,
     date,
     metric
-  );
+  ) NULLS NOT DISTINCT;
 
 CREATE INDEX IF NOT EXISTS idx_demand_property_date
   ON demand_calendar_days(property_id, date);
