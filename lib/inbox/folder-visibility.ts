@@ -47,7 +47,11 @@ export function condizioniCartelleNascoste(perCasella: Map<string, CartelleNasco
   const condizioni: string[] = []
 
   for (const [channelId, nascoste] of perCasella) {
-    if (nascoste.etichette.length > 0) {
+    // UNA condizione per cartella spenta, non un unico `ov` con l'elenco: dentro
+    // un `or()` la virgola separa le voci dell'albero logico, quindi `{A,B}`
+    // verrebbe spezzato a meta' e la richiesta rifiutata. Con una cartella sola
+    // sarebbe passata inosservata.
+    for (const etichetta of nascoste.etichette) {
       condizioni.push(
         [
           // Le conversazioni non-email non hanno casella: senza questa voce
@@ -60,7 +64,10 @@ export function condizioniCartelleNascoste(perCasella: Map<string, CartelleNasco
           // ha cartella registrata non lo governa questa condizione ma la voce
           // "Tutte le altre", qui sotto.
           "gmail_labels.is.null",
-          `not.gmail_labels.ov.{${nascoste.etichette.join(",")}}`,
+          // La negazione va DOPO il nome della colonna (`colonna.not.operatore`):
+          // scritta prima, PostgREST rifiuta l'intera richiesta e l'inbox
+          // risponde 500 invece di filtrare.
+          `gmail_labels.not.cs.{"${etichetta}"}`,
         ].join(","),
       )
     }
@@ -73,7 +80,7 @@ export function condizioniCartelleNascoste(perCasella: Map<string, CartelleNasco
           // Tieni solo cio' che HA una cartella: ne' vuoto ne' lista vuota.
           // `{}` e' un elenco vuoto, diverso da "assente", e vanno esclusi
           // entrambi o meta' delle conversazioni sfuggirebbe alla scelta.
-          "and(not.gmail_labels.is.null,not.gmail_labels.eq.{})",
+          "and(gmail_labels.not.is.null,gmail_labels.not.eq.{})",
         ].join(","),
       )
     }
