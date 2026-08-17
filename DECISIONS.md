@@ -82,6 +82,13 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: il webhook Pub/Sub usa un client server service-role, avanza `gmail_history_id` solo dopo l'elaborazione completa della pagina e restituisce un errore retryable sui guasti transitori. Il poll periodico resta il fallback indipendente; pagina integralmente il backlog prima di avanzare il watermark e riconcilia in modo completo gli stati `UNREAD`, spam e cestino senza scansionare inutilmente tutta la Inbox. Un HTTP 5xx di Gmail/Supabase non viene presentato come revoca OAuth.
 - Conseguenza: nessuna notifica viene confermata dopo un'elaborazione parziale; i cursor scaduti richiedono una sincronizzazione storica che ristabilisce anche il cursor. La riconnessione viene proposta solo per errori di credenziale reali. Prima dello stato `Production-ready` restano obbligatori autenticazione del webhook, recovery drill e osservabilità.
 
+## ADR-014 — Modulo HR separato e attivabile per tenant
+
+- Stato: accettata
+- Decisione: HotelAccelerator HR e' un modulo `product` opzionale governato da `tenant_modules`.
+- La prima versione gestisce reparti, anagrafiche, turni, pubblicazione, notifiche, risposte e richieste di assenza.
+- Cedolini e documenti sensibili saranno introdotti solo con storage privato, audit accessi e associazione AI confermata da una persona.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

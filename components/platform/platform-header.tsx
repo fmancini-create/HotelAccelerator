@@ -42,6 +42,7 @@ import {
   Tag,
   Users,
   PhoneCall,
+  CalendarClock,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -130,6 +131,8 @@ const PRIMARY_NAV: NavItem[] = [
 
 // Secondary sections accessible via the "Altro" dropdown.
 const MORE_NAV: NavItem[] = [
+  { href: "/admin/my-work", label: "I miei turni", icon: CalendarClock, module: "hr" },
+  { href: "/admin/hr", label: "Personale e turni", icon: CalendarClock, module: "hr", adminOnly: true, area: "hr" },
   { href: "/admin/calls", label: "Telefonate", icon: PhoneCall, module: "inbox", area: "calls" },
   { href: "/admin/photos", label: "Foto", icon: ImageIcon, area: "photos" },
   { href: "/admin/gallery", label: "Gallery", icon: ImageIcon, area: "gallery" },
