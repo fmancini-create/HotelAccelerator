@@ -107,6 +107,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       extractionCount = count ?? 0
     }
 
+    // Il cron che esegue questa configurazione e' protetto da `CRON_SECRET`, e
+    // senza quel segreto risponde 401: la configurazione resterebbe accesa e
+    // ferma, esattamente come questa scheda prima che il cron esistesse. Si
+    // riporta quindi se il pianificatore e' in grado di partire, per non far
+    // credere a un'estrazione in corso che invece non avviene. Si comunica
+    // SOLO il fatto che il segreto ci sia (booleano), mai il suo valore.
+    const schedulerReady = Boolean(process.env.CRON_SECRET)
+
     return NextResponse.json({
       group,
       config: config ?? null,
@@ -114,6 +122,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       mailboxes: mailboxes ?? [],
       messagingKinds,
       extractionCount,
+      schedulerReady,
     })
   } catch (error: any) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)

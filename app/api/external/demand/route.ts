@@ -48,13 +48,14 @@ export async function GET(request: NextRequest) {
     // una sessione utente.
     const supabase = createServiceClient()
 
-    // `hashApiToken` lancia quando API_TOKEN_HASH_SECRET manca o e' troppo corto
-    // (misurato: qui il segreto NON c'e'). Se lo si lasciasse propagare, la
-    // richiesta morirebbe con un 500 prima del ripiego sul token in chiaro - che
-    // il segreto non lo usa affatto: senza segreto NESSUNA property riuscirebbe
-    // ad autenticarsi, nemmeno quelle che hanno solo il token in chiaro, e il
-    // guasto si leggerebbe come "l'RMS non riceve dati" invece che come una
-    // variabile mancante. Quindi il ramo per hash si salta e si prosegue.
+    // `hashApiToken` lancia quando API_TOKEN_HASH_SECRET manca o e' troppo
+    // corto. Misurato: il segreto E' impostato in Production e Preview, ma NON
+    // in Development. Se l'eccezione si propagasse, in locale la richiesta
+    // morirebbe con un 500 prima di arrivare al ripiego sul token in chiaro -
+    // che il segreto non usa affatto - e il guasto si leggerebbe come "l'RMS non
+    // riceve dati" invece che come una variabile assente da questo ambiente.
+    // Quindi il ramo per hash si salta e si prosegue: in produzione resta la via
+    // principale, in locale l'API rimane provabile.
     let tokenHash: string | null = null
     try {
       tokenHash = hashApiToken(token)

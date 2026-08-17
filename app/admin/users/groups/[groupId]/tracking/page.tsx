@@ -40,6 +40,9 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
   const [mailboxes, setMailboxes] = useState<Mailbox[]>([])
   const [messagingKinds, setMessagingKinds] = useState<string[]>([])
   const [extractionCount, setExtractionCount] = useState(0)
+  // Si parte da `true`: se fosse `false`, durante il caricamento comparirebbe
+  // per un istante l'avviso di estrazione ferma anche quando tutto funziona.
+  const [schedulerReady, setSchedulerReady] = useState(true)
 
   const [enabled, setEnabled] = useState(false)
   const [preset, setPreset] = useState("libero")
@@ -51,6 +54,7 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [running, setRunning] = useState(false)
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
 
   useEffect(() => {
@@ -68,6 +72,7 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
       setMailboxes(data.mailboxes ?? [])
       setMessagingKinds(data.messagingKinds ?? [])
       setExtractionCount(data.extractionCount ?? 0)
+      setSchedulerReady(data.schedulerReady !== false)
       if (data.config) {
         setEnabled(Boolean(data.config.is_enabled))
         setPreset(data.config.preset ?? "libero")
@@ -92,6 +97,43 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
 
   function updateField(index: number, patch: Partial<TrackingField>) {
     setFields((prev) => prev.map((f, i) => (i === index ? { ...f, ...patch } : f)))
+  }
+
+  /**
+   * Avvio a mano di una passata.
+   *
+   * La rotta esisteva gia' ma nessuno la chiamava: un'estrazione avviabile solo
+   * da un cron che oggi non parte lascia l'operatore senza alcuna via. Al
+   * termine si ricarica la scheda, cosi' il conteggio delle conversazioni lette
+   * riflette subito il lavoro appena fatto invece di restare al valore vecchio.
+   */
+  async function runNow() {
+    setRunning(true)
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/admin/groups/${groupId}/tracking/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Avvio non riuscito")
+      const r = data.report ?? {}
+      const nuove = (r.byModel ?? 0) + (r.byRules ?? 0)
+      setMessage({
+        kind: "ok",
+        text:
+          nuove === 0 && (r.calls ?? 0) === 0
+            ? `Nessuna conversazione nuova da leggere (${r.alreadyDone ?? 0} già fatte).`
+            : `Lette ${nuove} conversazioni nuove, di cui ${r.withDemand ?? 0} con una richiesta` +
+              `${r.calls ? `, più ${r.calls} telefonate` : ""}.`,
+      })
+      await load()
+    } catch (e) {
+      setMessage({ kind: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setRunning(false)
+    }
   }
 
   async function save() {
@@ -184,12 +226,27 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Attiva il cervello per questo gruppo" />
           </CardHeader>
-          {extractionCount > 0 ? (
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Finora ha ricavato dati da <span className="font-medium text-foreground">{extractionCount}</span>{" "}
-                conversazioni.
-              </p>
+          {extractionCount > 0 || (enabled && !schedulerReady) ? (
+            <CardContent className="flex flex-col gap-3">
+              {extractionCount > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Finora ha ricavato dati da <span className="font-medium text-foreground">{extractionCount}</span>{" "}
+                  conversazioni.
+                </p>
+              ) : null}
+              {/* Un interruttore acceso che non produce nulla e' peggio di uno
+                  spento: chi guarda crede che il lavoro sia in corso. L'esecuzione
+                  oraria e' protetta da un segreto e senza quello non parte, quindi
+                  qui lo si dice apertamente invece di lasciare il conteggio fermo
+                  senza spiegazione. */}
+              {enabled && !schedulerReady ? (
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
+                  <span className="font-medium">Estrazione automatica ferma.</span> Il cervello è acceso, ma
+                  l&apos;esecuzione ogni ora non può partire perché manca la variabile{" "}
+                  <code className="font-mono text-xs">CRON_SECRET</code> nelle impostazioni del progetto. Puoi comunque
+                  avviarla a mano dal pulsante qui sotto.
+                </p>
+              ) : null}
             </CardContent>
           ) : null}
         </Card>
@@ -417,10 +474,18 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
           </div>
         ) : null}
 
-        <div className="flex items-center gap-3">
-          <Button onClick={save} disabled={saving}>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={save} disabled={saving || running}>
             {saving ? "Salvataggio…" : "Salva"}
           </Button>
+          {/* Si mostra solo se il cervello e' acceso: la rotta rifiuta di
+              eseguire una configurazione spenta, e un pulsante che risponde
+              sempre con un errore e' peggio di un pulsante assente. */}
+          {enabled ? (
+            <Button variant="outline" onClick={runNow} disabled={running || saving} className="bg-transparent">
+              {running ? "Lettura in corso…" : "Leggi ora le conversazioni"}
+            </Button>
+          ) : null}
           {enabled ? <Badge variant="secondary">Attivo</Badge> : <Badge variant="outline">Spento</Badge>}
         </div>
       </main>
