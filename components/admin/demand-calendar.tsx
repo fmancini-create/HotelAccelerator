@@ -35,6 +35,9 @@ interface DemandSummary {
     script: number
   }
   dailyData: DemandData[]
+  // Facoltativo: una risposta salvata prima che questa misura esistesse non ha
+  // il campo, e leggerlo senza guardia mostrerebbe "undefined telefonate".
+  calls?: { received: number; missed: number }
 }
 
 interface DemandCalendarProps {
@@ -277,6 +280,28 @@ export function DemandCalendar({
               <SourceStat icon={Phone} label="Telefono" count={demandData.bySource.phone} />
               {demandData.bySource.script > 0 && (
                 <SourceStat icon={Code} label="Script" count={demandData.bySource.script} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Telefonate: fuori dal calendario, con la data detta a parole.
+            Il cron le contava da sempre in `demand_calendar_days` e nessuno le
+            leggeva. Restano separate perche' qui la data e' il giorno della
+            telefonata, non la notte chiesta: messe nelle celle direbbero che
+            quelle persone vogliono dormire il giorno in cui hanno chiamato. */}
+        {!compact && demandData?.calls && demandData.calls.received > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium">Telefonate ricevute</h4>
+            <p className="text-xs text-muted-foreground text-pretty">
+              Contate nel giorno della chiamata, non nella notte richiesta: per questo non entrano nel calendario.
+            </p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+              <span className="text-2xl font-semibold tabular-nums">{demandData.calls.received}</span>
+              {demandData.calls.missed > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  di cui {demandData.calls.missed} senza risposta
+                </span>
               )}
             </div>
           </div>

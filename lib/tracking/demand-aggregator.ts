@@ -58,6 +58,20 @@ export interface DemandSummary {
     script: number
   }
   dailyData: DemandData[]
+  /**
+   * Le telefonate del periodo, tenute FUORI dal calendario e dai totali.
+   *
+   * Sono una misura a se' perche' hanno un'altra unita' di misura sull'asse
+   * del tempo: per una telefonata la data e' il giorno in cui e' arrivata,
+   * per una richiesta e' la notte chiesta (misurato: scarto 0 giorni per le
+   * chiamate, +78/+24/+5 per le prenotazioni). Sommarle nelle celle direbbe
+   * "queste persone vogliono dormire il 15 agosto" di gente che quel giorno
+   * ha solo telefonato.
+   */
+  calls: {
+    received: number
+    missed: number
+  }
 }
 
 /** Il canale della conversazione, tradotto nelle voci che il calendario mostra. */
@@ -73,9 +87,10 @@ function sourceOfChannel(channel: string | null | undefined): keyof DemandData["
  * Le date chieste dagli ospiti scrivendo o telefonando.
  *
  * Si legge `conversation_extractions` e non `demand_calendar_days` perche' le
- * estrazioni portano con se' il canale: il calendario aggregato conserva i
- * totali per giorno, ma non da quale canale arrivavano, e la pagina divide
- * proprio per canale.
+ * estrazioni sono la riga per riga: il calendario aggregato tiene i totali per
+ * giorno (il canale ce l'ha, dentro `breakdown`, come `canale:email`) ma non
+ * permette di separare i segnaposto nostri dalle richieste vere, che e' proprio
+ * l'esclusione qui sotto.
  *
  * Non si contano i NOSTRI segnaposto, che non sono domanda di date:
  *
@@ -150,6 +165,49 @@ function calculateIntensity(count: number, maxCount: number): DemandData["intens
 }
 
 // Aggrega i dati di domanda per un periodo
+/**
+ * Le telefonate del periodo, prese da `demand_calendar_days`.
+ *
+ * Questa tabella la scrive il cron dell'estrazione e finora NESSUNO la leggeva:
+ * misurate 214 righe e 7 misure (chiamate 96, ospiti 229, richieste 116...)
+ * calcolate ogni ora e mai mostrate a nessuno. Il commento qui sopra promette
+ * che il volume delle telefonate "resta come misura a se'": senza questa
+ * lettura era una promessa non mantenuta.
+ *
+ * Si somma per struttura: verificato che non esistono due righe con la stessa
+ * terna struttura+data+misura, quindi la somma non raddoppia.
+ */
+async function callsFromCalendar(
+  propertyId: string,
+  startDate: string,
+  endDate: string,
+  client?: DemandReader,
+): Promise<DemandSummary["calls"]> {
+  const supabase = client ?? (await createClient())
+  const { data, error } = await supabase
+    .from("demand_calendar_days")
+    .select("metric,value")
+    .eq("property_id", propertyId)
+    .in("metric", ["chiamate", "chiamate_perse"])
+    .gte("date", String(startDate).slice(0, 10))
+    .lte("date", String(endDate).slice(0, 10))
+
+  if (error) {
+    // Non si spegne il resto della pagina per una misura accessoria.
+    console.error("[v0] telefonate dal calendario:", error.message)
+    return { received: 0, missed: 0 }
+  }
+
+  let received = 0
+  let missed = 0
+  for (const row of data ?? []) {
+    const v = Number(row.value ?? 0)
+    if (row.metric === "chiamate") received += v
+    else if (row.metric === "chiamate_perse") missed += v
+  }
+  return { received, missed }
+}
+
 export async function getDemandData(
   propertyId: string,
   startDate: string,
@@ -176,6 +234,7 @@ export async function getDemandData(
       peakDates: [],
       bySource: { website: 0, chat: 0, email: 0, whatsapp: 0, phone: 0, script: 0 },
       dailyData: [],
+      calls: { received: 0, missed: 0 },
     }
   }
 
@@ -274,6 +333,10 @@ export async function getDemandData(
   // Top 5 date più cercate
   const peakDates = [...dailyData].sort((a, b) => b.searchCount - a.searchCount).slice(0, 5)
 
+  // Stesso client, per la ragione detta sopra: con quello di sessione un
+  // chiamante a token leggerebbe zero telefonate in silenzio.
+  const calls = await callsFromCalendar(propertyId, startDate, endDate, supabase)
+
   return {
     period: { start: startDate, end: endDate },
     // Il totale comprende entrambe le sorgenti: contare solo gli eventi del
@@ -282,6 +345,7 @@ export async function getDemandData(
     peakDates,
     bySource: totalBySource,
     dailyData,
+    calls,
   }
 }
 
