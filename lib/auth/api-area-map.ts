@@ -135,6 +135,10 @@ export const API_AREA_MAP: Record<string, string> = {
   "/api/kpi": "inbox",
   "/api/admin/revenue": "dashboard",
   "/api/channels": "settings",
+  // Token di accesso API della struttura: sta sotto Impostazioni, e il presidio
+  // effettivo e' `requireTenantAdmin` dentro la rotta, perche' "settings" e'
+  // baseline (concessa a tutti) e da sola non proteggerebbe nulla.
+  "/api/admin/api-access": "settings",
   "/api/admin/domains": "settings",
   "/api/admin/setup": "settings",
   "/api/admin/cleanup": "settings",
