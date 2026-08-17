@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
+import { esitoGruppoSquillo, ESITO_DEDOTTO, ESITO_DAL_CENTRALINO } from "@/lib/telephony/ring-group"
 import { authenticateInbound, syntheticCallId } from "@/lib/telephony/inbound-auth"
 import { phoneMatchKey } from "@/lib/telephony/threecx-client"
 import { findUserIdByExtension, findUserIdByEmail } from "@/lib/telephony/user-extension"
@@ -113,6 +114,67 @@ export async function POST(request: NextRequest) {
     (await findUserIdByExtension(supabase, propertyId, extension)) ??
     (await findUserIdByEmail(supabase, propertyId, pick(body, "agent_email")))
 
+  /**
+   * Esito come lo dichiara il centralino, tenuto separato da quello dedotto.
+   *
+   * 3CX non sa dire se un GRUPPO di squillo ha lasciato cadere la chiamata: la
+   * manda come `Inbound` e nulla piu'. Misurato: zero perse in arrivo su 179
+   * chiamate, mentre 31 chiamate sull'801 duravano esattamente il timeout di
+   * squillo e 18 di quei chiamanti hanno richiamato entro un'ora.
+   */
+  const statusDalCentralino = (() => {
+    const explicit = pick(body, "status")
+    if (explicit) return explicit
+    // Valori che 3CX puo' mandare in `CallType`: Inbound, Outbound, Missed,
+    // Notanswered (documentati). Il controllo precedente cercava "unans", che
+    // in "notanswered" NON esiste ("notanswered" contiene "answer", non
+    // "unans"): ogni chiamata squillata e mai risposta cadeva nel ramo finale
+    // e veniva registrata come "completed".
+    //
+    // "Missed" e "Notanswered" restano uniti sotto "missed": per l'albergo
+    // significano la stessa cosa (nessuno ha risposto, da richiamare) e un
+    // solo valore non puo' essere dimenticato da un filtro o da un conteggio.
+    const type = pick(body, "call_type", "callType").toLowerCase().replace(/[^a-z]/g, "")
+    if (type.includes("miss") || type.includes("pers")) return "missed"
+    // Le varianti italiane cercate sono "norisp"/"nonrisp" e MAI "risposta":
+    // in italiano "Risposta" significa che qualcuno HA risposto, quindi
+    // cercarla marcherebbe come persa proprio la chiamata andata a buon fine.
+    if (type.includes("notanswer") || type.includes("noanswer")) return "missed"
+    if (type.includes("norisp") || type.includes("nonrisp")) return "missed"
+    return "completed"
+  })()
+
+  const durataSecondi = toSeconds(body.duration)
+
+  // L'etichetta dell'interno dice se e' un gruppo di squillo e con quale timeout.
+  // Un errore di lettura NON deve bloccare la registrazione della telefonata:
+  // senza etichetta si tiene l'esito del centralino, che e' il comportamento
+  // di prima.
+  let kindInterno: string | null = null
+  let timeoutGruppo: number | null = null
+  if (extension) {
+    const { data: etichetta, error: erroreEtichetta } = await supabase
+      .from("telephony_extension_labels")
+      .select("kind, no_answer_seconds")
+      .eq("property_id", propertyId)
+      .eq("extension", extension)
+      .maybeSingle()
+    if (erroreEtichetta) {
+      console.log(`[v0] etichetta interno ${extension} non letta: ${erroreEtichetta.message}`)
+    } else if (etichetta) {
+      kindInterno = etichetta.kind ? String(etichetta.kind) : null
+      timeoutGruppo = typeof etichetta.no_answer_seconds === "number" ? etichetta.no_answer_seconds : null
+    }
+  }
+
+  const esitoDedotto = esitoGruppoSquillo({
+    kindInterno,
+    direction,
+    status: statusDalCentralino,
+    durataSecondi,
+    timeoutSecondi: timeoutGruppo,
+  })
+
   const record = {
     property_id: propertyId,
     contact_id: contactId,
@@ -121,37 +183,19 @@ export async function POST(request: NextRequest) {
     extension: extension || null,
     user_id: userId,
     agent_name: pick(body, "agent_name", "agent") || null,
-    // 3CX comunica l'esito in `CallType` ("Missed", "Answered"...). Prima si
-    // leggeva solo un campo `status` che il centralino non manda mai: TUTTE le
-    // chiamate, comprese quelle perse, finivano nel registro come "completed" —
-    // e in hotel la chiamata persa e' proprio quella da richiamare.
-    status: (() => {
-      const explicit = pick(body, "status")
-      if (explicit) return explicit
-      // Valori che 3CX puo' mandare in `CallType`: Inbound, Outbound, Missed,
-      // Notanswered (documentati). Il controllo precedente cercava "unans", che
-      // in "notanswered" NON esiste ("notanswered" contiene "answer", non
-      // "unans"): ogni chiamata squillata e mai risposta cadeva nel ramo finale
-      // e veniva registrata come "completed".
-      //
-      // "Missed" e "Notanswered" restano uniti sotto "missed": per l'albergo
-      // significano la stessa cosa (nessuno ha risposto, da richiamare) e un
-      // solo valore non puo' essere dimenticato da un filtro o da un conteggio.
-      const type = pick(body, "call_type", "callType").toLowerCase().replace(/[^a-z]/g, "")
-      if (type.includes("miss") || type.includes("pers")) return "missed"
-      // Le varianti italiane cercate sono "norisp"/"nonrisp" e MAI "risposta":
-      // in italiano "Risposta" significa che qualcuno HA risposto, quindi
-      // cercarla marcherebbe come persa proprio la chiamata andata a buon fine.
-      if (type.includes("notanswer") || type.includes("noanswer")) return "missed"
-      if (type.includes("norisp") || type.includes("nonrisp")) return "missed"
-      return "completed"
-    })(),
+    // L'esito valido e' quello dedotto quando c'e', altrimenti quello del
+    // centralino. `provider_status` conserva SEMPRE cio' che ha detto 3CX:
+    // senza quel dato la riclassificazione sarebbe irreversibile e nessuno
+    // potrebbe distinguere un esito dichiarato da uno dedotto da noi.
+    status: esitoDedotto ?? statusDalCentralino,
+    provider_status: statusDalCentralino,
+    status_source: esitoDedotto ? ESITO_DEDOTTO : ESITO_DAL_CENTRALINO,
     started_at: toIsoOrNull(startedAtRaw) ?? new Date().toISOString(),
     ended_at: toIsoOrNull(pick(body, "ended_at", "callEnd")),
     // L'istante di risposta NON arriva piu' dal template e non va aggiunto qui:
     // `phone_calls` non ha una colonna per contenerlo (schema verificato, non
     // supposto) e in 3CX quel valore esiste solo per le chiamate risposte.
-    duration_seconds: toSeconds(body.duration),
+    duration_seconds: durataSecondi,
     external_call_id: externalId,
     notes: typeof body.notes === "string" ? body.notes.slice(0, 1000) : null,
   }
