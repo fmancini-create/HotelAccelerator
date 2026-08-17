@@ -4,7 +4,7 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { resolveIdentity } from "@/lib/telephony/user-extension"
 import { caricaProvider, sincronizzaDalPms } from "@/lib/pms/sync"
-import type { PmsCapability } from "@/lib/pms/provider"
+import { NESSUNA_CAPACITA, type PmsCapability, type PmsProvider } from "@/lib/pms/provider"
 import { isValidUuid } from "@/lib/platform-context"
 
 /**
@@ -29,15 +29,42 @@ export async function GET(request: NextRequest) {
   const propertyId = identity.propertyId
   const sb = createServiceClient()
 
-  const { provider, interruttori, cursor } = await caricaProvider(propertyId)
-  // La verifica chiama il PMS: se le credenziali sono sbagliate o il servizio e'
-  // fermo, deve diventare "connessione non riuscita" con il motivo, non un 500
-  // che porterebbe via l'intera pagina di governo (conflitti compresi).
+  // Un tipo di PMS non riconosciuto fa fallire la costruzione del connettore, di
+  // proposito (meglio fermarsi che mostrare dati finti a chi ha credenziali
+  // vere). Ma NON deve portarsi via questa pagina: e' l'unico posto da cui si
+  // corregge la configurazione, e con un 500 resterebbero invisibili anche i
+  // conflitti da rivedere. Quindi si degrada a "nessuna capacita' + motivo".
+  let provider: PmsProvider
+  let interruttori: { contacts: boolean; tags: boolean; notes: boolean; consents: boolean }
+  let cursor: string | null
   let prova: { ok: boolean; detail: string }
   try {
-    prova = await provider.testConnection()
+    const caricato = await caricaProvider(propertyId)
+    provider = caricato.provider
+    interruttori = caricato.interruttori
+    cursor = caricato.cursor
+    // La verifica chiama il PMS: credenziali sbagliate o servizio fermo devono
+    // diventare "connessione non riuscita" con il motivo, non un 500.
+    try {
+      prova = await provider.testConnection()
+    } catch (e) {
+      prova = { ok: false, detail: e instanceof Error ? e.message : String(e) }
+    }
   } catch (e) {
-    prova = { ok: false, detail: e instanceof Error ? e.message : String(e) }
+    const motivo = e instanceof Error ? e.message : String(e)
+    provider = {
+      slug: "non-configurato",
+      name: "Configurazione PMS non valida",
+      isFake: false,
+      capabilities: { ...NESSUNA_CAPACITA },
+      limitations: [motivo],
+      testConnection: async () => ({ ok: false, detail: motivo }),
+      listGuests: async () => ({ guests: [], nextCursor: null, scartati: [] }),
+      applyWrite: async () => ({ ok: false, detail: motivo }),
+    }
+    interruttori = { contacts: false, tags: false, notes: false, consents: false }
+    cursor = null
+    prova = { ok: false, detail: motivo }
   }
 
   const [passate, conflitti, coda, contatti] = await Promise.all([
@@ -190,7 +217,18 @@ export async function PUT(request: NextRequest) {
   // Accendere una scrittura che il connettore non sa fare non si salva: sarebbe
   // una promessa che nessun codice puo' mantenere, e chi l'ha accesa crederebbe
   // che da quel momento i dati finiscano nel PMS. Si rifiuta dicendo perche'.
-  const { provider } = await caricaProvider(identity.propertyId)
+  let provider: PmsProvider
+  try {
+    provider = (await caricaProvider(identity.propertyId)).provider
+  } catch (e) {
+    // Se non sappiamo nemmeno quale PMS sia, non possiamo sapere se la
+    // scrittura sia possibile: si rifiuta spiegando, invece di salvare un
+    // interruttore la cui promessa nessuno potra' mantenere.
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : String(e), interruttoriRifiutati: Object.keys(modifiche) },
+      { status: 422 },
+    )
+  }
   const nonSupportati = INTERRUTTORI.filter(
     (chiave) => modifiche[chiave] === true && !provider.capabilities[CAPACITA_INTERRUTTORE[chiave]],
   )

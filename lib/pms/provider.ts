@@ -98,6 +98,36 @@ export type PmsProvider = {
 }
 
 /**
+ * Confronta gli interruttori accesi con quello che il connettore sa davvero
+ * fare, e restituisce le frasi da mostrare.
+ *
+ * Serve perche' un interruttore acceso su una capacita' assente e' la peggiore
+ * delle bugie: chi lo ha acceso crede che da quel momento i dati vengano scritti
+ * nel PMS, e invece non parte nulla. Meglio dirlo in chiaro a ogni passata.
+ *
+ * Vive qui e non in `sync.ts` perche' e' una funzione pura sulle capacita':
+ * `sync.ts` e' `server-only`, quindi la stessa regola non sarebbe verificabile
+ * da una sonda ne' riusabile fuori dal server.
+ */
+export function scrittureNonSupportate(
+  provider: PmsProvider,
+  interruttori: { contacts: boolean; tags: boolean; notes: boolean; consents: boolean },
+): string[] {
+  const coppie: Array<[boolean, PmsCapability, string]> = [
+    [interruttori.contacts, "writeContact", "anagrafiche"],
+    [interruttori.tags, "writeTags", "etichette"],
+    [interruttori.notes, "writeNote", "note"],
+    [interruttori.consents, "writeConsent", "consensi"],
+  ]
+  return coppie
+    .filter(([acceso, capacita]) => acceso && !provider.capabilities[capacita])
+    .map(
+      ([, , nome]) =>
+        `Interruttore "${nome}" acceso ma ${provider.name} non supporta questa scrittura: non viene inviato nulla.`,
+    )
+}
+
+/**
  * Il fornitore finto.
  *
  * I dati imitano la forma di quelli veri (numeri fiorentini `055…`, cellulari

@@ -76,7 +76,7 @@ function nomeCompleto(c: ScidooCustomer): string | null {
  * ospite ("IT" contro "ITALIA") e sommergerebbe di falsi allarmi i conflitti
  * veri. Percio' `country` resta vuoto e il limite e' dichiarato a schermo.
  */
-function traduciCliente(c: ScidooCustomer): PmsGuest | null {
+export function traduciCliente(c: ScidooCustomer): PmsGuest | null {
   const pmsGuestId = valorePulito(c.guest_id) ?? (typeof c.guest_id === "number" ? String(c.guest_id) : null)
   // Senza identificativo stabile non si puo' riconoscere la stessa persona alla
   // passata successiva: meglio scartarlo e dirlo che inventare una chiave.
@@ -158,10 +158,17 @@ export function makeScidooProvider(creds: PmsCredentials): PmsProvider {
     capabilities: { ...NESSUNA_CAPACITA, readGuests: true },
     limitations: [
       "Scidoo non espone una rubrica clienti: le anagrafiche si leggono dalle prenotazioni, quindi chi non ha mai prenotato non compare.",
-      "L'API Scidoo non ha nessun endpoint per modificare un cliente: la scrittura verso il PMS non e' possibile con questo connettore, per nessun campo.",
+      // Precisazione dovuta: un endpoint che scrive i dati ospite ESISTE
+      // (bookings/guestCheckin.php, con nome, email e telefono), ma non e'
+      // utilizzabile per aggiornare un'anagrafica: esegue il CHECK-IN della
+      // prenotazione e pretende l'intera lista ospiti. Usarlo per correggere un
+      // numero di telefono registrerebbe l'arrivo di clienti non ancora
+      // presenti e sovrascriverebbe i campi non inviati. Percio' la capacita'
+      // resta dichiarata assente, e il motivo e' scritto, non nascosto.
+      "L'unico endpoint che scrive dati ospite (bookings/guestCheckin.php) esegue il check-in della prenotazione e richiede tutta la lista ospiti: non e' un aggiornamento di anagrafica, quindi non viene usato. La scrittura verso Scidoo non e' disponibile per nessun campo.",
       "L'API Scidoo non contiene alcun campo di consenso (marketing, privacy, GDPR): da Scidoo il consenso arriva sempre come ignoto, mai come rifiuto.",
       "La nazionalita' arriva come nome ('ITALIA') e non come sigla ('IT'): non viene importata, per non generare un conflitto su ogni ospite.",
-      "Gli accompagnatori della prenotazione non hanno un identificativo cliente: vengono contati fra gli scartati anziche' salvati con una chiave inventata.",
+      "Si leggono sia chi prenota sia gli accompagnatori, perche' entrambi hanno guest_id e recapiti propri. Chi arriva senza guest_id non viene importato e viene conteggiato fra gli scartati.",
     ],
 
     /**
@@ -222,26 +229,55 @@ export function makeScidooProvider(creds: PmsCredentials): PmsProvider {
       // conteggi e riscrivendo lo stesso campo a ripetizione.
       const perId = new Map<string, PmsGuest>()
       let senzaId = 0
-      let accompagnatori = 0
 
       for (const p of prenotazioni) {
-        const cliente = (p.customer ?? null) as ScidooCustomer | null
-        if (!cliente) continue
-        const ospite = traduciCliente(cliente)
-        if (!ospite) {
-          senzaId += 1
-          continue
+        // La prenotazione porta DUE fonti di anagrafiche, entrambe con
+        // `guest_id`: chi ha prenotato (`customer`) e chi ha soggiornato
+        // (`guests[]`, che nel manuale e' "come customer" con type ed eta').
+        // Leggere solo `customer` butterebbe via persone identificabili e con
+        // recapiti propri: l'esempio del manuale ha un accompagnatore con il
+        // cellulare compilato e il titolare senza.
+        const fonti: ScidooCustomer[] = []
+        if (p.customer && typeof p.customer === "object") fonti.push(p.customer as ScidooCustomer)
+        if (Array.isArray(p.guests)) {
+          for (const g of p.guests as unknown[]) {
+            if (g && typeof g === "object") fonti.push(g as ScidooCustomer)
+          }
         }
-        if (!perId.has(ospite.pmsGuestId)) perId.set(ospite.pmsGuestId, ospite)
 
-        const co = Array.isArray(p.guests) ? (p.guests as unknown[]) : []
-        // Gli accompagnatori arrivano "come customer" ma senza `guest_id`
-        // documentato: contati e dichiarati, non salvati con una chiave finta.
-        if (co.length > 1) accompagnatori += co.length - 1
+        for (const fonte of fonti) {
+          const ospite = traduciCliente(fonte)
+          if (!ospite) {
+            senzaId += 1
+            continue
+          }
+          // Deduplica: il titolare compare anche dentro `guests`, e lo stesso
+          // cliente torna in ogni sua prenotazione. Il primo che arriva vince,
+          // ma i campi vuoti si completano con le occorrenze successive, perche'
+          // lo stesso ospite puo' avere l'email in una scheda e il telefono in
+          // un'altra.
+          const gia = perId.get(ospite.pmsGuestId)
+          if (!gia) {
+            perId.set(ospite.pmsGuestId, ospite)
+          } else {
+            perId.set(ospite.pmsGuestId, {
+              ...gia,
+              name: gia.name ?? ospite.name,
+              email: gia.email ?? ospite.email,
+              phone: gia.phone ?? ospite.phone,
+              city: gia.city ?? ospite.city,
+              language: gia.language ?? ospite.language,
+            })
+          }
+        }
       }
 
-      if (senzaId > 0) scartati.push(`${senzaId} anagrafiche senza identificativo cliente: non abbinabili in modo stabile.`)
-      if (accompagnatori > 0) scartati.push(`${accompagnatori} accompagnatori non importati: l'API non fornisce un identificativo per loro.`)
+      if (senzaId > 0) {
+        scartati.push(
+          `${senzaId} anagrafiche senza guest_id non importate: senza identificativo stabile non si riconoscerebbe la stessa persona alla passata successiva.`,
+        )
+      }
+
 
       // Ordine per identificativo: l'API non garantisce un ordinamento, e senza
       // un criterio nostro il taglio a `limit` salterebbe o ripeterebbe persone

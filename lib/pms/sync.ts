@@ -16,7 +16,13 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { decryptSecretIfNeeded } from "@/lib/crypto/secrets"
 import { phoneMatchKey } from "@/lib/telephony/phone-match"
 import { uniscoContattoEOspite, type CrmContact, type PmsGuest, type MergeField } from "./merge"
-import { makeFakeProvider, CAPACITA_PER_SCRITTURA, type PmsCapability, type PmsProvider, type PmsWrite } from "./provider"
+import {
+  makeFakeProvider,
+  scrittureNonSupportate,
+  CAPACITA_PER_SCRITTURA,
+  type PmsProvider,
+  type PmsWrite,
+} from "./provider"
 import { creaConnettore } from "./connectors/registry"
 
 export type SyncEsito = {
@@ -93,32 +99,6 @@ export async function caricaProvider(propertyId: string): Promise<{
     cursor: data.last_sync_cursor ?? null,
     integrationId: data.id,
   }
-}
-
-/**
- * Confronta gli interruttori accesi con quello che il connettore sa davvero
- * fare, e restituisce le frasi da mostrare.
- *
- * Serve perche' un interruttore acceso su una capacita' assente e' la peggiore
- * delle bugie: chi lo ha acceso crede che da quel momento i dati vengano scritti
- * nel PMS, e invece non parte nulla. Meglio dirlo in chiaro a ogni passata.
- */
-export function scrittureNonSupportate(
-  provider: PmsProvider,
-  interruttori: { contacts: boolean; tags: boolean; notes: boolean; consents: boolean },
-): string[] {
-  const coppie: Array<[boolean, PmsCapability, string]> = [
-    [interruttori.contacts, "writeContact", "anagrafiche"],
-    [interruttori.tags, "writeTags", "etichette"],
-    [interruttori.notes, "writeNote", "note"],
-    [interruttori.consents, "writeConsent", "consensi"],
-  ]
-  return coppie
-    .filter(([acceso, capacita]) => acceso && !provider.capabilities[capacita])
-    .map(
-      ([, , nome]) =>
-        `Interruttore "${nome}" acceso ma ${provider.name} non supporta questa scrittura: non viene inviato nulla.`,
-    )
 }
 
 /** I campi del contatto che l'unione puo' riempire, mappati sulle colonne vere. */
