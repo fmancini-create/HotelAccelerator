@@ -12,7 +12,9 @@
  * numeri in due momenti non ha un numero "sbagliato".
  */
 
-import { phoneMatchKey } from "@/lib/telephony/threecx-client"
+// Dal file puro, NON dal client del centralino: quello apre con `server-only` e
+// renderebbe queste regole inutilizzabili nelle prove e in pagina.
+import { phoneMatchKey } from "@/lib/telephony/phone-match"
 
 /** I campi su cui vale il confronto campo per campo. */
 export type MergeField = "name" | "email" | "phone" | "city" | "country" | "company" | "language"

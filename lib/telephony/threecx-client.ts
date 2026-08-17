@@ -41,21 +41,12 @@ export function normalizeBaseUrl(raw: string): string {
 }
 
 /**
- * Normalizza un numero per il confronto con `contacts.phone`.
- *
- * 3CX presenta il chiamante in formati diversi (`+39055123456`, `0039055...`,
- * `055123456`), mentre in rubrica i numeri sono scritti a mano. Confrontare le
- * stringhe cosi' come sono NON troverebbe quasi nulla: si confrontano le ultime
- * cifre significative, che sono la parte stabile.
+ * La funzione vive in `./phone-match` perche' questo file e' `server-only`:
+ * le regole di unione col PMS e le prove automatiche devono poter riconoscere
+ * un numero senza trascinarsi dietro il client del centralino. Ri-esportata
+ * qui perche' i chiamanti esistenti continuino a funzionare senza modifiche.
  */
-export function phoneMatchKey(raw: string | null | undefined): string | null {
-  if (!raw) return null
-  const digits = String(raw).replace(/\D+/g, "")
-  if (digits.length < 6) return null // troppo corto: interni, servizi
-  // Ultime 9 cifre: sufficiente a distinguere un'utenza, tollerante al prefisso
-  // internazionale scritto in modi diversi.
-  return digits.slice(-9)
-}
+export { phoneMatchKey } from "./phone-match"
 
 type TokenBag = { token: string; expiresAt: number }
 
