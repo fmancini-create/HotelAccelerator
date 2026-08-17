@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/demand-extract",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/hr-notifications",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

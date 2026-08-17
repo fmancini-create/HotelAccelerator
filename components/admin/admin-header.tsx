@@ -41,6 +41,8 @@ const pathMap: Record<string, { label: string; parent?: string }> = {
   "/admin/settings/site-legal": { label: "Dati legali e policy", parent: "/admin/settings" },
   "/admin/tracking/demand": { label: "Calendario Domanda", parent: "/admin/dashboard" },
   "/admin/todos": { label: "Task & To-Do", parent: "/admin/dashboard" },
+  "/admin/hr": { label: "Personale e turni", parent: "/admin/dashboard" },
+  "/admin/my-work": { label: "I miei turni", parent: "/admin/dashboard" },
 }
 
 /**
