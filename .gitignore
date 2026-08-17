@@ -26,7 +26,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 # Scratch space for local verification (never committed).
-# La regola era `.v0-tmp/` esatta: una cartella `.v0-tmp-demand/` NON era
-# coperta e una sonda di misura e' finita dentro un commit. Il glob copre
-# qualunque suffisso.
+# Storia di due strette successive, entrambe pagate:
+#  1. la regola era `.v0-tmp/` esatta => una cartella `.v0-tmp-demand/` NON era
+#     coperta e una sonda di misura e' finita in un commit;
+#  2. corretta in `.v0-tmp*/`, ma la BARRA FINALE limita ai soli DIRECTORY =>
+#     i FILE `.v0-tmp-secret` e `.v0-tmp-body.json` (che contenevano un segreto
+#     in chiaro) sono entrati nell'area di staging.
+# Servono quindi DUE righe: una per i file, una per le cartelle.
+.v0-tmp*
 .v0-tmp*/
