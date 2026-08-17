@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { handleServiceError } from "@/lib/errors"
+import { evaluateKpiReadiness } from "@/lib/email/kpi-readiness"
 
 export const dynamic = "force-dynamic"
 
@@ -54,19 +55,24 @@ export async function GET(request: NextRequest) {
       throw unreadError
     }
 
-    // A revoked mailbox never finishes reconciliation, so don't let it block the
-    // whole KPI from publishing — only require reconciliation on healthy channels.
-    const healthyChannels = (gmailChannels || []).filter((c) => c.oauth_reconnect_required !== true)
-    const reconciliationReady =
-      healthyChannels.length > 0 && healthyChannels.every((channel) => Boolean(channel.gmail_state_reconciled_at))
+    // La prontezza guarda l'ETA' del segnalibro, non solo la sua esistenza: con
+    // `Boolean(...)` bastava una riconciliazione riuscita una volta sola, anche
+    // mesi prima, per continuare a pubblicare il numero come se fosse allineato.
+    // Le caselle con autorizzazione revocata restano escluse, come prima.
+    const readiness = evaluateKpiReadiness(gmailChannels || [])
 
     return NextResponse.json({
-      unread_count: reconciliationReady ? unreadCount || 0 : null,
+      unread_count: readiness.ready ? unreadCount || 0 : null,
       read_unreplied_count: null,
       overdue_count: null,
       avg_response_time_minutes: null,
       overdue_threshold_minutes: null,
-      metrics_status: reconciliationReady ? "gmail_state_ready" : "reconciling",
+      metrics_status: readiness.status,
+      // Esposti perche' "non pronto" da solo non dice se la prima passata e' in
+      // corso o se la riparazione e' ferma: senza questi il ritardo resta muto.
+      reconcile_never: readiness.neverReconciled,
+      reconcile_stale: readiness.staleReconciled,
+      reconcile_age_minutes: readiness.oldestReconcileAgeMinutes,
     })
   } catch (error) {
     // Prima: ogni errore diventava 500 con messaggio generico, quindi una

@@ -16,6 +16,7 @@ import {
   Ligature as Signature,
   UsersRound,
   Lock,
+  Brain,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -520,6 +521,12 @@ export default function AdminUsersPage() {
                       <Button variant="outline" size="sm">
                         <Settings className="w-4 h-4 mr-1" />
                         Permessi
+                      </Button>
+                    </Link>
+                    <Link href={`/admin/users/groups/${group.id}/tracking`}>
+                      <Button variant="outline" size="sm">
+                        <Brain className="w-4 h-4 mr-1" />
+                        Cervello
                       </Button>
                     </Link>
                   </div>

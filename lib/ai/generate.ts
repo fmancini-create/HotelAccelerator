@@ -66,6 +66,11 @@ export interface ReplyConfig {
   persona?: string | null
   language?: string
   confidenceThreshold?: number
+  /**
+   * Chi sta scrivendo, quando il sistema lo sa. Serve a non chiedere dati che
+   * abbiamo gia': su WhatsApp il numero e' l'identita' del canale.
+   */
+  datiNoti?: DatiNotiCliente | null
 }
 
 /**
@@ -208,19 +213,68 @@ function normalizeContact(raw: {
  * precondition: without a way to reach the guest, the staff cannot answer, so
  * the promise must not be made yet.
  */
-const STAFF_HANDOFF_RULE = [
-  "- CONTATTO CON LO STAFF: se il cliente chiede (o accetta) di essere messo in contatto con una persona, PRIMA raccogli nome, cognome, email e telefono.",
-  "  Chiedi in UNA sola frase i dati che mancano, senza rielencare quelli che ti ha già dato.",
-  "  NON dire MAI di aver inoltrato la richiesta, di averla presa in carico o che lo staff risponderà: la conferma viene aggiunta dal sistema solo quando la richiesta è stata registrata davvero.",
-  "  Quando hai già nome, cognome e un recapito, limitati a un breve ringraziamento senza promesse e senza richiedere dati che il cliente ti ha già dato.",
-].join("\n")
+/**
+ * Regola del passaggio allo staff, costruita sui dati che il sistema HA GIA'.
+ *
+ * Era un testo fisso che chiedeva sempre "nome, cognome, email e telefono".
+ * Su WhatsApp il telefono E' l'identita' del canale da cui arriva il messaggio:
+ * chiederlo significa chiedere una cosa che si ha in mano, e infatti nella
+ * conversazione reale il bot ha domandato il numero a chi stava scrivendo
+ * proprio da quel numero. Lo stesso vale per il nome e l'email quando il
+ * mittente e' riconosciuto in rubrica: al massimo si chiede una conferma.
+ */
+export function regolaContattoStaff(datiNoti?: DatiNotiCliente | null): string {
+  const righe = [
+    "- CONTATTO CON LO STAFF: se il cliente chiede (o accetta) di essere messo in contatto con una persona, servono un nome e un recapito.",
+  ]
+
+  const noti: string[] = []
+  if (datiNoti?.nome) noti.push(`nome: ${datiNoti.nome}`)
+  if (datiNoti?.email) noti.push(`email: ${datiNoti.email}`)
+  if (datiNoti?.numero) noti.push(`telefono: +${datiNoti.numero}`)
+
+  if (noti.length > 0) {
+    righe.push(`  DATI CHE ABBIAMO GIÀ e che NON devi chiedere: ${noti.join(" · ")}.`)
+  }
+
+  if (datiNoti?.numero) {
+    righe.push(
+      "  Il cliente ti sta scrivendo da questo numero: NON chiedere MAI il numero di telefono su questo canale.",
+    )
+  }
+
+  if (datiNoti?.email && datiNoti?.daAnagraficaEsistente) {
+    righe.push(
+      `  L'email risulta già registrata: al massimo chiedi una conferma ("confermo che possiamo scriverle a ${datiNoti.email}?"), non chiederla come se non l'avessimo.`,
+    )
+  }
+
+  righe.push(
+    "  Chiedi in UNA sola frase soltanto i dati che mancano davvero, senza rielencare quelli noti o già ricevuti.",
+    "  Se non manca nulla, NON fare domande.",
+    "  NON dire MAI di aver inoltrato la richiesta, di averla presa in carico o che lo staff risponderà: la conferma viene aggiunta dal sistema solo quando la richiesta è stata registrata davvero.",
+    "  Non chiedere un dato e nello stesso messaggio dire che la richiesta è stata passata: sono due cose che si contraddicono.",
+  )
+
+  return righe.join("\n")
+}
+
+/** Cosa il sistema sa gia' di chi scrive, per non richiederglielo. */
+export interface DatiNotiCliente {
+  nome: string | null
+  email: string | null
+  numero: string | null
+  daAnagraficaEsistente: boolean
+}
 
 function buildSystemPrompt(
   config: ReplyConfig,
   context: string,
   grounded: boolean,
   greetingOnly = false,
+  datiNoti?: DatiNotiCliente | null,
 ): string {
+  const STAFF_HANDOFF_RULE = regolaContattoStaff(datiNoti)
   const persona =
     config.persona?.trim() ||
     "Sei l'assistente virtuale di una struttura ricettiva. Rispondi in modo cortese, professionale e conciso."
@@ -340,7 +394,7 @@ export async function generateReply(
   const { object } = await generateObject({
     model: CHAT_MODEL,
     schema: replySchema,
-    system: buildSystemPrompt(config, context, grounded, greetingOnly),
+    system: buildSystemPrompt(config, context, grounded, greetingOnly, config.datiNoti),
     messages: [
       ...history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
       { role: "user" as const, content: incomingMessage },

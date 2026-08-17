@@ -9,7 +9,21 @@ interface EmailKpi {
   overdue_count: number | null
   avg_response_time_minutes: number | null
   overdue_threshold_minutes: number | null
-  metrics_status: "gmail_state_ready" | "reconciling"
+  metrics_status: "gmail_state_ready" | "reconciling" | "stale"
+  // Opzionali: una risposta servita da una versione precedente non li ha, e
+  // dichiararli obbligatori li farebbe leggere come `undefined` fingendo invece
+  // che ci siano.
+  reconcile_never?: number
+  reconcile_stale?: number
+  reconcile_age_minutes?: number | null
+}
+
+/** Ritardo in forma leggibile: minuti sotto l'ora, poi ore, poi giorni. */
+function formatRitardo(minuti: number): string {
+  if (minuti < 60) return `${minuti} min fa`
+  const ore = minuti / 60
+  if (ore < 48) return `${ore < 10 ? ore.toFixed(1) : Math.round(ore)} ore fa`
+  return `${Math.round(ore / 24)} giorni fa`
 }
 
 export function EmailKpiBar() {
@@ -144,9 +158,18 @@ export function EmailKpiBar() {
       <div className="flex items-center gap-2 text-muted-foreground">
         <Clock className="h-4 w-4" />
         <span>
+          {/* "in corso" solo quando lo e' davvero (prima passata). Con un
+              segnalibro vecchio il lavoro NON sta avvenendo: dirlo comunque
+              sarebbe una conferma falsa, e il ritardo resterebbe invisibile. */}
           {kpi.metrics_status === "reconciling"
             ? "Allineamento stato Gmail in corso"
-            : "KPI di risposta temporaneamente non pubblicati"}
+            : kpi.metrics_status === "stale"
+              ? `Allineamento Gmail in ritardo${
+                  typeof kpi.reconcile_age_minutes === "number"
+                    ? ` (ultimo ${formatRitardo(kpi.reconcile_age_minutes)})`
+                    : ""
+                }`
+              : "KPI di risposta temporaneamente non pubblicati"}
         </span>
       </div>
     </div>

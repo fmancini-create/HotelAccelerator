@@ -35,6 +35,9 @@ interface DemandSummary {
     script: number
   }
   dailyData: DemandData[]
+  // Facoltativo: una risposta salvata prima che questa misura esistesse non ha
+  // il campo, e leggerlo senza guardia mostrerebbe "undefined telefonate".
+  calls?: { received: number; missed: number }
 }
 
 interface DemandCalendarProps {
@@ -260,14 +263,57 @@ export function DemandCalendar({
         {/* Statistiche sorgenti (solo versione estesa) */}
         {!compact && demandData && (
           <div className="mt-4 pt-4 border-t">
-            <h4 className="text-sm font-medium mb-2">Sorgenti ricerche</h4>
+            <h4 className="text-sm font-medium">Sorgenti ricerche</h4>
+            <p className="text-xs text-muted-foreground mb-2 text-pretty">
+              Da dove arrivano le richieste con una notte precisa.
+            </p>
+            {/* "Sito" e "Script" arrivano SOLO dagli eventi del sito, che oggi
+                nessuno scrive (tabella `events` a zero righe): mostrarli fissi a
+                zero accanto a numeri veri li fa leggere come misura ("dal sito
+                non arriva nulla") invece che come sorgente non ancora
+                collegata. Si mostra una voce solo se ha un valore; le altre
+                restano scritte qui e ricompaiono da sole appena arrivano dati. */}
             <div className="grid grid-cols-3 gap-2">
-              <SourceStat icon={Globe} label="Sito" count={demandData.bySource.website} />
+              {demandData.bySource.website > 0 && (
+                <SourceStat icon={Globe} label="Sito" count={demandData.bySource.website} />
+              )}
               <SourceStat icon={MessageSquare} label="Chat" count={demandData.bySource.chat} />
               <SourceStat icon={Mail} label="Email" count={demandData.bySource.email} />
               <SourceStat icon={Phone} label="WhatsApp" count={demandData.bySource.whatsapp} />
-              <SourceStat icon={Phone} label="Telefono" count={demandData.bySource.phone} />
-              <SourceStat icon={Code} label="Script" count={demandData.bySource.script} />
+              {/* Stessa regola di "Sito" e "Script", che qui mancava: "Telefono"
+                  vale il numero di telefonate in cui l'ospite ha chiesto una
+                  NOTTE precisa. Misurato: tutte le 96 righe da telefono sono di
+                  tipo `chiamata`, cioe' volume senza data, quindi questa voce e'
+                  0 mentre subito sotto compare "96 telefonate": due numeri che
+                  si contraddicono a occhio pur essendo entrambi giusti. */}
+              {demandData.bySource.phone > 0 && (
+                <SourceStat icon={Phone} label="Telefono" count={demandData.bySource.phone} />
+              )}
+              {demandData.bySource.script > 0 && (
+                <SourceStat icon={Code} label="Script" count={demandData.bySource.script} />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Telefonate: fuori dal calendario, con la data detta a parole.
+            Il cron le contava da sempre in `demand_calendar_days` e nessuno le
+            leggeva. Restano separate perche' qui la data e' il giorno della
+            telefonata, non la notte chiesta: messe nelle celle direbbero che
+            quelle persone vogliono dormire il giorno in cui hanno chiamato. */}
+        {!compact && demandData?.calls && demandData.calls.received > 0 && (
+          <div className="mt-4 pt-4 border-t">
+            <h4 className="text-sm font-medium">Telefonate ricevute</h4>
+            <p className="text-xs text-muted-foreground text-pretty">
+              Contate nel giorno della chiamata, non nella notte richiesta: per questo non entrano nel calendario.
+            </p>
+            <div className="mt-2 flex flex-wrap items-baseline gap-x-6 gap-y-1">
+              <span className="text-2xl font-semibold tabular-nums">{demandData.calls.received}</span>
+              {demandData.calls.missed > 0 && (
+                <span className="text-sm text-muted-foreground">
+                  di cui {demandData.calls.missed} senza risposta
+                </span>
+              )}
             </div>
           </div>
         )}

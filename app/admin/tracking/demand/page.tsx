@@ -50,13 +50,22 @@ export default function DemandTrackingPage() {
                   Sorgenti Tracciate
                 </CardTitle>
               </CardHeader>
+              {/* Si elencano le sorgenti LETTE davvero. L'elenco precedente
+                  prometteva "ricerche sul sito web" e "script embed su altri
+                  siti": nessuno dei due viene scritto da nessuna parte (la
+                  tabella `events` e' a zero righe), quindi la pagina dichiarava
+                  una copertura che non ha - e un operatore che non vede
+                  comparire le ricerche del sito lo legge come un guasto, non
+                  come una funzione assente. */}
               <CardContent className="text-sm text-ha-brand-soft-foreground space-y-1">
-                <p>• Ricerche sul sito web</p>
-                <p>• Richieste via chat</p>
                 <p>• Email ricevute</p>
                 <p>• Messaggi WhatsApp</p>
-                <p>• Chiamate telefoniche (VoIP)</p>
-                <p>• Script embed su altri siti</p>
+                <p>• Chat e Telegram</p>
+                <p>• Chiamate telefoniche (solo i dati della chiamata)</p>
+                <p className="pt-2 text-xs">
+                  Quali di queste leggere lo decide la scheda{" "}
+                  <strong className="text-foreground">Cervello</strong> di ogni gruppo di lavoro.
+                </p>
               </CardContent>
             </Card>
           </div>

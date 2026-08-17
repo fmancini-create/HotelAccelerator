@@ -4,7 +4,19 @@ import { useRouter } from "next/navigation"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAdminAuth } from "@/lib/admin-hooks"
-import { Globe, Users, Radio, Lock, Boxes, BarChart3, FileText, Activity, ChevronRight, Scale } from "lucide-react"
+import {
+  Globe,
+  Users,
+  Radio,
+  Lock,
+  Boxes,
+  BarChart3,
+  FileText,
+  Activity,
+  ChevronRight,
+  Scale,
+  KeyRound,
+} from "lucide-react"
 
 interface SettingsItem {
   id: string
@@ -35,6 +47,17 @@ const settingsItems: SettingsItem[] = [
     icon: <Globe className="w-6 h-6" />,
     href: "/admin/settings/domains",
     color: "bg-teal-500",
+    adminOnly: true,
+  },
+  {
+    id: "api-access",
+    title: "Accesso API",
+    description: "Token con cui un sistema esterno legge i dati della struttura",
+    icon: <KeyRound className="w-6 h-6" />,
+    href: "/admin/settings/api-access",
+    color: "bg-amber-600",
+    // Solo amministratori: il token vale come una password verso i dati della
+    // struttura, e la rotta applica lo stesso presidio lato server.
     adminOnly: true,
   },
   {

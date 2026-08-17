@@ -13,6 +13,7 @@
     "check:area-guard": "tsx scripts/check-area-guard.mjs",
     "check:inbox-collaboration": "tsx scripts/check-inbox-collaboration.mjs",
     "test:area-guard": "tsx scripts/test-area-guard.mjs",
+    "test:kpi-readiness": "tsx scripts/test-kpi-readiness.mjs",
     "simulate:area-guard": "tsx scripts/simulate-area-guard.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:santaddeo": "tsc --noEmit -p apps/santaddeo/tsconfig.json",
@@ -110,5 +111,10 @@
     "tsx": "^4.22.4",
     "typescript": "^5",
     "vitest": "^2.1.8"
-  }
+  },
+  "workspaces": [
+    ".",
+    "apps/*",
+    "packages/*"
+  ]
 }
