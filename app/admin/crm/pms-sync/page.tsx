@@ -47,9 +47,14 @@ type Passata = {
 
 type Stato = {
   provider: {
+    slug: string
     name: string
     fake: boolean
     connessione: { ok: boolean; detail: string }
+    /** Cosa il connettore sa fare: decide quali interruttori sono azionabili. */
+    capacita: Record<string, boolean>
+    /** Perche' il resto non si puo' fare, in frasi da mostrare a schermo. */
+    limiti: string[]
   }
   interruttori: Record<string, boolean>
   rubrica: { contatti: number; conTelefono: number; senzaTelefono: number }
@@ -86,24 +91,36 @@ const ETICHETTE_CAMPO: Record<string, string> = {
   language: "Lingua",
 }
 
-const INTERRUTTORI: Array<{ chiave: string; titolo: string; spiegazione: string; delicato?: boolean }> = [
+// `capacita` collega l'interruttore a quello che il connettore dichiara di saper
+// fare. I testi non nominano nessun fornitore: la pagina serve qualunque PMS.
+const INTERRUTTORI: Array<{
+  chiave: string
+  capacita: string
+  titolo: string
+  spiegazione: string
+  delicato?: boolean
+}> = [
   {
     chiave: "write_contacts",
+    capacita: "writeContact",
     titolo: "Telefono ed email",
-    spiegazione: "Scrive nel PMS i contatti che la nostra rubrica ha e Scidoo no. Non sostituisce mai un dato esistente.",
+    spiegazione: "Scrive nel PMS i contatti che la nostra rubrica ha e il PMS no. Non sostituisce mai un dato esistente.",
   },
   {
     chiave: "write_tags",
+    capacita: "writeTags",
     titolo: "Tag e segmenti",
     spiegazione: "Porta nella scheda ospite le etichette del CRM, senza toccare i dati anagrafici.",
   },
   {
     chiave: "write_notes",
+    capacita: "writeNote",
     titolo: "Note e storico contatti",
     spiegazione: "Aggiunge alla scheda le interazioni avvenute fuori dal PMS: telefonate ed email.",
   },
   {
     chiave: "write_consents",
+    capacita: "writeConsent",
     titolo: "Consensi",
     spiegazione:
       "Scrivere un consenso e una dichiarazione formale. Una revoca documentata viene sempre propagata; un consenso mai dichiarato non viene inventato.",
@@ -216,8 +233,8 @@ export default function PmsSyncPage() {
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight text-balance">Anagrafiche e PMS</h1>
             <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              Unisce la rubrica del CRM con le schede ospite di Scidoo. Un campo vuoto viene riempito dall&apos;altro
-              sistema; due valori diversi non vengono toccati e finiscono qui sotto, da rivedere.
+              Unisce la rubrica del CRM con le schede ospite del PMS collegato. Un campo vuoto viene riempito
+              dall&apos;altro sistema; due valori diversi non vengono toccati e finiscono qui sotto, da rivedere.
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => void mutate()} className="gap-2">
@@ -232,12 +249,12 @@ export default function PmsSyncPage() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldAlert className="h-4 w-4 text-amber-600" />
-              Nessuna credenziale Scidoo: fornitore di prova
+              Nessuna credenziale PMS: fornitore di prova
             </CardTitle>
             <CardDescription className="leading-relaxed">
               I dati mostrati vengono da un fornitore finto, utile solo a collaudare le regole. La scrittura in rubrica e
-              verso il PMS resta impedita finche non arriva il codice autorizzativo rilasciato da Scidoo dopo
-              l&apos;approvazione della struttura.
+              verso il PMS resta impedita finche non vengono configurate le credenziali della struttura presso il
+              fornitore.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -283,7 +300,11 @@ export default function PmsSyncPage() {
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium">{provider.name}</span>
-            {provider.fake ? <Badge variant="outline">di prova</Badge> : <Badge variant="secondary">Scidoo</Badge>}
+                {provider.fake ? (
+                  <Badge variant="outline">di prova</Badge>
+                ) : (
+                  <Badge variant="secondary">{provider.slug}</Badge>
+                )}
             {provider.connessione.ok ? (
               <Badge variant="secondary" className="gap-1">
                 <CheckCircle2 className="h-3 w-3" />
@@ -346,15 +367,19 @@ export default function PmsSyncPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Cosa scriviamo dentro Scidoo</CardTitle>
+          <CardTitle className="text-base">Cosa scriviamo dentro il PMS</CardTitle>
           <CardDescription>
             Tutti spenti all&apos;inizio, deliberatamente: prima si misura quanti ospiti si abbinano davvero, poi si
-            accende una voce alla volta.
+            accende una voce alla volta. Le voci che {provider.name} non permette restano bloccate.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {INTERRUTTORI.map((i) => {
             const attivo = interruttori?.[i.chiave] === true
+            // Se il connettore non dichiara la capacita', l'interruttore non e'
+            // azionabile: lasciarlo cliccabile farebbe credere di aver attivato
+            // una scrittura che nessun codice puo' eseguire.
+            const supportato = provider.capacita?.[i.capacita] === true
             return (
               <div key={i.chiave} className="flex items-start justify-between gap-4">
                 <div className="flex flex-col gap-1">
@@ -366,18 +391,35 @@ export default function PmsSyncPage() {
                         delicato
                       </Badge>
                     ) : null}
+                    {supportato ? null : (
+                      <Badge variant="outline" className="font-normal">
+                        non disponibile su questo PMS
+                      </Badge>
+                    )}
                   </Label>
                   <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">{i.spiegazione}</p>
                 </div>
                 <Switch
                   id={i.chiave}
                   checked={attivo}
+                  disabled={!supportato}
                   onCheckedChange={(v) => void cambiaInterruttore(i.chiave, v)}
                   aria-label={i.titolo}
                 />
               </div>
             )
           })}
+
+          {provider.limiti?.length ? (
+            <div className="rounded-md border border-border bg-muted/40 p-3">
+              <p className="mb-2 text-sm font-medium">Perche&apos; alcune voci sono bloccate</p>
+              <ul className="flex list-disc flex-col gap-1 pl-5 text-sm leading-relaxed text-muted-foreground">
+                {provider.limiti.map((l) => (
+                  <li key={l}>{l}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

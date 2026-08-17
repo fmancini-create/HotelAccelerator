@@ -1,34 +1,62 @@
 /**
- * Lo strato che sta fra noi e il PMS.
+ * Il contratto fra noi e un PMS qualsiasi.
  *
- * PERCHE' UN'INTERFACCIA E NON CHIAMATE DIRETTE: del servizio Scidoo non
- * conosciamo ancora la forma esatta delle risposte (la documentazione non e'
- * ancora arrivata). Se il resto del sistema chiamasse direttamente Scidoo,
- * ogni sorpresa nella forma dei dati costringerebbe a riscrivere unione,
- * scritture e pagine. Con l'interfaccia in mezzo, adattare il connettore vero
- * significa scrivere UN file: tutto il resto e' gia' provato contro il finto.
+ * AGNOSTICO PER COSTRUZIONE: in questo file non compare il nome di nessun
+ * fornitore. Scidoo, come qualunque altro PMS, vive in `connectors/<nome>.ts` e
+ * viene raggiunto solo attraverso il registro. Aggiungere un PMS = un file
+ * nuovo + una riga nel registro, senza toccare unione, sincronizzazione, rotta
+ * o pagina.
  *
- * Il fornitore finto NON serve a fingere che funzioni: serve a poter provare
- * l'intero percorso (leggi -> confronta -> segnala -> metti in coda) su casi
- * che i dati veri non hanno ancora, e si attiva SOLO quando la struttura non
- * ha credenziali configurate e chi guarda lo vede dichiarato a schermo.
+ * LE CAPACITA' SI DICHIARANO, NON SI PRESUMONO. Non tutti i PMS sanno fare le
+ * stesse cose: alcuni espongono la rubrica, altri restituiscono le anagrafiche
+ * solo dentro le prenotazioni; alcuni permettono di riscrivere un campo, altri
+ * sono in sola lettura. Se il resto del sistema lo dovesse indovinare,
+ * finirebbe per offrire a schermo un interruttore che non fa nulla: l'utente lo
+ * accende, legge "salvato", e crede che da quel momento i dati vengano scritti
+ * nel PMS. Per questo ogni connettore dichiara cosa sa fare (`capabilities`) e
+ * PERCHE' non sa fare il resto (`limitations`), e quelle frasi arrivano fino
+ * alla pagina.
  */
 
 import type { PmsGuest } from "./merge"
 
+/** Le operazioni che un connettore puo' sapere fare. */
+export type PmsCapability = "readGuests" | "writeContact" | "writeTags" | "writeNote" | "writeConsent"
+
+export type PmsCapabilities = Record<PmsCapability, boolean>
+
+/** Nessuna capacita': punto di partenza onesto per un connettore nuovo. */
+export const NESSUNA_CAPACITA: PmsCapabilities = {
+  readGuests: false,
+  writeContact: false,
+  writeTags: false,
+  writeNote: false,
+  writeConsent: false,
+}
+
 /** Cosa serve a un connettore per parlare col PMS di UNA struttura. */
 export type PmsCredentials = {
   baseUrl: string
-  /** Il codice autorizzativo rilasciato da Scidoo dopo l'approvazione. */
+  /** La chiave o il codice autorizzativo rilasciato dal fornitore. */
   authCode: string
   /** Identificativo della struttura presso il PMS, quando serve. */
   propertyCode?: string | null
+  /** Opzioni specifiche del singolo connettore, lette dalla configurazione. */
+  options?: Record<string, unknown>
 }
 
 export type PagedGuests = {
   guests: PmsGuest[]
   /** Segnaposto per riprendere da dove si era arrivati. null = finito. */
   nextCursor: string | null
+  /**
+   * Cosa e' stato scartato durante la lettura, e perche'.
+   *
+   * Serve a non far passare per "letto tutto" una pagina in cui meta' delle
+   * anagrafiche erano inutilizzabili (email oscurate, ospiti senza
+   * identificativo). Un numero senza queste frasi sarebbe fuorviante.
+   */
+  scartati?: string[]
 }
 
 /** Cosa si puo' scrivere nel PMS, un tipo per interruttore. */
@@ -38,11 +66,29 @@ export type PmsWrite =
   | { kind: "note"; pmsGuestId: string; text: string; occurredAt?: string }
   | { kind: "consent"; pmsGuestId: string; consentKind: "marketing" | "gdpr"; granted: boolean; evidence?: unknown }
 
+/** Quale capacita' serve per ciascun tipo di scrittura. */
+export const CAPACITA_PER_SCRITTURA: Record<PmsWrite["kind"], PmsCapability> = {
+  contact: "writeContact",
+  tags: "writeTags",
+  note: "writeNote",
+  consent: "writeConsent",
+}
+
 export type PmsProvider = {
+  /** Chiave tecnica del connettore, uguale al valore salvato in `pms_type`. */
+  readonly slug: string
   /** Nome dichiarato a schermo: chi guarda deve sapere se sta vedendo dati veri. */
   readonly name: string
   /** true solo per il fornitore finto. Serve a marcare la pagina in modo visibile. */
   readonly isFake: boolean
+  /** Cosa questo connettore sa fare davvero. */
+  readonly capabilities: PmsCapabilities
+  /**
+   * Cosa NON sa fare e perche', in frasi leggibili da chi non conosce l'API.
+   * Vanno mostrate accanto agli interruttori spenti, altrimenti sembrerebbero
+   * spenti per scelta nostra invece che per un limite del PMS.
+   */
+  readonly limitations: string[]
   /** Verifica che le credenziali funzionino, senza modificare nulla. */
   testConnection(): Promise<{ ok: boolean; detail: string }>
   /** Legge gli ospiti a pagine. `cursor` null = dall'inizio. */
@@ -54,11 +100,14 @@ export type PmsProvider = {
 /**
  * Il fornitore finto.
  *
- * I dati imitano la forma di quelli veri di Villa I Barronci (numeri fiorentini
- * `055…`, cellulari `3…`, un ospite estero) e includono deliberatamente i casi
- * scomodi: lo stesso numero scritto in due formati, un ospite senza telefono,
- * un consenso revocato da un lato solo. Sono i casi su cui l'unione va provata
- * PRIMA di toccare l'archivio vero.
+ * I dati imitano la forma di quelli veri (numeri fiorentini `055…`, cellulari
+ * `3…`, un ospite estero) e includono deliberatamente i casi scomodi: lo stesso
+ * numero scritto in due formati, un ospite senza telefono, un consenso revocato
+ * da un lato solo. Sono i casi su cui l'unione va provata PRIMA di toccare
+ * l'archivio vero.
+ *
+ * Non serve a fingere che l'integrazione funzioni: si attiva SOLO quando la
+ * struttura non ha credenziali configurate, e chi guarda lo vede dichiarato.
  */
 export function makeFakeProvider(): PmsProvider {
   const ospiti: PmsGuest[] = [
@@ -103,10 +152,18 @@ export function makeFakeProvider(): PmsProvider {
   ]
 
   return {
+    slug: "fake",
     name: "Fornitore di prova (nessuna credenziale configurata)",
     isFake: true,
+    // Legge (dalla sua lista finta) ma non scrive da nessuna parte: dichiararlo
+    // scrivente sarebbe la bugia piu' dannosa, perche' il resto del sistema si
+    // comporterebbe come se le scritture arrivassero a destinazione.
+    capabilities: { ...NESSUNA_CAPACITA, readGuests: true },
+    limitations: [
+      "Fornitore di prova: le anagrafiche non arrivano da nessun PMS e nessuna scrittura viene inviata.",
+    ],
     async testConnection() {
-      return { ok: true, detail: "Fornitore di prova: nessuna chiamata verso Scidoo." }
+      return { ok: true, detail: "Fornitore di prova: nessuna chiamata verso un PMS." }
     },
     async listGuests(cursor, limit) {
       const start = cursor ? Number(cursor) : 0
@@ -118,38 +175,6 @@ export function makeFakeProvider(): PmsProvider {
       // Deliberatamente NON scrive nulla e lo dichiara: un finto che risponde
       // "fatto" insegnerebbe a fidarsi di una scrittura mai avvenuta.
       return { ok: false, detail: "Fornitore di prova: la scrittura non viene inviata a nessun sistema." }
-    },
-  }
-}
-
-/**
- * Il connettore Scidoo vero.
- *
- * NON e' ancora implementato, e questo e' deliberato: senza la documentazione
- * ufficiale scriverei endpoint e nomi di campo indovinati, che sembrerebbero
- * codice funzionante e fallirebbero al primo contatto col servizio. Meglio un
- * errore che dice esattamente cosa manca.
- */
-export function makeScidooProvider(creds: PmsCredentials): PmsProvider {
-  const nonPronto = (azione: string) => ({
-    ok: false,
-    detail:
-      `Connettore Scidoo non ancora attivo (${azione}): manca la documentazione ufficiale ` +
-      `degli endpoint. Le credenziali sono salvate e cifrate; appena la documentazione ` +
-      `e' disponibile si implementa questo solo file.`,
-  })
-
-  return {
-    name: `Scidoo (${creds.baseUrl || "indirizzo non configurato"})`,
-    isFake: false,
-    async testConnection() {
-      return nonPronto("verifica connessione")
-    },
-    async listGuests() {
-      throw new Error(nonPronto("lettura ospiti").detail)
-    },
-    async applyWrite() {
-      return nonPronto("scrittura")
     },
   }
 }

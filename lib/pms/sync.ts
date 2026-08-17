@@ -16,7 +16,8 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { decryptSecretIfNeeded } from "@/lib/crypto/secrets"
 import { phoneMatchKey } from "@/lib/telephony/phone-match"
 import { uniscoContattoEOspite, type CrmContact, type PmsGuest, type MergeField } from "./merge"
-import { makeFakeProvider, makeScidooProvider, type PmsProvider } from "./provider"
+import { makeFakeProvider, CAPACITA_PER_SCRITTURA, type PmsCapability, type PmsProvider, type PmsWrite } from "./provider"
+import { creaConnettore } from "./connectors/registry"
 
 export type SyncEsito = {
   runId: string | null
@@ -53,7 +54,6 @@ export async function caricaProvider(propertyId: string): Promise<{
       "id, pms_type, api_url, api_key_encrypted, auth_code_encrypted, is_active, last_sync_cursor, write_contacts, write_tags, write_notes, write_consents, settings",
     )
     .eq("property_id", propertyId)
-    .eq("pms_type", "scidoo")
     .maybeSingle()
 
   // Un errore di lettura NON e' "nessuna configurazione": confonderli farebbe
@@ -73,16 +73,52 @@ export async function caricaProvider(propertyId: string): Promise<{
   }
 
   const settings = (data.settings ?? {}) as Record<string, unknown>
+  const propertyCode =
+    typeof settings.property_code === "string"
+      ? settings.property_code
+      : typeof settings.property_code === "number"
+        ? String(settings.property_code)
+        : null
+
   return {
-    provider: makeScidooProvider({
+    // Il tipo lo decide la configurazione, non questo file: cosi' una struttura
+    // con un altro PMS non richiede di riscrivere la sincronizzazione.
+    provider: creaConnettore(String(data.pms_type ?? ""), {
       baseUrl: String(data.api_url ?? ""),
       authCode,
-      propertyCode: typeof settings.property_code === "string" ? settings.property_code : null,
+      propertyCode,
+      options: settings,
     }),
     interruttori,
     cursor: data.last_sync_cursor ?? null,
     integrationId: data.id,
   }
+}
+
+/**
+ * Confronta gli interruttori accesi con quello che il connettore sa davvero
+ * fare, e restituisce le frasi da mostrare.
+ *
+ * Serve perche' un interruttore acceso su una capacita' assente e' la peggiore
+ * delle bugie: chi lo ha acceso crede che da quel momento i dati vengano scritti
+ * nel PMS, e invece non parte nulla. Meglio dirlo in chiaro a ogni passata.
+ */
+export function scrittureNonSupportate(
+  provider: PmsProvider,
+  interruttori: { contacts: boolean; tags: boolean; notes: boolean; consents: boolean },
+): string[] {
+  const coppie: Array<[boolean, PmsCapability, string]> = [
+    [interruttori.contacts, "writeContact", "anagrafiche"],
+    [interruttori.tags, "writeTags", "etichette"],
+    [interruttori.notes, "writeNote", "note"],
+    [interruttori.consents, "writeConsent", "consensi"],
+  ]
+  return coppie
+    .filter(([acceso, capacita]) => acceso && !provider.capabilities[capacita])
+    .map(
+      ([, , nome]) =>
+        `Interruttore "${nome}" acceso ma ${provider.name} non supporta questa scrittura: non viene inviato nulla.`,
+    )
 }
 
 /** I campi del contatto che l'unione puo' riempire, mappati sulle colonne vere. */
@@ -226,10 +262,11 @@ export async function sincronizzaDalPms(
   }
 
   if (provider.isFake) {
-    esito.avvisi.push(
-      "Nessuna credenziale Scidoo configurata: i dati letti sono di prova e non provengono dal PMS.",
-    )
+    esito.avvisi.push("Nessuna credenziale PMS configurata: i dati letti sono di prova e non provengono dal PMS.")
   }
+  // Le capacita' mancanti si dichiarano PRIMA di iniziare: chi legge l'esito
+  // deve poter distinguere "non c'era nulla da scrivere" da "non si puo' scrivere".
+  esito.avvisi.push(...scrittureNonSupportate(provider, interruttori))
   if (!dryRun && provider.isFake) {
     esito.avvisi.push("Scrittura in rubrica rifiutata: non si salvano dati di prova nell'archivio vero.")
   }
@@ -246,6 +283,9 @@ export async function sincronizzaDalPms(
   try {
     const pagina = await provider.listGuests(cursor, limit)
     esito.ospitiLetti = pagina.guests.length
+    // Quello che il PMS non ha saputo dare va detto: "12 ospiti letti" senza
+    // queste frasi farebbe credere che fossero tutti quelli del periodo.
+    if (pagina.scartati?.length) esito.avvisi.push(...pagina.scartati)
 
     for (const ospite of pagina.guests) {
       const { contatto, ambiguo } = await trovaContatto(sb, propertyId, ospite)
@@ -270,11 +310,35 @@ export async function sincronizzaDalPms(
       esito.campiRiempiti += Object.keys(unione.daRiempire).length
       esito.conflittiTrovati += unione.conflitti.length
 
-      const scritturePossibili =
-        Object.keys(unione.daScrivereNelPms).length + (unione.tag.daScrivereNelPms.length > 0 ? 1 : 0)
-      const attivo = interruttori.contacts || interruttori.tags
-      if (attivo && !dryRun) esito.scrittureInviate += 0
-      esito.scrittureInAnteprima += scritturePossibili
+      // Le scritture si costruiscono come richieste esplicite: cosi' la
+      // decisione "si puo' inviare?" e' una sola riga di confronto con le
+      // capacita' dichiarate, invece di essere sparsa in condizioni diverse.
+      const richieste: PmsWrite[] = []
+      if (Object.keys(unione.daScrivereNelPms).length > 0) {
+        richieste.push({
+          kind: "contact",
+          pmsGuestId: ospite.pmsGuestId,
+          fields: unione.daScrivereNelPms as Record<string, string>,
+        })
+      }
+      if (unione.tag.daScrivereNelPms.length > 0) {
+        richieste.push({ kind: "tags", pmsGuestId: ospite.pmsGuestId, add: unione.tag.daScrivereNelPms })
+      }
+      esito.scrittureInAnteprima += richieste.length
+
+      for (const richiesta of richieste) {
+        const capacita = CAPACITA_PER_SCRITTURA[richiesta.kind]
+        const acceso =
+          richiesta.kind === "contact" ? interruttori.contacts : richiesta.kind === "tags" ? interruttori.tags : false
+        if (!acceso || dryRun || provider.isFake || !provider.capabilities[capacita]) continue
+
+        const esitoScrittura = await provider.applyWrite(richiesta)
+        // Una scrittura rifiutata NON si conta fra quelle inviate, e il motivo
+        // arriva a schermo: il contrario e' come nasce un "inviate: 12" con
+        // l'archivio del PMS invariato.
+        if (esitoScrittura.ok) esito.scrittureInviate += 1
+        else esito.avvisi.push(`Scrittura ${richiesta.kind} su ${ospite.pmsGuestId} non eseguita: ${esitoScrittura.detail}`)
+      }
 
       if (dryRun || provider.isFake) continue
 

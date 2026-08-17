@@ -4,6 +4,7 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { resolveIdentity } from "@/lib/telephony/user-extension"
 import { caricaProvider, sincronizzaDalPms } from "@/lib/pms/sync"
+import type { PmsCapability } from "@/lib/pms/provider"
 import { isValidUuid } from "@/lib/platform-context"
 
 /**
@@ -29,7 +30,15 @@ export async function GET(request: NextRequest) {
   const sb = createServiceClient()
 
   const { provider, interruttori, cursor } = await caricaProvider(propertyId)
-  const prova = await provider.testConnection()
+  // La verifica chiama il PMS: se le credenziali sono sbagliate o il servizio e'
+  // fermo, deve diventare "connessione non riuscita" con il motivo, non un 500
+  // che porterebbe via l'intera pagina di governo (conflitti compresi).
+  let prova: { ok: boolean; detail: string }
+  try {
+    prova = await provider.testConnection()
+  } catch (e) {
+    prova = { ok: false, detail: e instanceof Error ? e.message : String(e) }
+  }
 
   const [passate, conflitti, coda, contatti] = await Promise.all([
     sb
@@ -83,7 +92,17 @@ export async function GET(request: NextRequest) {
   for (const r of coda.data ?? []) perTipo[r.kind] = (perTipo[r.kind] ?? 0) + 1
 
   return NextResponse.json({
-    provider: { name: provider.name, fake: provider.isFake, connessione: prova },
+    provider: {
+      slug: provider.slug,
+      name: provider.name,
+      fake: provider.isFake,
+      connessione: prova,
+      // Consegnate al client perche' la pagina possa disabilitare gli
+      // interruttori impossibili E dire perche': un interruttore spento senza
+      // spiegazione sembra una scelta nostra, non un limite del PMS.
+      capacita: provider.capabilities,
+      limiti: provider.limitations,
+    },
     interruttori,
     cursor,
     rubrica: {
@@ -132,6 +151,14 @@ export async function POST(request: NextRequest) {
 /** I quattro interruttori della scrittura verso il PMS. */
 const INTERRUTTORI = ["write_contacts", "write_tags", "write_notes", "write_consents"] as const
 
+/** Quale capacita' del connettore serve per ciascun interruttore. */
+const CAPACITA_INTERRUTTORE: Record<(typeof INTERRUTTORI)[number], PmsCapability> = {
+  write_contacts: "writeContact",
+  write_tags: "writeTags",
+  write_notes: "writeNote",
+  write_consents: "writeConsent",
+}
+
 export async function PUT(request: NextRequest) {
   const decision = await requireAreaApi("crm", request)
   if (isAreaDenied(decision)) return areaDeniedResponse(decision)
@@ -158,6 +185,24 @@ export async function PUT(request: NextRequest) {
   }
   if (Object.keys(modifiche).length === 0) {
     return NextResponse.json({ error: "Nessun interruttore valido nella richiesta" }, { status: 400 })
+  }
+
+  // Accendere una scrittura che il connettore non sa fare non si salva: sarebbe
+  // una promessa che nessun codice puo' mantenere, e chi l'ha accesa crederebbe
+  // che da quel momento i dati finiscano nel PMS. Si rifiuta dicendo perche'.
+  const { provider } = await caricaProvider(identity.propertyId)
+  const nonSupportati = INTERRUTTORI.filter(
+    (chiave) => modifiche[chiave] === true && !provider.capabilities[CAPACITA_INTERRUTTORE[chiave]],
+  )
+  if (nonSupportati.length > 0) {
+    return NextResponse.json(
+      {
+        error: `${provider.name} non supporta questa scrittura: l'interruttore non e' stato salvato.`,
+        interruttoriRifiutati: nonSupportati,
+        motivi: provider.limitations,
+      },
+      { status: 422 },
+    )
   }
 
   const sb = createServiceClient()
