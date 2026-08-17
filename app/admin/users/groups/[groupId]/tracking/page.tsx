@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, use } from "react"
-import { Brain, Mail, MessageSquare, Phone, Plus, Trash2, AlertTriangle } from "lucide-react"
+import { Mail, MessageSquare, Phone, Plus, Trash2, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
@@ -119,14 +119,24 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? "Avvio non riuscito")
       const r = data.report ?? {}
-      const nuove = (r.byModel ?? 0) + (r.byRules ?? 0)
+      // Si usa `scanned`, non `byRules + byModel`: le conversazioni scartate
+      // come non pertinenti (`skippedNoise`) vengono comunque registrate come
+      // lette, quindi entrano nel contatore qui sotto. Misurato: il contatore
+      // sale di `byRules + byModel + skippedNoise`, cioe' esattamente `scanned`
+      // (12 = 4+4+4). Sommando solo le prime due il messaggio diceva 35 mentre
+      // il contatore saliva di 51: due numeri sulla stessa schermata che si
+      // contraddicono fanno sospettare un errore anche quando non c'e'.
+      const lette = r.scanned ?? 0
+      const chiamate = r.calls ?? 0
+      const conRichiesta = r.withDemand ?? 0
       setMessage({
         kind: "ok",
         text:
-          nuove === 0 && (r.calls ?? 0) === 0
+          lette === 0 && chiamate === 0
             ? `Nessuna conversazione nuova da leggere (${r.alreadyDone ?? 0} già fatte).`
-            : `Lette ${nuove} conversazioni nuove, di cui ${r.withDemand ?? 0} con una richiesta` +
-              `${r.calls ? `, più ${r.calls} telefonate` : ""}.`,
+            : `${lette === 1 ? "Letta 1 conversazione nuova" : `Lette ${lette} conversazioni nuove`}, di cui ` +
+              `${conRichiesta === 1 ? "1 con una richiesta" : `${conRichiesta} con una richiesta`}` +
+              `${chiamate ? `, più ${chiamate === 1 ? "1 telefonata" : `${chiamate} telefonate`}` : ""}.`,
       })
       await load()
     } catch (e) {
@@ -189,20 +199,9 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
         backLabel="Gruppi di lavoro"
       />
       <main className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Brain className="h-5 w-5 text-primary" aria-hidden="true" />
-            </span>
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-balance">Cervello di {groupName}</h1>
-              <p className="text-sm text-muted-foreground text-pretty">
-                Cosa leggere dalle conversazioni di questo reparto, e cosa ricavarne.
-              </p>
-            </div>
-          </div>
-        </div>
-
+        {/* Titolo e sottotitolo stanno nell'AdminHeader: ripeterli qui parola per
+            parola aggiungeva un secondo <h1> alla pagina e sembrava un errore di
+            resa. */}
         {message ? (
           <div
             role="status"
