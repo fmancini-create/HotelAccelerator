@@ -19,6 +19,17 @@ export interface GenerateReplyResult {
   staffRequested: boolean
   /** Contact details gathered anywhere in the conversation. */
   contact: HandoffContact
+  /**
+   * La risposta si appoggia davvero alla base di conoscenza.
+   *
+   * `reason` non basta a chi chiama: "conversational" copre due casi opposti -
+   * un saluto (niente da cercare) e una domanda vera che la base non copriva
+   * (una lacuna). Chi registra le lacune deve poter distinguere i due, quindi
+   * il fatto viene dichiarato invece di essere ricostruito dal punteggio.
+   */
+  grounded: boolean
+  /** Il messaggio in arrivo era soltanto un saluto: non conteneva domande. */
+  greetingOnly: boolean
 }
 
 /**
@@ -412,6 +423,8 @@ export async function generateReply(
       reason: chunks.length === 0 ? "no_match" : "low_confidence",
       staffRequested: object.staff_requested,
       contact,
+      grounded,
+      greetingOnly,
     }
   }
 
@@ -422,5 +435,7 @@ export async function generateReply(
     reason: grounded ? "ok" : "conversational",
     staffRequested: object.staff_requested,
     contact,
+    grounded,
+    greetingOnly,
   }
 }

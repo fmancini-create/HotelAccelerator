@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { generateReply, type ConversationTurn } from "./generate"
 import { contactIsComplete, registerStaffHandoff } from "./handoff"
 import { getBasesForChannel, type AiMode } from "./knowledge-bases"
+import { eUnaLacuna, registraLacuna } from "./gaps"
 import {
   trovaCandidatiPerNumero,
   trovaCandidatiPerEmail,
@@ -112,6 +113,37 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     history,
   )
 
+  // L'esperienza torna nelle basi: quando la base NON copriva la domanda, la
+  // richiesta viene messa in coda per l'approvazione di una persona. Si registra
+  // qui, prima dei rami per modo, perche' la lacuna esiste allo stesso modo se
+  // la risposta e' stata inviata, salvata come bozza o non data affatto.
+  //
+  // Mai bloccante: l'ospite sta aspettando una risposta e un problema nello
+  // scrivere la lacuna non deve togliergliela.
+  try {
+    if (
+      eUnaLacuna({
+        soloSaluto: result.greetingOnly,
+        fondata: result.grounded,
+        domanda: incomingText,
+      })
+    ) {
+      await registraLacuna({
+        supabase,
+        propertyId,
+        conversationId,
+        channel,
+        knowledgeBaseId: primary.id,
+        domanda: incomingText,
+        rispostaIa: result.answer,
+        similarity: result.confidence,
+        threshold: primary.confidence_threshold,
+      })
+    }
+  } catch (err) {
+    console.log(`[v0] registrazione lacuna fallita: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
   if (!result.answer) {
     // No confident answer from the knowledge base. In autopilot mode we send a
     // brief courtesy/handoff message instead of staying silent, so the guest is
@@ -150,6 +182,8 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
             ai_generated: true,
             ai_fallback: true,
             ai_confidence: result.confidence,
+            ai_grounded: result.grounded,
+            ai_reason: result.reason ?? null,
             ai_knowledge_base_id: primary.id,
           },
         })
@@ -253,6 +287,11 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     channel,
     ai_generated: true,
     ai_confidence: result.confidence,
+    // Il punteggio da solo non dice se la risposta si appoggiava alla base: la
+    // soglia della base puo' cambiare dopo, e allora lo stesso numero
+    // significherebbe il contrario. Il fatto viene salvato quando e' noto.
+    ai_grounded: result.grounded,
+    ai_reason: result.reason ?? null,
     ai_source_ids: result.usedChunks.map((c) => c.source_id),
     ai_knowledge_base_id: primary.id,
     ...(handoffMeta ?? {}),
