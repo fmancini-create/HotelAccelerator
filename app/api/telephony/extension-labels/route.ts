@@ -26,7 +26,7 @@ const SCAN = 2000
  * passerebbe il controllo dei tipi per restituire `undefined` a runtime.
  */
 type RigaChiamata = { extension: string | null; status: string | null; started_at: string | null }
-type RigaEtichetta = { extension: string; label: string; kind: string }
+type RigaEtichetta = { extension: string; label: string; kind: string; no_answer_seconds: number | null }
 type RigaAssegnazione = { extension: string; user_id: string }
 type RigaUtente = { id: string; name: string | null }
 
@@ -40,7 +40,10 @@ async function elenco(propertyId: string) {
       .eq("property_id", propertyId)
       .order("started_at", { ascending: false, nullsFirst: false })
       .limit(SCAN),
-    supabase.from("telephony_extension_labels").select("extension, label, kind").eq("property_id", propertyId),
+    supabase
+      .from("telephony_extension_labels")
+      .select("extension, label, kind, no_answer_seconds")
+      .eq("property_id", propertyId),
     supabase.from("telephony_user_extensions").select("extension, user_id").eq("property_id", propertyId),
   ])
 
@@ -56,7 +59,19 @@ async function elenco(propertyId: string) {
   )
   const etichetta = new Map(
     ((etichette.data ?? []) as RigaEtichetta[]).map(
-      (e) => [String(e.extension), { label: String(e.label), kind: String(e.kind) }] as const,
+      (e) =>
+        [
+          String(e.extension),
+          {
+            label: String(e.label),
+            kind: String(e.kind),
+            // Portato fino all'elenco: se si fermasse qui il pannello mostrerebbe
+            // sempre il campo vuoto e il primo salvataggio del nome cancellerebbe
+            // il timeout dichiarato, spegnendo senza avviso il riconoscimento
+            // delle chiamate cadute.
+            noAnswerSeconds: typeof e.no_answer_seconds === "number" ? e.no_answer_seconds : null,
+          },
+        ] as const,
     ),
   )
 
@@ -85,6 +100,7 @@ async function elenco(propertyId: string) {
       last_call_at: v.last,
       label: etichetta.get(extension)?.label ?? null,
       kind: etichetta.get(extension)?.kind ?? null,
+      no_answer_seconds: etichetta.get(extension)?.noAnswerSeconds ?? null,
       person: persona.get(extension) ?? null,
     }))
     .sort((a, b) => b.calls - a.calls || a.extension.localeCompare(b.extension))
@@ -124,7 +140,7 @@ export async function PUT(request: NextRequest) {
     const supabase = createServiceClient()
 
     const body = (await request.json().catch(() => null)) as
-      | { extension?: unknown; label?: unknown; kind?: unknown }
+      | { extension?: unknown; label?: unknown; kind?: unknown; no_answer_seconds?: unknown }
       | null
     if (!body) return NextResponse.json({ error: "Richiesta non valida." }, { status: 400 })
 
@@ -135,6 +151,43 @@ export async function PUT(request: NextRequest) {
 
     const label = (typeof body.label === "string" ? body.label : "").trim().slice(0, 80)
     const kind = typeof body.kind === "string" && TIPI.has(body.kind) ? body.kind : "other"
+
+    /**
+     * I secondi di squillo dopo i quali il gruppo lascia cadere la chiamata.
+     *
+     * Da questo numero dipende la riclassificazione delle chiamate cadute: un
+     * valore sbagliato marcherebbe "senza risposta" delle conversazioni vere.
+     * Percio' un valore non numerico o fuori scala viene RESPINTO invece di
+     * essere ripiegato in silenzio su un numero plausibile: chi lo digita deve
+     * sapere che non e' stato accettato.
+     *
+     * Il limite di 600 secondi non e' estetico: oltre i 10 minuti non e' piu' un
+     * timeout di squillo, e prenderlo per tale trasformerebbe in "perse" tutte
+     * le telefonate piu' brevi di quella soglia.
+     */
+    let noAnswerSeconds: number | null = null
+    const grezzo = body.no_answer_seconds
+    if (grezzo !== undefined && grezzo !== null && grezzo !== "") {
+      const n = typeof grezzo === "number" ? grezzo : Number.parseInt(String(grezzo), 10)
+      if (!Number.isInteger(n) || n < 5 || n > 600) {
+        return NextResponse.json(
+          { error: "Secondi di squillo non validi: indica un numero intero fra 5 e 600." },
+          { status: 400 },
+        )
+      }
+      noAnswerSeconds = n
+    }
+
+    // Il timeout ha senso solo su un gruppo di squillo. Accettarlo su un
+    // telefono personale farebbe dedurre chiamate perse dove la durata e' tempo
+    // di conversazione: si risponderebbe "salvato" a una richiesta che sporca i
+    // dati, quindi si respinge.
+    if (noAnswerSeconds !== null && kind !== "group") {
+      return NextResponse.json(
+        { error: "I secondi di squillo si dichiarano solo su un gruppo di squillo." },
+        { status: 400 },
+      )
+    }
 
     // Etichetta svuotata = rimozione. Salvare una stringa vuota lascerebbe una
     // riga che nel registro si vedrebbe come un nome invisibile.
@@ -154,6 +207,14 @@ export async function PUT(request: NextRequest) {
         extension,
         label,
         kind,
+        // Scritto SEMPRE, anche quando e' `null`.
+        //
+        // Ometterlo dall'upsert non lo lascerebbe "invariato": cambiando il tipo
+        // da gruppo a telefono condiviso il vecchio timeout resterebbe in
+        // archivio e continuerebbe a far dedurre chiamate perse su un interno
+        // che non e' piu' un gruppo. Il valore mostrato nel pannello e quello
+        // salvato sono cosi' la stessa cosa.
+        no_answer_seconds: noAnswerSeconds,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "property_id,extension" },
@@ -163,7 +224,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Salvataggio non riuscito." }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, extension, label, kind })
+    return NextResponse.json({ ok: true, extension, label, kind, no_answer_seconds: noAnswerSeconds })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     if (error instanceof Error && error.message === "Non autenticato") {

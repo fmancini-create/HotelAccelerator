@@ -44,6 +44,13 @@ type RigaChiamata = {
   id: string
   direction: string | null
   status: string | null
+  /**
+   * Da dove viene `status`: "provider" se l'ha dichiarato il centralino,
+   * "ring_group_timeout" se l'abbiamo dedotto noi dal timeout del gruppo di
+   * squillo. Serve in pagina per non spacciare una deduzione per un dato
+   * certificato dal centralino.
+   */
+  status_source: string | null
   counterpart_number: string | null
   extension: string | null
   started_at: string | null
@@ -159,7 +166,7 @@ export async function GET(request: NextRequest) {
         supabase
           .from("phone_calls")
           .select(
-            "id, direction, status, counterpart_number, extension, started_at, duration_seconds, contact_id, user_id",
+            "id, direction, status, status_source, counterpart_number, extension, started_at, duration_seconds, contact_id, user_id",
           )
           .eq("property_id", identity.propertyId),
       )
@@ -237,6 +244,7 @@ export async function GET(request: NextRequest) {
           id: c.id,
           direction: c.direction,
           status: c.status ?? "completed",
+          status_source: c.status_source ?? "provider",
           number: c.counterpart_number ?? null,
           started_at: c.started_at,
           duration_seconds: typeof c.duration_seconds === "number" ? c.duration_seconds : null,
