@@ -4,7 +4,19 @@ import { useRouter } from "next/navigation"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAdminAuth } from "@/lib/admin-hooks"
-import { Globe, Users, Radio, Lock, Boxes, BarChart3, FileText, Activity, ChevronRight, Scale } from "lucide-react"
+import {
+  Globe,
+  Users,
+  Radio,
+  Lock,
+  Boxes,
+  BarChart3,
+  FileText,
+  Activity,
+  ChevronRight,
+  Scale,
+  KeyRound,
+} from "lucide-react"
 
 interface SettingsItem {
   id: string

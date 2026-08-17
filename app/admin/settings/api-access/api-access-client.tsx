@@ -293,11 +293,21 @@ export function ApiAccessClient() {
               <code className="block rounded bg-muted px-3 py-2 font-mono text-xs">
                 Authorization: Bearer &lt;token&gt;
               </code>
-              <p className="text-muted-foreground leading-relaxed">
-                Usa esattamente questo indirizzo, con <code className="font-mono">www</code>: senza
-                di esso la richiesta viene rediretta e l&apos;intestazione di autenticazione può
-                andare perduta, restituendo un errore di accesso.
-              </p>
+              {/* L'avvertenza sul `www` si mostra SOLO se l'indirizzo lo contiene
+                  davvero: in sviluppo l'indirizzo e' `http://localhost:3000` e la
+                  nota indicava una parte inesistente (visto a schermo). */}
+              {stato.endpoint.includes("://www.") ? (
+                <p className="text-muted-foreground leading-relaxed">
+                  Usa esattamente questo indirizzo, con <code className="font-mono">www</code>:
+                  senza di esso la richiesta viene rediretta e l&apos;intestazione di autenticazione
+                  può andare perduta, restituendo un errore di accesso.
+                </p>
+              ) : (
+                <p className="text-muted-foreground leading-relaxed">
+                  Usa esattamente questo indirizzo, senza modificarlo: un redirect può far perdere
+                  l&apos;intestazione di autenticazione e restituire un errore di accesso.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

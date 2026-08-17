@@ -42,7 +42,13 @@ const CANONICAL_PUBLIC_ORIGIN = "https://www.hotelaccelerator.com"
 function publicBase(request: NextRequest): string {
   const url = new URL(request.url)
   const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1"
-  return isLocal ? url.origin : CANONICAL_PUBLIC_ORIGIN
+  if (!isLocal) return CANONICAL_PUBLIC_ORIGIN
+  // Lo SCHEMA va ricostruito, non ereditato da `url.origin`: quando la pagina e'
+  // servita da un proxy in https che inoltra a `localhost:3000`, `url.origin`
+  // combina lo schema esterno con l'host interno e produce
+  // `https://localhost:3000` — un indirizzo che NON esiste (visto a schermo).
+  // In locale il protocollo e' sempre http.
+  return `http://${url.host}`
 }
 
 /**
