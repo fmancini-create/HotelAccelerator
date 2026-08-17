@@ -100,6 +100,13 @@ export function ApiAccessClient() {
     }
   }
 
+  // Costruito dall'indirizzo REALE restituito dal server, non da uno scritto a
+  // mano: cosi' l'esempio resta corretto sia in sviluppo sia in produzione.
+  const adesso = new Date()
+  const esempioChiamata = stato
+    ? `curl -H "Authorization: Bearer ${tokenInChiaro ?? "<token>"}" \\\n  "${stato.endpoint}?year=${adesso.getFullYear()}&month=${adesso.getMonth() + 1}"`
+    : ""
+
   return (
     /* Stesso contenitore e stessa intestazione della pagina Domini, che sta nella
        medesima sezione: l'intestazione la mette il componente, non il layout. */
@@ -306,6 +313,32 @@ export function ApiAccessClient() {
                 <p className="text-muted-foreground leading-relaxed">
                   Usa esattamente questo indirizzo, senza modificarlo: un redirect può far perdere
                   l&apos;intestazione di autenticazione e restituire un errore di accesso.
+                </p>
+              )}
+            </div>
+
+            {/* Esempio pronto da copiare: la versione remota dello stesso lavoro
+                lo aveva e questa riscrittura lo aveva perso. Mostra il token vero
+                solo se l'utente ha premuto "Mostra". */}
+            <div className="space-y-2">
+              <p className="font-medium">Esempio di chiamata</p>
+              <div className="flex flex-wrap items-start gap-2">
+                <code className="flex-1 whitespace-pre-wrap break-all rounded bg-muted px-3 py-2 font-mono text-xs">
+                  {esempioChiamata}
+                </code>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void copia(esempioChiamata, "Esempio")}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copia
+                </Button>
+              </div>
+              {!tokenInChiaro && (
+                <p className="text-muted-foreground leading-relaxed">
+                  Premi <span className="font-medium">Mostra</span> qui sopra per inserire il token
+                  reale al posto di <code className="font-mono">&lt;token&gt;</code>.
                 </p>
               )}
             </div>
