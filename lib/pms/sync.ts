@@ -119,24 +119,63 @@ async function trovaContatto(
       .eq("property_id", propertyId)
       .eq("pms_guest_id", ospite.pmsGuestId)
       .maybeSingle()
-    if (data) return { contatto: mappaContatto(data), ambiguo: false }
+    if (data) return { contatto: await conProveConsenso(sb, mappaContatto(data)), ambiguo: false }
   }
 
   const email = String(ospite.email ?? "").trim().toLowerCase()
   if (email) {
     const { data } = await sb.from("contacts").select(campi).eq("property_id", propertyId).ilike("email", email)
-    if (data && data.length === 1) return { contatto: mappaContatto(data[0]), ambiguo: false }
+    if (data && data.length === 1) {
+      return { contatto: await conProveConsenso(sb, mappaContatto(data[0])), ambiguo: false }
+    }
     if (data && data.length > 1) return { contatto: null, ambiguo: true }
   }
 
   const chiave = phoneMatchKey(ospite.phone)
   if (chiave) {
     const { data } = await sb.from("contacts").select(campi).eq("property_id", propertyId).eq("phone_digits", chiave)
-    if (data && data.length === 1) return { contatto: mappaContatto(data[0]), ambiguo: false }
+    if (data && data.length === 1) {
+      return { contatto: await conProveConsenso(sb, mappaContatto(data[0])), ambiguo: false }
+    }
     if (data && data.length > 1) return { contatto: null, ambiguo: true }
   }
 
   return { contatto: null, ambiguo: false }
+}
+
+/**
+ * Aggiunge al contatto la risposta a una domanda che i suoi campi non sanno
+ * dare: quel consenso e' stato DICHIARATO da qualcuno, o e' solo il valore con
+ * cui e' nata la colonna?
+ *
+ * Serve perche' sui dati veri `marketing_consent` e `gdpr_consent` valgono
+ * `false` su 878 contatti su 878. Senza questa lettura le regole leggerebbero
+ * 878 revoche inesistenti e spegnerebbero consensi veri dentro il PMS.
+ */
+async function conProveConsenso(
+  sb: ReturnType<typeof createServiceClient>,
+  contatto: CrmContact,
+): Promise<CrmContact> {
+  const { data, error } = await sb
+    .from("contact_consent_events")
+    .select("consent_kind")
+    .eq("contact_id", contatto.id)
+
+  // Se la lettura FALLISCE non si finge "nessuna prova": senza prova le regole
+  // recepirebbero il SI' del PMS, e un guasto passeggero riaccenderebbe un
+  // consenso revocato. Meglio trattare l'ignoto come "dichiarato" e non
+  // toccare nulla: la scrittura verso il PMS resta ferma.
+  if (error) {
+    return { ...contatto, marketingConsentDichiarato: true, gdprConsentDichiarato: true }
+  }
+
+  const righe = (data ?? []) as Array<{ consent_kind: string }>
+  const tipi = new Set(righe.map((r) => String(r.consent_kind)))
+  return {
+    ...contatto,
+    marketingConsentDichiarato: tipi.has("marketing"),
+    gdprConsentDichiarato: tipi.has("gdpr"),
+  }
 }
 
 function mappaContatto(r: Record<string, unknown>): CrmContact {

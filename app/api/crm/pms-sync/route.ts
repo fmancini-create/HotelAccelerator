@@ -4,14 +4,17 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { resolveIdentity } from "@/lib/telephony/user-extension"
 import { caricaProvider, sincronizzaDalPms } from "@/lib/pms/sync"
+import { isValidUuid } from "@/lib/platform-context"
 
 /**
  * Governo della sincronizzazione anagrafiche col PMS.
  *
- * GET  = stato: connessione, interruttori, ultime passate, conflitti aperti.
- * POST = esegue una passata. Per difetto in **prova a vuoto**: legge, confronta e
- *        dice cosa farebbe, senza scrivere niente da nessuna parte. Scrivere
- *        richiede `dryRun: false` esplicito.
+ * GET   = stato: connessione, interruttori, ultime passate, conflitti aperti.
+ * POST  = esegue una passata. Per difetto in **prova a vuoto**: legge, confronta e
+ *         dice cosa farebbe, senza scrivere niente da nessuna parte. Scrivere
+ *         richiede `dryRun: false` esplicito.
+ * PUT   = accende o spegne un interruttore della scrittura verso il PMS.
+ * PATCH = registra la decisione su un valore in conflitto.
  */
 
 export async function GET(request: NextRequest) {
@@ -124,4 +127,133 @@ export async function POST(request: NextRequest) {
     console.log(`[v0] pms-sync errore property=${identity.propertyId} dryRun=${dryRun}: ${messaggio}`)
     return NextResponse.json({ error: messaggio }, { status: 502 })
   }
+}
+
+/** I quattro interruttori della scrittura verso il PMS. */
+const INTERRUTTORI = ["write_contacts", "write_tags", "write_notes", "write_consents"] as const
+
+export async function PUT(request: NextRequest) {
+  const decision = await requireAreaApi("crm", request)
+  if (isAreaDenied(decision)) return areaDeniedResponse(decision)
+
+  const identity = await resolveIdentity(request)
+  if (!identity?.propertyId) {
+    return NextResponse.json({ error: "Struttura non determinata" }, { status: 400 })
+  }
+
+  let corpo: Record<string, unknown> = {}
+  try {
+    corpo = (await request.json()) as Record<string, unknown>
+  } catch {
+    return NextResponse.json({ error: "Corpo della richiesta illeggibile" }, { status: 400 })
+  }
+
+  // Si accetta SOLO un vero booleano. Un valore assente non viene interpretato
+  // come "spegni": si tocca solo cio' che e' stato dichiarato, altrimenti una
+  // richiesta parziale spegnerebbe interruttori che nessuno ha chiesto di
+  // spegnere.
+  const modifiche: Record<string, boolean> = {}
+  for (const chiave of INTERRUTTORI) {
+    if (typeof corpo[chiave] === "boolean") modifiche[chiave] = corpo[chiave] as boolean
+  }
+  if (Object.keys(modifiche).length === 0) {
+    return NextResponse.json({ error: "Nessun interruttore valido nella richiesta" }, { status: 400 })
+  }
+
+  const sb = createServiceClient()
+  const { data, error } = await sb
+    .from("pms_integrations")
+    .update(modifiche)
+    .eq("property_id", identity.propertyId)
+    .select(INTERRUTTORI.join(", "))
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  // Zero righe aggiornate NON e' un successo: significa che per questa struttura
+  // non esiste alcuna configurazione PMS, quindi l'interruttore non e' stato
+  // salvato da nessuna parte. Dirlo, invece di rispondere "ok".
+  if (!data || data.length === 0) {
+    return NextResponse.json(
+      { error: "Nessuna configurazione PMS per questa struttura: l'interruttore non e' stato salvato" },
+      { status: 409 },
+    )
+  }
+
+  return NextResponse.json({ ok: true, interruttori: data[0] })
+}
+
+export async function PATCH(request: NextRequest) {
+  const decision = await requireAreaApi("crm", request)
+  if (isAreaDenied(decision)) return areaDeniedResponse(decision)
+
+  const identity = await resolveIdentity(request)
+  if (!identity?.propertyId) {
+    return NextResponse.json({ error: "Struttura non determinata" }, { status: 400 })
+  }
+
+  let corpo: { id?: unknown; resolution?: unknown } = {}
+  try {
+    corpo = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Corpo della richiesta illeggibile" }, { status: 400 })
+  }
+
+  const id = typeof corpo.id === "string" ? corpo.id : null
+  const ammesse = ["kept_current", "promoted_alternate", "both_valid", "discarded"]
+  const resolution = typeof corpo.resolution === "string" && ammesse.includes(corpo.resolution)
+    ? corpo.resolution
+    : null
+  if (!id || !resolution) {
+    return NextResponse.json({ error: "Serve un id e una decisione valida" }, { status: 400 })
+  }
+
+  const sb = createServiceClient()
+
+  // Se la decisione e' "il valore del PMS era quello giusto", va scritto nel
+  // contatto: senza questo passaggio il responsabile premerebbe un pulsante che
+  // sposta la riga dall'elenco e non cambia il dato. Il filtro su property_id
+  // impedisce di agganciare un conflitto di un'altra struttura.
+  const { data: riga, error: erroreLettura } = await sb
+    .from("contact_field_alternates")
+    .select("id, contact_id, field, value")
+    .eq("id", id)
+    .eq("property_id", identity.propertyId)
+    .maybeSingle()
+
+  if (erroreLettura) return NextResponse.json({ error: erroreLettura.message }, { status: 500 })
+  if (!riga) return NextResponse.json({ error: "Conflitto non trovato per questa struttura" }, { status: 404 })
+
+  const r = riga as { id: string; contact_id: string; field: string; value: string }
+
+  if (resolution === "promoted_alternate") {
+    const { error: erroreScrittura } = await sb
+      .from("contacts")
+      .update({ [r.field]: r.value })
+      .eq("id", r.contact_id)
+      .eq("property_id", identity.propertyId)
+    // L'errore NON va ingoiato: altrimenti la riga risulterebbe risolta mentre
+    // il dato del contatto e' rimasto quello vecchio.
+    if (erroreScrittura) {
+      return NextResponse.json({ error: `Contatto non aggiornato: ${erroreScrittura.message}` }, { status: 500 })
+    }
+  }
+
+  const { error: erroreChiusura } = await sb
+    .from("contact_field_alternates")
+    .update({
+      resolution,
+      resolved_at: new Date().toISOString(),
+      // `resolved_by` e' un uuid, ma nella scorciatoia di sviluppo l'identita'
+      // vale `dev-admin-id`: passandolo cosi' Postgres rifiuterebbe l'INTERA
+      // riga e la decisione andrebbe persa. Meglio non sapere chi ha deciso che
+      // perdere la decisione.
+      resolved_by: isValidUuid(identity.userId) ? identity.userId : null,
+    })
+    .eq("id", r.id)
+    .eq("property_id", identity.propertyId)
+
+  if (erroreChiusura) return NextResponse.json({ error: erroreChiusura.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true, id: r.id, resolution })
 }

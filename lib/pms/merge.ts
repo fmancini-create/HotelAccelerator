@@ -52,6 +52,17 @@ export type CrmContact = {
   marketingConsent?: boolean | null
   gdprConsent?: boolean | null
   unsubscribed?: boolean | null
+  /**
+   * Esiste traccia di CHI e QUANDO ha deciso questi consensi?
+   *
+   * Non sono un doppione dei campi sopra: `marketingConsent === false` da solo
+   * non distingue "ha rifiutato" da "nessuno ha mai chiesto". Sui dati veri di
+   * Villa I Barronci il secondo caso e' il 100% (878 su 878), quindi senza
+   * questa distinzione la sincronizzazione spegnerebbe consensi veri nel PMS.
+   * Vengono da `contact_consent_events`.
+   */
+  marketingConsentDichiarato?: boolean
+  gdprConsentDichiarato?: boolean
 }
 
 export type FieldDecision =
@@ -141,28 +152,62 @@ export type DecisioneConsenso = {
   cambiaInCrm: boolean
   scriviNelPms: boolean
   motivo: "revoca_vince" | "concesso_da_pms" | "concesso_da_noi" | "gia_allineati"
+  /**
+   * Vero quando il nostro `false` NON era una revoca ma il valore predefinito
+   * della colonna, quindi e' stato letto come "non dichiarato".
+   *
+   * MISURATO sui dati veri di Villa I Barronci: `marketing_consent` e
+   * `gdpr_consent` valgono `false` su TUTTI gli 878 contatti, `unsubscribed`
+   * pure. Non e' la scelta di 878 persone: e' il valore con cui nasce la
+   * colonna. Trattarlo come revoca avrebbe spento in Scidoo consensi veri
+   * usando un nostro dato che non esiste.
+   */
+  nostroNoIgnorato: boolean
+}
+
+/** Cosa sappiamo NOI del consenso, e con quanta certezza. */
+export type ConsensoNostro = {
+  valore: boolean | null | undefined
+  /**
+   * Obbligatorio, e non per pedanteria: se fosse facoltativo un chiamante
+   * potrebbe ometterlo e il valore predefinito deciderebbe da solo la sorte di
+   * un consenso. Vero solo se esiste traccia di chi/quando (`contact_consent_events`).
+   */
+  dichiarato: boolean
+  /** La disiscrizione e' un gesto compiuto: vale come revoca documentata. */
+  disiscritto?: boolean | null
 }
 
 /**
- * I consensi, con una regola asimmetrica e deliberata: LA REVOCA VINCE SEMPRE.
+ * I consensi, con una regola asimmetrica e deliberata: LA REVOCA VINCE SEMPRE,
+ * ma solo una revoca VERA.
  *
  * Sincronizzare i consensi "come tutti gli altri campi" avrebbe una conseguenza
  * inaccettabile: un ospite che si e' disiscritto da noi tornerebbe iscritto alla
  * prima passata, perche' nel PMS il consenso e' ancora acceso. Una revoca e'
  * una richiesta esplicita della persona; una concessione presente da un lato
  * solo e' molto probabilmente un dato piu' aggiornato. Quindi:
- *   - se un lato dice NO (o l'ospite risulta disiscritto), il risultato e' NO;
+ *   - se un lato dice NO **dichiarato** (o l'ospite risulta disiscritto), e' NO;
+ *   - un `false` non dichiarato vale "non lo sappiamo", non "ha rifiutato";
  *   - un SI' si propaga solo in assenza di un NO esplicito.
  */
 export function decidiConsenso(
   kind: "marketing" | "gdpr",
-  nostro: boolean | null | undefined,
+  nostro: ConsensoNostro,
   delPms: boolean | null | undefined,
-  disiscrittoDaNoi?: boolean | null,
 ): DecisioneConsenso {
+  const disiscrittoDaNoi = nostro.disiscritto
+  // Un NO conta come revoca solo se qualcuno l'ha dichiarato. Altrimenti e' il
+  // valore predefinito della colonna e va letto come "non dichiarato".
+  const nostroNoReale = nostro.valore === false && nostro.dichiarato
+  const nostroNoIgnorato = nostro.valore === false && !nostro.dichiarato
+  // Da qui in poi si ragiona sul valore ripulito: il `false` non dichiarato
+  // diventa `null`, cosi' non puo' piu' spegnere nulla nel PMS.
+  const nostroPulito: boolean | null | undefined = nostroNoIgnorato ? null : nostro.valore
+
   // La disiscrizione e' una revoca a tutti gli effetti: e' il gesto con cui una
   // persona chiede di non essere piu' contattata.
-  const noiNo = nostro === false || (kind === "marketing" && disiscrittoDaNoi === true)
+  const noiNo = nostroNoReale || (kind === "marketing" && disiscrittoDaNoi === true)
   const pmsNo = delPms === false
 
   if (noiNo || pmsNo) {
@@ -172,24 +217,53 @@ export function decidiConsenso(
       // Va scritto NO da noi in ogni caso in cui non sia GIA' un NO esplicito:
       // anche "ignoto" va reso esplicito, altrimenti un secondo passaggio
       // ripartirebbe da "non dichiarato" e potrebbe riaccendere il consenso.
-      cambiaInCrm: nostro !== false,
+      cambiaInCrm: nostroPulito !== false,
       // Se il PMS ha ancora il SI', la revoca va portata anche là: altrimenti
       // l'ospite continuerebbe a ricevere email partite dal PMS.
       scriviNelPms: delPms === true,
       motivo: "revoca_vince",
+      nostroNoIgnorato,
     }
   }
-  if (nostro === true && delPms === true) {
-    return { kind, risultato: true, cambiaInCrm: false, scriviNelPms: false, motivo: "gia_allineati" }
+  if (nostroPulito === true && delPms === true) {
+    return {
+      kind,
+      risultato: true,
+      cambiaInCrm: false,
+      scriviNelPms: false,
+      motivo: "gia_allineati",
+      nostroNoIgnorato,
+    }
   }
-  if (delPms === true && nostro !== true) {
-    return { kind, risultato: true, cambiaInCrm: true, scriviNelPms: false, motivo: "concesso_da_pms" }
+  if (delPms === true && nostroPulito !== true) {
+    return {
+      kind,
+      risultato: true,
+      cambiaInCrm: true,
+      scriviNelPms: false,
+      motivo: "concesso_da_pms",
+      nostroNoIgnorato,
+    }
   }
-  if (nostro === true && delPms !== true) {
-    return { kind, risultato: true, cambiaInCrm: false, scriviNelPms: true, motivo: "concesso_da_noi" }
+  if (nostroPulito === true && delPms !== true) {
+    return {
+      kind,
+      risultato: true,
+      cambiaInCrm: false,
+      scriviNelPms: true,
+      motivo: "concesso_da_noi",
+      nostroNoIgnorato,
+    }
   }
   // Nessuno dei due dichiara nulla: non si inventa un consenso.
-  return { kind, risultato: false, cambiaInCrm: false, scriviNelPms: false, motivo: "gia_allineati" }
+  return {
+    kind,
+    risultato: false,
+    cambiaInCrm: false,
+    scriviNelPms: false,
+    motivo: "gia_allineati",
+    nostroNoIgnorato,
+  }
 }
 
 export type EsitoUnione = {
@@ -225,8 +299,20 @@ export function uniscoContattoEOspite(contatto: CrmContact, ospite: PmsGuest): E
     daScrivereNelPms,
     tag: unisciTag(contatto.tags, ospite.tags),
     consensi: [
-      decidiConsenso("marketing", contatto.marketingConsent, ospite.marketingConsent, contatto.unsubscribed),
-      decidiConsenso("gdpr", contatto.gdprConsent, ospite.gdprConsent),
+      decidiConsenso(
+        "marketing",
+        {
+          valore: contatto.marketingConsent,
+          dichiarato: contatto.marketingConsentDichiarato === true,
+          disiscritto: contatto.unsubscribed,
+        },
+        ospite.marketingConsent,
+      ),
+      decidiConsenso(
+        "gdpr",
+        { valore: contatto.gdprConsent, dichiarato: contatto.gdprConsentDichiarato === true },
+        ospite.gdprConsent,
+      ),
     ],
   }
 }

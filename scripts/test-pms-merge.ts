@@ -80,34 +80,79 @@ console.log("\n== Consensi: LA REVOCA VINCE (il caso che fa danno) ==")
 {
   // Ospite disiscritto da noi, ma nel PMS il consenso e' ancora acceso.
   // Sincronizzando "come un campo normale" tornerebbe iscritto: inaccettabile.
-  const d = decidiConsenso("marketing", true, true, true)
+  const d = decidiConsenso("marketing", { valore: true, dichiarato: true, disiscritto: true }, true)
   ok("disiscritto da noi => risultato NO", d.risultato === false, JSON.stringify(d))
   ok("la revoca viene portata anche nel PMS", d.scriviNelPms === true, JSON.stringify(d))
   ok("motivo dichiarato: revoca_vince", d.motivo === "revoca_vince")
 
-  const d2 = decidiConsenso("marketing", false, true)
-  ok("NO da noi batte SI' del PMS", d2.risultato === false && d2.scriviNelPms === true)
+  const d2 = decidiConsenso("marketing", { valore: false, dichiarato: true }, true)
+  ok("NO dichiarato da noi batte SI' del PMS", d2.risultato === false && d2.scriviNelPms === true)
 
-  const d3 = decidiConsenso("marketing", true, false)
+  const d3 = decidiConsenso("marketing", { valore: true, dichiarato: true }, false)
   ok("NO del PMS batte SI' nostro", d3.risultato === false && d3.cambiaInCrm === true)
 
-  const d4 = decidiConsenso("marketing", null, false)
-  ok("ignoto da noi + NO del PMS => scriviamo NO esplicito", d4.risultato === false && d4.cambiaInCrm === true, JSON.stringify(d4))
+  const d4 = decidiConsenso("marketing", { valore: null, dichiarato: false }, false)
+  ok(
+    "ignoto da noi + NO del PMS => scriviamo NO esplicito",
+    d4.risultato === false && d4.cambiaInCrm === true,
+    JSON.stringify(d4),
+  )
+}
+
+console.log("\n== Consensi: un NO NON dichiarato non e' una revoca (difetto misurato) ==")
+{
+  // MISURATO: su Villa I Barronci `marketing_consent` e' false su 878/878.
+  // E' il valore predefinito della colonna, non la scelta di 878 persone.
+  // Se lo trattassimo come revoca, spegneremmo consensi VERI dentro Scidoo.
+  const d = decidiConsenso("marketing", { valore: false, dichiarato: false }, true)
+  ok(
+    "false non dichiarato + SI' del PMS => il SI' vince (NON si spegne il PMS)",
+    d.risultato === true && d.scriviNelPms === false,
+    JSON.stringify(d),
+  )
+  ok("il consenso viene recepito da noi", d.cambiaInCrm === true && d.motivo === "concesso_da_pms")
+  ok("ed e' dichiarato che il nostro NO e' stato ignorato", d.nostroNoIgnorato === true)
+
+  // Il controllo opposto: con la prova, la revoca deve ancora vincere.
+  const d2 = decidiConsenso("marketing", { valore: false, dichiarato: true }, true)
+  ok(
+    "con prova documentata la revoca vince ancora",
+    d2.risultato === false && d2.scriviNelPms === true && d2.nostroNoIgnorato === false,
+    JSON.stringify(d2),
+  )
+
+  // La disiscrizione e' un gesto: vale anche senza registro dei consensi.
+  const d3 = decidiConsenso("marketing", { valore: false, dichiarato: false, disiscritto: true }, true)
+  ok("la disiscrizione vale come revoca anche senza registro", d3.risultato === false, JSON.stringify(d3))
+
+  const d4 = decidiConsenso("gdpr", { valore: false, dichiarato: false }, null)
+  ok(
+    "false non dichiarato e PMS muto => nessuna scrittura da nessun lato",
+    d4.cambiaInCrm === false && d4.scriviNelPms === false,
+    JSON.stringify(d4),
+  )
 }
 
 console.log("\n== Consensi: il SI' si propaga solo senza un NO esplicito ==")
 {
-  const d = decidiConsenso("marketing", null, true)
+  const d = decidiConsenso("marketing", { valore: null, dichiarato: false }, true)
   ok("SI' del PMS su campo ignoto => lo recepiamo", d.risultato === true && d.cambiaInCrm === true, JSON.stringify(d))
 
-  const d2 = decidiConsenso("marketing", true, null)
+  const d2 = decidiConsenso("marketing", { valore: true, dichiarato: true }, null)
   ok("SI' nostro su campo ignoto del PMS => glielo scriviamo", d2.risultato === true && d2.scriviNelPms === true)
 
-  const d3 = decidiConsenso("gdpr", null, null)
-  ok("nessuno dichiara nulla => NON si inventa un consenso", d3.risultato === false && d3.cambiaInCrm === false && d3.scriviNelPms === false, JSON.stringify(d3))
+  const d3 = decidiConsenso("gdpr", { valore: null, dichiarato: false }, null)
+  ok(
+    "nessuno dichiara nulla => NON si inventa un consenso",
+    d3.risultato === false && d3.cambiaInCrm === false && d3.scriviNelPms === false,
+    JSON.stringify(d3),
+  )
 
-  const d4 = decidiConsenso("gdpr", true, true)
-  ok("gia' allineati => nessuna scrittura", d4.cambiaInCrm === false && d4.scriviNelPms === false && d4.motivo === "gia_allineati")
+  const d4 = decidiConsenso("gdpr", { valore: true, dichiarato: true }, true)
+  ok(
+    "gia' allineati => nessuna scrittura",
+    d4.cambiaInCrm === false && d4.scriviNelPms === false && d4.motivo === "gia_allineati",
+  )
 }
 
 console.log("\n== Caso completo su dati simili a quelli veri ==")
