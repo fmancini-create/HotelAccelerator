@@ -9,27 +9,15 @@
  */
 
 /**
- * Copia esatta della funzione della pagina.
+ * La funzione VERA, importata dal file che usa anche la pagina.
  *
- * La pagina è un componente client con dentro JSX: importarla qui trascinerebbe
- * React e le dipendenze dell'interfaccia in uno script da riga di comando. La
- * copia è tenuta d'accordo dal controllo finale, che confronta questo testo con
- * quello del file di pagina e FALLISCE se divergono: senza quel confronto una
- * modifica alla pagina lascerebbe queste prove verdi su codice diverso da
- * quello che gira davvero.
+ * Prima qui c'era una copia, tenuta d'accordo da un confronto di testo: un
+ * meccanismo fragile, perche' bastava riformattare la pagina per far fallire il
+ * confronto su codice corretto. Ora la funzione sta in `lib/telephony/display.ts`
+ * (nessun JSX, importabile da uno script) e la copia non esiste piu': non c'e'
+ * modo che queste prove restino verdi su codice diverso da quello che gira.
  */
-function numeroLeggibile(n: string | null): string {
-  if (!n) return "Numero sconosciuto"
-  const ripulito = n.replace(/^0(?=\+)/, "")
-  if (/^\+/.test(ripulito)) {
-    return ripulito
-  }
-  const cifre = ripulito.replace(/\D/g, "")
-  const candidati = [cifre, cifre.replace(/^0039/, ""), cifre.replace(/^39/, ""), cifre.replace(/^0/, "")]
-  const cellulare = candidati.find((c) => c.length === 10 && c.startsWith("3"))
-  if (cellulare) return `${cellulare.slice(0, 3)} ${cellulare.slice(3, 6)} ${cellulare.slice(6)}`
-  return n
-}
+import { numeroLeggibile, etichettaEsito } from "../lib/telephony/display"
 
 const casi: Array<{ nome: string; dato: string | null; atteso: string }> = [
   // --- forme reali trovate in archivio ---
@@ -88,21 +76,51 @@ if (rese.size === 1) {
   console.log(`  ROTTO la stessa utenza si legge in ${rese.size} modi: ${[...rese].join(" / ")}`)
 }
 
-// La copia sopra deve corrispondere alla funzione della pagina.
+/**
+ * L'etichetta dell'esito.
+ *
+ * Una caduta sul gruppo NON deve chiamarsi come una persa dichiarata dal
+ * centralino: sono due cose diverse e confonderle spaccia una deduzione nostra
+ * per un dato certificato.
+ */
+console.log("\nEtichetta dell'esito\n")
+const casiEsito: Array<{ nome: string; status: string; fonte: string; atteso: string }> = [
+  { nome: "caduta sul gruppo di squillo (dedotta)", status: "missed", fonte: "ring_group_timeout", atteso: "Caduta al centralino" },
+  { nome: "persa dichiarata dal centralino", status: "missed", fonte: "provider", atteso: "Senza risposta" },
+  // Controllo negativo: una chiamata riuscita non diventa "caduta" nemmeno se
+  // la fonte fosse per errore quella della deduzione.
+  { nome: "completata: resta completata", status: "completed", fonte: "provider", atteso: "Completata" },
+  { nome: "completata con fonte dedotta: resta completata", status: "completed", fonte: "ring_group_timeout", atteso: "Completata" },
+]
+for (const c of casiEsito) {
+  const reso = etichettaEsito(c.status, c.fonte)
+  if (reso === c.atteso) {
+    ok++
+    console.log(`  ok   ${c.nome} -> "${reso}"`)
+  } else {
+    ko++
+    console.log(`  ROTTO ${c.nome} -> "${reso}", atteso "${c.atteso}"`)
+  }
+}
+
+/**
+ * La pagina deve USARE le funzioni condivise, non una propria copia.
+ *
+ * Senza questo controllo qualcuno potrebbe reintrodurre una funzione locale in
+ * pagina: queste prove resterebbero verdi mentre a schermo gira altro codice.
+ */
 import { readFileSync } from "node:fs"
 const sorgentePagina = readFileSync(new URL("../app/admin/calls/page.tsx", import.meta.url), "utf8")
-const corpoAtteso = [
-  'n.replace(/^0(?=\\+)/, "")',
-  'if (/^\\+/.test(ripulito))',
-  'candidati.find((c) => c.length === 10 && c.startsWith("3"))',
-]
-const mancanti = corpoAtteso.filter((frammento) => !sorgentePagina.includes(frammento))
-if (mancanti.length === 0) {
+if (
+  sorgentePagina.includes('from "@/lib/telephony/display"') &&
+  !/function numeroLeggibile/.test(sorgentePagina) &&
+  !/function etichettaEsito/.test(sorgentePagina)
+) {
   ok++
-  console.log("  ok   la copia qui corrisponde alla funzione della pagina")
+  console.log("\n  ok   la pagina importa le funzioni condivise e non ne tiene una copia")
 } else {
   ko++
-  console.log(`  ROTTO la pagina è cambiata: queste prove NON stanno provando il codice vero (${mancanti.join(" | ")})`)
+  console.log("\n  ROTTO la pagina non usa le funzioni condivise: queste prove NON provano il codice vero")
 }
 
 console.log(`\nRisultato: ${ok} superate, ${ko} fallite`)

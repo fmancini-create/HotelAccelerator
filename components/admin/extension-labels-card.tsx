@@ -26,6 +26,12 @@ type Riga = {
   last_call_at: string | null
   label: string | null
   kind: string | null
+  /**
+   * Secondi di squillo dopo i quali un gruppo lascia cadere la chiamata.
+   * NULL = non dichiarato: il registro non deduce nulla e si fida solo di cio'
+   * che dice il centralino.
+   */
+  no_answer_seconds: number | null
   person: string | null
 }
 
@@ -36,11 +42,23 @@ const TIPI: Array<{ value: string; label: string }> = [
   { value: "other", label: "Altro" },
 ]
 
+/** Il valore di partenza dei campi: quello SALVATO, non un valore inventato. */
+function bozzaIniziale(r: Riga) {
+  return {
+    label: r.label ?? "",
+    kind: r.kind ?? "other",
+    secondi: r.no_answer_seconds === null ? "" : String(r.no_answer_seconds),
+  }
+}
+
 export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
   const [righe, setRighe] = useState<Riga[]>([])
   const [caricamento, setCaricamento] = useState(true)
   const [errore, setErrore] = useState<string | null>(null)
-  const [bozza, setBozza] = useState<Record<string, { label: string; kind: string }>>({})
+  // I secondi si tengono come TESTO, non come numero: durante la digitazione il
+  // campo passa per stati intermedi (vuoto, "7") che un numero non saprebbe
+  // rappresentare senza riscrivere sotto le dita di chi scrive.
+  const [bozza, setBozza] = useState<Record<string, { label: string; kind: string; secondi: string }>>({})
   const [salvando, setSalvando] = useState<string | null>(null)
   const [salvato, setSalvato] = useState<string | null>(null)
 
@@ -67,14 +85,23 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
   }, [carica])
 
   const salva = async (r: Riga) => {
-    const corrente = bozza[r.extension] ?? { label: r.label ?? "", kind: r.kind ?? "other" }
+    const corrente = bozza[r.extension] ?? bozzaIniziale(r)
     setSalvando(r.extension)
     setErrore(null)
     try {
       const res = await fetch("/api/telephony/extension-labels", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ extension: r.extension, label: corrente.label, kind: corrente.kind }),
+        body: JSON.stringify({
+          extension: r.extension,
+          label: corrente.label,
+          kind: corrente.kind,
+          // I secondi si mandano SOLO per un gruppo di squillo. Cambiando tipo
+          // da gruppo a telefono condiviso il valore va via con il tipo,
+          // altrimenti resterebbe a dedurre chiamate perse su un interno che
+          // gruppo non e' piu'.
+          no_answer_seconds: corrente.kind === "group" ? corrente.secondi : null,
+        }),
       })
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string }
@@ -117,7 +144,7 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
       ) : (
         <ul className="mt-4 flex flex-col gap-3">
           {righe.map((r) => {
-            const corrente = bozza[r.extension] ?? { label: r.label ?? "", kind: r.kind ?? "other" }
+            const corrente = bozza[r.extension] ?? bozzaIniziale(r)
             const bloccato = Boolean(r.person)
             return (
               <li key={r.extension} className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center">
@@ -140,7 +167,7 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
                     {" › "}Telefono.
                   </p>
                 ) : (
-                  <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                     <Input
                       value={corrente.label}
                       onChange={(e) =>
@@ -162,6 +189,30 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
                         </option>
                       ))}
                     </select>
+                    {/* Compare solo per un gruppo di squillo, perche' solo lì il
+                        numero ha un senso: su un telefono personale la durata è
+                        tempo di conversazione, e dedurne chiamate perse sarebbe
+                        sbagliato. Senza questo campo la regola resterebbe spenta
+                        per sempre e le chiamate cadute tornerebbero invisibili. */}
+                    {corrente.kind === "group" && (
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span className="whitespace-nowrap">Squilla per</span>
+                        <Input
+                          value={corrente.secondi}
+                          onChange={(e) =>
+                            setBozza((b) => ({
+                              ...b,
+                              [r.extension]: { ...corrente, secondi: e.target.value.replace(/\D/g, "").slice(0, 3) },
+                            }))
+                          }
+                          inputMode="numeric"
+                          placeholder="75"
+                          aria-label={`Secondi di squillo del gruppo ${r.extension}`}
+                          className="h-9 w-16 text-center"
+                        />
+                        <span className="whitespace-nowrap">secondi, poi cade</span>
+                      </label>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"
@@ -186,6 +237,9 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
 
       <p className="mt-3 text-xs text-muted-foreground">
         {"Svuotare il nome rimuove l'etichetta. Per attribuire le telefonate a una persona serve invece l'assegnazione dell'interno in Canali › Telefono."}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {"Sui gruppi di squillo il centralino non dice se nessuno ha risposto: dichiarando i secondi di squillo, le chiamate durate esattamente quel tempo compaiono nel registro come «Caduta al centralino» invece di sembrare gestite."}
       </p>
     </div>
   )

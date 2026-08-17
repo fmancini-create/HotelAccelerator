@@ -59,7 +59,19 @@ async function elenco(propertyId: string) {
   )
   const etichetta = new Map(
     ((etichette.data ?? []) as RigaEtichetta[]).map(
-      (e) => [String(e.extension), { label: String(e.label), kind: String(e.kind) }] as const,
+      (e) =>
+        [
+          String(e.extension),
+          {
+            label: String(e.label),
+            kind: String(e.kind),
+            // Portato fino all'elenco: se si fermasse qui il pannello mostrerebbe
+            // sempre il campo vuoto e il primo salvataggio del nome cancellerebbe
+            // il timeout dichiarato, spegnendo senza avviso il riconoscimento
+            // delle chiamate cadute.
+            noAnswerSeconds: typeof e.no_answer_seconds === "number" ? e.no_answer_seconds : null,
+          },
+        ] as const,
     ),
   )
 
@@ -88,6 +100,7 @@ async function elenco(propertyId: string) {
       last_call_at: v.last,
       label: etichetta.get(extension)?.label ?? null,
       kind: etichetta.get(extension)?.kind ?? null,
+      no_answer_seconds: etichetta.get(extension)?.noAnswerSeconds ?? null,
       person: persona.get(extension) ?? null,
     }))
     .sort((a, b) => b.calls - a.calls || a.extension.localeCompare(b.extension))
