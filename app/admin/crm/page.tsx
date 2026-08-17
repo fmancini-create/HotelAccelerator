@@ -198,6 +198,9 @@ export default function CRMPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" asChild>
+            <Link href="/admin/crm/pms-sync">PMS</Link>
+          </Button>
+          <Button variant="outline" asChild>
             <Link href="/admin/crm/settings">Impostazioni</Link>
           </Button>
           <Button variant="outline" onClick={() => setShowImportDialog(true)}>
