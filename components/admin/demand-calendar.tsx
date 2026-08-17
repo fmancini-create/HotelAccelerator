@@ -263,7 +263,10 @@ export function DemandCalendar({
         {/* Statistiche sorgenti (solo versione estesa) */}
         {!compact && demandData && (
           <div className="mt-4 pt-4 border-t">
-            <h4 className="text-sm font-medium mb-2">Sorgenti ricerche</h4>
+            <h4 className="text-sm font-medium">Sorgenti ricerche</h4>
+            <p className="text-xs text-muted-foreground mb-2 text-pretty">
+              Da dove arrivano le richieste con una notte precisa.
+            </p>
             {/* "Sito" e "Script" arrivano SOLO dagli eventi del sito, che oggi
                 nessuno scrive (tabella `events` a zero righe): mostrarli fissi a
                 zero accanto a numeri veri li fa leggere come misura ("dal sito
@@ -277,7 +280,15 @@ export function DemandCalendar({
               <SourceStat icon={MessageSquare} label="Chat" count={demandData.bySource.chat} />
               <SourceStat icon={Mail} label="Email" count={demandData.bySource.email} />
               <SourceStat icon={Phone} label="WhatsApp" count={demandData.bySource.whatsapp} />
-              <SourceStat icon={Phone} label="Telefono" count={demandData.bySource.phone} />
+              {/* Stessa regola di "Sito" e "Script", che qui mancava: "Telefono"
+                  vale il numero di telefonate in cui l'ospite ha chiesto una
+                  NOTTE precisa. Misurato: tutte le 96 righe da telefono sono di
+                  tipo `chiamata`, cioe' volume senza data, quindi questa voce e'
+                  0 mentre subito sotto compare "96 telefonate": due numeri che
+                  si contraddicono a occhio pur essendo entrambi giusti. */}
+              {demandData.bySource.phone > 0 && (
+                <SourceStat icon={Phone} label="Telefono" count={demandData.bySource.phone} />
+              )}
               {demandData.bySource.script > 0 && (
                 <SourceStat icon={Code} label="Script" count={demandData.bySource.script} />
               )}
