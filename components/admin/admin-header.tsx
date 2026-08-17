@@ -5,7 +5,6 @@ import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ChevronRight, Home } from "lucide-react"
-import { TenantSwitcher } from "@/components/admin/tenant-switcher"
 
 interface BreadcrumbItem {
   label: string
@@ -112,10 +111,15 @@ export function AdminHeader({ title, subtitle, actions }: AdminHeaderProps) {
 
           </div>
 
-          <div className="flex items-center gap-2">
-            <TenantSwitcher />
-            {actions}
-          </div>
+          {/*
+           * Il selettore di struttura NON va qui: lo rende gia' `PlatformHeader`
+           * nella barra globale, e `app/admin/layout.tsx` avvolge ogni pagina in
+           * `PlatformShell`. Essendo questa testata usata da 36 pagine admin, il
+           * risultato erano DUE selettori identici, uno sotto l'altro, su tutte:
+           * due comandi per la stessa scelta, e nessun indizio su quale valga.
+           * La scelta della struttura e' globale, quindi resta nella barra.
+           */}
+          <div className="flex items-center gap-2">{actions}</div>
         </div>
 
         {/*
