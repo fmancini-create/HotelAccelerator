@@ -39,6 +39,12 @@ type Stato = {
   masked: string | null
   tokenLength: number | null
   hashPresent: boolean
+  /**
+   * Il server sa calcolare l'impronta del token? Se no la rigenerazione e'
+   * impossibile, e il pulsante va spento CON la ragione: premerlo darebbe un
+   * errore che non dipende da chi lo preme.
+   */
+  hashSecretPresent: boolean
   manubotConfigured: boolean
   endpoint: string
 }
@@ -185,7 +191,16 @@ export function ApiAccessClient() {
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="sm" disabled={inCorso !== null}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={inCorso !== null || !stato.hashSecretPresent}
+                      title={
+                        stato.hashSecretPresent
+                          ? undefined
+                          : "Rigenerazione non disponibile: manca il segreto di hashing sul server"
+                      }
+                    >
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Rigenera
                     </Button>
@@ -219,6 +234,17 @@ export function ApiAccessClient() {
                 </AlertDialog>
               </div>
 
+              {!stato.hashSecretPresent && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    La rigenerazione è disattivata: su questo ambiente manca il segreto con cui il
+                    server calcola l&apos;impronta del token. Mostrare e copiare il token attuale
+                    funziona comunque.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {appenaRigenerato && (
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
@@ -235,7 +261,23 @@ export function ApiAccessClient() {
                 Questa struttura non ha ancora un token. Generane uno per consentire le letture
                 esterne.
               </p>
-              <Button size="sm" onClick={() => void azione("rotate")} disabled={inCorso !== null}>
+              {/* Stessa condizione della rigenerazione: la generazione passa dalla
+                  stessa scrittura doppia, quindi senza segreto di hashing e'
+                  altrettanto impossibile. */}
+              {!stato?.hashSecretPresent && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Generazione non disponibile: su questo ambiente manca il segreto con cui il server
+                    calcola l&apos;impronta del token.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Button
+                size="sm"
+                onClick={() => void azione("rotate")}
+                disabled={inCorso !== null || !stato?.hashSecretPresent}
+              >
                 {inCorso === "rotate" ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : (

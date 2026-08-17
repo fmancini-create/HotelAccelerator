@@ -80,6 +80,20 @@ type PropertyRow = {
   manubot_email: string | null
 }
 
+/**
+ * Il segreto di hashing e' utilizzabile? Non si controlla l'esistenza della
+ * variabile ma si PROVA a calcolare un'impronta: `hashApiToken` rifiuta anche i
+ * segreti troppo corti, quindi "variabile presente" non implica "funzionante".
+ */
+function hashSecretUsable(): boolean {
+  try {
+    hashApiToken("verifica")
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function loadProperty(propertyId: string): Promise<PropertyRow | null> {
   const supabase = createServiceClient()
   const { data, error } = await supabase
@@ -107,6 +121,10 @@ export async function GET(request: NextRequest) {
       masked: token ? maskToken(token) : null,
       tokenLength: token.length || null,
       hashPresent: Boolean(property.api_token_hash),
+      // Il server sa calcolare l'impronta? Se no, la rigenerazione e' impossibile
+      // e il pulsante va spento CON la ragione: altrimenti l'utente premerebbe e
+      // riceverebbe un errore senza capire che non dipende da lui.
+      hashSecretPresent: hashSecretUsable(),
       // Serve a decidere se mostrare l'avviso sulla rotazione: senza ManuBot
       // configurato, rigenerare non interrompe alcun flusso in entrata.
       manubotConfigured: Boolean(property.manubot_email),
@@ -182,17 +200,36 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createServiceClient()
-    const { error } = await supabase
+    const { data: scritte, error } = await supabase
       .from("properties")
       // Scrittura doppia deliberata: `api_token` in chiaro perché il webhook lo
       // usa ancora come ripiego, `api_token_hash` perché è la via primaria.
       // Scriverne una sola lascerebbe i due valori discordi e il webhook muto.
       .update({ api_token: nuovo, api_token_hash: nuovoHash, updated_at: new Date().toISOString() })
       .eq("id", propertyId)
+      // `.select()` non è decorativo: senza di esso Supabase riporta `error: null`
+      // anche quando il filtro non ha colpito NESSUNA riga, e la rotta
+      // annuncerebbe una rotazione mai avvenuta consegnando all'integratore un
+      // token che il database non conosce. Qui pretendiamo la riga aggiornata.
+      .select("id, api_token, api_token_hash")
 
-    if (error) {
-      console.error("[v0] api-access rotate: scrittura fallita")
-      return NextResponse.json({ error: "Rigenerazione non riuscita" }, { status: 500 })
+    if (error || !scritte || scritte.length !== 1) {
+      console.error(`[v0] api-access rotate: scrittura non confermata (righe=${scritte?.length ?? 0})`)
+      return NextResponse.json(
+        { error: "Rigenerazione non riuscita: il token NON è stato modificato." },
+        { status: 500 },
+      )
+    }
+
+    // Controprova sul valore riletto dal database: se una regola, un trigger o
+    // una colonna generata avesse alterato ciò che abbiamo scritto, mostreremmo
+    // un token diverso da quello memorizzato.
+    if (scritte[0].api_token !== nuovo || scritte[0].api_token_hash !== nuovoHash) {
+      console.error("[v0] api-access rotate: il valore riletto non combacia con quello scritto")
+      return NextResponse.json(
+        { error: "Rigenerazione incoerente: verifica lo stato del token prima di usarlo." },
+        { status: 500 },
+      )
     }
 
     console.log(`[v0] api-access rotate property=${propertyId} by=${email ?? "?"}`)
