@@ -53,6 +53,13 @@ export interface ChannelSyncResult {
   restored?: number
   readSynced?: number
   stateReconciled?: boolean
+  // Riconciliazioni fallite in questa passata (stelle, stato). Restano
+  // "best-effort" — NON fanno fallire il sync — ma vanno CONTATE: `errors`
+  // conta solo i guasti sui singoli messaggi, quindi senza questo campo un
+  // timeout della riconciliazione usciva come `err=0` e la riga di riepilogo
+  // sembrava perfettamente sana (osservato in produzione il 16/08).
+  // Silenziare un guasto non deve renderlo invisibile.
+  reconcileFailures?: string[]
   error?: string
   // True when the Gmail grant is revoked and the mailbox needs reconnection.
   reconnectRequired?: boolean
@@ -194,12 +201,24 @@ export async function syncChannelIncremental(
     return out
   }
 
+  // NIENTE uscita anticipata quando non ci sono messaggi nuovi.
+  //
+  // Prima, con zero messaggi nella finestra si faceva `return out` qui: si
+  // saltavano ENTRAMBE le riconciliazioni sotto, quindi una casella tranquilla
+  // non scriveva MAI `gmail_state_reconciled_at`. Due conseguenze reali:
+  //   1. le stelle, il letto/non letto, spam e cestino modificati DENTRO Gmail
+  //      non venivano mai riportati nell'app — proprio la deriva che queste
+  //      passate esistono per riparare;
+  //   2. `/api/kpi/email` pretende il segnalibro su OGNI casella sana, quindi
+  //      una sola casella tranquilla bloccava il KPI "Non lette" dell'INTERA
+  //      struttura su `reconciling` (osservato: info@datiberio.com, segnalibro
+  //      mai scritto, con le altre 4 caselle in regola).
+  //
+  // Il ciclo qui sotto su un elenco vuoto e' gia' un'operazione nulla, e in
+  // fondo `recordChannelHealth` + `markPollCompleted` fanno quanto facevano le
+  // due righe rimosse (con zero messaggi `out.error` e `out.errors` sono
+  // intatti, quindi la guardia del segnalibro passa).
   const ids = listed.ids
-  if (ids.length === 0) {
-    await recordChannelHealth(supabase, channel.id, { reconnectRequired: false })
-    await markPollCompleted(supabase, channel.id)
-    return out
-  }
 
   const processor = new EmailProcessor(supabase)
 
@@ -258,6 +277,7 @@ export async function syncChannelIncremental(
     out.starsRemoved = stars.removed
   } catch (e) {
     console.error("[v0][incremental-sync] star reconcile error:", e)
+    ;(out.reconcileFailures ||= []).push("stelle")
   }
 
   // A mailbox-wide pass repairs historical drift (including the legacy import
@@ -279,6 +299,7 @@ export async function syncChannelIncremental(
     out.stateReconciled = fullStateDue
   } catch (e) {
     console.error("[v0][incremental-sync] state reconcile error:", e)
+    ;(out.reconcileFailures ||= []).push("stato")
   }
 
   // The token was valid this run, so any previously-recorded revoked state is
