@@ -15,6 +15,19 @@
 
 import { createClient } from "@/lib/supabase/server"
 
+/**
+ * Il client con cui leggere. Di norma si usa quello di sessione, con RLS che
+ * limita alla struttura dell'utente. Ma un chiamante autenticato a TOKEN (l'API
+ * per i sistemi esterni) non ha sessione: con il client di sessione RLS non
+ * restituirebbe alcuna riga E NESSUN ERRORE, e la risposta direbbe "0 richieste"
+ * invece di "non posso leggere" - misurato: 100 estrazioni presenti, 0
+ * riportate. Un RMS che riceve zero lo interpreta come "nessuna domanda" e
+ * pianifica su quel nulla. Percio' il client si puo' passare: chi lo passa e'
+ * responsabile di aver stabilito l'ambito (qui: la struttura ricavata dal
+ * token), e le query filtrano comunque per `property_id`.
+ */
+type DemandReader = Awaited<ReturnType<typeof createClient>>
+
 export interface DemandData {
   date: string // YYYY-MM-DD
   searchCount: number
@@ -85,8 +98,9 @@ async function demandFromConversations(
   propertyId: string,
   startDate: string,
   endDate: string,
+  client?: DemandReader,
 ): Promise<Map<string, { count: number; sources: DemandData["sources"] }>> {
-  const supabase = await createClient()
+  const supabase = client ?? (await createClient())
   const result = new Map<string, { count: number; sources: DemandData["sources"] }>()
 
   const { data, error } = await supabase
@@ -136,8 +150,13 @@ function calculateIntensity(count: number, maxCount: number): DemandData["intens
 }
 
 // Aggrega i dati di domanda per un periodo
-export async function getDemandData(propertyId: string, startDate: string, endDate: string): Promise<DemandSummary> {
-  const supabase = await createClient()
+export async function getDemandData(
+  propertyId: string,
+  startDate: string,
+  endDate: string,
+  client?: DemandReader,
+): Promise<DemandSummary> {
+  const supabase = client ?? (await createClient())
 
   // Query eventi di tipo "date_search" o "availability_check"
   const { data: events, error } = await supabase
@@ -219,7 +238,9 @@ export async function getDemandData(propertyId: string, startDate: string, endDa
   // --- seconda sorgente: le date chieste scrivendo o telefonando ---
   // Si somma a quella del sito sullo stesso giorno: una data cercata sul sito
   // e chiesta anche per email e' domanda due volte, non una.
-  const fromConversations = await demandFromConversations(propertyId, startDate, endDate)
+  // Si passa lo STESSO client: se qui restasse quello di sessione, un chiamante
+  // a token leggerebbe zero conversazioni in silenzio.
+  const fromConversations = await demandFromConversations(propertyId, startDate, endDate, supabase)
   let conversationCount = 0
   for (const [day, extra] of fromConversations) {
     conversationCount += extra.count
@@ -265,9 +286,14 @@ export async function getDemandData(propertyId: string, startDate: string, endDa
 }
 
 // Versione real-time per aggiornamenti
-export async function getDemandDataForMonth(propertyId: string, year: number, month: number): Promise<DemandSummary> {
+export async function getDemandDataForMonth(
+  propertyId: string,
+  year: number,
+  month: number,
+  client?: DemandReader,
+): Promise<DemandSummary> {
   const startDate = new Date(year, month - 1, 1).toISOString()
   const endDate = new Date(year, month, 0, 23, 59, 59).toISOString()
 
-  return getDemandData(propertyId, startDate, endDate)
+  return getDemandData(propertyId, startDate, endDate, client)
 }
