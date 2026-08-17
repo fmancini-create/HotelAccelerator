@@ -1,0 +1,9 @@
+import * as nodemailer from "nodemailer"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import { getTelegramChannelForProperty } from "@/lib/telegram/channels"
+import { sendTelegramText } from "@/lib/telegram/client"
+
+type Item={id:string;property_id:string;channel:"email"|"telegram"|"in_app";employee:{first_name:string;last_name:string;email:string|null;telegram_chat_id:string|null}|null;shift:{starts_at:string;ends_at:string;location:string|null}|null}
+function text(item:Item){const s=item.shift!;return `Nuovo turno pubblicato\n${new Date(s.starts_at).toLocaleString("it-IT")} – ${new Date(s.ends_at).toLocaleTimeString("it-IT",{hour:"2-digit",minute:"2-digit"})}${s.location?`\nSede: ${s.location}`:""}\nAccedi a HotelAccelerator per confermare.`}
+export async function deliverHrNotification(db:SupabaseClient,item:Item){if(item.channel==="in_app")return {ok:true};if(!item.employee||!item.shift)return {ok:false,error:"missing_relation"};if(item.channel==="telegram"){if(!item.employee.telegram_chat_id)return {ok:false,error:"missing_chat_id"};const channel=await getTelegramChannelForProperty(db,item.property_id);if(!channel)return {ok:false,error:"telegram_not_configured"};const result=await sendTelegramText(channel.credentials,item.employee.telegram_chat_id,text(item));return {ok:result.success,error:result.error}}
+if(!item.employee.email)return {ok:false,error:"missing_email"};if(!process.env.HR_SMTP_HOST||!process.env.HR_SMTP_FROM)return {ok:false,error:"smtp_not_configured"};const transport=nodemailer.createTransport({host:process.env.HR_SMTP_HOST,port:Number(process.env.HR_SMTP_PORT||587),secure:process.env.HR_SMTP_SECURE==="true",auth:process.env.HR_SMTP_USER?{user:process.env.HR_SMTP_USER,pass:process.env.HR_SMTP_PASSWORD}:undefined});await transport.sendMail({from:process.env.HR_SMTP_FROM,to:item.employee.email,subject:"Nuovo turno di lavoro",text:text(item)});return {ok:true}}

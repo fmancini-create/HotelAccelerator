@@ -39,7 +39,7 @@ Questa prima versione consolida requisiti emersi nelle conversazioni. Non è anc
 | ManuBot programmato | Preventiva, ricorrenze, storico asset/camera, inventario, costi e KPI | Da verificare | Identificare unico proprietario cron/webhook |
 | Integrazione manutenzioni | Ticket da inbox/chiamate/recensioni/fatture e collegamento HotelProfitAI | Specifica | Contratti evento e deduplica |
 | Procedure e checklist | Procedure, manuali, checklist, prove foto/firma, scadenze, versioni, AI assistant | Specifica | Decidere collocazione Core o ManuBot |
-| Personale | Dipendenti, reparti, turni, presenze, ferie, task, formazione e KPI | Idea | Fuori dal nucleo finché non prioritizzato |
+| HotelAccelerator HR | Dipendenti, reparti, turni, notifiche, conferme e richieste ferie/permessi | Codice | Applicare migrazione e collaudare su tenant reale; documenti privati, cedolini, timbrature e KPI restano da sviluppare |
 | Centro notifiche/audit | Notifiche unificate, activity log, audit trail, health connettori, errori | Specifica | Fondazione trasversale prioritaria |
 | Billing SaaS | Piani, abbonamenti, entitlement, onboarding, assistenza e SLA | Specifica | Necessario per stato Vendibile |
 | 4BID area documentale | Accesso protetto, identità, commenti, revisioni, versioni, approvazioni | Specifica | Progetto separato salvo contratto API |

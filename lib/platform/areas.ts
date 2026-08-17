@@ -57,6 +57,7 @@ export const PLATFORM_AREAS: PlatformArea[] = [
   { key: "categories", label: "Categorie", group: "operative", href: "/admin/categories" },
   { key: "message-rules", label: "Smart Messages", group: "operative", href: "/admin/message-rules" },
   { key: "marketing", label: "Marketing", group: "operative", href: "/admin/marketing" },
+  { key: "hr", label: "Personale e turni", group: "operative", href: "/admin/hr", adminOnly: true },
 
   // --- Content / config areas (grantable to members) ---
   { key: "cms", label: "CMS", group: "config", href: "/admin/cms/studio" },
