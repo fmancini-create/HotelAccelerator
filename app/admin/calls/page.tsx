@@ -27,6 +27,8 @@ type Call = {
   id: string
   direction: string
   status: string
+  /** "provider" = detto dal centralino; "ring_group_timeout" = dedotto da noi. */
+  status_source: string
   number: string | null
   started_at: string | null
   duration_seconds: number | null
@@ -50,11 +52,11 @@ const PAGE = 25
 
 /** Filtri come singola scelta: due elenchi separati confondono l'esito. */
 const FILTRI = [
-  { id: "all", label: "Tutte", query: "" },
-  { id: "missed", label: "Senza risposta", query: "status=missed" },
-  { id: "inbound", label: "In arrivo", query: "direction=inbound" },
-  { id: "outbound", label: "In uscita", query: "direction=outbound" },
-  { id: "today", label: "Oggi", query: "today=1" },
+  { id: "all", label: "Tutte", query: "", ambito: "tutto il registro" },
+  { id: "missed", label: "Senza risposta", query: "status=missed", ambito: "tra le senza risposta" },
+  { id: "inbound", label: "In arrivo", query: "direction=inbound", ambito: "tra le in arrivo" },
+  { id: "outbound", label: "In uscita", query: "direction=outbound", ambito: "tra le in uscita" },
+  { id: "today", label: "Oggi", query: "today=1", ambito: "di oggi" },
 ] as const
 
 function durata(secondi: number | null): string {
@@ -82,7 +84,25 @@ function durata(secondi: number | null): string {
  */
 function numeroLeggibile(n: string | null): string {
   if (!n) return "Numero sconosciuto"
-  const cifre = n.replace(/\D/g, "")
+  /**
+   * Lo zero di selezione davanti a un numero INTERNAZIONALE.
+   *
+   * Misurato in archivio: 47 numeri esteri salvati come "0+41793374549" e
+   * "0+3197010241328". Quello zero è il prefisso con cui il centralino prende
+   * la linea esterna, non parte del numero: lasciandolo, il numero mostrato
+   * non è richiamabile e un olandese (+31) sembrava un numero italiano che
+   * inizia per zero. Va togliato PRIMA di levare i simboli, perché dopo il
+   * "+" spariscono e "0+41..." diventerebbe "041...", indistinguibile da un
+   * prefisso urbano italiano.
+   */
+  const ripulito = n.replace(/^0(?=\+)/, "")
+  if (/^\+/.test(ripulito)) {
+    // Un numero estero si restituisce con il "+" e senza raggrupparlo: le
+    // regole di spaziatura italiane suggerirebbero una struttura che quel
+    // numero non ha.
+    return ripulito
+  }
+  const cifre = ripulito.replace(/\D/g, "")
   // Si toglie il prefisso italiano (+39 / 0039) e lo zero di selezione, ma SOLO
   // quando cio' che resta e' un cellulare italiano di 10 cifre che inizia per 3.
   // Un numero estero (+33, +44...) resta come e' arrivato: raggrupparlo con le
@@ -166,6 +186,20 @@ export default function CallsPage() {
 
   const conteggi = useMemo(() => data?.summary ?? { filtered: 0, missed: 0, unknown_number: 0, today: 0 }, [data])
 
+  /**
+   * A cosa si riferiscono i numeri in alto, scritto sotto ognuno.
+   *
+   * La ricerca per numero restringe l'elenco quanto una linguetta: se non
+   * comparisse qui, cercando un numero i tre valori cambierebbero senza che
+   * niente a schermo ne spieghi il motivo.
+   */
+  const ambito = useMemo(() => {
+    const parti: string[] = []
+    if (filtro !== "all") parti.push(FILTRI.find((f) => f.id === filtro)?.ambito ?? "")
+    if (ricercaAttiva) parti.push(`numero ${ricercaAttiva}`)
+    return parti.filter(Boolean).join(" · ") || "tutto il registro"
+  }, [filtro, ricercaAttiva])
+
   return (
     <div className="min-h-full bg-background">
       <AdminHeader
@@ -181,13 +215,21 @@ export default function CallsPage() {
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {/* Tre numeri, non una parete di riquadri: quello che conta è quante
-            telefonate sono rimaste senza risposta. */}
+            telefonate sono rimaste senza risposta.
+
+            I tre valori descrivono lo STESSO insieme — l'elenco aperto sotto —
+            e ognuno lo dichiara sotto la cifra. Prima il primo riquadro diceva
+            sempre "oggi" mentre gli altri due seguivano la linguetta attiva:
+            si leggeva "44 chiamate, 5 senza risposta" credendo che parlassero
+            della stessa giornata, quando il 5 riguardava solo le chiamate in
+            uscita di TUTTO il registro. */}
         <div className="grid gap-3 sm:grid-cols-3">
           <Card>
             <CardContent className="flex items-baseline justify-between gap-3 py-4">
               <div>
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Oggi</p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{conteggi.today}</p>
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Telefonate</p>
+                <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{conteggi.filtered}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{ambito}</p>
               </div>
               <PhoneIncoming className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             </CardContent>
@@ -203,6 +245,7 @@ export default function CallsPage() {
                 >
                   {conteggi.missed}
                 </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{ambito}</p>
               </div>
               <PhoneMissed
                 className={`h-5 w-5 shrink-0 ${conteggi.missed > 0 ? "text-destructive" : "text-muted-foreground"}`}
@@ -215,11 +258,23 @@ export default function CallsPage() {
               <div>
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Numeri non in rubrica</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{conteggi.unknown_number}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{ambito}</p>
               </div>
               <UserPlus className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             </CardContent>
           </Card>
         </div>
+
+        {/* Il conteggio della giornata resta leggibile senza fingere che sia
+            l'ambito dei riquadri: quando si guarda altro, è una riga a parte. */}
+        {filtro !== "today" && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Oggi: <span className="tabular-nums text-foreground">{conteggi.today}</span> telefonate in tutto.{" "}
+            <button type="button" className="underline" onClick={() => { setFiltro("today"); setPagina(0) }}>
+              Guarda solo oggi
+            </button>
+          </p>
+        )}
 
         <div className="mt-5 flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtra le telefonate">
@@ -314,6 +369,7 @@ export default function CallsPage() {
               <ul className="divide-y">
                 {calls.map((c) => {
                   const persa = c.status === "missed"
+                  const cadutaSulGruppo = persa && c.status_source === "ring_group_timeout"
                   const inArrivo = c.direction === "inbound"
                   const t = quando(c.started_at)
                   const Icona = persa ? PhoneMissed : inArrivo ? PhoneIncoming : PhoneOutgoing
@@ -335,9 +391,14 @@ export default function CallsPage() {
                               {numeroLeggibile(c.number)}
                             </span>
                           )}
+                          {/* "Caduta al centralino" invece di "Senza risposta"
+                              quando l'esito e' DEDOTTO dal timeout del gruppo:
+                              il centralino non l'ha dichiarata persa, e dare
+                              alle due cose la stessa etichetta spaccerebbe una
+                              nostra deduzione per un dato certificato. */}
                           {persa && (
                             <Badge variant="destructive" className="text-xs">
-                              Senza risposta
+                              {cadutaSulGruppo ? "Caduta al centralino" : "Senza risposta"}
                             </Badge>
                           )}
                         </p>
@@ -373,9 +434,17 @@ export default function CallsPage() {
 
                       {/* La durata di una chiamata persa è il tempo di SQUILLO,
                           non di conversazione: dirlo evita di leggere "75s"
-                          come una telefonata gestita. */}
-                      <div className="w-24 text-right text-xs tabular-nums text-muted-foreground">
+                          come una telefonata gestita.
+
+                          Per le cadute sul gruppo si aggiunge "nessuno ha
+                          risposto": la durata al timeout è indistinguibile da
+                          una conversazione, ed è proprio l'equivoco che ha
+                          tenuto nascoste 31 chiamate. */}
+                      <div className="w-32 text-right text-xs tabular-nums text-muted-foreground">
                         {persa ? `${durata(c.duration_seconds)} di squillo` : durata(c.duration_seconds)}
+                        {cadutaSulGruppo && (
+                          <span className="block text-[11px] not-italic">nessuno ha risposto</span>
+                        )}
                       </div>
 
                       <div className="w-24 text-right text-xs text-muted-foreground">
