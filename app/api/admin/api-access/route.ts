@@ -1,89 +1,54 @@
-/**
- * Gestione del token di accesso API della struttura.
- *
- * A COSA SERVE
- * `properties.api_token` autentica DUE flussi opposti, e questo è il fatto che
- * governa tutta la pagina:
- *   1. IN ENTRATA  — il webhook ManuBot -> hub (`/api/external/manubot`) accetta
- *      `Authorization: Bearer <api_token>`;
- *   2. IN USCITA   — Santaddeo (o qualunque altro consumatore) legge la domanda
- *      da `/api/external/demand` con lo stesso Bearer.
- * Conseguenza misurata sul dato reale (Villa I Barronci ha `manubot_email`
- * valorizzato): RIGENERARE il token INTERROMPE l'arrivo dei task da ManuBot
- * finché il nuovo valore non viene riconfigurato là. Per questo la rotazione è
- * un'azione separata, esplicita e avvisata, mentre il caso d'uso normale
- * ("devo dare il token a Santaddeo") è `reveal`, che non cambia nulla.
- *
- * PERCHÉ `reveal` PUÒ MOSTRARE IL TOKEN IN CHIARO
- * perché in chiaro è già: `api_token` è salvato non cifrato in colonna (il
- * webhook lo usa ancora in `.eq("api_token", ...)` come ripiego), e
- * `api_token_hash` è l'impronta affiancata. Nascondere il valore a un
- * amministratore che può comunque leggerlo sarebbe teatro, non sicurezza: la
- * scelta onesta è mostrarlo su richiesta esplicita e non stamparlo MAI nei log.
- *
- * COSA QUESTA ROTTA NON FA
- *  - non inventa una data di rotazione: nel DB NON esiste una colonna per essa
- *    (`updated_at` cambia per qualunque modifica, quindi mostrarla come "ultima
- *    rotazione" sarebbe una bugia);
- *  - non tocca `manubot_email`, `manubot_password`, webhook o altre colonne;
- *  - non restituisce mai `api_token_hash` (non serve a nessun integratore).
- *
- * È POST anche per `reveal` proprio perché non deve poter essere innescata da un
- * prefetch o dall'apertura di un URL.
- *
- * AMBITO: `requireTenantAdmin` risolve la struttura come le altre rotte admin
- * (cookie del selettore per il super_admin, `admin_users.property_id` per il
- * tenant_admin) e nega a chi non è amministratore. L'area "settings" è baseline,
- * cioè concessa a tutti: il presidio vero è QUESTO, non l'area.
- */
-
+import { NextResponse, type NextRequest } from "next/server"
 import crypto from "node:crypto"
-import { type NextRequest, NextResponse } from "next/server"
+
+import { requireTenantAdmin, isAccessError, accessErrorStatus } from "@/lib/auth/admin-access"
 import { createServiceClient } from "@/lib/supabase/server"
-import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { hashApiToken } from "@/lib/security/token-hash"
 
-/** Anteprima non sufficiente a ricostruire il token: primi 6 e ultimi 4. */
-function maskToken(token: string): string {
-  if (token.length <= 12) return "•".repeat(token.length)
-  return `${token.slice(0, 6)}${"•".repeat(10)}${token.slice(-4)}`
-}
-
 /**
- * Indirizzo pubblico da mostrare e copiare.
+ * Token di accesso API della struttura.
  *
- * NON è derivato da `NEXT_PUBLIC_APP_URL`, per due ragioni entrambe misurate:
- *  1. in produzione quella variabile vale `https://hotelaccelerator.com`, cioè
- *     l'APEX, e l'apex risponde `307` verso `www` (verificato). Un redirect può
- *     far PERDERE l'header `Authorization: Bearer`, quindi l'integratore
- *     riceverebbe 401 seguendo alla lettera le istruzioni che gli diamo. È lo
- *     stesso motivo per cui `MANUBOT_WEBHOOK_PUBLIC_URL` è fissata con `www`;
- *  2. in sviluppo e in preview vale `http://localhost:3000`: copiare quello
- *     significa consegnare a Santaddeo un indirizzo che non esiste per lui.
- * Fuori da localhost si usa quindi l'host canonico con `www`, e in sviluppo
- * l'origine reale della richiesta, così la pagina resta provabile in locale.
+ * Contesto verificato prima di scrivere questa rotta:
+ *  - il token vive su `properties` in DUE colonne: `api_token` (in chiaro) e
+ *    `api_token_hash` (impronta HMAC). La verifica in ingresso usa l'impronta
+ *    come via primaria e il chiaro come ripiego, quindi ogni scrittura deve
+ *    aggiornare ENTRAMBE: aggiornarne una sola le lascia discordi;
+ *  - lo STESSO token autentica anche il webhook ManuBot in entrata. Rigenerarlo
+ *    interrompe quel flusso finche' ManuBot non riceve il valore nuovo, percio'
+ *    l'interfaccia deve avvisarlo quando ManuBot risulta configurato.
  */
-const CANONICAL_PUBLIC_ORIGIN = "https://www.hotelaccelerator.com"
-
-function publicBase(request: NextRequest): string {
-  const origin = new URL(request.url).origin
-  const host = new URL(request.url).hostname
-  const isLocal = host === "localhost" || host === "127.0.0.1"
-  return isLocal ? origin : CANONICAL_PUBLIC_ORIGIN
-}
 
 type PropertyRow = {
   id: string
-  name: string | null
   api_token: string | null
   api_token_hash: string | null
   manubot_email: string | null
 }
 
 /**
+ * Indirizzo pubblico da mostrare e copiare.
+ *
+ * NON derivato da `NEXT_PUBLIC_APP_URL`, per due ragioni entrambe misurate:
+ *  1. in produzione quella variabile vale `https://hotelaccelerator.com`, cioe'
+ *     l'APEX, e l'apex risponde 307 verso `www` (verificato con curl). Un
+ *     redirect puo' far PERDERE l'intestazione `Authorization: Bearer`, quindi
+ *     l'integratore riceverebbe 401 seguendo alla lettera le nostre istruzioni.
+ *     E' la stessa ragione per cui l'URL del webhook ManuBot e' fissato con `www`;
+ *  2. in sviluppo vale `http://localhost:3000`: copiarlo significherebbe
+ *     consegnare a un sistema esterno un indirizzo che per lui non esiste.
+ */
+const CANONICAL_PUBLIC_ORIGIN = "https://www.hotelaccelerator.com"
+
+function publicBase(request: NextRequest): string {
+  const url = new URL(request.url)
+  const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1"
+  return isLocal ? url.origin : CANONICAL_PUBLIC_ORIGIN
+}
+
+/**
  * Il segreto di hashing e' utilizzabile? Non si controlla l'esistenza della
- * variabile ma si PROVA a calcolare un'impronta: `hashApiToken` rifiuta anche i
- * segreti troppo corti, quindi "variabile presente" non implica "funzionante".
+ * variabile ma si PROVA a calcolare un'impronta, perche' `hashApiToken` rifiuta
+ * anche i segreti troppo corti: "variabile presente" non implica "funzionante".
  */
 function hashSecretUsable(): boolean {
   try {
@@ -94,156 +59,162 @@ function hashSecretUsable(): boolean {
   }
 }
 
+/** Mostra abbastanza per riconoscere il token, non abbastanza per usarlo. */
+function maschera(token: string): string {
+  if (token.length <= 10) return "•".repeat(token.length)
+  return `${token.slice(0, 6)}${"•".repeat(10)}${token.slice(-4)}`
+}
+
 async function loadProperty(propertyId: string): Promise<PropertyRow | null> {
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from("properties")
-    .select("id, name, api_token, api_token_hash, manubot_email")
+    .select("id, api_token, api_token_hash, manubot_email")
     .eq("id", propertyId)
     .maybeSingle()
 
-  if (error) throw new Error(error.message)
-  return (data as PropertyRow | null) ?? null
+  if (error) {
+    console.error("[v0] api-access: lettura struttura fallita")
+    return null
+  }
+  return (data as PropertyRow) ?? null
+}
+
+/**
+ * `requireTenantAdmin` LANCIA `AccessError` (401/403), non restituisce un errore:
+ * va quindi avvolto in try/catch, altrimenti l'eccezione diventerebbe un 500 e
+ * un accesso negato somiglierebbe a un guasto del server.
+ */
+async function risolviAmministratore(): Promise<{ propertyId: string } | NextResponse> {
+  try {
+    return await requireTenantAdmin()
+  } catch (errore) {
+    if (isAccessError(errore)) {
+      return NextResponse.json(
+        { error: errore instanceof Error ? errore.message : "Accesso negato" },
+        { status: accessErrorStatus(errore) },
+      )
+    }
+    throw errore
+  }
 }
 
 export async function GET(request: NextRequest) {
-  try {
-    const { propertyId } = await requireTenantAdmin(request)
-    const property = await loadProperty(propertyId)
-    if (!property) {
-      return NextResponse.json({ error: "Struttura non trovata" }, { status: 404 })
-    }
+  const identity = await risolviAmministratore()
+  if (identity instanceof NextResponse) return identity
 
-    const token = property.api_token ?? ""
-    return NextResponse.json({
-      property: { id: property.id, name: property.name },
-      hasToken: token.length > 0,
-      masked: token ? maskToken(token) : null,
-      tokenLength: token.length || null,
-      hashPresent: Boolean(property.api_token_hash),
-      // Il server sa calcolare l'impronta? Se no, la rigenerazione e' impossibile
-      // e il pulsante va spento CON la ragione: altrimenti l'utente premerebbe e
-      // riceverebbe un errore senza capire che non dipende da lui.
-      hashSecretPresent: hashSecretUsable(),
-      // Serve a decidere se mostrare l'avviso sulla rotazione: senza ManuBot
-      // configurato, rigenerare non interrompe alcun flusso in entrata.
-      manubotConfigured: Boolean(property.manubot_email),
-      endpoint: `${publicBase(request)}/api/external/demand`,
-    })
-  } catch (error) {
-    const status = accessErrorStatus(error)
-    if (status !== 500) {
-      return NextResponse.json({ error: error instanceof Error ? error.message : "Accesso negato" }, { status })
-    }
-    console.error("[v0] api-access GET: errore interno")
-    return NextResponse.json({ error: "Errore interno" }, { status: 500 })
+  const property = await loadProperty(identity.propertyId)
+  if (!property) {
+    return NextResponse.json({ error: "Struttura non trovata" }, { status: 404 })
   }
+
+  const token = property.api_token
+  return NextResponse.json({
+    hasToken: Boolean(token),
+    // Il valore in chiaro NON viaggia qui: serve un'azione esplicita.
+    masked: token ? maschera(token) : null,
+    tokenLength: token?.length ?? 0,
+    hashPresent: Boolean(property.api_token_hash),
+    // Il server sa calcolare l'impronta? Se no la rigenerazione e' impossibile e
+    // il pulsante va spento CON la ragione: premerlo darebbe altrimenti un
+    // errore che non dipende da chi lo preme.
+    hashSecretPresent: hashSecretUsable(),
+    // Serve a decidere se avvisare prima di rigenerare: senza ManuBot
+    // configurato, rigenerare non interrompe alcun flusso in entrata.
+    manubotConfigured: Boolean(property.manubot_email),
+    endpoint: `${publicBase(request)}/api/external/demand`,
+  })
 }
 
 export async function POST(request: NextRequest) {
+  const identity = await risolviAmministratore()
+  if (identity instanceof NextResponse) return identity
+
+  let azione: string | undefined
   try {
-    const { propertyId, email } = await requireTenantAdmin(request)
-
-    let action = ""
-    try {
-      const body = (await request.json()) as { action?: unknown }
-      action = typeof body.action === "string" ? body.action : ""
-    } catch {
-      return NextResponse.json({ error: "Corpo della richiesta non valido" }, { status: 400 })
-    }
-
-    if (action !== "reveal" && action !== "rotate") {
-      return NextResponse.json({ error: 'Azione non valida: attese "reveal" o "rotate"' }, { status: 400 })
-    }
-
-    const property = await loadProperty(propertyId)
-    if (!property) {
-      return NextResponse.json({ error: "Struttura non trovata" }, { status: 404 })
-    }
-
-    if (action === "reveal") {
-      if (!property.api_token) {
-        return NextResponse.json(
-          { error: "Nessun token presente per questa struttura: usa Rigenera per crearne uno." },
-          { status: 409 },
-        )
-      }
-      // Tracciabilità senza segreti: chi e quando, non il valore.
-      console.log(`[v0] api-access reveal property=${propertyId} by=${email ?? "?"}`)
-      return NextResponse.json({ token: property.api_token, rotated: false })
-    }
-
-    // --- rotate -------------------------------------------------------------
-    // Esadecimale come in `manubot/setup`: ASCII per costruzione, quindi sempre
-    // valido dentro un'intestazione HTTP.
-    const nuovo = crypto.randomBytes(32).toString("hex")
-
-    // L'impronta si calcola PRIMA di scrivere. `hashApiToken` lancia se
-    // `API_TOKEN_HASH_SECRET` non è impostata (è accaduto in sviluppo, dove la
-    // variabile non c'è pur essendo presente in produzione): senza questo
-    // blocco l'eccezione diventava un 500 opaco, e soprattutto la scrittura
-    // sarebbe potuta partire con una sola delle due colonne aggiornata,
-    // lasciando token e impronta discordi e il webhook muto.
-    let nuovoHash: string
-    try {
-      nuovoHash = hashApiToken(nuovo)
-    } catch {
-      console.error("[v0] api-access rotate: impronta non calcolabile (segreto di hashing assente)")
-      return NextResponse.json(
-        {
-          error:
-            "Rigenerazione non disponibile: manca il segreto di hashing dei token sul server. " +
-            "Il token attuale NON è stato modificato.",
-        },
-        { status: 503 },
-      )
-    }
-
-    const supabase = createServiceClient()
-    const { data: scritte, error } = await supabase
-      .from("properties")
-      // Scrittura doppia deliberata: `api_token` in chiaro perché il webhook lo
-      // usa ancora come ripiego, `api_token_hash` perché è la via primaria.
-      // Scriverne una sola lascerebbe i due valori discordi e il webhook muto.
-      .update({ api_token: nuovo, api_token_hash: nuovoHash, updated_at: new Date().toISOString() })
-      .eq("id", propertyId)
-      // `.select()` non è decorativo: senza di esso Supabase riporta `error: null`
-      // anche quando il filtro non ha colpito NESSUNA riga, e la rotta
-      // annuncerebbe una rotazione mai avvenuta consegnando all'integratore un
-      // token che il database non conosce. Qui pretendiamo la riga aggiornata.
-      .select("id, api_token, api_token_hash")
-
-    if (error || !scritte || scritte.length !== 1) {
-      console.error(`[v0] api-access rotate: scrittura non confermata (righe=${scritte?.length ?? 0})`)
-      return NextResponse.json(
-        { error: "Rigenerazione non riuscita: il token NON è stato modificato." },
-        { status: 500 },
-      )
-    }
-
-    // Controprova sul valore riletto dal database: se una regola, un trigger o
-    // una colonna generata avesse alterato ciò che abbiamo scritto, mostreremmo
-    // un token diverso da quello memorizzato.
-    if (scritte[0].api_token !== nuovo || scritte[0].api_token_hash !== nuovoHash) {
-      console.error("[v0] api-access rotate: il valore riletto non combacia con quello scritto")
-      return NextResponse.json(
-        { error: "Rigenerazione incoerente: verifica lo stato del token prima di usarlo." },
-        { status: 500 },
-      )
-    }
-
-    console.log(`[v0] api-access rotate property=${propertyId} by=${email ?? "?"}`)
-    return NextResponse.json({
-      token: nuovo,
-      rotated: true,
-      manubotConfigured: Boolean(property.manubot_email),
-    })
-  } catch (error) {
-    const status = accessErrorStatus(error)
-    if (status !== 500) {
-      return NextResponse.json({ error: error instanceof Error ? error.message : "Accesso negato" }, { status })
-    }
-    console.error("[v0] api-access POST: errore interno")
-    return NextResponse.json({ error: "Errore interno" }, { status: 500 })
+    azione = (await request.json())?.action
+  } catch {
+    return NextResponse.json({ error: "Corpo della richiesta non valido" }, { status: 400 })
   }
+
+  if (azione !== "reveal" && azione !== "rotate") {
+    return NextResponse.json(
+      { error: "Azione non riconosciuta: usare 'reveal' oppure 'rotate'" },
+      { status: 400 },
+    )
+  }
+
+  const propertyId = identity.propertyId
+  const property = await loadProperty(propertyId)
+  if (!property) {
+    return NextResponse.json({ error: "Struttura non trovata" }, { status: 404 })
+  }
+
+  if (azione === "reveal") {
+    if (!property.api_token) {
+      return NextResponse.json({ error: "Nessun token da mostrare" }, { status: 404 })
+    }
+    // Sola lettura: non tocca nulla, cosi' mostrare il token non puo' invalidarlo.
+    return NextResponse.json({ token: property.api_token, rotated: false })
+  }
+
+  // --- rotate ---------------------------------------------------------------
+  // Esadecimale: ASCII per costruzione, quindi sempre valido in un'intestazione.
+  const nuovo = crypto.randomBytes(32).toString("hex")
+
+  // L'impronta si calcola PRIMA di scrivere. `hashApiToken` lancia se il segreto
+  // manca o e' troppo corto: senza questo blocco l'eccezione diventerebbe un 500
+  // opaco e, peggio, la scrittura potrebbe partire aggiornando una sola delle due
+  // colonne, lasciando token e impronta discordi e il webhook muto.
+  let nuovoHash: string
+  try {
+    nuovoHash = hashApiToken(nuovo)
+  } catch {
+    console.error("[v0] api-access rotate: impronta non calcolabile (segreto di hashing assente)")
+    return NextResponse.json(
+      {
+        error:
+          "Rigenerazione non disponibile: manca il segreto di hashing dei token sul server. " +
+          "Il token attuale NON è stato modificato.",
+      },
+      { status: 503 },
+    )
+  }
+
+  const supabase = createServiceClient()
+  const { data: scritte, error } = await supabase
+    .from("properties")
+    // Scrittura doppia deliberata: `api_token` perche' la verifica in ingresso lo
+    // usa come ripiego, `api_token_hash` perche' e' la via primaria.
+    .update({ api_token: nuovo, api_token_hash: nuovoHash, updated_at: new Date().toISOString() })
+    .eq("id", propertyId)
+    // `.select()` non e' decorativo: senza di esso Supabase riporta `error: null`
+    // anche quando il filtro non colpisce NESSUNA riga, e la rotta annuncerebbe
+    // una rotazione mai avvenuta consegnando un token che il database non conosce.
+    .select("id, api_token, api_token_hash")
+
+  if (error || !scritte || scritte.length !== 1) {
+    console.error(`[v0] api-access rotate: scrittura non confermata (righe=${scritte?.length ?? 0})`)
+    return NextResponse.json(
+      { error: "Rigenerazione non riuscita: il token NON è stato modificato." },
+      { status: 500 },
+    )
+  }
+
+  // Controprova sul valore riletto: se un trigger o una colonna generata avesse
+  // alterato cio' che abbiamo scritto, mostreremmo un token diverso da quello
+  // effettivamente memorizzato.
+  if (scritte[0].api_token !== nuovo || scritte[0].api_token_hash !== nuovoHash) {
+    console.error("[v0] api-access rotate: il valore riletto non combacia con quello scritto")
+    return NextResponse.json(
+      { error: "Rigenerazione incoerente: verifica lo stato del token prima di usarlo." },
+      { status: 500 },
+    )
+  }
+
+  return NextResponse.json({
+    token: nuovo,
+    rotated: true,
+    manubotConfigured: Boolean(property.manubot_email),
+  })
 }
