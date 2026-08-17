@@ -60,6 +60,9 @@ async function main() {
     // `caricaProvider` non ripiega sul fornitore di prova e prova a costruire
     // davvero il connettore.
     pms_type: "pms-inesistente-di-prova",
+    // `name` e' obbligatorio nella tabella: senza, Postgres rifiuta l'intera
+    // riga e la prova si fermerebbe prima di verificare qualsiasi cosa.
+    name: "Configurazione di prova (tipo ignoto)",
     is_active: true,
     auth_code_encrypted: "credenziale-di-prova",
     api_url: "https://example.invalid/api/",
@@ -130,6 +133,10 @@ async function main() {
     } else {
       const { error } = await sb.from("pms_integrations").delete().eq("property_id", property.id)
       esito("riga di prova rimossa", !error, error?.message ?? "")
+      // Verifica, non fiducia: la tabella era vuota e deve tornare vuota, o
+      // lascerei in giro una configurazione finta che sembra vera.
+      const { data: resti } = await sb.from("pms_integrations").select("id").eq("property_id", property.id)
+      esito("nessuna configurazione di prova sopravvissuta", (resti?.length ?? 0) === 0, `${resti?.length ?? 0} righe`)
     }
   }
 
