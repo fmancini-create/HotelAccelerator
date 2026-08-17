@@ -149,11 +149,17 @@ export function ApiAccessClient() {
                 </CardDescription>
               </div>
             </div>
-            {stato?.hasToken ? (
-              <Badge variant="secondary">Attivo</Badge>
-            ) : (
-              <Badge variant="destructive">Assente</Badge>
-            )}
+            {/* Nessun distintivo quando lo stato NON e' stato caricato: dire
+                "Assente" perche' la richiesta e' fallita sarebbe un'affermazione
+                falsa (il token puo' esistere benissimo). "Assente" si mostra solo
+                quando il server ha risposto dicendo che non c'e'. */}
+            {stato ? (
+              stato.hasToken ? (
+                <Badge variant="secondary">Attivo</Badge>
+              ) : (
+                <Badge variant="destructive">Assente</Badge>
+              )
+            ) : null}
           </div>
         </CardHeader>
 
@@ -255,6 +261,14 @@ export function ApiAccessClient() {
                 </Alert>
               )}
             </div>
+          ) : !stato ? (
+            /* Stato NON caricato: si dice solo che non si sa. Prima qui cadeva il
+               ramo "non ha ancora un token", che a schermo affermava il falso —
+               con il token realmente presente nel database. */
+            <p className="text-sm text-muted-foreground">
+              Stato del token non disponibile: la richiesta al server non è andata a buon fine.
+              Ricarica la pagina per riprovare.
+            </p>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
@@ -290,6 +304,10 @@ export function ApiAccessClient() {
         </CardContent>
       </Card>
 
+      {/* Le istruzioni si mostrano SOLO con lo stato caricato: senza `endpoint`
+          l'indirizzo restava un riquadro vuoto e i due pulsanti "Copia" erano
+          attivi pur non avendo nulla da copiare (verificato a schermo). */}
+      {stato && (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Come si usa</CardTitle>
@@ -359,6 +377,7 @@ export function ApiAccessClient() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   )
 }
