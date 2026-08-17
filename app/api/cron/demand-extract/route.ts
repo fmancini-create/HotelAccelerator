@@ -34,11 +34,14 @@ const PER_GROUP = 40
 const COST_CAP_MICRO_USD = 500_000
 
 export async function GET(request: NextRequest) {
-  // Difesa a chiusura, non ad apertura. Lo schema usato dagli altri cron
+  // Difesa a chiusura, non ad apertura. Lo schema usato dagli altri tre cron
   // (`if (cronSecret) { ...verifica... }`) lascia la rotta APERTA quando la
-  // variabile non e' impostata — e qui e' stato misurato: `CRON_SECRET` non
-  // c'e'. Su una rotta che chiama un modello a pagamento, aperta significa che
-  // un estraneo puo' far spendere denaro chiamandola in continuazione.
+  // variabile non e' impostata. Su una rotta che chiama un modello a pagamento,
+  // aperta significa che un estraneo puo' far spendere denaro chiamandola in
+  // continuazione. `CRON_SECRET` ora E' impostata (verificato: la guardia
+  // risponde 401 senza segreto e 200 con quello giusto), ma la chiusura resta
+  // perche' il giorno in cui la variabile venisse rimossa la rotta deve
+  // fermarsi, non spalancarsi.
   //
   // Quindi: senza segreto si passa solo in sviluppo locale, dove la rotta non
   // e' raggiungibile da fuori. In produzione senza segreto si risponde 401 e il

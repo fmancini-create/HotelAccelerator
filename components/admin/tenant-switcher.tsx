@@ -57,7 +57,18 @@ export function TenantSwitcher() {
     return null
   }
 
-  const active = data.tenants.find((t) => t.id === data.activePropertyId) || data.tenants[0]
+  // `activePropertyId` nullo significa "nessuna struttura ancora scelta": il
+  // cookie che la registra non esiste. Mostrare comunque `tenants[0]` come se
+  // fosse attiva era la causa di un guasto silenzioso: l'intestazione diceva
+  // "Villa I Barronci", ma ogni API rispondeva "Nessun tenant selezionato" (400)
+  // e le pagine comparivano vuote, con gli interruttori spenti e i contatori a
+  // zero — quindi non "manca una scelta", ma "i dati non ci sono". Peggio: la
+  // voce mostrata risultava GIA' attiva, e `handleSwitch` esce subito quando si
+  // riclicca l'attiva, percio' sceglierla non registrava nulla e il guasto era
+  // inuscibile. Ora, senza scelta registrata, non si finge: si mostra l'invito a
+  // scegliere.
+  const selected = data.tenants.find((t) => t.id === data.activePropertyId) ?? null
+  const active = selected
 
   // Tenant admin or non-admin member on a single property: show a read-only
   // badge for context (only super_admins get the full switcher below).
