@@ -73,6 +73,10 @@ export function AnalyticsSourcesClient() {
   const incluse = sorgenti?.filter((s) => s.included).length ?? 0
   const nessunaInclusa = Boolean(sorgenti && sorgenti.length > 0 && incluse === 0)
 
+  // La targhetta "mai deciso" ha senso solo se distingue: quando NESSUNA sorgente
+  // e' stata decisa comparirebbe su ogni riga, cioe' non informa.
+  const qualcunaDecisa = Boolean(sorgenti?.some((s) => s.decided))
+
   const cambia = (s: Sorgente, valore: boolean) => {
     setSorgenti((prec) =>
       (prec ?? []).map((x) => (x.kind === s.kind && x.id === s.id ? { ...x, included: valore } : x)),
@@ -210,9 +214,9 @@ export function AnalyticsSourcesClient() {
                               {s.reference}
                               {s.conversazioni === null
                                 ? " · volume non disponibile"
-                                : ` · ${numero(s.conversazioni)} conversazioni${
-                                    s.conteggioPerTipo ? " (totale del tipo)" : ""
-                                  }`}
+                                : ` · ${numero(s.conversazioni)} ${
+                                    s.conversazioni === 1 ? "conversazione" : "conversazioni"
+                                  }${s.conteggioPerTipo ? " (totale del tipo)" : ""}`}
                             </p>
                           </div>
                           <Switch
