@@ -39,6 +39,17 @@ const PRESENZA_MINUTI = 5
 /** Soglia oltre la quale una conversazione aperta e' considerata ferma. */
 const FERMA_ORE = 24
 
+/**
+ * Finestra entro cui un arretrato e' ancora lavoro, non archivio.
+ *
+ * Ricavata dai dati veri, non scelta a gusto: sulla struttura di prova le
+ * conversazioni aperte risalgono fino al 26/11/2024, e senza finestra
+ * l'arretrato "da gestire" sarebbe 7315 voci — un numero su cui nessuno agisce.
+ * A 7 giorni i conti diventano azionabili (65 non lette, 570 ferme) e coprono
+ * comunque piu' di un cambio turno.
+ */
+const GIORNI_UTILI = 7
+
 function isoOreFa(ore: number): string {
   return new Date(Date.now() - ore * 3600_000).toISOString()
 }
@@ -117,15 +128,32 @@ export async function GET(request: NextRequest) {
   const dati: Record<string, unknown> = {}
 
   // ---- Casella condivisa (tutti quelli che hanno l'inbox) ----
+  //
+  // I conteggi sono limitati agli ultimi GIORNI_UTILI giorni. Non e' un dettaglio
+  // estetico: misurato su Villa I Barronci, "non lette" senza finestra fa 1014 e
+  // "ferme da oltre 24h" fa 7315, ma la conversazione aperta piu' vecchia risale
+  // al 26/11/2024. Quei numeri sono in gran parte IMPORTAZIONE STORICA (le
+  // caselle sono state collegate con tutto il pregresso), e su 7315 voci nessuno
+  // puo' agire: un cruscotto che apre con un allarme non azionabile insegna a
+  // ignorare l'allarme. Nella finestra utile gli stessi conti fanno 65 e 570.
+  //
+  // Il totale d'archivio non viene nascosto: viaggia a fianco come contesto
+  // dichiarato, cosi' il numero grande resta verificabile e non sembra un conto
+  // sparito.
   if (haArea("inbox")) {
-    const [nonLette, aperte, ferme, ultime24h] = await Promise.all([
+    const daFinestra = isoOreFa(24 * GIORNI_UTILI)
+    const fermaDa = isoOreFa(FERMA_ORE)
+    const [nonLette, nonLetteArchivio, ferme, fermeArchivio, ultime24h] = await Promise.all([
+      conta("conversations", (q) => q.gt("unread_count", 0).neq("status", "deleted").gte("last_message_at", daFinestra)),
       conta("conversations", (q) => q.gt("unread_count", 0).neq("status", "deleted")),
+      conta("conversations", (q) =>
+        q.eq("status", "open").gte("last_message_at", daFinestra).lt("last_message_at", fermaDa),
+      ),
       conta("conversations", (q) => q.eq("status", "open")),
-      conta("conversations", (q) => q.eq("status", "open").lt("last_message_at", isoOreFa(FERMA_ORE))),
       conta("conversations", (q) => q.gte("last_message_at", isoOreFa(24))),
     ])
-    dati.backlog = { nonLette, aperte, ultime24h }
-    dati.stale = { ferme, soglieOre: FERMA_ORE }
+    dati.backlog = { nonLette, nonLetteArchivio, ultime24h, giorni: GIORNI_UTILI }
+    dati.stale = { ferme, fermeArchivio, soglieOre: FERMA_ORE, giorni: GIORNI_UTILI }
   }
 
   // ---- Telefonate ----

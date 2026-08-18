@@ -100,9 +100,11 @@ export function DashboardCard({ panel, dati }: { panel: DashboardPanel; dati: Da
           <div className="mb-1 text-3xl font-semibold tabular-nums">
             <Numero valore={d?.nonLette} sospetto={(d?.nonLette ?? 0) > 0} />
           </div>
-          <p className="mb-2 text-xs text-muted-foreground">non lette</p>
-          <Voce label="aperte" valore={d?.aperte} />
+          <p className="mb-2 text-xs text-muted-foreground">non lette, ultimi {d?.giorni ?? 7} giorni</p>
           <Voce label="movimento 24h" valore={d?.ultime24h} />
+          {/* L'archivio non viene nascosto: il numero grande e' la finestra utile,
+              questa riga dice quanto pesa tutto il pregresso importato. */}
+          <Voce label="in tutto, con archivio" valore={d?.nonLetteArchivio} />
         </Guscio>
       )
 
@@ -112,7 +114,10 @@ export function DashboardCard({ panel, dati }: { panel: DashboardPanel; dati: Da
           <div className="text-3xl font-semibold tabular-nums">
             <Numero valore={d?.ferme} sospetto={(d?.ferme ?? 0) > 0} />
           </div>
-          <p className="text-xs text-muted-foreground">aperte da oltre {d?.soglieOre ?? 24}h</p>
+          <p className="mb-2 text-xs text-muted-foreground">
+            ferme da oltre {d?.soglieOre ?? 24}h, ultimi {d?.giorni ?? 7} giorni
+          </p>
+          <Voce label="in tutto, con archivio" valore={d?.fermeArchivio} />
         </Guscio>
       )
 
