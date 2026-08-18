@@ -134,7 +134,12 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "volumes",
     title: "Volumi per canale",
-    hint: "Da dove arrivano le conversazioni e quanto si muovono nelle 24 ore.",
+    // Il testo prometteva "nelle 24 ore", ma i conteggi non hanno alcuna
+    // finestra: sono i totali per canale dall'inizio (misurato a schermo: email
+    // 7678, cioe' tutto lo storico importato). Promettere 24 ore su un totale
+    // storico e' lo stesso difetto dell'arretrato, quindi il testo viene
+    // allineato a cio' che il codice calcola davvero.
+    hint: "Da dove arrivano le conversazioni: totali per canale su tutto lo storico.",
     kind: "metrics",
     adminOnly: true,
     href: "/admin/inbox",
@@ -158,7 +163,9 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "campaigns",
     title: "Campagne email",
-    hint: "Invii recenti e loro esito.",
+    // "Invii recenti" era falso: conta("email_campaigns") non ha filtro sul
+    // tempo, quindi il numero e' il totale storico delle campagne.
+    hint: "Campagne create finora, in tutto lo storico.",
     kind: "metrics",
     area: "marketing",
     href: "/admin/marketing",
