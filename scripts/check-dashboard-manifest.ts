@@ -137,6 +137,86 @@ console.log("\n3c. Uno zero misurato non viene spacciato per dato mancante")
   }
 }
 
+console.log("\n3d. Nessun testo promette una finestra che il conteggio non applica")
+{
+  // Difetto ricorrente, trovato tre volte guardando lo schermo: la spiegazione
+  // diceva "nelle 24 ore" / "invii recenti" mentre il conteggio non aveva alcun
+  // filtro sul tempo, quindi mostrava il totale storico (email: 7678). Chi legge
+  // non puo' accorgersene: il numero e' plausibile, mente solo l'etichetta.
+  //
+  // Si controlla la COERENZA fra le due meta' della promessa: un pannello puo'
+  // dire "recente" solo se il suo conteggio filtra davvero sul tempo.
+  // NON si delimita piu' il codice a colpi di regex: tre tentativi hanno
+  // prodotto blocchi sbagliati (83 caratteri senza i conteggi, poi 6106 che
+  // inglobavano i filtri di pannelli vicini) e in entrambi i casi il controllo si
+  // auto-assolveva trovando un `.gte(` altrui. Leggere il comportamento dentro
+  // una stringa e' la strada sbagliata.
+  //
+  // Si verifica invece il DATO che l'API dichiara: un pannello che promette una
+  // finestra deve pubblicarla come campo (`giorni`), cosi' la promessa e' un
+  // valore controllabile e non una frase da interpretare. E' anche cio' che la
+  // card mostra a schermo ("ultimi 7 giorni"), quindi testo e numero non possono
+  // piu' divergere in silenzio.
+  const PROMETTE = /\b(24 ore|ultim\w+|recent\w*|oggi|mese)\b/i
+
+  // Chi promette una finestra e chi no, dichiarato: `volumes` e `campaigns` sono
+  // totali storici e il loro testo lo dice ora esplicitamente.
+  //
+  // `presence` ha una finestra vera ma in MINUTI (5, filtro su last_seen_at) e la
+  // pubblica come `minuti`, non `giorni`: verificato nel codice, non e' un
+  // difetto. Sta quindi fra i pannelli con finestra, con il proprio campo.
+  const CON_FINESTRA = new Set(["backlog", "stale", "calls", "presence"])
+  const CAMPO_FINESTRA: Record<string, string> = { presence: "minuti" }
+
+  let esaminati = 0
+  for (const p of DASHBOARD_PANELS) {
+    const prometteTempo = PROMETTE.test(p.hint)
+    if (prometteTempo) esaminati++
+
+    check(
+      `"${p.id}": testo e finestra concordano`,
+      // Semplice uguaglianza: promettere tempo e avere una finestra devono
+      // coincidere. (Una prima versione aggiungeva `|| (!a && !b)`, che rendeva
+      // la condizione sempre vera quando il testo non prometteva nulla.)
+      prometteTempo === CON_FINESTRA.has(p.id),
+      prometteTempo
+        ? `il testo dice "${p.hint.slice(0, 44)}…" ma il pannello non e' fra quelli con finestra: mostrerebbe il totale storico`
+        : "il pannello ha una finestra ma il testo non la dichiara",
+    )
+  }
+
+  // Il contratto lato API: ogni pannello con finestra pubblica `giorni`, che e'
+  // il numero mostrato nella card. Senza questo, il testo potrebbe dire "7
+  // giorni" mentre il codice ne filtra 30.
+  const api = readFileSync(join(RADICE, "app/api/platform/dashboard/route.ts"), "utf8")
+  for (const id of CON_FINESTRA) {
+    const campo = CAMPO_FINESTRA[id] ?? "giorni"
+
+    // TUTTE le assegnazioni, non la prima che capita: `dati.presence` ne ha due
+    // (con persone e con persone: null, quando la lettura non riesce). Con
+    // `.test()` bastava che una fosse in regola e il ramo di ripiego poteva
+    // perdere la finestra senza che nessuno lo notasse (misurato).
+    const assegnazioni = [...api.matchAll(new RegExp(`dati\\.${id} = \\{[^}]*\\}`, "g"))].map((m) => m[0])
+    check(`"${id}" e' assegnato dall'API`, assegnazioni.length > 0, `nessuna assegnazione dati.${id}`)
+    check(
+      `"${id}" pubblica la finestra in ogni ramo (campo ${campo})`,
+      assegnazioni.length > 0 && assegnazioni.every((a) => a.includes(campo)),
+      `${assegnazioni.filter((a) => !a.includes(campo)).length} rami su ${assegnazioni.length} non dichiarano ${campo}`,
+    )
+  }
+  check(
+    "la finestra e' una costante sola, non un numero sparso",
+    (api.match(/GIORNI_UTILI/g) ?? []).length >= 3,
+    "piu' finestre indipendenti divergerebbero fra pannelli",
+  )
+
+  check(
+    "almeno un pannello promette una finestra (altrimenti il controllo e' vacuo)",
+    esaminati > 0,
+    "nessun hint contiene parole di tempo: controllo da rivedere",
+  )
+}
+
 console.log("\n4. I pannelli riservati non raggiungono i membri")
 {
   const tuttiIModuli = [...new Set(DASHBOARD_PANELS.map((p) => p.module).filter(Boolean))] as string[]
