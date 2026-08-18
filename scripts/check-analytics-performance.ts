@@ -14,7 +14,8 @@
  *    alla classifica (misurato: succede davvero su questa struttura);
  *  - l'IA sta fuori graduatoria (risponde in 2 secondi: vincerebbe sempre);
  *  - sotto la soglia la graduatoria si dichiara non disponibile;
- *  - la mediana non e' la media (con 109 e 3.067 minuti la media direbbe 1.588);
+ *  - la mediana non e' la media (con attese di 3000, 10 e 10 minuti la mediana dice
+ *    10 e la media direbbe 1.007: due letture opposte dello stesso lavoro);
  *  - la conversione resta dichiarata come non disponibile, mai stimata.
  *
  * Si esegue con: pnpm check:analytics
@@ -265,7 +266,9 @@ async function main() {
   // 8. Mediana, non media.
   {
     const m = mondoBase()
-    // attese di 10, 20 e 3000 minuti: mediana 20, media 1010.
+    // Attese vere prodotte da questi messaggi: 3000, 10 e 10 minuti.
+    // Mediana 10, media 1006,7: se il codice usasse la media, il numero a schermo
+    // direbbe "16 ore di attesa" invece di "10 minuti".
     m.messaggi = [
       { id: "q1", conversation_id: "c1", sender_type: "customer", sender_id: null, created_at: fa(3010), metadata: null },
       { id: "r1", conversation_id: "c1", sender_type: "agent", sender_id: "u-vera", created_at: fa(10), metadata: null },
