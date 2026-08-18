@@ -6,15 +6,21 @@
  * Global top-bar for all internal admin pages.
  *
  * Architecture (script-first, multi-tenant):
- *  - Navigation is data-driven (see PRIMARY_NAV / MORE_NAV below). Links are
- *    not hardcoded to a specific tenant and route to the user's currently
- *    active tenant via the standard /admin/* paths.
+ *  - Le voci NON sono dichiarate qui: arrivano da lib/platform/nav.ts, che e'
+ *    la fonte unica letta anche dalla pagina /admin/settings. I link non sono
+ *    legati a una struttura e usano i normali percorsi /admin/*.
  *  - TenantSwitcher is always mounted; it self-degrades based on the user's
  *    role (super_admin, tenant_admin, none).
  *  - User menu wires up Supabase signOut.
  *
- * Layout is mobile-first: on small screens, PRIMARY_NAV collapses into the
- * same "Altro" dropdown to avoid overflow.
+ * Organizzazione del menu:
+ *  - in chiaro e nella tendina "Altro" stanno solo le parti OPERATIVE (Inbox,
+ *    Telefonate, turni, campagne...);
+ *  - tutto cio' che si IMPOSTA sta nell'unica tendina "Impostazioni", il cui
+ *    piede porta alla pagina che raccoglie le stesse voci in schede.
+ *
+ * Layout is mobile-first: on small screens, le voci in chiaro collassano nella
+ * stessa tendina "Altro" per non far tracimare la barra.
  */
 
 import Link from "next/link"
