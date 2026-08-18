@@ -315,6 +315,21 @@ export const NAV_ENTRIES: NavEntry[] = [
     area: "tracking",
   },
   {
+    // Quali caselle e canali contano nei numeri del cruscotto.
+    //
+    // Area "tracking" (come le altre pagine di statistiche) ma SENZA `module`:
+    // legare la voce al modulo tracking la farebbe sparire dove quel modulo non
+    // e' attivo, e la scelta serve comunque, perche' i volumi per canale si
+    // contano anche senza tracciamento dei siti.
+    id: "analytics-sources",
+    href: "/admin/settings/analytics-sources",
+    label: "Sorgenti statistiche",
+    description: "Caselle e canali che contano nei numeri del cruscotto",
+    placement: "settings",
+    icon: BarChart3,
+    area: "tracking",
+  },
+  {
     id: "embed-scripts",
     href: "/admin/embed-scripts",
     label: "Embed scripts",

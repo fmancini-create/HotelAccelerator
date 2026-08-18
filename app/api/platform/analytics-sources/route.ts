@@ -30,7 +30,11 @@ export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAreaApi("dashboard", request)
+    // Chiave "tracking": e' quella del catalogo che governa le statistiche.
+    // "dashboard" NON esiste fra le aree (verificato in lib/platform/nav.ts) e una
+    // chiave sconosciuta cade in `not-granted`, cioe' avrebbe negato l'accesso a
+    // ogni collaboratore: una guardia che blocca invece di proteggere.
+    await requireAreaApi("tracking", request)
 
     const chi = await getCallerIdentity(request)
     if (!chi?.propertyId) {
@@ -61,7 +65,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    await requireAreaApi("dashboard", request)
+    await requireAreaApi("tracking", request)
 
     const chi = await getCallerIdentity(request)
     if (!chi?.propertyId) {

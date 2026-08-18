@@ -40,6 +40,22 @@ export type AnalyticsSource = {
    * personale del titolare fra le statistiche dell'hotel.
    */
   decided: boolean
+  /**
+   * Conversazioni attribuite a questa sorgente.
+   *
+   * Non e' un ornamento: senza il volume, chi decide non ha modo di sapere che la
+   * casella personale del titolare pesa 6.806 conversazioni e quella dell'hotel
+   * poche decine. Sceglierebbe a memoria.
+   *
+   * `null` quando il conteggio non e' disponibile: la messaggistica non ha il
+   * canale collegato sulle conversazioni, quindi per quei canali il numero e' per
+   * TIPO e non per singolo canale (due bot dello stesso tipo condividono lo
+   * stesso totale). Dichiararlo evita di far sembrare il totale di tipo un
+   * merito del singolo bot.
+   */
+  conversazioni: number | null
+  /** Vero quando `conversazioni` e' il totale del tipo di canale, non della singola sorgente. */
+  conteggioPerTipo: boolean
 }
 
 export type AnalyticsFilter = {
@@ -103,6 +119,28 @@ export async function listAnalyticsSources(
     decise.set(`${r.source_kind}:${r.source_id}`, r.included !== false)
   }
 
+  // Volume per sorgente, in parallelo: e' il dato su cui si decide cosa escludere.
+  const volumeCasella = new Map<string, number | null>()
+  const volumeTipo = new Map<string, number | null>()
+
+  const conta = async (applica: (q: any) => any): Promise<number | null> => {
+    const r = await applica(
+      sb.from("conversations").select("id", { count: "exact", head: true }).eq("property_id", propertyId),
+    )
+    // null, non 0: un errore di lettura mostrato come zero farebbe escludere la
+    // casella sbagliata perche' sembra inattiva.
+    return r.error ? null : (r.count ?? 0)
+  }
+
+  await Promise.all([
+    ...(caselle.data ?? []).map(async (c: any) => {
+      volumeCasella.set(c.id, await conta((q: any) => q.eq("channel_id", c.id)))
+    }),
+    ...[...new Set((canali.data ?? []).map((c: any) => c.channel_type).filter(Boolean))].map(async (tipo: any) => {
+      volumeTipo.set(tipo, await conta((q: any) => q.eq("channel", tipo)))
+    }),
+  ])
+
   const sources: AnalyticsSource[] = []
 
   for (const c of caselle.data ?? []) {
@@ -115,19 +153,27 @@ export async function listAnalyticsSources(
       channelType: "email",
       included: decise.get(chiave) ?? true,
       decided: decise.has(chiave),
+      conversazioni: volumeCasella.get(c.id) ?? null,
+      conteggioPerTipo: false,
     })
   }
 
   for (const c of canali.data ?? []) {
     const chiave = `messaging_channel:${c.id}`
+    const tipo = c.channel_type ?? ""
+    // Quanti canali condividono questo tipo: se piu' di uno, il totale non e'
+    // attribuibile al singolo e la pagina deve dirlo.
+    const omonimi = (canali.data ?? []).filter((x: any) => (x.channel_type ?? "") === tipo).length
     sources.push({
       kind: "messaging_channel",
       id: c.id,
       label: c.display_name || c.channel_type || "Canale senza nome",
-      reference: c.channel_type ?? "",
-      channelType: c.channel_type ?? "",
+      reference: tipo,
+      channelType: tipo,
       included: decise.get(chiave) ?? true,
       decided: decise.has(chiave),
+      conversazioni: volumeTipo.get(tipo) ?? null,
+      conteggioPerTipo: omonimi > 1,
     })
   }
 
