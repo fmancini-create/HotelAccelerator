@@ -14,7 +14,7 @@
  * Si esegue con: pnpm check:dashboard
  */
 
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { DASHBOARD_PANELS, PANEL_ORDER, visiblePanels, dashboardProfileLabel } from "../lib/platform/dashboard"
 import { ALL_AREA_KEYS, BASELINE_AREA_KEYS } from "../lib/platform/areas"
@@ -37,10 +37,21 @@ function paginaEsiste(href: string): boolean {
   const parti = href.replace(/^\//, "").split("/")
   const diretto = join(RADICE, "app", ...parti, "page.tsx")
   if (existsSync(diretto)) return true
-  // Cartella con gruppo di rotte o segmento dinamico: si prova il padre.
-  const padre = join(RADICE, "app", ...parti.slice(0, -1))
-  if (!existsSync(padre)) return false
-  return existsSync(join(padre, "page.tsx"))
+
+  // Il ripiego sul padre NON puo' essere "il padre ha una page.tsx": ogni
+  // indirizzo sotto /admin/ passerebbe, perche' app/admin/page.tsx esiste, e il
+  // controllo diventerebbe vacuo (verificato: /admin/todos-inesistente passava).
+  // Si accetta solo il caso legittimo: la cartella dell'ultimo segmento esiste
+  // davvero e la pagina e' resa da un gruppo di rotte o da un segmento dinamico.
+  const cartella = join(RADICE, "app", ...parti)
+  if (!existsSync(cartella)) return false
+  return (
+    existsSync(join(cartella, "page.jsx")) ||
+    existsSync(join(cartella, "route.ts")) ||
+    readdirSync(cartella).some(
+      (v) => (v.startsWith("(") || v.startsWith("[")) && existsSync(join(cartella, v, "page.tsx")),
+    )
+  )
 }
 
 console.log("\n1. Ogni pannello e' disegnato da una card")
@@ -69,6 +80,27 @@ console.log("\n3. Coerenza delle dichiarazioni")
     check(`${p.id} ha una famiglia valida`, PANEL_ORDER.includes(p.kind), `kind sconosciuto: ${p.kind}`)
     if (p.area) {
       check(`${p.id} usa area "${p.area}"`, (ALL_AREA_KEYS as Set<string>).has(p.area), "chiave d'area sconosciuta")
+    }
+  }
+}
+
+console.log("\n3b. I pannelli che espongono il lavoro altrui restano riservati")
+{
+  // Elenco INCHIODATO a mano: sono i pannelli che mostrano dati di tutti, non
+  // del singolo. Senza questo controllo, togliere `adminOnly` da uno di essi
+  // passava inosservato (misurato: il sabotaggio restava verde), perche' le
+  // altre prove verificano la coerenza delle dichiarazioni, non QUALI pannelli
+  // devono essere dichiarati riservati.
+  const SENSIBILI = ["per-person", "volumes", "presence", "system-health", "revenue", "leave-requests"]
+  for (const id of SENSIBILI) {
+    const p = DASHBOARD_PANELS.find((x) => x.id === id)
+    check(`"${id}" esiste ancora fra i pannelli`, Boolean(p), "pannello rinominato o rimosso: aggiornare l'elenco")
+    if (p) {
+      check(
+        `"${id}" e' dichiarato riservato`,
+        p.adminOnly === true,
+        "espone il lavoro o i conti di tutti: deve restare adminOnly",
+      )
     }
   }
 }
@@ -108,16 +140,31 @@ console.log("\n5. Le aree non concesse non aprono pannelli")
   }
 
   // Concedere una singola area apre esattamente i pannelli di quell'area.
-  const conInbox = { isAdmin: false, areas: ["inbox"], activeModules: tuttiIModuli }
-  const delta = visiblePanels(conInbox)
-    .map((p) => p.id)
-    .filter((id) => !visiblePanels(nudo).some((p) => p.id === id))
-  const attesi = DASHBOARD_PANELS.filter((p) => p.area === "inbox" && !p.adminOnly).map((p) => p.id)
-  check(
-    "concedere inbox apre solo i pannelli di inbox",
-    delta.length === attesi.length && delta.every((id) => attesi.includes(id)),
-    `apparsi: [${delta.join(", ")}] attesi: [${attesi.join(", ")}]`,
-  )
+  //
+  // NON si usa "inbox": e' area BASELINE (spetta a tutti per progetto, come nel
+  // menu), quindi concederla non cambia nulla e il confronto resterebbe verde
+  // qualunque cosa faccia il motore. Una prova che non puo' fallire non prova
+  // niente. Si scelgono solo aree davvero concedibili, e si verifica che
+  // esistano nel catalogo invece di fidarsi del nome che ho in mente.
+  const concedibili = [...new Set(DASHBOARD_PANELS.map((p) => p.area).filter(Boolean))]
+    .filter((k) => !BASELINE_AREA_KEYS.includes(k as string))
+    // ALL_AREA_KEYS e' un Set, non un array: `.includes` non esiste.
+    .filter((k) => ALL_AREA_KEYS.has(k as string)) as string[]
+
+  check("esiste almeno un'area concedibile fra i pannelli", concedibili.length > 0, "nessuna area da discriminare")
+
+  for (const area of concedibili) {
+    const con = { isAdmin: false, areas: [area], activeModules: tuttiIModuli }
+    const delta = visiblePanels(con)
+      .map((p) => p.id)
+      .filter((id) => !visiblePanels(nudo).some((p) => p.id === id))
+    const attesi = DASHBOARD_PANELS.filter((p) => p.area === area && !p.adminOnly).map((p) => p.id)
+    check(
+      `concedere "${area}" apre esattamente i suoi pannelli`,
+      delta.length === attesi.length && delta.every((id) => attesi.includes(id)),
+      `apparsi: [${delta.join(", ")}] attesi: [${attesi.join(", ")}]`,
+    )
+  }
 }
 
 console.log("\n6. Moduli: spento nasconde, sconosciuto non svuota")
