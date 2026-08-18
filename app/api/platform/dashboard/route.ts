@@ -26,6 +26,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { getMemberEffectiveAreas } from "@/lib/auth/area-access"
+import { dashboardProfileLabel, visiblePanels } from "@/lib/platform/dashboard"
 
 export const dynamic = "force-dynamic"
 
@@ -54,6 +55,25 @@ export async function GET(request: NextRequest) {
 
   const isAdmin = identita.isSuperAdmin || identita.isTenantAdmin
   const sb = createServiceClient()
+
+  // Moduli attivi della struttura: governano quali pannelli esistono affatto.
+  // `null` (non solo elenco vuoto) quando la lettura non riesce, perche' i
+  // pannelli sono fail-OPEN sui moduli: un guasto di rete non deve svuotare il
+  // cruscotto facendo sembrare spenti moduli che sono accesi.
+  let activeModules: string[] | null = null
+  try {
+    const { data, error } = await sb
+      .from("tenant_modules")
+      .select("module_key, status")
+      .eq("property_id", propertyId)
+    if (error) throw error
+    activeModules = (data ?? [])
+      .filter((m: { status: string | null }) => m.status === "active")
+      .map((m: { module_key: string }) => m.module_key)
+  } catch (e) {
+    console.error("[v0] dashboard: moduli attivi non leggibili:", e)
+    activeModules = null
+  }
 
   // Aree del membro: servono per non restituire numeri di aree non concesse.
   let areas: string[] = []
@@ -171,15 +191,19 @@ export async function GET(request: NextRequest) {
         .gte("last_seen_at", new Date(Date.now() - PRESENZA_MINUTI * 60_000).toISOString())
       if (error) throw error
 
-      const ids = (presenze ?? []).map((p) => p.admin_user_id).filter(Boolean)
+      type Presenza = { admin_user_id: string; last_seen_at: string }
+      const righe = (presenze ?? []) as Presenza[]
+
+      const ids = righe.map((p) => p.admin_user_id).filter(Boolean)
       let nomi: Record<string, string> = {}
       if (ids.length > 0) {
         const { data: utenti } = await sb.from("admin_users").select("id, name, email").in("id", ids)
-        nomi = Object.fromEntries((utenti ?? []).map((u) => [u.id, u.name || u.email]))
+        const elenco = (utenti ?? []) as { id: string; name: string | null; email: string }[]
+        nomi = Object.fromEntries(elenco.map((u) => [u.id, u.name || u.email]))
       }
       dati.presence = {
         minuti: PRESENZA_MINUTI,
-        persone: (presenze ?? []).map((p) => ({
+        persone: righe.map((p) => ({
           nome: nomi[p.admin_user_id] ?? "Operatore",
           ultimoSegnale: p.last_seen_at,
         })),
@@ -260,15 +284,20 @@ export async function GET(request: NextRequest) {
         .from("email_channels")
         .select("*", { count: "exact", head: true })
         .eq("property_id", propertyId)
-      const { data: moduli, error: e2 } = await sb
+      // I moduli attivi sono gia' stati letti in cima al file per decidere quali
+      // pannelli esistono: si riusa quel dato invece di interrogare due volte la
+      // stessa tabella, che e' anche il modo in cui due numeri finiscono per non
+      // coincidere. `null` resta `null`: se la lettura non e' riuscita, qui non
+      // si scrive zero.
+      const { count: moduliTotali, error: e2 } = await sb
         .from("tenant_modules")
-        .select("module_key, status")
+        .select("*", { count: "exact", head: true })
         .eq("property_id", propertyId)
       if (e1 || e2) throw e1 ?? e2
       dati["system-health"] = {
         caselle: caselle ?? null,
-        moduliAttivi: (moduli ?? []).filter((m) => m.status === "active").length,
-        moduliTotali: (moduli ?? []).length,
+        moduliAttivi: activeModules === null ? null : activeModules.length,
+        moduliTotali: moduliTotali ?? null,
       }
     } catch (e) {
       console.error("[v0] dashboard: salute non misurabile:", e)
@@ -279,5 +308,18 @@ export async function GET(request: NextRequest) {
     dati["knowledge-gaps"] = { aperte: await conta("knowledge_gaps", (q) => q.eq("status", "open")) }
   }
 
-  return NextResponse.json({ isAdmin, propertyId, dati })
+  // Quali pannelli sono visibili lo decide IL SERVER, con la stessa funzione che
+  // conosce le regole. La pagina si limita a disegnare l'elenco ricevuto: se
+  // ricalcolasse i permessi a modo suo nascerebbe la divergenza fra due fonti
+  // che abbiamo appena finito di eliminare nel menu.
+  const viewer = { isAdmin, areas, activeModules }
+  const panels = visiblePanels(viewer).map((p) => p.id)
+
+  return NextResponse.json({
+    isAdmin,
+    propertyId,
+    profilo: dashboardProfileLabel(viewer),
+    panels,
+    dati,
+  })
 }

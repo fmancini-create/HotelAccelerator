@@ -1,470 +1,237 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import {
-  Images,
-  Users,
-  LogOut,
-  Settings,
-  FileText,
-  Calendar,
-  MessageSquare,
-  BarChart3,
-  Lock,
-  Home,
-  Inbox,
-  Megaphone,
-  Globe,
-  ExternalLink,
-  Layers,
-  Radio,
-  Activity,
-  CheckSquare,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useAdminAuth, getRoleLabel } from "@/lib/admin-hooks"
-import { createClient } from "@/lib/supabase/client"
-import { Progress } from "@/components/ui/progress"
-import RevenueSummaryCard from "@/components/admin/revenue-summary-card"
+/**
+ * Il cruscotto di /admin.
+ *
+ * Prima questa pagina era una griglia di 18 scorciatoie che ripeteva il menu
+ * (alcune segnate "Prossimamente") e mostrava tutto a tutti, filtrando solo su
+ * `can_manage_users`: un quarto elenco di destinazioni scritto a mano, che
+ * ignorava aree concesse, moduli attivi e gruppi.
+ *
+ * Ora la pagina non decide nulla: chiede a /api/platform/dashboard QUALI
+ * pannelli mostrare e con quali numeri. La regola di visibilita' vive in un solo
+ * posto (lib/platform/dashboard.ts) e il server la applica prima di rispondere,
+ * cosi' i dati riservati non partono nemmeno.
+ *
+ * La pagina non disegna una propria testata: la barra con struttura, utente ed
+ * uscita e' gia' fornita da PlatformShell nel layout. Prima ce n'erano due, una
+ * sopra l'altra, con due pulsanti "Esci".
+ */
 
-interface DashboardModule {
-  id: string
-  title: string
-  description: string
-  icon: React.ReactNode
-  href: string
-  requiresPermission?: "can_upload" | "can_delete" | "can_move" | "can_manage_users"
-  comingSoon?: boolean
+import { useEffect, useState } from "react"
+import Link from "next/link"
+import { ArrowRight, TriangleAlert } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { DashboardCard } from "@/components/admin/dashboard/dashboard-cards"
+import {
+  DASHBOARD_PANELS,
+  PANEL_KIND_LABEL,
+  PANEL_ORDER,
+  type PanelKind,
+} from "@/lib/platform/dashboard"
+
+interface Risposta {
+  isAdmin: boolean
+  profilo: string
+  /** Id dei pannelli che questa persona puo' vedere, decisi dal server. */
+  panels: string[]
+  dati: Record<string, any>
 }
 
-const dashboardModules: DashboardModule[] = [
-  {
-    id: "photos",
-    title: "Gestione Foto",
-    description: "Carica, elimina e organizza le foto delle camere",
-    icon: <Images className="w-5 h-5" />,
-    href: "/admin/photos",
-  },
-  {
-    id: "cms",
-    title: "Pagine CMS",
-    description: "Crea e gestisci pagine libere del sito",
-    icon: <Layers className="w-5 h-5" />,
-    href: "/admin/cms/studio",
-  },
-  {
-    id: "channels",
-    title: "Canali",
-    description: "Configura Email, Chat, WhatsApp, Social e altri canali",
-    icon: <Radio className="w-5 h-5" />,
-    href: "/admin/channels",
-  },
-  {
-    id: "inbox",
-    title: "Inbox",
-    description: "Gestisci tutte le conversazioni in un unico posto",
-    icon: <Inbox className="w-5 h-5" />,
-    href: "/admin/inbox",
-  },
-  {
-    id: "smart-messages",
-    title: "Smart Messages",
-    description: "Mostra offerte e messaggi personalizzati ai visitatori",
-    icon: <Megaphone className="w-5 h-5" />,
-    href: "/admin/message-rules",
-  },
-  {
-    id: "demand-calendar",
-    title: "Calendario Domanda",
-    description: "Monitora le date più cercate dai visitatori",
-    icon: <Calendar className="w-5 h-5" />,
-    href: "/admin/tracking/demand",
-  },
-  {
-    id: "tracking-visitors",
-    title: "Visitatori Live",
-    description: "Sessioni in tempo reale, timeline eventi e stitching al CRM",
-    icon: <Radio className="w-5 h-5" />,
-    href: "/admin/tracking/visitors",
-  },
-  {
-    id: "tracking-sites",
-    title: "Siti Tracking",
-    description: "Gestisci chiavi script-first e domini autorizzati per tenant",
-    icon: <Globe className="w-5 h-5" />,
-    href: "/admin/tracking/sites",
-  },
-  {
-    id: "todos",
-    title: "Task & To-Do",
-    description: "Gestisci attività, assegna task al team e sincronizza con Manubot",
-    icon: <CheckSquare className="w-5 h-5" />,
-    href: "/admin/todos",
-  },
-  {
-    id: "monitoring",
-    title: "Monitoring",
-    description: "Monitora utilizzo risorse e performance",
-    icon: <Activity className="w-5 h-5" />,
-    href: "/admin/monitoring",
-  },
-  {
-    id: "domains",
-    title: "Domini",
-    description: "Configura subdomain e dominio personalizzato",
-    icon: <Globe className="w-5 h-5" />,
-    href: "/admin/settings/domains",
-  },
-  {
-    id: "users",
-    title: "Gestione Utenti",
-    description: "Aggiungi e gestisci gli utenti admin",
-    icon: <Users className="w-5 h-5" />,
-    href: "/admin/users",
-    requiresPermission: "can_manage_users",
-  },
-  {
-    id: "profile",
-    title: "Il Mio Profilo",
-    description: "Modifica la tua password e visualizza i permessi",
-    icon: <Lock className="w-5 h-5" />,
-    href: "/admin/profile",
-  },
-  {
-    id: "content",
-    title: "Contenuti",
-    description: "Modifica testi e contenuti del sito",
-    icon: <FileText className="w-5 h-5" />,
-    href: "/admin/content",
-    comingSoon: true,
-  },
-  {
-    id: "bookings",
-    title: "Prenotazioni",
-    description: "Visualizza e gestisci le prenotazioni",
-    icon: <Calendar className="w-5 h-5" />,
-    href: "/admin/bookings",
-    comingSoon: true,
-  },
-  {
-    id: "reviews",
-    title: "Recensioni",
-    description: "Gestisci le recensioni degli ospiti",
-    icon: <MessageSquare className="w-5 h-5" />,
-    href: "/admin/reviews",
-    comingSoon: true,
-  },
-  {
-    id: "analytics",
-    title: "Statistiche",
-    description: "Analisi del traffico e performance",
-    icon: <BarChart3 className="w-5 h-5" />,
-    href: "/admin/analytics",
-    comingSoon: true,
-  },
-  {
-    id: "settings",
-    title: "Impostazioni",
-    description: "Configurazione generale del sito",
-    icon: <Settings className="w-5 h-5" />,
-    href: "/admin/settings",
-    comingSoon: true,
-  },
+/**
+ * Utilizzo risorse: conteggi reali contro i limiti del piano.
+ *
+ * Nessun campo "piano": /api/admin/quotas restituisce i limiti ma non il nome
+ * del piano, e una riga "Piano —" sarebbe rumore permanente. Verificato sulla
+ * risposta vera, non sulla forma che mi aspettavo.
+ */
+interface Quote {
+  pagine: { uso: number; limite: number }
+  foto: { uso: number; limite: number }
+  conversazioni: { uso: number; limite: number }
+}
+
+/**
+ * Le poche scorciatoie che restano. Il menu esiste per navigare: qui stanno solo
+ * le tre cose che si aprono davvero ogni giorno, e solo se la persona ha il
+ * pannello corrispondente (quindi il permesso).
+ */
+const SCORCIATOIE: { label: string; href: string; richiedePannello: string }[] = [
+  { label: "Vai alla casella", href: "/admin/inbox", richiedePannello: "backlog" },
+  { label: "Telefonate", href: "/admin/calls", richiedePannello: "calls" },
+  { label: "Le mie attivita'", href: "/admin/my-work", richiedePannello: "my-shifts" },
 ]
 
 export default function AdminDashboardPage() {
-  const { isLoading, adminUser, logout } = useAdminAuth()
-  const [property, setProperty] = useState<{ name: string; slug: string; domain: string | null } | null>(null)
-  const [siteUrl, setSiteUrl] = useState<string>("/")
-  const [quotas, setQuotas] = useState<{
-    pages: { current: number; limit: number }
-    photos: { current: number; limit: number }
-    conversations: { current: number; limit: number }
-    plan: string
-  } | null>(null)
-  // Conteggi REALI dal DB via /api/admin/quotas (getTenantUsage):
-  // usati dal "Riepilogo Rapido" al posto dei valori hardcoded.
-  const [usage, setUsage] = useState<{
-    photosCount: number
-    pagesCount: number
-    adminUsersCount: number
-    conversationsThisMonth: number
-  } | null>(null)
-
-  // Qui siamo nella dashboard /admin, quindi è sempre un tenant admin
-  const isSuperAdmin = false // In /admin siamo sempre nel contesto tenant
+  const [risposta, setRisposta] = useState<Risposta | null>(null)
+  const [erroreCarico, setErroreCarico] = useState<string | null>(null)
+  const [quote, setQuote] = useState<Quote | null>(null)
 
   useEffect(() => {
-    async function loadProperty() {
-      if (!adminUser?.property_id) return
+    let vivo = true
 
-      const supabase = createClient()
-      if (!supabase) return
-
-      const { data } = await supabase
-        .from("properties")
-        .select("name, slug, domain")
-        .eq("id", adminUser.property_id)
-        .single()
-
-      if (data) {
-        setProperty(data)
-        if (data.domain) {
-          setSiteUrl(`https://${data.domain}`)
-        } else if (data.slug) {
-          setSiteUrl(`/${data.slug}`)
-        }
-      }
-    }
-
-    async function loadQuotas() {
-      if (!adminUser?.property_id) return
-
+    async function carica() {
       try {
-        const response = await fetch("/api/admin/quotas")
-        if (response.ok) {
-          const data = await response.json()
-          // getQuotaStatus risponde {quotas, usage, percentages, warnings}:
-          // mappiamo i conteggi REALI (prima il client leggeva una shape
-          // inesistente e "Utilizzo Risorse" mostrava sempre 0/0).
-          if (data?.usage && data?.quotas) {
-            setQuotas({
-              pages: { current: data.usage.pagesCount ?? 0, limit: data.quotas.maxPagesCount ?? 0 },
-              photos: { current: data.usage.photosCount ?? 0, limit: data.quotas.maxPhotosCount ?? 0 },
-              conversations: {
-                current: data.usage.conversationsThisMonth ?? 0,
-                limit: data.quotas.maxConversationsPerMonth ?? 0,
-              },
-              plan: typeof data.plan === "string" ? data.plan : "",
-            })
-            setUsage(data.usage)
-          }
+        const r = await fetch("/api/platform/dashboard")
+        if (!r.ok) {
+          // Un errore non si nasconde: senza questo messaggio la pagina
+          // sembrerebbe semplicemente vuota, che e' peggio di un guasto visibile.
+          setErroreCarico(
+            r.status === 401
+              ? "Sessione scaduta: rientra per vedere il cruscotto."
+              : `Non e' stato possibile leggere i dati (errore ${r.status}).`,
+          )
+          return
         }
-      } catch (error) {
-        // silently fail
+        const j = (await r.json()) as Risposta
+        if (vivo) setRisposta(j)
+      } catch {
+        if (vivo) setErroreCarico("Non e' stato possibile contattare il servizio.")
       }
     }
 
-    loadProperty()
-    loadQuotas()
-  }, [adminUser?.property_id])
+    async function caricaQuote() {
+      try {
+        const r = await fetch("/api/admin/quotas")
+        if (!r.ok) return
+        const d = await r.json()
+        // getQuotaStatus risponde {quotas, usage, ...}: si leggono i conteggi
+        // reali. Una versione precedente leggeva una forma inesistente e
+        // "Utilizzo risorse" mostrava sempre 0 su 0.
+        if (d?.usage && d?.quotas && vivo) {
+          setQuote({
+            pagine: { uso: d.usage.pagesCount ?? 0, limite: d.quotas.maxPagesCount ?? 0 },
+            foto: { uso: d.usage.photosCount ?? 0, limite: d.quotas.maxPhotosCount ?? 0 },
+            conversazioni: {
+              uso: d.usage.conversationsThisMonth ?? 0,
+              limite: d.quotas.maxConversationsPerMonth ?? 0,
+            },
+          })
+        }
+      } catch {
+        // Le quote sono un contorno: se non arrivano il cruscotto resta utile.
+      }
+    }
 
-  if (isLoading) {
+    carica()
+    caricaQuote()
+    return () => {
+      vivo = false
+    }
+  }, [])
+
+  if (erroreCarico) {
     return (
-      <div className="min-h-full bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-ha-brand"></div>
-      </div>
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 md:px-6">
+        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-5">
+          <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
+          <div>
+            <h2 className="text-sm font-medium text-foreground">Cruscotto non disponibile</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{erroreCarico}</p>
+          </div>
+        </div>
+      </main>
     )
   }
 
-  const effectiveAdmin = adminUser
-
-  if (!effectiveAdmin) {
-    return null
-  }
-
-  const availableModules = dashboardModules.filter((module) => {
-    if (module.requiresPermission) {
-      return effectiveAdmin[module.requiresPermission]
-    }
-    return true
-  })
-
-  const isExternalSite = siteUrl.startsWith("https://")
-
-  const headerTitle = property?.name || "Dashboard"
-
-  const siteButtonLabel = "Sito"
-
-  return (
-    <main className="min-h-full bg-background">
-      {/* Header */}
-      <header className="bg-background border-b border-border sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
-              <span className="text-sm text-muted-foreground">Dashboard</span>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-medium text-foreground">{effectiveAdmin.name}</p>
-                <p className="text-xs text-muted-foreground">{getRoleLabel(effectiveAdmin.role)}</p>
-              </div>
-              {isExternalSite ? (
-                <a href={siteUrl} target="_blank" rel="noopener noreferrer">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-transparent"
-                  >
-                    <Home className="w-4 h-4 mr-2" />
-                    {siteButtonLabel}
-                    <ExternalLink className="w-3 h-3 ml-1" />
-                  </Button>
-                </a>
-              ) : (
-                <Link href={siteUrl}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-transparent"
-                  >
-                    <Home className="w-4 h-4 mr-2" />
-                    {siteButtonLabel}
-                  </Button>
-                </Link>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={logout}
-                className="bg-transparent"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Esci
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-foreground mb-2">Benvenuto, {effectiveAdmin.name.split(" ")[0]}</h2>
-          <p className="text-muted-foreground">Seleziona un modulo per iniziare.</p>
-        </div>
-
-        {quotas && !isSuperAdmin && (
-          <div className="mb-8 bg-card rounded-xl border border-border p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium text-foreground">Utilizzo Risorse</h3>
-              {quotas.plan && (
-                <span className="px-3 py-1 bg-ha-brand text-ha-brand-foreground text-xs rounded-full uppercase">
-                  Piano {quotas.plan}
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-muted-foreground">Pagine CMS</span>
-                  <span className="text-foreground font-medium">
-                    {quotas.pages?.current ?? 0} / {quotas.pages?.limit === -1 ? "∞" : (quotas.pages?.limit ?? 0)}
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    quotas.pages?.limit === -1 ? 10 : ((quotas.pages?.current ?? 0) / (quotas.pages?.limit || 1)) * 100
-                  }
-                  className="h-2"
-                />
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-muted-foreground">Foto</span>
-                  <span className="text-foreground font-medium">
-                    {quotas.photos?.current ?? 0} / {quotas.photos?.limit === -1 ? "∞" : (quotas.photos?.limit ?? 0)}
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    quotas.photos?.limit === -1
-                      ? 10
-                      : ((quotas.photos?.current ?? 0) / (quotas.photos?.limit || 1)) * 100
-                  }
-                  className="h-2"
-                />
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-muted-foreground">Conversazioni/mese</span>
-                  <span className="text-foreground font-medium">
-                    {quotas.conversations?.current ?? 0} /{" "}
-                    {quotas.conversations?.limit === -1 ? "∞" : (quotas.conversations?.limit ?? 0)}
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    quotas.conversations?.limit === -1
-                      ? 10
-                      : ((quotas.conversations?.current ?? 0) / (quotas.conversations?.limit || 1)) * 100
-                  }
-                  className="h-2"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Revenue (modulo Santaddeo, read-only) */}
-        <RevenueSummaryCard />
-
-        {/* Modules Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {availableModules.map((module) => (
-            <div key={module.id} className="relative">
-              {module.comingSoon ? (
-                <div className="bg-card rounded-xl border border-border p-6 opacity-60 cursor-not-allowed">
-                  <div className="w-10 h-10 rounded-lg bg-secondary text-muted-foreground flex items-center justify-center mb-4">
-                    {module.icon}
-                  </div>
-                  <h3 className="text-base font-medium text-foreground mb-2">{module.title}</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">{module.description}</p>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Lock className="w-4 h-4" />
-                    <span>Prossimamente</span>
-                  </div>
-                </div>
-              ) : (
-                <Link href={module.href}>
-                  {/* Accento verde Santaddeo: icona soft, hover pieno */}
-                  <div className="bg-card rounded-xl border border-border p-6 hover:border-ha-brand/40 hover:shadow-sm transition-colors duration-200 cursor-pointer group">
-                    <div className="w-10 h-10 rounded-lg bg-ha-brand-soft text-ha-brand-soft-foreground flex items-center justify-center mb-4 group-hover:bg-ha-brand group-hover:text-ha-brand-foreground transition-colors">
-                      {module.icon}
-                    </div>
-                    <h3 className="text-base font-medium text-foreground mb-2">{module.title}</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{module.description}</p>
-                  </div>
-                </Link>
-              )}
-            </div>
+  if (!risposta) {
+    return (
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 md:px-6">
+        <div className="h-7 w-52 animate-pulse rounded bg-muted" />
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-36 animate-pulse rounded-xl bg-muted" />
           ))}
         </div>
+        <span className="sr-only">Caricamento del cruscotto</span>
+      </main>
+    )
+  }
 
-        {/* Quick Stats — SOLO conteggi reali dal DB (getTenantUsage via
-            /api/admin/quotas). Se il dato non è arrivato: "n/d", mai
-            numeri inventati. Le voci senza fonte reale (categorie camere,
-            stato sito) sono state rimosse. */}
-        <div className="mt-12">
-          <h3 className="text-lg font-medium text-foreground mb-4">Riepilogo Rapido</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">{usage ? usage.photosCount : "n/d"}</p>
-              <p className="text-sm text-muted-foreground">Foto totali</p>
-            </div>
-            <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">{usage ? usage.pagesCount : "n/d"}</p>
-              <p className="text-sm text-muted-foreground">Pagine CMS</p>
-            </div>
-            <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">{usage ? usage.adminUsersCount : "n/d"}</p>
-              <p className="text-sm text-muted-foreground">Utenti attivi</p>
-            </div>
-            <div className="bg-card rounded-xl border border-border p-4">
-              <p className="text-2xl font-semibold text-foreground">
-                {usage ? usage.conversationsThisMonth : "n/d"}
-              </p>
-              <p className="text-sm text-muted-foreground">Conversazioni mese</p>
+  const visibili = new Set(risposta.panels)
+  const pannelli = DASHBOARD_PANELS.filter((p) => visibili.has(p.id))
+  const scorciatoie = SCORCIATOIE.filter((s) => visibili.has(s.richiedePannello))
+
+  return (
+    <main className="mx-auto w-full max-w-6xl px-4 py-8 md:px-6">
+      <header className="mb-8">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Cruscotto {risposta.profilo}
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground text-balance md:text-3xl">
+          Cosa sta succedendo adesso
+        </h1>
+        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground text-pretty">
+          Vedi soltanto le sezioni che i tuoi permessi ti concedono: quello che manca non e'
+          nascosto per errore.
+        </p>
+      </header>
+
+      {pannelli.length === 0 ? (
+        <p className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">
+          Nessun pannello disponibile con i permessi attuali. Chiedi a chi amministra la struttura
+          di concederti le aree che ti servono.
+        </p>
+      ) : (
+        PANEL_ORDER.map((kind: PanelKind) => {
+          const gruppo = pannelli.filter((p) => p.kind === kind)
+          if (gruppo.length === 0) return null
+          return (
+            <section key={kind} className="mb-10">
+              <h2 className="mb-3 text-sm font-medium text-foreground">{PANEL_KIND_LABEL[kind]}</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {gruppo.map((panel) => (
+                  <DashboardCard key={panel.id} panel={panel} dati={risposta.dati} />
+                ))}
+              </div>
+            </section>
+          )
+        })
+      )}
+
+      {/* Utilizzo risorse: solo per chi amministra, e solo se i limiti esistono. */}
+      {risposta.isAdmin && quote && (
+        <section className="mb-10">
+          <h2 className="mb-3 text-sm font-medium text-foreground">Utilizzo risorse</h2>
+          <div className="rounded-xl border border-border bg-card p-5">
+            <div className="flex flex-col gap-4">
+              {[
+                { nome: "Pagine", v: quote.pagine },
+                { nome: "Foto", v: quote.foto },
+                { nome: "Conversazioni del mese", v: quote.conversazioni },
+              ].map(({ nome, v }) => (
+                <div key={nome}>
+                  <div className="mb-1 flex items-baseline justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">{nome}</span>
+                    <span className="text-sm font-medium tabular-nums text-foreground">
+                      {v.uso.toLocaleString("it-IT")}
+                      {v.limite > 0 && ` / ${v.limite.toLocaleString("it-IT")}`}
+                    </span>
+                  </div>
+                  {v.limite > 0 && (
+                    <Progress value={Math.min(100, Math.round((v.uso / v.limite) * 100))} />
+                  )}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+      )}
+
+      {scorciatoie.length > 0 && (
+        <nav aria-label="Scorciatoie" className="flex flex-wrap gap-2">
+          {scorciatoie.map((s) => (
+            <Link
+              key={s.href}
+              href={s.href}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-ha-brand/40 hover:text-ha-brand"
+            >
+              {s.label}
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          ))}
+        </nav>
+      )}
     </main>
   )
 }

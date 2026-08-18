@@ -14,6 +14,9 @@
  */
 
 import type { NavViewer } from "@/lib/platform/nav"
+// Le aree valide per tutti si leggono dal catalogo: riscriverle a mano qui
+// avrebbe fatto divergere dashboard e menu, che e' il difetto appena chiuso.
+import { BASELINE_AREA_KEYS } from "@/lib/platform/areas"
 
 /** A cosa serve il pannello: decide anche l'ordine in pagina. */
 export type PanelKind =
@@ -196,12 +199,6 @@ export const PANEL_KIND_LABEL: Record<PanelKind, string> = {
   metrics: "Andamento",
   oversight: "Sorveglianza",
 }
-
-/**
- * Aree valide per tutti senza concessione esplicita. Duplicarle a mano qui
- * avrebbe fatto divergere dashboard e menu: si leggono dal catalogo.
- */
-import { BASELINE_AREA_KEYS } from "@/lib/platform/areas"
 
 /**
  * I pannelli che questa persona puo' vedere.
