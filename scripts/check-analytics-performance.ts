@@ -83,6 +83,11 @@ function fintoClient(m: Mondo) {
           return api
         },
         eq(col: string, val: unknown) {
+          // `property_id` non e' nei dati finti (una sola struttura in gioco):
+          // filtrarlo azzererebbe OGNI risultato e la prova diventerebbe rossa
+          // per colpa dell'impalcatura, non del codice. E' il difetto che ha
+          // prodotto 11 falsi rossi al primo giro.
+          if (col === "property_id") return api
           righe = righe.filter((r) => r[col] === val)
           return api
         },
@@ -106,8 +111,6 @@ function fintoClient(m: Mondo) {
           return api
         },
         then(risolvi: (v: unknown) => void) {
-          // `property_id` non e' nei dati finti: il filtro per struttura e' gia'
-          // implicito, qui interessa la logica di selezione e attribuzione.
           risolvi(contaEsatta ? { data: null, count: righe.length, error: null } : { data: righe, error: null })
         },
       }

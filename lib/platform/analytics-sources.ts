@@ -224,6 +224,16 @@ export function caselleDaContare(filter: AnalyticsFilter): string[] | null {
  * su 9), quindi la sola scelta possibile e' per tipo.
  */
 export function canaleIncluso(filter: AnalyticsFilter, channelType: string): boolean {
+  // L'email NON si giudica con la lista della messaggistica: si sceglie per
+  // casella, ed e' `emailChannelIds` a governarla.
+  //
+  // Senza questa riga, escludere l'unico canale WhatsApp rendeva
+  // `messagingChannelTypes` un elenco che non contiene "email", quindi l'email
+  // risultava esclusa e i volumi email crollavano a zero: una spunta su WhatsApp
+  // che spegne l'email e' esattamente il genere di numero inspiegabile che
+  // queste due pagine devono eliminare.
+  if (channelType === "email") return filter.emailChannelIds === null || filter.emailChannelIds.length > 0
+
   if (filter.messagingChannelTypes === null) return true
   return filter.messagingChannelTypes.includes(channelType)
 }
