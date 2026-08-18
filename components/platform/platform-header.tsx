@@ -6,44 +6,28 @@
  * Global top-bar for all internal admin pages.
  *
  * Architecture (script-first, multi-tenant):
- *  - Navigation is data-driven (see PRIMARY_NAV / MORE_NAV below). Links are
- *    not hardcoded to a specific tenant and route to the user's currently
- *    active tenant via the standard /admin/* paths.
+ *  - Le voci NON sono dichiarate qui: arrivano da lib/platform/nav.ts, che e'
+ *    la fonte unica letta anche dalla pagina /admin/settings. I link non sono
+ *    legati a una struttura e usano i normali percorsi /admin/*.
  *  - TenantSwitcher is always mounted; it self-degrades based on the user's
  *    role (super_admin, tenant_admin, none).
  *  - User menu wires up Supabase signOut.
  *
- * Layout is mobile-first: on small screens, PRIMARY_NAV collapses into the
- * same "Altro" dropdown to avoid overflow.
+ * Organizzazione del menu:
+ *  - in chiaro e nella tendina "Altro" stanno solo le parti OPERATIVE (Inbox,
+ *    Telefonate, turni, campagne...);
+ *  - tutto cio' che si IMPOSTA sta nell'unica tendina "Impostazioni", il cui
+ *    piede porta alla pagina che raccoglie le stesse voci in schede.
+ *
+ * Layout is mobile-first: on small screens, le voci in chiaro collassano nella
+ * stessa tendina "Altro" per non far tracimare la barra.
  */
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useMemo, useState } from "react"
 import useSWR from "swr"
-import {
-  BarChart3,
-  Boxes,
-  Building2,
-  ChevronDown,
-  FileText,
-  Image as ImageIcon,
-  Inbox,
-  LayoutDashboard,
-  ListTodo,
-  LogOut,
-  Mail,
-  Megaphone,
-  MessageSquare,
-  MoreHorizontal,
-  Radio,
-  Settings,
-  Sparkles,
-  Tag,
-  Users,
-  PhoneCall,
-  CalendarClock,
-} from "lucide-react"
+import { Building2, ChevronDown, LogOut, MoreHorizontal } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,123 +40,26 @@ import { Button } from "@/components/ui/button"
 import { TenantSwitcher } from "@/components/admin/tenant-switcher"
 import { HotelAcceleratorLogo, HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 import { createClient } from "@/lib/supabase/client"
+import {
+  OPERATIVE_PRIMARY,
+  OPERATIVE_SECONDARY,
+  SETTINGS_ENTRIES,
+  SETTINGS_HUB_HREF,
+  SETTINGS_ICON,
+  visibleEntries,
+  type NavEntry,
+} from "@/lib/platform/nav"
 
-type NavItem = {
-  href: string
-  label: string
-  icon: React.ComponentType<{ className?: string }>
-  match?: (pathname: string) => boolean
-  /**
-   * Chiave del modulo che governa questa voce. Se presente e il modulo NON
-   * e' attivo per la struttura corrente, la voce viene nascosta dal menu.
-   * Voci senza `module` sono sempre visibili.
-   */
-  module?: string
-  /**
-   * Se true, la voce e' riservata agli amministratori (super_admin o tenant
-   * admin). I membri non-admin (es. "editor") non la vedono.
-   */
-  adminOnly?: boolean
-  /**
-   * Chiave dell'AREA (vedi lib/platform/areas.ts) che governa questa voce. Se
-   * presente, un membro non-admin la vede solo se l'area gli e' stata concessa
-   * (direttamente o via gruppo). Voci senza `area` (baseline, canali, utenti)
-   * seguono le regole module/adminOnly.
-   */
-  area?: string
-}
-
-// Primary navigation shown inline on the header (desktop).
-const PRIMARY_NAV: NavItem[] = [
-  { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/inbox", label: "Inbox", icon: Inbox, module: "inbox" },
-  {
-    href: "/admin/crm",
-    label: "CRM",
-    icon: Users,
-    match: (p) => p.startsWith("/admin/crm"),
-    module: "crm",
-    area: "crm",
-  },
-  {
-    href: "/admin/cms/studio",
-    label: "CMS",
-    icon: FileText,
-    match: (p) => p.startsWith("/admin/cms"),
-    module: "cms",
-    area: "cms",
-  },
-  {
-    // Visible to all members: a non-admin lands on the email page where they
-    // can connect/configure their OWN mailbox. Admin-only channel config
-    // (WhatsApp, Telegram, ...) is guarded at the page/route level.
-    href: "/admin/channels/email",
-    label: "Canali",
-    icon: Radio,
-    match: (p) => p.startsWith("/admin/channels"),
-    module: "inbox",
-  },
-  {
-    href: "/admin/knowledge",
-    label: "Assistente IA",
-    icon: Sparkles,
-    match: (p) => p.startsWith("/admin/knowledge"),
-    module: "inbox",
-    adminOnly: true,
-  },
-  {
-    href: "/admin/users",
-    label: "Utenti",
-    icon: Users,
-    match: (p) => p.startsWith("/admin/users"),
-    adminOnly: true,
-  },
-]
-
-// Secondary sections accessible via the "Altro" dropdown.
-const MORE_NAV: NavItem[] = [
-  { href: "/admin/my-work", label: "I miei turni", icon: CalendarClock, module: "hr" },
-  { href: "/admin/hr", label: "Personale e turni", icon: CalendarClock, module: "hr", adminOnly: true, area: "hr" },
-  { href: "/admin/calls", label: "Telefonate", icon: PhoneCall, module: "inbox", area: "calls" },
-  { href: "/admin/photos", label: "Foto", icon: ImageIcon, area: "photos" },
-  { href: "/admin/gallery", label: "Gallery", icon: ImageIcon, area: "gallery" },
-  { href: "/admin/categories", label: "Categorie", icon: Tag, area: "categories" },
-  { href: "/admin/message-rules", label: "Smart Messages", icon: MessageSquare, module: "inbox", area: "message-rules" },
-  {
-    href: "/admin/tracking",
-    label: "Tracking",
-    icon: BarChart3,
-    match: (p) => p.startsWith("/admin/tracking"),
-    module: "tracking",
-    area: "tracking",
-  },
-  { href: "/admin/todos", label: "Todos", icon: ListTodo, area: "todos" },
-  { href: "/admin/monitoring", label: "Monitoring", icon: BarChart3, area: "monitoring" },
-  { href: "/admin/embed-scripts", label: "Embed scripts", icon: Mail, area: "embed-scripts" },
-  {
-    href: "/admin/marketing",
-    label: "Marketing",
-    icon: Megaphone,
-    match: (p) => p.startsWith("/admin/marketing"),
-    area: "marketing",
-  },
-  {
-    href: "/admin/modules",
-    label: "Moduli",
-    icon: Boxes,
-    match: (p) => p.startsWith("/admin/modules"),
-    adminOnly: true,
-  },
-  {
-    // Visible to everyone: the settings hub itself only shows items the user
-    // is allowed to use (e.g. a member sees "Canali" + "Il Mio Profilo").
-    // Admin-only destinations stay guarded at the page level.
-    href: "/admin/settings",
-    label: "Impostazioni",
-    icon: Settings,
-    match: (p) => p.startsWith("/admin/settings"),
-  },
-]
+/*
+ * Le voci NON si dichiarano piu' qui.
+ *
+ * Menu e pagina /admin/settings leggono lo STESSO elenco
+ * (lib/platform/nav.ts). Prima erano due elenchi scritti a mano e divergevano
+ * davvero: "Tracking" e "CMS" risultavano concedibili nel menu e solo-admin
+ * nelle schede delle impostazioni, cioe' un membro con l'area concessa li
+ * vedeva in un posto e non nell'altro.
+ */
+type NavItem = NavEntry
 
 /**
  * Micro-indicatore cromatico della voce attiva (Step 3 - design token
@@ -184,11 +71,16 @@ const MORE_NAV: NavItem[] = [
 const NAV_ACCENT_DOT: Record<string, string> = {
   "/admin/inbox": "bg-ha-module-crm",
   "/admin/crm": "bg-ha-module-crm",
-  "/admin/channels/email": "bg-ha-module-crm",
+  "/admin/channels": "bg-ha-module-crm",
   "/admin/message-rules": "bg-ha-module-crm",
   "/admin/cms/studio": "bg-ha-module-marketing",
   "/admin/marketing": "bg-ha-module-marketing",
-  "/admin/tracking": "bg-ha-module-automation",
+  // Il tracking ora ha tre destinazioni distinte (visitatori e domanda fra le
+  // operative, chiavi fra le impostazioni): serve una riga per ciascuna,
+  // altrimenti il puntino spariva dove prima c'era.
+  "/admin/tracking/visitors": "bg-ha-module-automation",
+  "/admin/tracking/demand": "bg-ha-module-automation",
+  "/admin/tracking/sites": "bg-ha-module-automation",
 }
 
 type PlatformMe = {
@@ -217,39 +109,12 @@ const modulesFetcher = async (url: string): Promise<ActiveModules> => {
   return res.json()
 }
 
-/**
- * Filtra le voci di menu in base ai moduli attivi.
- * Fail-open: se `activeModules` e' null/undefined (dato non pronto o errore),
- * mostriamo tutto per non far sparire il menu per sbaglio.
+/*
+ * I tre filtri (moduli / ruolo / aree) stavano qui e venivano rifatti a modo
+ * proprio dalla pagina Impostazioni: due implementazioni della stessa regola.
+ * Ora la regola e' una sola, `visibleEntries` in lib/platform/nav.ts, usata da
+ * entrambi.
  */
-function filterByModules(items: NavItem[], activeModules: string[] | null | undefined): NavItem[] {
-  if (!activeModules) return items
-  const active = new Set(activeModules)
-  return items.filter((item) => !item.module || active.has(item.module))
-}
-
-/**
- * Nasconde le voci `adminOnly` ai membri che non sono amministratori.
- * Fail-closed sul ruolo: finche' non sappiamo se l'utente e' admin
- * (`isAdmin` undefined), le voci admin restano nascoste per non esporle a chi
- * non ne ha diritto.
- */
-function filterByRole(items: NavItem[], isAdmin: boolean | undefined): NavItem[] {
-  if (isAdmin) return items
-  return items.filter((item) => !item.adminOnly)
-}
-
-/**
- * Nasconde le voci legate a un'AREA che non e' stata concessa al membro.
- * Gli admin (isAdmin) vedono tutto. Per i membri si usa l'elenco `areas`
- * effettivo (baseline + concesse dirette/gruppo). Fail-closed: finche' le aree
- * non sono note, le voci area-gated restano nascoste.
- */
-function filterByArea(items: NavItem[], isAdmin: boolean | undefined, areas: string[] | undefined): NavItem[] {
-  if (isAdmin) return items
-  const granted = new Set(areas ?? [])
-  return items.filter((item) => !item.area || granted.has(item.area))
-}
 
 function isActive(item: NavItem, pathname: string): boolean {
   if (item.match) return item.match(pathname)
@@ -279,18 +144,30 @@ export function PlatformHeader() {
   const activeModules = modulesData?.activeModules
   const isAdmin = me?.isAdmin
   const areas = me?.areas
-  const primaryNav = useMemo(
-    () => filterByArea(filterByRole(filterByModules(PRIMARY_NAV, activeModules), isAdmin), isAdmin, areas),
-    [activeModules, isAdmin, areas],
+  const canManageUsers = me?.canManageUsers
+
+  // Un solo contesto, passato allo stesso filtro per tutti e tre gli elenchi.
+  const viewer = useMemo(
+    () => ({ isAdmin, areas, activeModules, canManageUsers }),
+    [isAdmin, areas, activeModules, canManageUsers],
   )
-  const moreNav = useMemo(
-    () => filterByArea(filterByRole(filterByModules(MORE_NAV, activeModules), isAdmin), isAdmin, areas),
-    [activeModules, isAdmin, areas],
-  )
+
+  const primaryNav = useMemo(() => visibleEntries(OPERATIVE_PRIMARY, viewer), [viewer])
+  const moreNav = useMemo(() => visibleEntries(OPERATIVE_SECONDARY, viewer), [viewer])
+  const settingsNav = useMemo(() => visibleEntries(SETTINGS_ENTRIES, viewer), [viewer])
 
   const moreHasActive = useMemo(
     () => moreNav.some((item) => isActive(item, pathname)),
     [moreNav, pathname],
+  )
+
+  // La tendina Impostazioni si evidenzia anche quando si e' sulla pagina che
+  // le raccoglie, non solo su una singola destinazione.
+  const settingsHasActive = useMemo(
+    () =>
+      pathname.startsWith(SETTINGS_HUB_HREF) ||
+      settingsNav.some((item) => isActive(item, pathname)),
+    [settingsNav, pathname],
   )
 
   const handleSignOut = async () => {
@@ -425,9 +302,17 @@ export function PlatformHeader() {
               })}
               <DropdownMenuSeparator />
             </div>
-            <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
-              Strumenti
-            </DropdownMenuLabel>
+            {/*
+              "Strumenti" mescolava operative e configurazione. Ora qui ci sono
+              SOLO parti operative: la configurazione ha la sua voce.
+              L'etichetta compare solo se c'e' almeno una voce, altrimenti
+              resterebbe un titolo sopra il nulla.
+            */}
+            {moreNav.length > 0 && (
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                Altre sezioni operative
+              </DropdownMenuLabel>
+            )}
             {moreNav.map((item) => {
               const Icon = item.icon
               const active = isActive(item, pathname)
@@ -457,6 +342,68 @@ export function PlatformHeader() {
             })}
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/*
+          L'unica voce "Impostazioni": tutto cio' che si IMPOSTA sta qui dentro.
+          E' una tendina (accesso in un clic) il cui piede porta alla pagina che
+          raccoglie le stesse voci in schede: due strade, un solo elenco.
+          Se chi guarda non ha nemmeno una impostazione visibile, la tendina non
+          si mostra: un pulsante che apre un menu vuoto sembra un guasto.
+        */}
+        {settingsNav.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={[
+                  "h-9 text-[13px] font-medium gap-1",
+                  settingsHasActive ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-foreground",
+                ].join(" ")}
+                aria-label="Impostazioni"
+              >
+                <SETTINGS_ICON className="h-4 w-4" aria-hidden />
+                <span className="hidden lg:inline">Impostazioni</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                Configurazione
+              </DropdownMenuLabel>
+              {settingsNav.map((item) => {
+                const Icon = item.icon
+                const active = isActive(item, pathname)
+                return (
+                  <DropdownMenuItem key={item.id} asChild>
+                    <Link
+                      href={item.href}
+                      className={[
+                        "flex items-center gap-2 cursor-pointer",
+                        active && "text-ha-brand-soft-foreground font-medium",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
+                    >
+                      <Icon className="h-4 w-4" aria-hidden />
+                      <span>{item.label}</span>
+                    </Link>
+                  </DropdownMenuItem>
+                )
+              })}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link
+                  href={SETTINGS_HUB_HREF}
+                  className="flex items-center gap-2 cursor-pointer text-muted-foreground"
+                >
+                  <SETTINGS_ICON className="h-4 w-4" aria-hidden />
+                  <span>Tutte le impostazioni</span>
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -501,8 +448,8 @@ export function PlatformHeader() {
               </Link>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link href="/admin/settings" className="flex items-center gap-2 cursor-pointer">
-                <Settings className="h-4 w-4" aria-hidden />
+              <Link href={SETTINGS_HUB_HREF} className="flex items-center gap-2 cursor-pointer">
+                <SETTINGS_ICON className="h-4 w-4" aria-hidden />
                 <span>Impostazioni</span>
               </Link>
             </DropdownMenuItem>

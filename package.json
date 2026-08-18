@@ -22,7 +22,8 @@
     "typecheck:santaddeo": "tsc --noEmit -p apps/santaddeo/tsconfig.json",
     "typecheck:all": "pnpm run typecheck && pnpm run typecheck:santaddeo",
     "test:phone-display": "tsx scripts/test-phone-display.ts",
-    "test:knowledge-gaps": "tsx scripts/test-knowledge-gaps.ts"
+    "test:knowledge-gaps": "tsx scripts/test-knowledge-gaps.ts",
+    "check:nav": "tsx scripts/check-nav-manifest.ts"
   },
   "dependencies": {
     "@edge-runtime/vm": "latest",

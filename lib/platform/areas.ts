@@ -21,7 +21,16 @@ export interface PlatformArea {
   key: string
   /** Human label (Italian UI). */
   label: string
-  /** Grouping used to organize the permission matrix. */
+  /**
+   * Classificazione dell'area:
+   *  - "operative": si USA per lavorare => nel menu ha un pulsante proprio.
+   *  - "config":    si IMPOSTA una funzione => vive sotto "Impostazioni".
+   *
+   * Serve sia a raggruppare la matrice dei permessi sia a spiegare la
+   * collocazione nel menu. La collocazione effettiva e' dichiarata in
+   * lib/platform/nav.ts (`placement`), che e' la fonte unica letta dal menu e
+   * dalla pagina Impostazioni; una prova verifica che le due non divergano.
+   */
   group: AreaGroup
   /** Primary route of the area (used by guards / nav). */
   href: string
@@ -52,18 +61,32 @@ export const PLATFORM_AREAS: PlatformArea[] = [
   // mentre la configurazione del centralino resta in Canali (solo admin).
   { key: "calls", label: "Telefonate", group: "operative", href: "/admin/calls" },
   { key: "todos", label: "Todos", group: "operative", href: "/admin/todos" },
-  { key: "photos", label: "Foto", group: "operative", href: "/admin/photos" },
-  { key: "gallery", label: "Gallery", group: "operative", href: "/admin/gallery" },
-  { key: "categories", label: "Categorie", group: "operative", href: "/admin/categories" },
-  { key: "message-rules", label: "Smart Messages", group: "operative", href: "/admin/message-rules" },
-  { key: "marketing", label: "Marketing", group: "operative", href: "/admin/marketing" },
+  { key: "marketing", label: "Email Marketing", group: "operative", href: "/admin/marketing" },
+  { key: "monitoring", label: "Monitoring", group: "operative", href: "/admin/monitoring" },
   { key: "hr", label: "Personale e turni", group: "operative", href: "/admin/hr", adminOnly: true },
+  // Una sola chiave per tutto /admin/tracking: e' quello che protegge
+  // `requireAreaPage("tracking")` nel layout. Nel MENU le tre destinazioni sono
+  // separate (Visitatori e Calendario domanda fra le operative, le chiavi fra
+  // le impostazioni), ma il permesso resta uno: spezzarlo avrebbe richiesto
+  // nuove chiavi, e chi ha "tracking" concesso oggi avrebbe perso l'accesso
+  // senza una migrazione dei dati. L'etichetta lo dice a chi concede.
+  {
+    key: "tracking",
+    label: "Tracking (visitatori, domanda e chiavi)",
+    group: "operative",
+    href: "/admin/tracking/visitors",
+  },
 
   // --- Content / config areas (grantable to members) ---
+  // `group` non e' solo l'ordine della matrice dei permessi: e' la stessa
+  // classificazione che decide DOVE sta la voce nel menu (operative = pulsante
+  // proprio, config = sotto Impostazioni). Vedi lib/platform/nav.ts.
   { key: "cms", label: "CMS", group: "config", href: "/admin/cms/studio" },
   { key: "embed-scripts", label: "Embed scripts", group: "config", href: "/admin/embed-scripts" },
-  { key: "tracking", label: "Tracking", group: "config", href: "/admin/tracking" },
-  { key: "monitoring", label: "Monitoring", group: "config", href: "/admin/monitoring" },
+  { key: "photos", label: "Foto", group: "config", href: "/admin/photos" },
+  { key: "gallery", label: "Gallery", group: "config", href: "/admin/gallery" },
+  { key: "categories", label: "Categorie", group: "config", href: "/admin/categories" },
+  { key: "message-rules", label: "Regole Messaggi", group: "config", href: "/admin/message-rules" },
 
   // --- Admin-only areas (never grantable to members) ---
   { key: "users", label: "Gestione Utenti", group: "config", href: "/admin/users", adminOnly: true },
