@@ -3,6 +3,7 @@
 import { useState, useEffect, use } from "react"
 import { Mail, MessageSquare, Phone, Plus, Trash2, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
@@ -202,6 +203,21 @@ export default function GroupTrackingPage({ params }: { params: Promise<{ groupI
         {/* Titolo e sottotitolo stanno nell'AdminHeader: ripeterli qui parola per
             parola aggiungeva un secondo <h1> alla pagina e sembrava un errore di
             resa. */}
+
+        {/* Il nome "Cervello" faceva credere che questa pagina insegnasse
+            all'assistente a rispondere. Non e' cosi': qui si MISURA quanta
+            domanda arriva. Chi risponde, e cio' che impara, sta in Assistente
+            IA - detto a schermo perche' due voci simili senza spiegazione si
+            scambiano per doppioni. */}
+        <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+          Questa pagina <strong className="font-medium text-foreground">misura la domanda</strong>: conta richieste di
+          camere, tavoli e preventivi ricavandole dalle conversazioni, e le riporta sul calendario. Non insegna
+          all&apos;assistente cosa rispondere: quello si cura in{" "}
+          <Link href="/admin/knowledge" className="underline underline-offset-4 hover:text-foreground">
+            Assistente IA
+          </Link>
+          , dove le domande rimaste senza risposta diventano nuove fonti.
+        </p>
         {message ? (
           <div
             role="status"
