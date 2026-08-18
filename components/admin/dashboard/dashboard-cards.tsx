@@ -42,11 +42,28 @@ function Guscio({
   panel,
   children,
   vuoto,
+  sensoZero,
 }: {
   panel: DashboardPanel
   children: React.ReactNode
-  /** true quando il modulo e' attivo ma non c'e' ancora alcun dato. */
+  /**
+   * true quando la misura e' riuscita e vale zero.
+   *
+   * Zero misurato NON e' "nessun dato": su "Assenze da approvare" significa che
+   * non c'e' nulla da approvare, cioe' una buona notizia. Scriverlo come "Nessun
+   * dato ancora" (come faceva prima) lo fa sembrare una misura mancante, e
+   * insegna a diffidare di una card che invece sta funzionando. Il testo dice
+   * quindi che la misura c'e' ed e' a zero; il caso "misura non riuscita" resta
+   * separato e in tono di allarme dentro <Numero>.
+   */
   vuoto?: boolean
+  /**
+   * Cosa significa lo zero PER QUESTA card. Obbligatorio insieme a `vuoto`
+   * perche' un unico testo mentirebbe: su "Assenze" zero e' quiete ("niente in
+   * sospeso"), su "Visitatori" zero significa che il tracciamento non e' ancora
+   * configurato — l'opposto di una buona notizia.
+   */
+  sensoZero?: string
 }) {
   const corpo = (
     <div className="flex h-full flex-col rounded-xl border border-border bg-card p-5 transition-colors hover:border-ha-brand/40">
@@ -61,7 +78,10 @@ function Guscio({
       </div>
       <div className="flex-1">
         {vuoto ? (
-          <p className="text-sm text-muted-foreground">Nessun dato ancora.</p>
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-semibold tabular-nums text-foreground">0</span>
+            <span className="text-sm text-muted-foreground">{sensoZero ?? "niente in sospeso"}</span>
+          </div>
         ) : (
           children
         )}
@@ -143,7 +163,7 @@ export function DashboardCard({ panel, dati }: { panel: DashboardPanel; dati: Da
 
     case "my-shifts":
       return (
-        <Guscio panel={panel} vuoto={d?.prossimi === 0}>
+        <Guscio panel={panel} vuoto={d?.prossimi === 0} sensoZero="nessun turno pubblicato">
           <div className="text-3xl font-semibold tabular-nums">
             <Numero valore={d?.prossimi} />
           </div>
@@ -180,17 +200,23 @@ export function DashboardCard({ panel, dati }: { panel: DashboardPanel; dati: Da
         </Guscio>
       )
 
+    // Zero siti non e' quiete: il tracciamento non e' ancora configurato.
     case "visitors":
       return (
-        <Guscio panel={panel} vuoto={d?.siti === 0 && d?.giorniDomanda === 0}>
+        <Guscio
+          panel={panel}
+          vuoto={d?.siti === 0 && d?.giorniDomanda === 0}
+          sensoZero="tracciamento non configurato"
+        >
           <Voce label="siti tracciati" valore={d?.siti} />
           <Voce label="giorni di domanda" valore={d?.giorniDomanda} />
         </Guscio>
       )
 
+    // Zero campagne = nessun invio fatto, non "tutto in ordine".
     case "campaigns":
       return (
-        <Guscio panel={panel} vuoto={d?.totali === 0}>
+        <Guscio panel={panel} vuoto={d?.totali === 0} sensoZero="nessuna campagna inviata">
           <div className="text-3xl font-semibold tabular-nums">
             <Numero valore={d?.totali} />
           </div>

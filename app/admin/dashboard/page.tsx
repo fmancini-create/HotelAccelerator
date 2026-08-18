@@ -59,7 +59,7 @@ interface Quote {
 const SCORCIATOIE: { label: string; href: string; richiedePannello: string }[] = [
   { label: "Vai alla casella", href: "/admin/inbox", richiedePannello: "backlog" },
   { label: "Telefonate", href: "/admin/calls", richiedePannello: "calls" },
-  { label: "Le mie attivita'", href: "/admin/my-work", richiedePannello: "my-shifts" },
+  { label: "Le mie attività", href: "/admin/my-work", richiedePannello: "my-shifts" },
 ]
 
 export default function AdminDashboardPage() {
@@ -79,14 +79,14 @@ export default function AdminDashboardPage() {
           setErroreCarico(
             r.status === 401
               ? "Sessione scaduta: rientra per vedere il cruscotto."
-              : `Non e' stato possibile leggere i dati (errore ${r.status}).`,
+              : `Non è stato possibile leggere i dati (errore ${r.status}).`,
           )
           return
         }
         const j = (await r.json()) as Risposta
         if (vivo) setRisposta(j)
       } catch {
-        if (vivo) setErroreCarico("Non e' stato possibile contattare il servizio.")
+        if (vivo) setErroreCarico("Non è stato possibile contattare il servizio.")
       }
     }
 
@@ -162,8 +162,8 @@ export default function AdminDashboardPage() {
           Cosa sta succedendo adesso
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground text-pretty">
-          Vedi soltanto le sezioni che i tuoi permessi ti concedono: quello che manca non e'
-          nascosto per errore.
+          Vedi soltanto le sezioni che i tuoi permessi ti concedono: quello che manca non è nascosto
+          per errore.
         </p>
       </header>
 

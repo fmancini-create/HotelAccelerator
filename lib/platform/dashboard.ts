@@ -65,7 +65,7 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "backlog",
     title: "Da gestire in casella",
-    hint: "Conversazioni non lette e aperte: la casella e' condivisa, quindi il conto e' di tutti.",
+    hint: "Non lette degli ultimi 7 giorni: la casella è condivisa, quindi il conto è di tutti. Il pregresso importato è contato a parte.",
     kind: "attention",
     module: "inbox",
     area: "inbox",
@@ -74,7 +74,7 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "stale",
     title: "Ferme da oltre 24 ore",
-    hint: "Aperte senza un nuovo messaggio da piu' di un giorno: sono quelle che scivolano.",
+    hint: "Aperte negli ultimi 7 giorni senza risposta da più di un giorno: sono quelle che scivolano.",
     kind: "attention",
     module: "inbox",
     area: "inbox",
@@ -107,14 +107,14 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
     // coincide con l'utente amministrativo. Contare i turni della struttura e
     // chiamarli "miei" sarebbe un numero giusto con l'etichetta sbagliata.
     title: "Turni in arrivo",
-    hint: "Turni pubblicati non ancora iniziati. La tua agenda personale e' in Le mie attivita'.",
+    hint: "Turni pubblicati non ancora iniziati. La tua agenda personale è in Le mie attività.",
     kind: "personal",
     module: "hr",
     href: "/admin/my-work",
   },
   {
     id: "my-todos",
-    title: "Attivita' aperte",
+    title: "Attività aperte",
     hint: "Cose da fare non ancora chiuse.",
     kind: "personal",
     area: "todos",
@@ -141,7 +141,7 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   },
   {
     id: "per-person",
-    title: "Attivita' per persona",
+    title: "Attività per persona",
     hint: "Risposte scritte da ciascuno. Dichiara quante risposte hanno un autore: senza quel dato il confronto ingannerebbe.",
     kind: "metrics",
     adminOnly: true,
@@ -174,7 +174,7 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   // --- Sorveglianza ---
   {
     id: "presence",
-    title: "Chi e' al lavoro adesso",
+    title: "Chi è al lavoro adesso",
     hint: "Operatori con un segnale recente. Chi non si collega da tempo non compare come presente.",
     kind: "oversight",
     adminOnly: true,

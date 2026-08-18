@@ -105,6 +105,38 @@ console.log("\n3b. I pannelli che espongono il lavoro altrui restano riservati")
   }
 }
 
+console.log("\n3c. Uno zero misurato non viene spacciato per dato mancante")
+{
+  // Il testo predefinito "niente in sospeso" e' vero solo per le CODE. Dove zero
+  // significa "non configurato" (visitatori, campagne) o "niente pubblicato"
+  // (turni), la card deve dichiararlo con sensoZero, altrimenti a schermo si
+  // legge una buona notizia al posto di un lavoro da fare.
+  const sorgente = readFileSync(join(RADICE, "components/admin/dashboard/dashboard-cards.tsx"), "utf8")
+
+  check(
+    'il guscio non scrive piu\' "Nessun dato ancora" per uno zero misurato',
+    !sorgente.includes("Nessun dato ancora"),
+    "uno zero misurato tornerebbe a sembrare una misura assente",
+  )
+
+  for (const id of ["visitors", "campaigns", "my-shifts"]) {
+    // Si guarda il blocco della singola card, non tutto il file: cercare
+    // "sensoZero" nel file intero passerebbe anche se fosse su un'altra card.
+    // La finestra si chiude al `case` SUCCESSIVO, non a un numero fisso di
+    // caratteri: con una finestra di 700 il blocco di "visitors" traboccava in
+    // quello di "campaigns" e trovava il sensoZero del vicino, quindi il
+    // controllo restava verde anche togliendo la dichiarazione (misurato).
+    const i = sorgente.indexOf(`case "${id}":`)
+    const dopo = i < 0 ? -1 : sorgente.indexOf("\n    case ", i + 1)
+    const blocco = i < 0 ? "" : sorgente.slice(i, dopo < 0 ? undefined : dopo)
+    check(
+      `"${id}" dichiara cosa significa il suo zero`,
+      blocco.includes("sensoZero"),
+      'senza sensoZero mostrerebbe "niente in sospeso", che qui e\' falso',
+    )
+  }
+}
+
 console.log("\n4. I pannelli riservati non raggiungono i membri")
 {
   const tuttiIModuli = [...new Set(DASHBOARD_PANELS.map((p) => p.module).filter(Boolean))] as string[]
