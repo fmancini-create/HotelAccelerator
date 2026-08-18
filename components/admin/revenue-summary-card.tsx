@@ -64,8 +64,17 @@ export default function RevenueSummaryCard() {
   let notice: string | null = null
   if (isLoading) notice = "Caricamento…"
   else if (error || !data || data.status === "error") notice = "Dati Revenue non disponibili al momento."
-  else if (data.status === "not_configured") notice = "Revenue non configurato."
-  else if (data.status === "not_linked") notice = "Revenue non collegato a questa struttura."
+  // I due stati "manca qualcosa" vengono da cause diverse e li risolvono persone
+  // diverse: le chiavi Santaddeo sono di chi amministra la piattaforma, il
+  // collegamento della singola struttura e' di chi la configura. Scrivere solo
+  // "non configurato" lasciava chi guarda senza sapere se aspettare o agire.
+  else if (data.status === "not_configured")
+    notice = "Collegamento a Santaddeo non attivo su questa installazione: lo imposta chi amministra la piattaforma."
+  // Verificato: nessuna interfaccia scrive santaddeo_hotel_id (solo lettura in
+  // app/api/admin/revenue/summary). Quindi NON si rimanda a una pagina che non
+  // esiste: si dice chi puo' sbloccare, e basta.
+  else if (data.status === "not_linked")
+    notice = "Questa struttura non è ancora abbinata a un hotel su Santaddeo: l'abbinamento lo esegue chi amministra la piattaforma."
   else if (data.status === "unauthorized") notice = "Accesso non autorizzato."
 
   if (notice) {
