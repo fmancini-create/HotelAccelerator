@@ -36,6 +36,7 @@
 import {
   Activity,
   BarChart3,
+  Gauge,
   Boxes,
   CalendarClock,
   FileText,
@@ -150,6 +151,19 @@ export const NAV_ENTRIES: NavEntry[] = [
     module: "inbox",
     area: "calls",
     primary: true,
+  },
+  {
+    // Operativa (si consulta, non si configura) ma riservata a chi amministra:
+    // confronta i colleghi fra loro. Senza `adminOnly` il menu la offrirebbe a
+    // chiunque, mentre il layout la nega: menu e guardia direbbero cose diverse,
+    // che e' il difetto dei tre elenchi divergenti gia' corretto.
+    id: "operator-performance",
+    href: "/admin/operator-performance",
+    label: "Performance operatori",
+    description: "Quante risposte manda ciascuno e quanto attende chi scrive",
+    placement: "operative",
+    icon: Gauge,
+    adminOnly: true,
   },
   {
     id: "marketing",

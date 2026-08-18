@@ -40,15 +40,16 @@ export type OperatoreRiga = {
   /** Conversazioni distinte toccate. */
   conversazioni: number
   /**
-   * Mediana dell'attesa in minuti, oppure null se nessuna risposta ha una domanda
-   * precedente da cui misurare.
+   * Mediana dell'attesa in SECONDI, oppure null se nessuna risposta ha una domanda
+   * precedente da cui misurare. L'unita' sta nel nome del campo perche' un
+   * `attesaMediana` generico che contiene secondi e' un'etichetta che mente.
    *
    * Mediana e non media: con pochi dati un singolo valore anomalo (una risposta
    * dopo il fine settimana) sposterebbe la media di giorni. Misurato: per una delle
    * due persone le attese sono 109 e 3.067 minuti, la media direbbe 1.588 e non
    * descriverebbe nessuna delle due.
    */
-  attesaMediana: number | null
+  attesaMedianaSec: number | null
   /** Su quante risposte e' calcolata l'attesa: il denominatore va mostrato. */
   attesaSu: number
   /** Vero quando la persona ha abbastanza risposte per la graduatoria. */
@@ -154,7 +155,10 @@ export async function computeOperatorPerformance(
       else break
     }
     if (ultima === null) return null
-    return Math.round((t - ultima) / 60000)
+    // In SECONDI, non in minuti arrotondati: misurato che l'IA risponde in 2
+    // secondi, che arrotondato dava "0 min" a schermo, cioe' un dato vero che
+    // sembrava mancante. Chi legge trasforma i secondi in unita' leggibili.
+    return Math.round((t - ultima) / 1000)
   }
 
   type Accumulo = { risposte: number; conv: Set<string>; attese: number[] }
@@ -210,7 +214,7 @@ export async function computeOperatorPerformance(
       genere: "persona",
       risposte: acc.risposte,
       conversazioni: acc.conv.size,
-      attesaMediana: mediana(acc.attese),
+      attesaMedianaSec: mediana(acc.attese),
       attesaSu: acc.attese.length,
       inGraduatoria: acc.risposte >= SOGLIA_GRADUATORIA,
     })
@@ -225,7 +229,7 @@ export async function computeOperatorPerformance(
       genere: "ia",
       risposte: ia.risposte,
       conversazioni: ia.conv.size,
-      attesaMediana: mediana(ia.attese),
+      attesaMedianaSec: mediana(ia.attese),
       attesaSu: ia.attese.length,
       inGraduatoria: false,
     })
@@ -238,7 +242,7 @@ export async function computeOperatorPerformance(
       genere: "non-attribuite",
       risposte: senzaAutore.risposte,
       conversazioni: senzaAutore.conv.size,
-      attesaMediana: mediana(senzaAutore.attese),
+      attesaMedianaSec: mediana(senzaAutore.attese),
       attesaSu: senzaAutore.attese.length,
       inGraduatoria: false,
     })
