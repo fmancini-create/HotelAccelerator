@@ -15,8 +15,13 @@ export const dynamic = "force-dynamic"
 export async function GET(request: Request) {
   const url = new URL(request.url)
 
-  if (url.searchParams.get("segreto") !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "non autorizzato" }, { status: 403 })
+  // Solo sviluppo locale: in qualunque altro ambiente la rotta non esiste.
+  const isLocale =
+    process.env.NODE_ENV !== "production" &&
+    (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+
+  if (!isLocale) {
+    return NextResponse.json({ error: "non disponibile" }, { status: 404 })
   }
 
   const email = url.searchParams.get("email")
@@ -53,6 +58,10 @@ export async function GET(request: Request) {
   }
 
   const projectRef = new URL(base).hostname.split(".")[0]
+  // Payload MINIMO: con l'oggetto `user` completo il cookie supera i 4096 byte
+  // che il browser accetta e viene scartato in silenzio — cioe' la sessione
+  // sembra non essere mai stata impostata. `getUser()` interroga comunque
+  // Supabase con l'access token, quindi i gettoni bastano.
   const cookieValue =
     "base64-" +
     Buffer.from(
@@ -62,7 +71,7 @@ export async function GET(request: Request) {
         expires_in: session.expires_in,
         expires_at: session.expires_at,
         refresh_token: session.refresh_token,
-        user: session.user,
+        user: { id: session.user?.id, email: session.user?.email },
       }),
     ).toString("base64")
 
@@ -71,6 +80,7 @@ export async function GET(request: Request) {
   const res = NextResponse.json({
     utente: session.user?.email,
     cookie: `sb-${projectRef}-auth-token`,
+    byte: cookieValue.length,
   })
   res.cookies.set(`sb-${projectRef}-auth-token`, cookieValue, {
     path: "/",

@@ -1,9 +1,4 @@
-import Link from "next/link"
-import { ArrowRight, Lock, Phone } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { CrmCallPanel } from "@/components/crm/crm-call-panel"
-import { evaluateAreaAccess } from "@/lib/auth/area-access"
 import { CrmCallsRecent } from "@/components/crm/crm-calls-recent"
 
 /**
@@ -25,25 +20,31 @@ import { CrmCallsRecent } from "@/components/crm/crm-calls-recent"
  * rimanda la' per tutto il resto, come fa gia' `crm/contacts/page.tsx` con
  * l'elenco dei contatti.
  *
- * IL PERMESSO E' LA PARTE DELICATA. Il registro richiede l'area "calls", questo
- * spazio l'area "crm": sono due permessi DISTINTI, e la misura sul database dice
- * che dei due membri con l'area CRM uno NON ha l'area Telefonate. Per lui un
- * rimando secco sarebbe un vicolo cieco (`requireAreaPage("calls")` lo
- * rispedirebbe alla dashboard) e l'elenco qui sotto un 403 muto. Quindi si
- * VALUTA il permesso senza applicarlo — `evaluateAreaAccess` non lancia — e si
- * dichiara il motivo invece di mostrare una tabella vuota.
+ * IL PERMESSO E' LA PARTE DELICATA, E QUI C'ERA UN DIFETTO MIO. Il registro
+ * richiede l'area "calls", questo spazio l'area "crm": due permessi DISTINTI, e
+ * dei due membri con l'area CRM uno NON ha l'area Telefonate. Avevo quindi
+ * valutato il permesso qui, con `evaluateAreaAccess("calls")`, per non mandarlo
+ * contro una porta chiusa. Aprendo la pagina come quell'utente vero, il rimando
+ * "Apri le Telefonate" compariva comunque, accanto al diniego dell'elenco:
+ * due verdetti opposti sulla stessa domanda.
  *
- * La valutazione qui NON e' l'unica difesa: `evaluateAreaAccess` lascia passare
- * di proposito quando il database non risponde, ma i dati arrivano comunque da
- * `/api/telephony/calls`, che applica la propria guardia. Nel caso peggiore si
- * vede il riquadro con un errore, non le telefonate di chi non deve vederle.
+ * Il motivo, misurato: in un componente server non c'e' una `request` da
+ * passare, e senza `request` `getDevBypass` concede il bypass di sviluppo solo
+ * perche' `NODE_ENV === "development"`, restituendo l'identita' finta
+ * `dev@hotelaccelerator.local` con i poteri di super-admin. La pagina giudicava
+ * un utente che non era quello collegato, mentre `/api/telephony/calls` — che
+ * riceve la richiesta con i cookie — giudicava quello vero e negava.
  *
- * La chiamata in uscita resta disponibile in entrambi i casi: il click-to-call
+ * Percio' IL GIUDICE E' UNO SOLO: l'API. Richiede la stessa area "calls" della
+ * pagina `/admin/calls`, quindi la sua risposta e' la prova diretta che quella
+ * porta si apre, e non puo' divergere da una seconda valutazione. Diniego
+ * dichiarato e rimando al registro completo vivono entrambi in
+ * `CrmCallsRecent`, guidati da quell'unica risposta.
+ *
+ * La chiamata in uscita resta disponibile in ogni caso: il click-to-call
  * richiede l'area "crm", non "calls".
  */
 export default async function CrmCallsPage() {
-  const accesso = await evaluateAreaAccess("calls")
-
   return (
     <div className="space-y-6">
       <div>
@@ -55,45 +56,7 @@ export default async function CrmCallsPage() {
 
       <CrmCallPanel />
 
-      {accesso.allowed ? (
-        <CrmCallsRecent />
-      ) : (
-        /* Diniego DICHIARATO: senza questo, l'elenco chiederebbe i dati e
-           riceverebbe 403, mostrando "nessuna telefonata" — cioe' un archivio
-           vuoto al posto di un permesso mancante. */
-        <Card>
-          <CardContent className="p-8 text-center">
-            <Lock className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
-            <p className="mt-3 text-sm font-medium text-foreground">Registro telefonate non accessibile</p>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground text-pretty leading-relaxed">
-              Il tuo utente ha l&apos;area CRM ma non l&apos;area «Telefonate», che è un permesso a parte: chiedi a un
-              amministratore di assegnartela. Puoi comunque avviare chiamate dal riquadro qui sopra.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {accesso.allowed && (
-        <Card>
-          <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
-            <div className="flex items-start gap-3">
-              <Phone className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-medium text-foreground">Registro completo</p>
-                <p className="text-sm text-muted-foreground text-pretty leading-relaxed">
-                  Filtri per esito e direzione, ricerca per numero, nomi degli interni e tutto lo storico.
-                </p>
-              </div>
-            </div>
-            <Button asChild variant="outline" size="sm">
-              <Link href="/admin/calls">
-                Apri le Telefonate
-                <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      <CrmCallsRecent />
     </div>
   )
 }

@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, PhoneIncoming, PhoneMissed, PhoneOutgoing, RefreshCw } from "lucide-react"
+import {
+  AlertCircle,
+  ArrowRight,
+  Lock,
+  Phone,
+  PhoneIncoming,
+  PhoneMissed,
+  PhoneOutgoing,
+  RefreshCw,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -70,23 +79,30 @@ export function CrmCallsRecent() {
   const [dati, setDati] = useState<Risposta | null>(null)
   const [caricamento, setCaricamento] = useState(true)
   const [errore, setErrore] = useState("")
+  /* Il permesso mancante NON e' un errore: e' uno stato a parte, perche' decide
+     anche se mostrare il rimando al registro completo (vedi in fondo al file). */
+  const [negato, setNegato] = useState(false)
 
   const carica = useCallback(async () => {
     setCaricamento(true)
     setErrore("")
+    setNegato(false)
     try {
       const res = await fetch(`/api/telephony/calls?limit=${QUANTE}`)
       if (!res.ok) {
         const body = await res.json().catch(() => null)
+        if (res.status === 403) {
+          setNegato(true)
+          setDati(null)
+          return
+        }
         // Errore di lettura in uno stato PROPRIO: mostrare "nessuna telefonata"
         // quando la lettura non riesce farebbe credere che il centralino abbia
         // smesso di registrare.
         setErrore(
           res.status === 401
             ? "Sessione scaduta: ricarica la pagina per rientrare."
-            : res.status === 403
-              ? "Non hai il permesso per l'area Telefonate."
-              : body?.error || "Non è stato possibile leggere il registro.",
+            : body?.error || "Non è stato possibile leggere il registro.",
         )
         setDati(null)
         return
@@ -106,8 +122,27 @@ export function CrmCallsRecent() {
 
   const chiamate = dati?.calls ?? []
 
+  /* Permesso mancante: si DICHIARA, e il rimando al registro completo non
+     compare. E' il punto delicato di questa pagina — vedi la nota in
+     `app/admin/crm/calls/page.tsx` sul perche' il giudice sia uno solo. */
+  if (negato) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <Lock className="mx-auto h-8 w-8 text-muted-foreground" aria-hidden="true" />
+          <p className="mt-3 text-sm font-medium text-foreground">Registro telefonate non accessibile</p>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-muted-foreground text-pretty leading-relaxed">
+            Il tuo utente ha l&apos;area CRM ma non l&apos;area «Telefonate», che è un permesso a parte: chiedi a un
+            amministratore di assegnartela. Puoi comunque avviare chiamate dal riquadro qui sopra.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
-    <Card>
+    <div className="space-y-6">
+      <Card>
       <CardContent className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
           <div>
@@ -203,7 +238,32 @@ export function CrmCallsRecent() {
             })}
           </ul>
         )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* Il rimando compare SOLO qui, dove si sa che la lettura e' andata a buon
+          fine: `/admin/calls` richiede la stessa area `calls` di questa API,
+          quindi un 200 e' la prova che quella porta si apre. Deciderlo altrove
+          significherebbe avere due giudici che possono contraddirsi. */}
+      <Card>
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
+          <div className="flex items-start gap-3">
+            <Phone className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Registro completo</p>
+              <p className="text-sm text-muted-foreground text-pretty leading-relaxed">
+                Filtri per esito e direzione, ricerca per numero, nomi degli interni e tutto lo storico.
+              </p>
+            </div>
+          </div>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/admin/calls">
+              Apri le Telefonate
+              <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
