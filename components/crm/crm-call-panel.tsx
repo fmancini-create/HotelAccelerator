@@ -89,7 +89,7 @@ export function CrmCallPanel() {
               id="numero-da-chiamare"
               value={numero}
               inputMode="tel"
-              placeholder="es. +39 055 123456"
+              placeholder="+39 e il numero, oppure un interno"
               onChange={(e) => setNumero(e.target.value)}
             />
           </div>
