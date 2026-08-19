@@ -1,217 +1,126 @@
-import type { Metadata } from "next"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import {
-  MessageSquare,
-  ArrowRight,
-  Mail,
-  Phone,
-  MessagesSquare,
-  Bot,
-  Clock,
-  Users,
-  Inbox,
-} from "lucide-react"
-import { PlatformFooter } from "@/components/platform-footer"
-import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
+import { ContactRound, Inbox, Mail, MessageSquareText, Tags, UsersRound } from "lucide-react"
+import { buildFeatureMetadata, FeatureLandingPage } from "@/components/platform/feature-landing-page"
 
-export const metadata: Metadata = {
-  title: "Inbox Omnicanale per Hotel - Email, WhatsApp, Chat | HotelAccelerator",
-  description:
-    "Gestisci tutte le comunicazioni del tuo hotel in un'unica inbox: Email, WhatsApp, Telegram, Chat. Rispondi da un solo posto, assegna a team, usa template. -50% tempo di risposta.",
+const description =
+  "Gestisci Gmail, conversazioni, assegnazioni, risposte rapide e collaborazione del team. Gli altri canali si attivano dopo verifica del connettore."
+
+export const metadata = buildFeatureMetadata({
+  slug: "inbox-omnicanale",
+  title: "Inbox omnicanale per hotel e Gmail",
+  description,
   keywords: [
     "inbox omnicanale hotel",
-    "gestione messaggi hotel",
-    "whatsapp business hotel",
-    "chat hotel",
-    "comunicazione unificata hotel",
-    "telegram hotel",
-    "messaggistica hotel",
-    "customer service hotel",
+    "gestione email hotel",
+    "gmail hotel",
+    "inbox condivisa hotel",
+    "messaggi ospiti hotel",
+    "collaborazione reception",
   ],
-  openGraph: {
-    title: "Inbox Omnicanale - Mai Più Messaggi Persi | HotelAccelerator",
-    description: "Email, WhatsApp, Telegram, Chat in un'unica inbox. -50% tempo di risposta.",
-    type: "website",
-  },
-  alternates: {
-    canonical: "https://hotelaccelerator.com/features/inbox-omnicanale",
-  },
-}
+})
 
-const channels = [
-  { icon: Mail, name: "Email", description: "Gmail, Outlook, IMAP" },
-  { icon: MessagesSquare, name: "WhatsApp", description: "WhatsApp Business API" },
-  { icon: MessageSquare, name: "Chat", description: "Widget per il sito" },
-  { icon: Phone, name: "Telegram", description: "Bot Telegram integrato" },
-]
-
-const features = [
+const capabilities = [
+  {
+    icon: Mail,
+    title: "Gmail sincronizzato",
+    description:
+      "OAuth, import incrementale, aggiornamenti push e polling di fallback mantengono messaggi e stato Gmail nella piattaforma.",
+  },
   {
     icon: Inbox,
-    title: "Inbox Unificata",
+    title: "Conversazioni organizzate",
     description:
-      "Tutti i messaggi in un unico posto. Non saltare più tra email, WhatsApp, chat. Vista conversazione completa.",
+      "Leggi thread, cerca, filtra, segna come letto o preferito e applica azioni massive alle conversazioni autorizzate.",
   },
   {
-    icon: Users,
-    title: "Assegnazione Team",
-    description: "Assegna conversazioni a receptionist, booking, management. Gestisci carichi di lavoro.",
+    icon: MessageSquareText,
+    title: "Risposta dall'inbox",
+    description:
+      "Rispondi ai thread Gmail e usa risposte rapide salvate, senza ricostruire manualmente destinatari e cronologia.",
   },
   {
-    icon: Bot,
-    title: "Risposte Rapide",
-    description: "Template per domande frequenti. Risparmia tempo con risposte pre-impostate personalizzabili.",
+    icon: UsersRound,
+    title: "Collaborazione del team",
+    description:
+      "Lock di lavorazione, trasferimento e storico aiutano più operatori a coordinarsi sulla stessa richiesta.",
   },
   {
-    icon: Clock,
-    title: "SLA e Priorità",
-    description: "Imposta tempi di risposta target. Visualizza urgenze, evita messaggi dimenticati.",
+    icon: Tags,
+    title: "Etichette e stato",
+    description:
+      "Le label Gmail, letto/non letto, spam e cestino vengono riconciliati per ridurre differenze tra casella e piattaforma.",
+  },
+  {
+    icon: ContactRound,
+    title: "Collegamento al CRM",
+    description:
+      "Il mittente viene collegato a un contatto esistente o acquisito secondo le regole del tenant, escludendo i mittenti automatici.",
+  },
+]
+
+const faqs = [
+  {
+    question: "Quale canale è verificato oggi su una struttura reale?",
+    answer:
+      "Gmail è il primo canale verificato su un tenant reale, con OAuth, sincronizzazione, watch push, polling di fallback e riconciliazione degli stati.",
+  },
+  {
+    question: "WhatsApp, Telegram e Outlook sono già inclusi automaticamente?",
+    answer:
+      "No. Nel repository esistono componenti e connettori per alcuni canali, ma provider, permessi, webhook e flusso end-to-end devono essere verificati per il singolo tenant prima dell'attivazione.",
+  },
+  {
+    question: "L'inbox evita sempre messaggi persi o dimezza i tempi di risposta?",
+    answer:
+      "Non viene garantita una percentuale prestabilita. L'inbox riduce i passaggi manuali, ma il risultato dipende da configurazione, copertura dei canali e organizzazione del team.",
+  },
+  {
+    question: "Le risposte vengono inviate automaticamente dall'AI?",
+    answer:
+      "L'operatore può generare una bozza assistita e modificarla. L'invio resta sotto il suo controllo, salvo futuri flussi esplicitamente configurati e collaudati.",
   },
 ]
 
 export default function InboxOmnichannelLandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Schema.org */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            name: "HotelAccelerator Inbox Omnicanale",
-            applicationCategory: "BusinessApplication",
-            description: "Inbox omnicanale per hotel con Email, WhatsApp, Chat e Telegram",
-            operatingSystem: "Web",
-          }),
-        }}
-      />
-
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-        <nav className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <HotelAcceleratorMark className="h-8 w-8" priority />
-            <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/admin">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Accedi
-              </Button>
-            </Link>
-            <Link href="/request-access">
-              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Richiedi Demo
-              </Button>
-            </Link>
-          </div>
-        </nav>
-      </header>
-
-      {/* Hero */}
-      <section className="pt-32 pb-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-16">
-            <Link href="/" className="mx-auto mb-6 flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-              <ArrowRight className="h-4 w-4 rotate-180" />
-              Torna alla home
-            </Link>
-            <div className="mx-auto flex w-fit items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand mb-8">
-              <MessageSquare className="h-4 w-4" />
-              Inbox Omnicanale
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 text-balance">Mai più messaggi persi</h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              <strong>Email, WhatsApp, Telegram e Chat</strong> in un'unica inbox. Rispondi da un solo posto, -50% tempo
-              di risposta, 0 messaggi dimenticati.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/request-access">
-                <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                  Prova l'Inbox
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Channels */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-12 border-y border-border">
-            {channels.map((channel) => (
-              <div key={channel.name} className="text-center p-4 rounded-xl bg-secondary/50">
-                <channel.icon className="h-8 w-8 text-ha-brand mx-auto mb-2" />
-                <div className="font-medium">{channel.name}</div>
-                <div className="text-xs text-muted-foreground">{channel.description}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Gestione messaggi semplice e potente</h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-            {features.map((feature) => (
-              <article key={feature.title} className="p-6 rounded-2xl bg-secondary/50 border border-border">
-                <div className="w-12 h-12 rounded-xl bg-ha-brand-soft flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-ha-brand" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm">{feature.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits */}
-      <section className="py-24 px-4 bg-card/[0.02]">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Risultati che contano</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
-              <div className="text-4xl font-bold text-ha-brand mb-2">-50%</div>
-              <div className="text-muted-foreground">Tempo di risposta</div>
-            </div>
-            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
-              <div className="text-4xl font-bold text-ha-brand mb-2">0</div>
-              <div className="text-muted-foreground">Messaggi persi</div>
-            </div>
-            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
-              <div className="text-4xl font-bold text-ha-brand mb-2">+40%</div>
-              <div className="text-muted-foreground">Soddisfazione ospiti</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-ha-brand/20 to-ha-brand-soft border border-ha-brand/20">
-            <MessageSquare className="h-12 w-12 text-ha-brand mx-auto mb-6" />
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">Centralizza le tue comunicazioni</h2>
-            <p className="text-muted-foreground mb-8">Demo gratuita con collegamento al tuo WhatsApp Business.</p>
-            <Link href="/request-access">
-              <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                Richiedi Demo Gratuita
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <PlatformFooter />
-    </div>
+    <FeatureLandingPage
+      slug="inbox-omnicanale"
+      eyebrow="Inbox per hotel"
+      icon={Inbox}
+      title="Email degli ospiti e lavoro del team in un unico spazio"
+      intro="HotelAccelerator porta Gmail nell'area operativa della struttura, collega conversazioni e contatti e offre strumenti di collaborazione senza promettere canali non ancora verificati."
+      statusLabel="Gmail verificato al livello Tenant reale"
+      statusDescription="Restano da completare recovery drill, autenticazione del webhook e osservabilità prima dello stato Production-ready. Gli altri canali sono attivati solo dopo verifica."
+      capabilitiesTitle="Cosa fa oggi l'inbox"
+      capabilitiesIntro="Il primo verticale reale è l'email. La strategia omnicanale procede per connettori indipendenti, senza simulare integrazioni mancanti."
+      capabilities={capabilities}
+      availableNow={[
+        "Connessione Gmail OAuth, sincronizzazione incrementale e risposta ai thread.",
+        "Label, letto/non letto, preferiti, spam, cestino e azioni massive.",
+        "Risposte rapide, lock di collaborazione, trasferimento e storico.",
+        "Collegamento controllato tra conversazioni e contatti CRM.",
+      ]}
+      requiresVerification={[
+        "Recovery con cursor scaduto, outage dei provider, alert e runbook.",
+        "Autenticazione completa del webhook Pub/Sub e SLO operativi.",
+        "WhatsApp, Telegram, Outlook, IMAP, social, OTA e telefonia sul tenant interessato.",
+      ]}
+      faqs={faqs}
+      related={[
+        {
+          href: "/features/crm",
+          title: "CRM alberghiero",
+          description: "Collega ogni conversazione al profilo ospite e al suo storico.",
+        },
+        {
+          href: "/features/ai-assistant",
+          title: "AI con controllo umano",
+          description: "Genera bozze basate sulla knowledge base senza invii opachi.",
+        },
+      ]}
+      ctaTitle="Verifichiamo i canali realmente collegabili"
+      ctaDescription="La demo parte dalla casella Gmail e dai permessi del team; gli altri canali vengono valutati uno per uno."
+      schemaName="Inbox omnicanale per hotel con integrazione Gmail"
+      schemaDescription={description}
+    />
   )
 }

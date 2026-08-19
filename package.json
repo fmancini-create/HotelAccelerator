@@ -11,11 +11,21 @@
     "test": "vitest",
     "test:run": "vitest run",
     "check:area-guard": "tsx scripts/check-area-guard.mjs",
+    "check:inbox-collaboration": "tsx scripts/check-inbox-collaboration.mjs",
     "test:area-guard": "tsx scripts/test-area-guard.mjs",
+    "test:kpi-readiness": "tsx scripts/test-kpi-readiness.mjs",
+    "test:hr-time": "tsx scripts/test-hr-time.ts",
+    "test:ring-group": "tsx scripts/test-ring-group.ts",
+    "backfill:ring-group": "tsx scripts/backfill-ring-group-timeout.ts",
     "simulate:area-guard": "tsx scripts/simulate-area-guard.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:santaddeo": "tsc --noEmit -p apps/santaddeo/tsconfig.json",
     "typecheck:all": "pnpm run typecheck && pnpm run typecheck:santaddeo",
+    "test:phone-display": "tsx scripts/test-phone-display.ts",
+    "test:knowledge-gaps": "tsx scripts/test-knowledge-gaps.ts",
+    "check:nav": "tsx scripts/check-nav-manifest.ts",
+    "check:dashboard": "tsx scripts/check-dashboard-manifest.ts",
+    "check:analytics": "tsx scripts/check-analytics-performance.ts",
     "check:crm-nav": "tsx scripts/check-crm-nav.mjs"
   },
   "dependencies": {
@@ -110,5 +120,10 @@
     "tsx": "^4.22.4",
     "typescript": "^5",
     "vitest": "^2.1.8"
-  }
+  },
+  "workspaces": [
+    ".",
+    "apps/*",
+    "packages/*"
+  ]
 }

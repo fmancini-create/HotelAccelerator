@@ -1,12 +1,20 @@
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import type { Metadata } from "next"
 import { Button } from "@/components/ui/button"
 import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 
-export const metadata = {
-  title: "Privacy Policy | HotelAccelerator",
+export const metadata: Metadata = {
+  title: { absolute: "Privacy Policy | HotelAccelerator" },
   description:
     "Informativa sulla Privacy di HotelAccelerator - Come raccogliamo, utilizziamo e proteggiamo i tuoi dati personali.",
+  alternates: { canonical: "https://www.hotelaccelerator.com/privacy" },
+  openGraph: {
+    title: "Privacy Policy | HotelAccelerator",
+    description: "Informativa sul trattamento dei dati personali nel sito e nei servizi HotelAccelerator.",
+    type: "website",
+    url: "https://www.hotelaccelerator.com/privacy",
+  },
 }
 
 export default function PrivacyPage() {
@@ -32,7 +40,7 @@ export default function PrivacyPage() {
       <main className="pt-32 pb-20 px-4">
         <div className="container mx-auto max-w-3xl">
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Informativa sulla Privacy</h1>
-          <p className="text-gray-400 mb-12">Ultimo aggiornamento: 27 dicembre 2025</p>
+          <p className="text-gray-400 mb-12">Ultimo aggiornamento: 18 agosto 2026</p>
 
           <div className="prose prose-invert prose-gray max-w-none space-y-8">
             <p className="text-gray-300 leading-relaxed">
@@ -65,8 +73,11 @@ export default function PrivacyPage() {
                 <li>Dati tecnici (indirizzo IP, browser, sistema operativo)</li>
                 <li>Contenuti e dati inseriti volontariamente dall&apos;utente all&apos;interno della piattaforma</li>
               </ul>
-              <p className="text-gray-400 mt-4 text-sm">
-                La Piattaforma non raccoglie dati sensibili (es. salute, religione, orientamento politico).
+              <p className="text-gray-400 mt-4 text-sm leading-relaxed">
+                La Piattaforma non richiede intenzionalmente categorie particolari di dati personali. I contenuti
+                transitati nei canali collegati o caricati dagli utenti possono tuttavia contenerle: il cliente deve
+                configurare accessi, basi giuridiche e minimizzazione in modo coerente con il proprio ruolo e le proprie
+                finalità.
               </p>
             </section>
 
@@ -141,8 +152,9 @@ export default function PrivacyPage() {
             <section>
               <h2 className="text-xl font-semibold text-white mb-4">9. Cookie</h2>
               <p className="text-gray-300 leading-relaxed">
-                La Piattaforma utilizza cookie tecnici e, previo consenso, cookie di analisi. Per maggiori informazioni
-                è possibile consultare la Cookie Policy dedicata.
+                Il sito può utilizzare strumenti tecnici necessari e, ove configurati, strumenti di analisi soggetti
+                alle scelte di consenso applicabili. Le informazioni e i controlli disponibili devono essere mostrati
+                dallo strumento di consenso attivo sul dominio visitato.
               </p>
             </section>
           </div>
@@ -152,7 +164,7 @@ export default function PrivacyPage() {
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-white/10">
         <div className="container mx-auto text-center text-sm text-gray-500">
-          © 2025 HotelAccelerator. Tutti i diritti riservati.
+          © 2026 4Bid S.r.l. – Tutti i diritti riservati
         </div>
       </footer>
     </div>

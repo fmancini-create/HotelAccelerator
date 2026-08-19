@@ -30,7 +30,6 @@ import {
   ChevronRight,
   ChevronLeft,
   MailOpen,
-  Bug,
   MessageCircle,
   Phone,
   ArrowUpDown,
@@ -45,6 +44,7 @@ import {
   BookText,
   Database,
   Plus,
+  Users,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -65,6 +65,8 @@ import { formatInboxTimestamp, formatInboxTimestampFull, formatWaitingSince } fr
 import { EmailKpiBar } from "@/components/admin/email-kpi-bar"
 import { AiDraftPanel } from "@/components/admin/inbox/ai-draft-panel"
 import { AddToKnowledgeButton } from "@/components/admin/inbox/add-to-knowledge-button"
+import { VistaBozze } from "@/components/admin/inbox/vista-bozze"
+import { toast } from "sonner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -77,6 +79,12 @@ import {
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useInboxCollaboration } from "@/hooks/use-inbox-collaboration"
+import { InLavorazioneBadge } from "@/components/admin/inbox/in-lavorazione-badge"
+import { chiaveBersaglio } from "@/lib/inbox/target"
+import type { Bersaglio } from "@/lib/inbox/target"
+import { useInboxTransfer } from "@/hooks/use-inbox-transfer"
+import { RichiestePassaggio } from "@/components/admin/inbox/richieste-passaggio"
 
 type InboxMode = "smart" | "gmail"
 
@@ -160,6 +168,18 @@ interface Conversation {
       requested_at?: string
       contact?: { name?: string | null; email?: string | null; phone?: string | null }
       manubot_task_id?: string | null
+    } | null
+    /**
+     * Cosa ha fatto il riconoscimento anagrafica: `ambigua` quando piu' schede
+     * curate corrispondono a chi scrive e nessuno ha deciso, `collegata` quando
+     * il sistema ha agganciato la conversazione a una scheda esistente. Una
+     * modifica al CRM decisa da una macchina non deve restare invisibile.
+     */
+    crm_segnalazione?: {
+      tipo?: "ambigua" | "da_confermare" | "collegata"
+      testo?: string
+      candidate?: { id: string; nome?: string | null; email?: string | null }[]
+      numero_salvato?: boolean
     } | null
   } | null
   contact: Contact | null
@@ -474,6 +494,80 @@ export default function InboxPage() {
   // Telegram, Chat) are visible together. "gmail" is the Gmail-only mirror view.
   const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
 
+  // ── Lavorazione condivisa ──
+  // Chi sta scrivendo cosa, in questa struttura. Vale per entrambe le modalita':
+  // un messaggio preso in carico nell'inbox unificata deve risultare occupato
+  // anche a chi guarda la vista Gmail, altrimenti la protezione avrebbe una
+  // porta di servizio aperta.
+  const {
+    lavorazioni,
+    bozze: bozzeInSospeso,
+    aggiornaBozze,
+    prendi: prendiInCarico,
+    salvaBozza: salvaBozzaCondivisa,
+    leggiBozza: leggiBozzaCondivisa,
+    sospendi: sospendiLavorazione,
+  } = useInboxCollaboration(true)
+  // Richieste di passaggio. Attive sempre, non solo in una modalita': chi tiene
+  // un messaggio puo' stare guardando l'altra vista, e una richiesta che non lo
+  // raggiunge non serve a niente.
+  const {
+    daGestire: richiesteDaGestire,
+    inCorso: passaggioInCorso,
+    chiedi: chiediPassaggio,
+    rispondi: rispondiPassaggio,
+    hoGiaChiesto,
+  } = useInboxTransfer(true)
+  // Autore della bozza recuperata, quando non e' la propria: serve a dire
+  // "ripresa la bozza di Marco" invece di far comparire testo dal nulla.
+  const [bozzaAutore, setBozzaAutore] = useState<string | null>(null)
+
+  // Il testo nel campo e il messaggio in lavorazione, tenuti in un riferimento.
+  // Servono quando si cambia messaggio: i gestori di selezione sono definiti
+  // molto piu' su in questo file, e leggere lo stato direttamente da loro
+  // catturerebbe il valore vecchio, salvando una bozza gia' superata.
+  const replyTextRef = useRef("")
+  const bersaglioAttivoRef = useRef<{ kind: "conversation" | "gmail_thread"; key: string } | null>(null)
+  // Messaggio per cui la presa in carico e' gia' stata chiesta: `onChange` scatta
+  // a ogni tasto premuto, e senza questo partirebbe una richiesta per lettera.
+  const presaTentataRef = useRef<string | null>(null)
+
+  /** Recupera la bozza condivisa di un messaggio appena aperto. Non sovrascrive
+   *  quello che l'operatore ha gia' nel campo: sarebbe cancellargli il lavoro. */
+  const recuperaBozza = useCallback(
+    async (bersaglio: { kind: "conversation" | "gmail_thread"; key: string }) => {
+      const bozza = await leggiBozzaCondivisa(bersaglio)
+      if (!bozza) {
+        setBozzaAutore(null)
+        return
+      }
+      setReplyText((corrente) => (corrente.trim() ? corrente : bozza.body))
+      setBozzaAutore(bozza.autore)
+    },
+    [leggiBozzaCondivisa],
+  )
+
+  /** Il messaggio e' stato spedito: il campo si svuota e con lui l'avviso della
+   *  bozza, che altrimenti resterebbe appeso a un testo gia' partito. Il blocco
+   *  e la bozza sul server li chiude la rotta di invio. */
+  const azzeraDopoInvio = useCallback(() => {
+    setReplyText("")
+    setBozzaAutore(null)
+    replyTextRef.current = ""
+    presaTentataRef.current = null
+  }, [])
+
+  /** Si sta lasciando un messaggio per aprirne un altro: la bozza va messa in
+   *  salvo e il blocco liberato subito. Senza questo, il messaggio precedente
+   *  resterebbe occupato ai colleghi fino alla scadenza, pur non essendo
+   *  piu' aperto da nessuno. */
+  const lasciaMessaggioPrecedente = useCallback(async () => {
+    const precedente = bersaglioAttivoRef.current
+    if (!precedente) return
+    bersaglioAttivoRef.current = null
+    await sospendiLavorazione(precedente, replyTextRef.current)
+  }, [sospendiLavorazione])
+
   // ── Gmail State ──
   const [gmailThreads, setGmailThreads] = useState<GmailThread[]>([])
   const [gmailLoading, setGmailLoading] = useState(false)
@@ -562,6 +656,12 @@ export default function InboxPage() {
   const [replyChannel, setReplyChannel] = useState("email")
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /** Messaggio che un collega sta gia' lavorando: tiene il bersaglio perche' il
+   *  pulsante "Chiedi il passaggio" deve sapere su cosa chiedere. */
+  const [bloccoRifiutato, setBloccoRifiutato] = useState<{ bersaglio: Bersaglio; label: string } | null>(null)
+  /** Esito dell'ultima richiesta, per dire A CHI e' andata: "richiesta inviata"
+   *  e basta lascerebbe l'operatore ad aspettare senza sapere da chi. */
+  const [esitoPassaggio, setEsitoPassaggio] = useState<string | null>(null)
   const [showReplyBox, setShowReplyBox] = useState(false)
   // Reply recipients (Gmail-style): To is pre-filled from thread, Cc/Bcc toggleable
   const [replyTo, setReplyTo] = useState("")
@@ -570,6 +670,12 @@ export default function InboxPage() {
   const [showCcField, setShowCcField] = useState(false)
   const [showBccField, setShowBccField] = useState(false)
   const [showComposeModal, setShowComposeModal] = useState(false)
+  // Firma dell'operatore. Viene accodata dal SERVER al momento dell'invio: qui
+  // si legge solo per MOSTRARLA sotto al testo, come fa Gmail, cosi' non si
+  // scrive alla cieca senza sapere cosa partira' davvero.
+  // `undefined` = non ancora caricata, `null` = caricata e assente.
+  const [signatureHtml, setSignatureHtml] = useState<string | null | undefined>(undefined)
+
   // Rich-text toolbar + canned (predefined) responses
   const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [cannedResponses, setCannedResponses] = useState<
@@ -791,6 +897,13 @@ export default function InboxPage() {
   const handleSelectGmailThread = useCallback(async (thread: GmailThread) => {
     console.log(`[v0] v771: handleSelectGmailThread START - thread.id=${thread.id}`)
 
+    // Chiude la lavorazione del messaggio che si stava guardando prima, poi
+    // recupera l'eventuale bozza condivisa di questo.
+    await lasciaMessaggioPrecedente()
+    presaTentataRef.current = null
+    setBozzaAutore(null)
+    void recuperaBozza({ kind: "gmail_thread", key: thread.id })
+
     // Reset state for new selection
     setIsThreadReady(false)
     setGmailMessages([])
@@ -857,7 +970,7 @@ export default function InboxPage() {
     } finally {
       setGmailThreadLoading(false)
     }
-  }, [])
+  }, [lasciaMessaggioPrecedente, recuperaBozza])
 
   // Gmail actions - IMPORTANT: This works with THREAD IDs only!
   const handleGmailAction = useCallback(
@@ -917,6 +1030,17 @@ export default function InboxPage() {
       // Optimistically remove archived/trashed/spam threads from the visible list
       if (action === "archive" || action === "trash" || action === "spam") {
         setGmailThreads((prev) => prev.filter((t) => !threadIds.includes(t.id)))
+        // Se il messaggio APERTO e' fra quelli spostati, il dettaglio va chiuso:
+        // altrimenti resterebbe visibile a schermo un messaggio che non e' piu'
+        // nella posta in arrivo, con i pulsanti "Rispondi" ancora attivi.
+        setSelectedGmailThread((aperto) => {
+          if (aperto && threadIds.includes(aperto.id)) {
+            setGmailMessages([])
+            setIsThreadReady(false)
+            return null
+          }
+          return aperto
+        })
       }
       const results = await Promise.allSettled(
         threadIds.map((id) =>
@@ -1115,6 +1239,32 @@ export default function InboxPage() {
     }
   }, [authLoading, adminUser, loadGmailChannels])
 
+  // Carica la firma dell'operatore una sola volta, per mostrarla in fondo alla
+  // risposta. `adminUser.id` e' opzionale nel tipo: senza questa guardia si
+  // chiamerebbe la rotta con "undefined" al posto dell'identificativo.
+  useEffect(() => {
+    if (authLoading || !adminUser?.id) return
+    let annullato = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/admin/users/${adminUser.id}/signature`)
+        if (!res.ok) {
+          // Nessuna firma leggibile non e' un guasto da mostrare: il messaggio
+          // si invia comunque, quindi si degrada in silenzio.
+          if (!annullato) setSignatureHtml(null)
+          return
+        }
+        const data = await res.json()
+        if (!annullato) setSignatureHtml(data.signature_html || data.signature || null)
+      } catch {
+        if (!annullato) setSignatureHtml(null)
+      }
+    })()
+    return () => {
+      annullato = true
+    }
+  }, [authLoading, adminUser?.id])
+
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
     if (inboxMode === "gmail" && !authLoading && adminUser) {
@@ -1221,10 +1371,40 @@ export default function InboxPage() {
     if (fallimentiConsecutiviRef.current >= 2) setGuastoAggiornamento(true)
   }, [])
 
+  // Quante conversazioni si stanno tenendo in elenco.
+  //
+  // L'elenco chiedeva sempre il predefinito (50) e non passava mai `offset`:
+  // con oltre 7.000 conversazioni aperte, la 51esima era irraggiungibile e
+  // nulla lo diceva. Si cresce di 50 alla volta invece di paginare con
+  // `offset` perche' l'ordinamento "intelligente" riordina in base ai non
+  // letti e all'ultimo messaggio: una pagina successiva calcolata a scorrimento
+  // salterebbe o duplicherebbe righe ogni volta che arriva un messaggio.
+  // Primo caricamento leggero come prima (50), ma passo ampio: con un passo da
+  // 50 servivano 19 clic per arrivare in fondo, che e' un altro modo di rendere
+  // irraggiungibili le conversazioni piu' vecchie.
+  const LIMITE_INIZIALE = 50
+  const PASSO_ELENCO = 200
+  const MASSIMO_ELENCO = 1000
+  const [limiteElenco, setLimiteElenco] = useState(LIMITE_INIZIALE)
+  // Il ricarico automatico (poll e realtime) legge il riferimento, non lo stato:
+  // cosi' non perde la profondita' raggiunta e non va riagganciato a ogni "carica altre".
+  const limiteElencoRef = useRef(LIMITE_INIZIALE)
+  // Quale vista corrisponde alla profondita' attuale (filtro, ricerca, canali,
+  // struttura): se cambia, si riparte dalle prime righe.
+  const contestoElencoRef = useRef<string | null>(null)
+  const [altreConversazioniPossibili, setAltreConversazioniPossibili] = useState(false)
+  const [caricandoAltre, setCaricandoAltre] = useState(false)
+
   const loadConversations = useCallback(async (opts?: { automatico?: boolean }) => {
     // Realtime, polling and user actions can all request a refresh. Never let
     // them fan out into concurrent copies of this relatively expensive query.
     if (conversationsLoadInFlightRef.current) return
+
+    // "Bozze" non e' uno stato dei messaggi: chiederlo al server significherebbe
+    // filtrare su un valore che non esiste, ricevere zero risultati e svuotare
+    // l'elenco. Si lascia intatto quello gia' caricato, cosi' aprire una bozza
+    // su un messaggio in vista resta immediato.
+    if (statusFilter === "bozze") return
 
     // `automatico` e' passato esplicitamente solo da poll e realtime. Chi
     // chiama in risposta a un gesto dell'operatore (o passa un evento) non
@@ -1242,6 +1422,19 @@ export default function InboxPage() {
       // Unified inbox: only constrain by channel when a specific one is selected.
       if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
       queryParams.set("mode", "smart")
+      // Cambiare vista riparte dalle prime 50: la profondita' raggiunta vale per
+      // l'elenco che si stava scorrendo, non per un filtro diverso, altrimenti
+      // aprire "Archiviate" scaricherebbe 1.000 righe senza che nessuno le abbia
+      // chieste. Il confronto sta qui, in un punto solo: farlo in un effetto a
+      // parte significherebbe dipendere dall'ordine di esecuzione degli effetti.
+      const contesto = JSON.stringify([statusFilter, searchQuery, inboxSort, channelFilter])
+      if (contestoElencoRef.current !== contesto) {
+        contestoElencoRef.current = contesto
+        limiteElencoRef.current = LIMITE_INIZIALE
+        setLimiteElenco(LIMITE_INIZIALE)
+      }
+      const limiteRichiesto = limiteElencoRef.current
+      queryParams.set("limit", String(limiteRichiesto))
       if (searchQuery) queryParams.set("search", searchQuery)
       // Smart mode: "smart" is the legacy priority sort, others map 1:1 to DB ORDER BY
       queryParams.set("sort", inboxSort)
@@ -1268,7 +1461,12 @@ export default function InboxPage() {
       }
 
       const data = await res.json()
-      setConversations(data.conversations || [])
+      const ricevute = data.conversations || []
+      setConversations(ricevute)
+      // Se ne sono arrivate quante ne erano state chieste, e' probabile che ce
+      // ne siano altre: si offre "carica altre" invece di far credere che
+      // l'elenco finisca li'. `limite.troncato` e' il tetto del server.
+      setAltreConversazioniPossibili(ricevute.length >= limiteRichiesto && limiteRichiesto < MASSIMO_ELENCO)
       fallimentiConsecutiviRef.current = 0
       cicliDaSaltareRef.current = 0
       setGuastoAggiornamento(false)
@@ -1280,6 +1478,21 @@ export default function InboxPage() {
       setIsLoading(false)
     }
   }, [statusFilter, searchQuery, inboxSort, channelFilter])
+
+  const caricaAltreConversazioni = useCallback(async () => {
+    if (caricandoAltre) return
+    setCaricandoAltre(true)
+    const nuovo = Math.min(limiteElencoRef.current + PASSO_ELENCO, MASSIMO_ELENCO)
+    // Il riferimento va aggiornato PRIMA della chiamata: `loadConversations` lo
+    // legge subito, e lo stato di React non sarebbe ancora cambiato.
+    limiteElencoRef.current = nuovo
+    setLimiteElenco(nuovo)
+    try {
+      await loadConversations()
+    } finally {
+      setCaricandoAltre(false)
+    }
+  }, [caricandoAltre, loadConversations])
 
   // Database is the UI source of truth; Gmail ingestion is owned by server
   // webhook/cron jobs, with an explicit manual sync available to the operator.
@@ -1564,12 +1777,19 @@ export default function InboxPage() {
   }, [inboxMode, messages, selectedConversationId, markMessagesAsRead])
 
   const handleSelectConversation = useCallback(async (conv: Conversation) => {
+    // Chiude la lavorazione del messaggio precedente e recupera la bozza
+    // condivisa di questo, prima di caricare i contenuti.
+    await lasciaMessaggioPrecedente()
+    presaTentataRef.current = null
+    setBozzaAutore(null)
+    void recuperaBozza({ kind: "conversation", key: conv.id })
+
     setSelectedConversation(conv)
     setSelectedConversationId(conv.id)
     setMessages([])
     // Load messages for this conversation
     await loadMessages(conv.id, true)
-  }, [loadMessages])
+  }, [loadMessages, lasciaMessaggioPrecedente, recuperaBozza])
 
   const handleToggleStar = async (conv: Conversation, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -1647,8 +1867,14 @@ export default function InboxPage() {
   }
 
   // Bulk actions for the unified list (archive = resolved, spam, mark as read)
-  const handleConversationBulkAction = async (action: "archive" | "spam" | "markAsRead" | "markAsUnread") => {
-    const ids = Array.from(selectedConversationIds)
+  const handleConversationBulkAction = async (
+    action: "archive" | "spam" | "markAsRead" | "markAsUnread",
+    // Bersaglio esplicito. Serve per agire sul messaggio APERTO quando non c'e'
+    // nessuna casella spuntata: la selezione veniva letta solo qui dentro,
+    // quindi passare degli id da fuori non avrebbe avuto alcun effetto.
+    idsArg?: string[],
+  ) => {
+    const ids = idsArg ?? Array.from(selectedConversationIds)
     if (ids.length === 0) return
     try {
       // Single bulk call: the server updates all rows at once and then pushes
@@ -1878,6 +2104,100 @@ export default function InboxPage() {
     requestAnimationFrame(() => replyTextareaRef.current?.focus())
   }
 
+  // Quale messaggio si sta lavorando adesso, nella modalita' attiva.
+  const bersaglioCorrente = useCallback(() => {
+    if (inboxMode === "gmail") {
+      return selectedGmailThread ? ({ kind: "gmail_thread" as const, key: selectedGmailThread.id }) : null
+    }
+    return selectedConversation ? ({ kind: "conversation" as const, key: selectedConversation.id }) : null
+  }, [inboxMode, selectedGmailThread, selectedConversation])
+
+  // I riferimenti seguono lo stato. L'aggiornamento avviene dopo il rendering,
+  // quindi quando si apre un altro messaggio il gestore legge ancora il
+  // bersaglio precedente: e' esattamente quello che serve per metterne in salvo
+  // la bozza prima di cambiare.
+  useEffect(() => {
+    replyTextRef.current = replyText
+  }, [replyText])
+  useEffect(() => {
+    bersaglioAttivoRef.current = bersaglioCorrente()
+  }, [bersaglioCorrente])
+
+  // Presa in carico alla prima battuta.
+  //
+  // Scatta sullo SCRIVERE, non sull'aprire: chi scorre l'inbox per dare
+  // un'occhiata bloccherebbe ogni messaggio che apre, e in pochi minuti l'elenco
+  // risulterebbe tutto occupato da lui. Il segnale che conta e' "sto rispondendo".
+  const assicuraPresaInCarico = useCallback(() => {
+    const b = bersaglioCorrente()
+    if (!b) return
+    const chiave = chiaveBersaglio(b)
+    // Una sola richiesta per messaggio: `onChange` scatta a ogni tasto premuto.
+    if (presaTentataRef.current === chiave) return
+    presaTentataRef.current = chiave
+    void prendiInCarico(b).then((esito) => {
+      if (!esito.ok && esito.label) {
+        // Si registra il bersaglio, non solo un testo: la frase "puoi chiedere il
+        // passaggio" senza un pulsante accanto sarebbe una promessa che il
+        // pannello non mantiene, e per chiederlo serve sapere QUALE messaggio.
+        setBloccoRifiutato({ bersaglio: b, label: esito.label })
+      }
+    })
+  }, [bersaglioCorrente, prendiInCarico])
+
+  // Il blocco rifiutato riguarda UN messaggio: cambiando conversazione la barra
+  // deve sparire, o l'operatore vedrebbe "in lavorazione da Mario" sopra un
+  // messaggio libero e non proverebbe nemmeno a rispondere.
+  useEffect(() => {
+    const b = bersaglioCorrente()
+    if (!bloccoRifiutato) return
+    if (!b || chiaveBersaglio(b) !== chiaveBersaglio(bloccoRifiutato.bersaglio)) {
+      setBloccoRifiutato(null)
+      setEsitoPassaggio(null)
+    }
+  }, [bersaglioCorrente, bloccoRifiutato])
+
+  const handleChiediPassaggio = useCallback(async () => {
+    if (!bloccoRifiutato) return
+    const esito = await chiediPassaggio(bloccoRifiutato.bersaglio)
+    if (!esito.ok) {
+      setEsitoPassaggio(esito.errore ?? "Richiesta non riuscita")
+      return
+    }
+    if (esito.giaAperta) {
+      setEsitoPassaggio("Hai già una richiesta aperta su questo messaggio.")
+      return
+    }
+    // A chi e' andata dipende dal permesso di chi tiene il messaggio, non da chi
+    // chiede: dirlo evita che l'operatore aspetti una risposta dalla persona
+    // sbagliata.
+    setEsitoPassaggio(
+      esito.destinatario === "holder"
+        ? `Richiesta inviata a ${bloccoRifiutato.label}.`
+        : "Richiesta inviata a un amministratore, perché il collega non può concedere il passaggio.",
+    )
+  }, [bloccoRifiutato, chiediPassaggio])
+
+  const handleRispondiPassaggio = useCallback(
+    async (richiestaId: string, concedi: boolean) => {
+      const esito = await rispondiPassaggio(richiestaId, concedi)
+      if (!esito.ok) {
+        toast.error(esito.errore ?? "Risposta non riuscita")
+        return
+      }
+      toast.success(concedi ? "Passaggio concesso: il messaggio è ora libero." : "Richiesta rifiutata.")
+    },
+    [rispondiPassaggio],
+  )
+
+  const registraBozza = useCallback(
+    (testo: string) => {
+      const b = bersaglioCorrente()
+      if (b) salvaBozzaCondivisa(b, testo)
+    },
+    [bersaglioCorrente, salvaBozzaCondivisa],
+  )
+
   const handleSendReply = async () => {
     if (!replyText.trim()) return
 
@@ -1905,7 +2225,7 @@ export default function InboxPage() {
             }),
           })
           if (res.ok) {
-            setReplyText("")
+            azzeraDopoInvio()
             setIsForwarding(false)
             setShowReplyBox(false)
           } else {
@@ -1924,7 +2244,7 @@ export default function InboxPage() {
             }),
           })
           if (res.ok) {
-            setReplyText("")
+            azzeraDopoInvio()
             setIsForwarding(false)
             setShowReplyBox(false)
             await loadMessages(selectedConversation.id, false)
@@ -1951,7 +2271,7 @@ export default function InboxPage() {
           }),
         })
         if (res.ok) {
-          setReplyText("")
+          azzeraDopoInvio()
           setReplyCc("")
           setReplyBcc("")
           setShowCcField(false)
@@ -1975,7 +2295,7 @@ export default function InboxPage() {
           }),
         })
         if (res.ok) {
-          setReplyText("")
+          azzeraDopoInvio()
           await loadMessages(selectedConversation.id, false)
           // Update conversations list to reflect potential unread count changes or last message
           loadConversations()
@@ -2504,16 +2824,32 @@ export default function InboxPage() {
                     onClick={() => setStatusFilter(item.id)}
                   />
                 ))}
-                <div className="my-2 mx-4 border-t border-[#c4c7c5]" />
-                <div className="flex items-center gap-2 pl-4 pr-2">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowDebugPanel(!showDebugPanel)} title="Debug">
-                    <Bug className="h-4 w-4 text-[#444746]" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={performInitialSmartSync} title="Sincronizza nuovi messaggi">
-                    <RefreshCw className={`h-4 w-4 text-[#444746] ${isLoading ? "animate-spin" : ""}`} />
-                  </Button>
-                  {lastSyncStatus && <span className="text-xs text-muted-foreground truncate">{lastSyncStatus}</span>}
-                </div>
+                {/* Le bozze in sospeso non sono uno stato del messaggio ma una
+                    tabella a parte, e l'elenco dei messaggi e' paginato: una
+                    bozza su una conversazione vecchia non comparirebbe mai
+                    scorrendo. Per questo e' una vista propria. Compare solo se
+                    ce n'e' almeno una: una cartella sempre vuota e' rumore. */}
+                {bozzeInSospeso.length > 0 && (
+                  <NavFolder
+                    id="bozze"
+                    label="Bozze"
+                    icon={FileText}
+                    isActive={statusFilter === "bozze"}
+                    unread={bozzeInSospeso.length}
+                    onClick={() => setStatusFilter("bozze")}
+                  />
+                )}
+                {/* Rimossi i due pulsanti senza etichetta che stavano qui sotto una linea
+                    di separazione, in fondo alla colonna delle cartelle:
+                    - il "baco" apriva il pannello di diagnostica tecnico, che resta
+                      raggiungibile dal menu con un'etichetta leggibile ("Mostra/Nascondi
+                      pannello diagnostica"): e' uno strumento tecnico, non un comando d'uso
+                      quotidiano da tenere fra le cartelle;
+                    - la sincronizzazione era un doppione esatto del pulsante identico in
+                      cima all'elenco dei messaggi (che copre sia Gmail sia questa
+                      modalita'), dove uno la cerca davvero.
+                    Erano inoltre privi di testo per i lettori di schermo. L'avviso di esito
+                    della sincronizzazione e' stato spostato accanto al pulsante superstite. */}
               </>
             )}
           </nav>
@@ -2557,7 +2893,17 @@ export default function InboxPage() {
               title={inboxMode === "gmail" ? "Ricarica Gmail" : "Sincronizza nuovi messaggi"}
             >
               <RefreshCw className={`h-4 w-4 text-[#5f6368] ${(gmailLoading || isLoading) ? "animate-spin" : ""}`} />
+              <span className="sr-only">{inboxMode === "gmail" ? "Ricarica Gmail" : "Sincronizza nuovi messaggi"}</span>
             </Button>
+            {/* Esito della sincronizzazione (anche gli errori, es. "Nessun canale Gmail
+                attivo configurato"). Prima era mostrato solo accanto al pulsante duplicato
+                in fondo alla colonna delle cartelle: rimuovendo quel blocco senza spostare
+                questo avviso, un errore di sincronizzazione sarebbe diventato invisibile. */}
+            {lastSyncStatus && (
+              <span className="ml-2 text-xs text-muted-foreground truncate max-w-[220px]" role="status">
+                {lastSyncStatus}
+              </span>
+            )}
             {/* Sort dropdown (Gmail + Smart) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -2687,37 +3033,89 @@ export default function InboxPage() {
                 Works in both Gmail mode and unified (smart) mode, for "Tutti i
                 canali" and any single channel. */}
             {(() => {
-              const count = inboxMode === "gmail" ? selectedGmailThreadIds.size : selectedConversationIds.size
-              const disabled = count === 0
-              // Se TUTTI gli elementi selezionati sono già letti, il pulsante
+              const gmail = inboxMode === "gmail"
+              const count = gmail ? selectedGmailThreadIds.size : selectedConversationIds.size
+
+              /**
+               * Chi subisce l'azione: le caselle spuntate se ce ne sono, ALTRIMENTI
+               * il messaggio aperto.
+               *
+               * Prima i tre pulsanti guardavano solo le caselle spuntate: chi
+               * apriva un messaggio e cercava "Archivia" lo trovava spento, e
+               * l'unica via era tornare all'elenco e spuntare la casella di un
+               * messaggio che aveva davanti agli occhi. Un pulsante visibile ma
+               * inerte non spiega cosa manca, quindi sembra guasto.
+               *
+               * In Gmail si attende che il messaggio sia caricato (`isThreadReady`),
+               * la stessa condizione già usata dalle azioni del dettaglio: agire
+               * su un messaggio ancora in caricamento veniva rifiutato dal server.
+               */
+              const apertoId = gmail
+                ? isThreadReady
+                  ? (selectedGmailThread?.id ?? null)
+                  : null
+                : (selectedConversation?.id ?? null)
+              const suApertoSolo = count === 0 && apertoId !== null
+              const bersaglio: string[] =
+                count > 0
+                  ? gmail
+                    ? Array.from(selectedGmailThreadIds)
+                    : Array.from(selectedConversationIds)
+                  : apertoId
+                    ? [apertoId]
+                    : []
+              const disabled = bersaglio.length === 0
+              // In Gmail un messaggio aperto ma non ancora caricato spegne i
+              // pulsanti: va detto perche', altrimenti sembrano guasti.
+              const inCaricamento = gmail && count === 0 && !!selectedGmailThread && !isThreadReady
+
+              // Se TUTTI i destinatari dell'azione sono già letti, il pulsante
               // offre l'azione inversa: "Segna come da leggere".
               const allSelectedRead =
-                count > 0 &&
-                (inboxMode === "gmail"
-                  ? gmailThreads
-                      .filter((t) => selectedGmailThreadIds.has(t.id))
-                      .every((t) => !t.isUnread)
-                  : conversations
-                      .filter((c) => selectedConversationIds.has(c.id))
-                      .every((c) => (c.unread_count ?? 0) === 0))
+                bersaglio.length > 0 &&
+                (gmail
+                  ? bersaglio.every((id) => {
+                      const inElenco = gmailThreads.find((t) => t.id === id)
+                      // Il messaggio aperto puo' non essere piu' nell'elenco
+                      // (altro filtro, altra pagina): si ricade sul suo stato.
+                      return !(inElenco ?? (selectedGmailThread?.id === id ? selectedGmailThread : null))?.isUnread
+                    })
+                  : bersaglio.every((id) => {
+                      const inElenco = conversations.find((c) => c.id === id)
+                      const rif = inElenco ?? (selectedConversation?.id === id ? selectedConversation : null)
+                      return (rif?.unread_count ?? 0) === 0
+                    }))
               const readAction: "markAsRead" | "markAsUnread" = allSelectedRead ? "markAsUnread" : "markAsRead"
               const run = (action: "archive" | "spam" | "markAsRead" | "markAsUnread") => {
                 if (disabled) return
-                if (inboxMode === "gmail") {
-                  handleGmailBulkAction(action, Array.from(selectedGmailThreadIds))
+                if (gmail) {
+                  handleGmailBulkAction(action, bersaglio)
                 } else {
-                  handleConversationBulkAction(action)
+                  handleConversationBulkAction(action, bersaglio)
                 }
               }
+              const suffisso = (verbo: string) =>
+                inCaricamento
+                  ? "Caricamento del messaggio in corso…"
+                  : disabled
+                    ? `${verbo}: apri un messaggio o selezionane almeno uno`
+                    : suApertoSolo
+                      ? `${verbo} il messaggio aperto`
+                      : `${verbo} i messaggi selezionati (${bersaglio.length})`
               return (
                 <div className="flex items-center gap-1 ml-1">
-                  {count > 0 && (
+                  {count > 0 ? (
                     <span className="text-[13px] text-[#5f6368] tabular-nums mr-1">{count} sel.</span>
-                  )}
+                  ) : suApertoSolo ? (
+                    // Il bersaglio va detto: gli stessi pulsanti, nella stessa
+                    // posizione, agiscono ora su cose diverse.
+                    <span className="hidden md:inline text-[13px] text-[#5f6368] mr-1">questo messaggio</span>
+                  ) : null}
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    title={suffisso("Archivia")}
                     className="text-xs h-7 bg-transparent gap-1"
                     onClick={() => run("archive")}
                   >
@@ -2728,6 +3126,7 @@ export default function InboxPage() {
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    title={suffisso("Segnala come spam")}
                     className="text-xs h-7 bg-transparent gap-1"
                     onClick={() => run("spam")}
                   >
@@ -2738,6 +3137,7 @@ export default function InboxPage() {
                     variant="outline"
                     size="sm"
                     disabled={disabled}
+                    title={suffisso(allSelectedRead ? "Segna come da leggere" : "Segna come letto")}
                     className="text-xs h-7 bg-transparent gap-1"
                     onClick={() => run(readAction)}
                   >
@@ -2755,11 +3155,13 @@ export default function InboxPage() {
                 <span className="text-[13px] text-[#5f6368] tabular-nums mr-2">
                   {gmailThreads.length > 0 ? `${(gmailCurrentPage - 1) * 100 + 1}–${(gmailCurrentPage - 1) * 100 + gmailThreads.length} di ${gmailDebugInfo?.rawThreadsCount || gmailThreads.length}` : "0"}
                 </span>
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading}>
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailPrevPage} disabled={gmailCurrentPage === 1 || gmailLoading} title="Pagina precedente">
                   <ChevronLeft className="h-5 w-5 text-[#5f6368]" />
+                  <span className="sr-only">Pagina precedente</span>
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading}>
+                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={handleGmailNextPage} disabled={!gmailNextPageToken || gmailLoading} title="Pagina successiva">
                   <ChevronRight className="h-5 w-5 text-[#5f6368]" />
+                  <span className="sr-only">Pagina successiva</span>
                 </Button>
               </div>
             )}
@@ -2789,15 +3191,130 @@ export default function InboxPage() {
               descendants (e.g. Tailwind `sr-only` spans in each row). Without it
               those abs spans anchor to <html>, inflating document height and
               producing a second, page-level scrollbar. */}
+          {/* Richieste di passaggio ricevute: fuori dall'area che scorre, o
+              scorrendo l'elenco l'operatore perderebbe di vista la richiesta di
+              un collega che sta aspettando una risposta. */}
+          <RichiestePassaggio
+            richieste={richiesteDaGestire}
+            inCorso={passaggioInCorso}
+            onRispondi={handleRispondiPassaggio}
+          />
           <div className="relative flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
             {(selectedGmailThread || selectedConversation) ? (
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
               <div className="flex flex-col h-full">
                 {/* Subject header */}
                 <div className="px-6 py-4 border-b border-border overflow-hidden">
-                  <h1 className="text-xl font-normal text-[#202124] truncate">
-                    {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
-                  </h1>
+                  <div className="flex items-start justify-between gap-3">
+                    <h1 className="text-xl font-normal text-[#202124] truncate">
+                      {selectedGmailThread?.subject || selectedConversation?.subject || "(nessun oggetto)"}
+                    </h1>
+                    {/* Azioni sulla conversazione aperta.
+                        I gestori esistevano gia' ed erano scritti proprio per questa vista
+                        (azzerano la selezione dopo l'azione), ma nessun pulsante li chiamava:
+                        da qui non si poteva ne' archiviare ne' eliminare senza tornare alla
+                        lista e usare le caselle di selezione. */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {inboxMode === "gmail" && selectedGmailThread ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={selectedGmailThread.isStarred ? "Togli stella" : "Aggiungi stella"}
+                            onClick={() => handleGmailStarToggle(selectedGmailThread)}
+                          >
+                            <Star className={`h-4 w-4 ${selectedGmailThread.isStarred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground"}`} />
+                            <span className="sr-only">{selectedGmailThread.isStarred ? "Togli stella" : "Aggiungi stella"}</span>
+                          </Button>
+                          {gmailLabelId === "SPAM" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              /* I gestori Gmail richiedono il thread completamente caricato:
+                                 disabilitare e' piu' chiaro di un messaggio d'errore dopo il clic. */
+                              disabled={!isThreadReady}
+                              title={isThreadReady ? "Non è spam" : "Caricamento in corso…"}
+                              onClick={() => handleGmailNotSpam(selectedGmailThread)}
+                            >
+                              <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                              <span className="sr-only">Non è spam</span>
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Archivia" : "Caricamento in corso…"}
+                            onClick={() => handleGmailArchive(selectedGmailThread)}
+                          >
+                            <Archive className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Archivia</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Sposta nel cestino" : "Caricamento in corso…"}
+                            onClick={() => handleGmailTrash(selectedGmailThread)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Sposta nel cestino</span>
+                          </Button>
+                          {/* Ultimo gestore che era rimasto senza pulsante: aprire un
+                              messaggio lo segna come letto, e senza questo comando non
+                              c'era modo di rimetterlo fra i non letti per riprenderlo poi. */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={!isThreadReady}
+                            title={isThreadReady ? "Segna come non letto" : "Caricamento in corso…"}
+                            onClick={() => handleGmailMarkAsRead(selectedGmailThread, true)}
+                          >
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Segna come non letto</span>
+                          </Button>
+                        </>
+                      ) : selectedConversation ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title={selectedConversation.is_starred ? "Togli stella" : "Aggiungi stella"}
+                            onClick={() => handleToggleStar(selectedConversation)}
+                          >
+                            <Star className={`h-4 w-4 ${selectedConversation.is_starred ? "fill-yellow-400 text-ha-warning-soft-foreground" : "text-muted-foreground"}`} />
+                            <span className="sr-only">{selectedConversation.is_starred ? "Togli stella" : "Aggiungi stella"}</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Archivia"
+                            onClick={() => handleArchive(selectedConversation.id)}
+                          >
+                            <Archive className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Archivia</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Segna come spam"
+                            onClick={() => handleMarkAsSpam(selectedConversation.id)}
+                          >
+                            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Segna come spam</span>
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">Posta in arrivo</span>
                   </div>
@@ -2842,9 +3359,11 @@ export default function InboxPage() {
                                     contextTitle={selectedConversation?.contact?.name || selectedConversation?.subject || undefined}
                                   />
                                 )}
-                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0">
-                                  <Star className="h-4 w-4 text-muted-foreground" />
-                                </Button>
+                                {/* La stella per-messaggio e' stata rimossa: era priva di
+                                    gestore (un clic non faceva nulla) e non poteva funzionare,
+                                    perche' la stella e' memorizzata per CONVERSAZIONE
+                                    (`conversations.is_starred`), non per messaggio. La stella
+                                    che funziona e' nell'intestazione del thread, qui sotto. */}
                               </div>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5 truncate">a {message.to || "me"}</div>
@@ -3083,17 +3602,77 @@ export default function InboxPage() {
       </DropdownMenuContent>
     </DropdownMenu>
   </div>
+  {bozzaAutore && (
+  // Il testo nel campo non e' stato scritto da chi sta guardando: dirlo evita
+  // che venga spedito credendolo proprio, o cancellato credendolo un residuo.
+  <div className="flex items-center gap-2 border-b border-ha-warning-soft-foreground/20 bg-ha-warning-soft px-3 py-1.5 text-xs text-ha-warning-soft-foreground">
+  <FileText className="h-3.5 w-3.5 flex-shrink-0" />
+  <span>Bozza iniziata da {bozzaAutore}. Le modifiche sono visibili a tutti.</span>
+  </div>
+  )}
+  {bloccoRifiutato && (
+  // Il collega sta scrivendo su questo stesso messaggio. Il campo NON viene
+  // disabilitato: il testo gia' battuto resta come bozza condivisa, e togliere
+  // la tastiera non impedirebbe la doppia risposta (quella la impedisce il
+  // vincolo sul blocco) mentre farebbe perdere quello che l'operatore ha scritto.
+  <div className="flex flex-wrap items-center gap-2 border-b border-ha-warning-soft-foreground/20 bg-ha-warning-soft px-3 py-2 text-xs text-ha-warning-soft-foreground">
+  <Users className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+  <span className="min-w-0 flex-1">
+  In lavorazione da {bloccoRifiutato.label}. {esitoPassaggio ?? "Puoi chiedere il passaggio."}
+  </span>
+  {!hoGiaChiesto(bloccoRifiutato.bersaglio) && (
+  <Button
+  size="sm"
+  variant="outline"
+  className="h-7 bg-transparent text-xs"
+  disabled={passaggioInCorso === chiaveBersaglio(bloccoRifiutato.bersaglio)}
+  onClick={handleChiediPassaggio}
+  >
+  Chiedi il passaggio
+  </Button>
+  )}
+  </div>
+  )}
   <Textarea
   ref={replyTextareaRef}
   placeholder={isForwarding ? "Aggiungi un messaggio e inoltra..." : "Scrivi una risposta..."}
   value={replyText}
-  onChange={(e) => setReplyText(e.target.value)}
+  onChange={(e) => {
+  setReplyText(e.target.value)
+  // Prende in carico appena c'e' del testo vero: uno spazio battuto per
+  // sbaglio non e' "sto rispondendo".
+  if (e.target.value.trim()) assicuraPresaInCarico()
+  // La bozza si salva anche quando si cancella tutto: se un operatore svuota il
+  // campo, la bozza condivisa deve svuotarsi con lui, non restare congelata su
+  // un testo che nessuno vuole piu' inviare.
+  registraBozza(e.target.value)
+  }}
   className="min-h-[120px] border-0 focus-visible:ring-0 resize-none"
   autoFocus
   onKeyDown={(e) => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSendReply()
   }}
   />
+                      {/* La firma la aggiunge il server all'invio: mostrarla qui
+                          rende visibile cio' che partira' davvero. Non e'
+                          modificabile, per non far credere che si possa
+                          correggere solo per questo messaggio: si cambia in
+                          Utenti. Reso solo quando c'e' davvero, cosi' chi non
+                          l'ha impostata non vede uno spazio vuoto inspiegabile. */}
+                      {signatureHtml ? (
+                        <div className="px-3 pb-3">
+                          <div className="border-t border-dashed border-border pt-2">
+                            <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Firma aggiunta automaticamente
+                            </p>
+                            <div
+                              className="ha-signature text-sm text-muted-foreground [&_a]:underline [&_img]:max-h-16 [&_img]:w-auto"
+                              // Ripulito dal server (in scrittura e in lettura).
+                              dangerouslySetInnerHTML={{ __html: signatureHtml }}
+                            />
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="flex items-center justify-between px-3 py-2 border-t border-border">
                         <Button
                           onClick={handleSendReply}
@@ -3104,8 +3683,9 @@ export default function InboxPage() {
                           {isForwarding ? "Inoltra" : "Invia"}
                         </Button>
                         <div className="flex items-center gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()}>
+                          <Button variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} title="Allega file">
                             <Paperclip className="h-4 w-4 text-muted-foreground" />
+                            <span className="sr-only">Allega file</span>
                           </Button>
                           <Button
                             variant="ghost"
@@ -3151,11 +3731,15 @@ export default function InboxPage() {
                   </div>
                 ) : (
                 <>
-                  {sortedGmailThreads.map((thread) => (
+                  {sortedGmailThreads.map((thread) => {
+                    // Stessa regola del multicanale, su bersaglio 'gmail_thread'.
+                    const lavorazione = lavorazioni.get(chiaveBersaglio({ kind: "gmail_thread", key: thread.id }))
+                    const occupatoDaAltri = Boolean(lavorazione && !lavorazione.mio)
+                    return (
                     <div
                       key={thread.id}
                       onClick={() => handleSelectGmailThread(thread)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
+                      className={`relative flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group w-full max-w-full min-w-0 overflow-hidden ${
                         (selectedGmailThread as GmailThread | null)?.id === thread.id
                           ? "bg-[#d3e3fd]"
                           : thread.isUnread
@@ -3190,10 +3774,53 @@ export default function InboxPage() {
                       <span className={`text-[11px] flex-shrink-0 min-w-[42px] text-right ${thread.isUnread ? "font-bold text-[#202124]" : "text-muted-foreground"}`}>
                         {format(new Date(thread.date), "d MMM", { locale: it })}
                       </span>
+                      {occupatoDaAltri && lavorazione && (
+                        <div className="absolute inset-0 flex items-center justify-end gap-2 bg-background/60 pr-3 pointer-events-none">
+                          <InLavorazioneBadge label={lavorazione.label} compatto />
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
                 </>
               )
+            ) : statusFilter === "bozze" ? (
+              <VistaBozze
+                bozze={bozzeInSospeso}
+                onApri={async (bozza) => {
+                  // Si apre il messaggio col gestore di selezione, unico punto in
+                  // cui la bozza viene recuperata: duplicare qui il recupero
+                  // vorrebbe dire due comportamenti da tenere allineati.
+                  const inElenco = conversations.find((c) => c.id === bozza.bersaglio.key)
+                  if (inElenco) {
+                    setStatusFilter("open")
+                    void handleSelectConversation(inElenco)
+                    return
+                  }
+                  // Fuori dalla pagina caricata (o in un altro stato): la si
+                  // chiede per id. Senza questo il click porterebbe a una
+                  // schermata vuota, cioe' un vicolo cieco proprio nel caso per
+                  // cui la vista esiste: la bozza su un messaggio vecchio.
+                  try {
+                    const res = await fetch(`/api/inbox/conversations?ids=${bozza.bersaglio.key}&mode=smart`)
+                    const dati = await res.json().catch(() => ({}))
+                    // Si cerca l'id chiesto invece di prendere il primo elemento:
+                    // la risposta viene riordinata a valle, e prendere il primo
+                    // aprirebbe in silenzio il messaggio sbagliato invece di
+                    // segnalare che quello giusto non e' arrivato.
+                    const conv = (dati?.conversations ?? []).find((c: any) => c.id === bozza.bersaglio.key)
+                    if (conv) {
+                      setStatusFilter("open")
+                      setConversations((prev) => (prev.some((c) => c.id === conv.id) ? prev : [conv, ...prev]))
+                      void handleSelectConversation(conv)
+                    } else {
+                      toast.error("La conversazione di questa bozza non è più accessibile")
+                    }
+                  } catch {
+                    toast.error("Apertura non riuscita: riprova tra poco")
+                  }
+                }}
+              />
             ) : (
               isLoading ? (
                 <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
@@ -3204,11 +3831,17 @@ export default function InboxPage() {
                 </div>
               ) : (
                 <>
-                  {conversations.map((conv) => (
+                  {conversations.map((conv) => {
+                    // Lavorazione di un collega su questa conversazione. La
+                    // propria non conta: offuscare a un operatore il messaggio
+                    // che sta scrivendo lui stesso sarebbe assurdo.
+                    const lavorazione = lavorazioni.get(chiaveBersaglio({ kind: "conversation", key: conv.id }))
+                    const occupatoDaAltri = Boolean(lavorazione && !lavorazione.mio)
+                    return (
                     <div
                       key={conv.id}
                       onClick={() => handleSelectConversation(conv)}
-                      className={`flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group min-w-0 ${
+                      className={`relative flex items-center gap-1 px-2 py-2 cursor-pointer border-b border-border transition-colors group min-w-0 ${
                         (selectedConversation as Conversation | null)?.id === conv.id
                           ? "bg-[#d3e3fd]"
                           : conv.unread_count > 0
@@ -3288,6 +3921,30 @@ export default function InboxPage() {
                           </span>
                         )}
                         {/*
+                          Riconoscimento anagrafica: "da verificare" quando piu'
+                          schede corrispondono e la scelta spetta a una persona,
+                          "collegata" quando il sistema ha modificato il CRM da
+                          se'. In entrambi i casi l'operatore deve poterlo vedere
+                          dall'elenco, senza aprire la conversazione.
+                        */}
+                        {conv.metadata?.crm_segnalazione?.tipo && (
+                          <span
+                            className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                              conv.metadata.crm_segnalazione.tipo === "ambigua" ||
+                              conv.metadata.crm_segnalazione.tipo === "da_confermare"
+                                ? "bg-ha-warning-soft text-ha-warning-soft-foreground"
+                                : "bg-ha-info-soft text-ha-info-soft-foreground"
+                            }`}
+                            title={conv.metadata.crm_segnalazione.testo || "Segnalazione anagrafica"}
+                          >
+                            {conv.metadata.crm_segnalazione.tipo === "ambigua"
+                              ? "Anagrafica da verificare"
+                              : conv.metadata.crm_segnalazione.tipo === "da_confermare"
+                                ? "Collegamento da confermare"
+                              : "Anagrafica collegata"}
+                          </span>
+                        )}
+                        {/*
                           The subject must win the space fight. Both spans used to
                           shrink equally, so a long preview squeezed the subject
                           down to a single visible character. `shrink-0` up to a
@@ -3334,8 +3991,43 @@ export default function InboxPage() {
                           ) : null
                         })()}
                       </span>
+                      {occupatoDaAltri && lavorazione && (
+                        // Velo semitrasparente invece di attenuare la riga:
+                        // attenuando il contenitore si attenuerebbe anche
+                        // l'etichetta, cioe' l'unica cosa che deve restare
+                        // leggibile. Non intercetta i clic (`pointer-events-none`)
+                        // perche' il collega deve poter aprire per chiedere il
+                        // passaggio: sbarrare l'accesso sarebbe un vicolo cieco.
+                        <div className="absolute inset-0 flex items-center justify-end gap-2 bg-background/60 pr-3 pointer-events-none">
+                          <InLavorazioneBadge label={lavorazione.label} compatto />
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    )
+                  })}
+                  {altreConversazioniPossibili ? (
+                    <div className="p-3 border-b border-border">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={caricaAltreConversazioni}
+                        disabled={caricandoAltre}
+                      >
+                        {caricandoAltre ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                        Carica altre conversazioni
+                      </Button>
+                    </div>
+                  ) : limiteElenco >= MASSIMO_ELENCO ? (
+                    // Il tetto va detto, non subito in silenzio: chi ha migliaia
+                    // di conversazioni deve sapere che alle precedenti si arriva
+                    // con la ricerca, non credere che l'elenco finisca qui.
+                    <div className="px-3 py-4 text-center">
+                      <p className="text-xs text-muted-foreground text-pretty">
+                        Caricate le {MASSIMO_ELENCO} conversazioni piu&apos; recenti. Per le precedenti usa la ricerca.
+                      </p>
+                    </div>
+                  ) : null}
                 </>
               )
             )

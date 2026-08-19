@@ -12,8 +12,38 @@ export async function generateMetadata(): Promise<Metadata> {
   const isPlatform = await isPlatformDomain()
   if (isPlatform) {
     return {
-      title: "HotelAccelerator - Piattaforma SaaS per Hotel",
-      description: "La piattaforma all-in-one per hotel: CMS, CRM, Email Marketing, Inbox Omnicanale e AI.",
+      title: { absolute: "Software gestionale modulare per hotel | HotelAccelerator" },
+      description:
+        "Inbox Gmail, CRM alberghiero, CMS, tracking e AI assistita in moduli attivati in base al tenant e alle integrazioni realmente configurate.",
+      metadataBase: new URL("https://www.hotelaccelerator.com"),
+      alternates: {
+        canonical: "https://www.hotelaccelerator.com",
+        languages: { "it-IT": "https://www.hotelaccelerator.com" },
+      },
+      openGraph: {
+        type: "website",
+        locale: "it_IT",
+        url: "https://www.hotelaccelerator.com",
+        siteName: "HotelAccelerator",
+        title: "Software gestionale modulare per hotel | HotelAccelerator",
+        description:
+          "Inbox Gmail, CRM alberghiero, CMS, tracking e AI assistita, con stato delle funzioni e verifiche dichiarati.",
+        images: [
+          {
+            url: "/og-image.png",
+            width: 1200,
+            height: 630,
+            alt: "HotelAccelerator - software gestionale modulare per hotel",
+          },
+        ],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: "Software gestionale modulare per hotel | HotelAccelerator",
+        description: "Inbox Gmail, CRM, CMS, tracking e AI assistita con attivazione guidata.",
+        images: ["/og-image.png"],
+      },
+      robots: { index: true, follow: true },
     }
   }
 

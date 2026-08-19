@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = {
   title: {
-    default: "HotelAccelerator - Software Gestionale per Hotel",
+    default: "Software gestionale modulare per hotel | HotelAccelerator",
     template: "%s | HotelAccelerator",
   },
   robots: {

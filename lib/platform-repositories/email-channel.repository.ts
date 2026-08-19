@@ -101,12 +101,24 @@ export class EmailChannelRepository {
     return decryptEmailChannelSecrets(data)
   }
 
-  async findByEmail(emailAddress: string): Promise<EmailChannel | null> {
-    const { data, error } = await this.supabase
-      .from("email_channels")
-      .select("*")
-      .eq("email_address", emailAddress)
-      .maybeSingle()
+  /**
+   * Cerca un canale per indirizzo.
+   *
+   * `propertyId` e' opzionale solo per compatibilita' con i chiamanti esistenti,
+   * ma va passato sempre: senza filtro la ricerca attraversa le strutture, e due
+   * alberghi che collegano la stessa casella condivisa finirebbero sulla STESSA
+   * riga (la riconnessione di uno scriverebbe i propri token nel canale
+   * dell'altro, e al secondo verrebbe detto che l'indirizzo e' "gia'
+   * configurato" pur non avendolo mai collegato).
+   */
+  async findByEmail(emailAddress: string, propertyId?: string): Promise<EmailChannel | null> {
+    let query = this.supabase.from("email_channels").select("*").eq("email_address", emailAddress)
+
+    if (propertyId) {
+      query = query.eq("property_id", propertyId)
+    }
+
+    const { data, error } = await query.maybeSingle()
 
     if (error) throw error
     return decryptEmailChannelSecrets(data)

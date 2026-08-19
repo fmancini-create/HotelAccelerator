@@ -1,250 +1,126 @@
-import type { Metadata } from "next"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import {
-  Users,
-  ArrowRight,
-  CheckCircle,
-  UserPlus,
-  Tags,
-  TrendingUp,
-  History,
-  Mail,
-  Target,
-  Heart,
-} from "lucide-react"
-import { PlatformFooter } from "@/components/platform-footer"
-import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
+import { BookOpenCheck, Gauge, Hotel, MailPlus, Search, ShieldCheck, UsersRound } from "lucide-react"
+import { buildFeatureMetadata, FeatureLandingPage } from "@/components/platform/feature-landing-page"
 
-export const metadata: Metadata = {
-  title: "CRM per Hotel - Gestione Clienti e Prenotazioni | HotelAccelerator",
-  description:
-    "CRM alberghiero professionale per gestire contatti, segmentare ospiti, tracciare prenotazioni e aumentare la fidelizzazione. Lead scoring automatico, storico completo, +45% retention rate.",
+const description =
+  "Centralizza contatti, consensi, segmenti e storico soggiorni. HotelAccelerator collega inbox e CRM e prepara la sincronizzazione con il PMS configurato."
+
+export const metadata = buildFeatureMetadata({
+  slug: "crm",
+  title: "CRM alberghiero per ospiti e soggiorni",
+  description,
   keywords: [
-    "crm hotel",
     "crm alberghiero",
-    "gestione clienti hotel",
-    "software prenotazioni hotel",
-    "fidelizzazione ospiti",
-    "lead scoring hotel",
-    "customer relationship management hotel",
+    "crm per hotel",
+    "gestione ospiti hotel",
     "database clienti hotel",
+    "storico soggiorni",
+    "consensi marketing hotel",
   ],
-  openGraph: {
-    title: "CRM per Hotel - Conosci i Tuoi Ospiti | HotelAccelerator",
-    description: "CRM alberghiero professionale. Gestione contatti, segmentazione, lead scoring. +45% retention rate.",
-    type: "website",
-  },
-  alternates: {
-    canonical: "https://hotelaccelerator.com/features/crm",
-  },
-}
+})
 
-const features = [
+const capabilities = [
   {
-    icon: UserPlus,
-    title: "Database Centralizzato",
-    description: "Tutti i contatti in un unico posto. Importa da Excel, PMS, booking engine. Deduplica automatica.",
+    icon: UsersRound,
+    title: "Anagrafica ospiti",
+    description:
+      "Crea e modifica contatti separati per struttura, con recapiti, tag, livello VIP e informazioni utili al team.",
   },
   {
-    icon: Tags,
-    title: "Segmentazione Avanzata",
-    description: "Crea segmenti dinamici: famiglie, business, repeater, VIP. Filtra per comportamento e preferenze.",
+    icon: Search,
+    title: "Ricerca e filtri",
+    description:
+      "Cerca per nome, email o azienda e filtra i contatti per livello VIP senza uscire dall'area CRM.",
   },
   {
-    icon: TrendingUp,
-    title: "Lead Scoring Automatico",
-    description: "Identifica i contatti più promettenti. Score basato su engagement, storico, valore potenziale.",
+    icon: ShieldCheck,
+    title: "Consensi visibili",
+    description:
+      "Il CRM conserva stato del consenso marketing e disiscrizione, così il team può distinguere i contatti utilizzabili.",
   },
   {
-    icon: History,
-    title: "Storico Completo",
-    description: "Ogni interazione registrata: email, chiamate, prenotazioni, preferenze. Timeline cronologica.",
+    icon: Hotel,
+    title: "Soggiorni e valore",
+    description:
+      "La scheda contatto può mostrare soggiorni, prenotazioni e ricavi quando questi dati sono stati importati dalla fonte autorizzata.",
   },
   {
-    icon: Mail,
-    title: "Comunicazione Integrata",
-    description: "Invia email, WhatsApp, SMS direttamente dal CRM. Template personalizzati per ogni segmento.",
+    icon: MailPlus,
+    title: "Contatti dall'inbox",
+    description:
+      "Le email possono creare o collegare il contatto corretto, escludendo mittenti automatici e rispettando le impostazioni del tenant.",
   },
   {
-    icon: Target,
-    title: "Tracking Conversioni",
-    description: "Misura il ROI di ogni campagna. Attribution model per capire cosa funziona davvero.",
+    icon: Gauge,
+    title: "KPI del database",
+    description:
+      "Totale contatti, consensi, VIP, prenotazioni, ricavi e punteggio medio vengono calcolati sui dati realmente presenti.",
   },
 ]
 
-const benefits = [
-  { metric: "+45%", label: "Retention rate" },
-  { metric: "360°", label: "Vista cliente" },
-  { metric: "Auto", label: "Lead scoring" },
-  { metric: "∞", label: "Contatti" },
+const faqs = [
+  {
+    question: "Il CRM importa automaticamente tutti gli ospiti dal PMS?",
+    answer:
+      "La sincronizzazione PMS è presente come flusso configurabile, ma viene attivata e collaudata per il connettore del singolo tenant. Scidoo è il primo adapter previsto; non tutti i PMS sono automaticamente compatibili.",
+  },
+  {
+    question: "Il lead score viene calcolato automaticamente?",
+    answer:
+      "Il CRM conserva e visualizza il campo di punteggio quando disponibile. Il sito non promette un motore automatico di lead scoring finché regole, test e origine del dato non sono verificati.",
+  },
+  {
+    question: "Posso creare segmenti di contatti?",
+    answer:
+      "È possibile salvare definizioni di segmento. La valutazione dinamica delle condizioni e il filtro completo dei membri sono ancora in consolidamento.",
+  },
+  {
+    question: "I contatti sono separati tra strutture?",
+    answer:
+      "Le API CRM applicano lo scope della struttura e i permessi dell'area. L'isolamento va comunque verificato nel collaudo del tenant prima di dichiarare il flusso production-ready.",
+  },
 ]
 
-export default function CRMLandingPage() {
+export default function CrmLandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Schema.org */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            name: "HotelAccelerator CRM",
-            applicationCategory: "BusinessApplication",
-            description: "CRM alberghiero per gestione clienti e prenotazioni",
-            operatingSystem: "Web",
-          }),
-        }}
-      />
-
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-        <nav className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <HotelAcceleratorMark className="h-8 w-8" priority />
-            <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/admin">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Accedi
-              </Button>
-            </Link>
-            <Link href="/request-access">
-              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Richiedi Demo
-              </Button>
-            </Link>
-          </div>
-        </nav>
-      </header>
-
-      {/* Hero */}
-      <section className="pt-32 pb-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-16">
-            <Link href="/" className="mx-auto mb-6 flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-              <ArrowRight className="h-4 w-4 rotate-180" />
-              Torna alla home
-            </Link>
-            <div className="mx-auto flex w-fit items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand mb-8">
-              <Users className="h-4 w-4" />
-              CRM Alberghiero
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 text-balance">
-              Conosci i tuoi ospiti come mai prima
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              Un CRM progettato per hotel che ti permette di <strong>segmentare, personalizzare e fidelizzare</strong>.
-              Aumenta la retention del 45% con comunicazioni mirate.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/request-access">
-                <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                  Prova il CRM
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-12 border-y border-border">
-            {benefits.map((benefit) => (
-              <div key={benefit.label} className="text-center">
-                <div className="text-3xl font-bold text-ha-brand mb-1">{benefit.metric}</div>
-                <div className="text-sm text-muted-foreground">{benefit.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Il CRM che capisce l'hospitality</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Funzionalità pensate per chi gestisce hotel, B&B e strutture ricettive
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <article key={feature.title} className="p-6 rounded-2xl bg-secondary/50 border border-border">
-                <div className="w-12 h-12 rounded-xl bg-ha-brand-soft flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-ha-brand" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm">{feature.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Benefits */}
-      <section className="py-24 px-4 bg-card/[0.02]">
-        <div className="container mx-auto max-w-5xl">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl font-bold mb-6">Trasforma i dati in relazioni</h2>
-              <ul className="space-y-4">
-                <li className="flex items-start gap-3">
-                  <CheckCircle className="h-5 w-5 text-ha-brand mt-0.5" />
-                  <div>
-                    <div className="font-medium">Riconosci gli ospiti di ritorno</div>
-                    <div className="text-sm text-muted-foreground">Salutali per nome, conosci le loro preferenze.</div>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle className="h-5 w-5 text-ha-brand mt-0.5" />
-                  <div>
-                    <div className="font-medium">Anticipa le loro esigenze</div>
-                    <div className="text-sm text-muted-foreground">Camera preferita, allergie, orari di arrivo.</div>
-                  </div>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle className="h-5 w-5 text-ha-brand mt-0.5" />
-                  <div>
-                    <div className="font-medium">Comunica al momento giusto</div>
-                    <div className="text-sm text-muted-foreground">Offerte personalizzate basate sul comportamento.</div>
-                  </div>
-                </li>
-              </ul>
-            </div>
-            <div className="p-6 rounded-2xl bg-secondary/50 border border-border">
-              <Heart className="h-12 w-12 text-ha-brand mb-4" />
-              <blockquote className="text-lg italic text-muted-foreground mb-4">
-                "Da quando usiamo il CRM di HotelAccelerator, il 60% delle nostre prenotazioni viene da ospiti di
-                ritorno."
-              </blockquote>
-              <div className="text-sm text-muted-foreground">- Hotel Belvedere, Firenze</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-ha-brand/20 to-ha-brand-soft border border-ha-brand/20">
-            <Users className="h-12 w-12 text-ha-brand mx-auto mb-6" />
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">Inizia a conoscere i tuoi ospiti</h2>
-            <p className="text-muted-foreground mb-8">Demo gratuita con i tuoi dati. Vedi subito il potenziale del CRM.</p>
-            <Link href="/request-access">
-              <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                Richiedi Demo Gratuita
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <PlatformFooter />
-    </div>
+    <FeatureLandingPage
+      slug="crm"
+      eyebrow="CRM alberghiero"
+      icon={BookOpenCheck}
+      title="Un profilo ospite unico per contatti, consensi e soggiorni"
+      intro="Il CRM di HotelAccelerator riunisce anagrafiche e dati operativi della struttura, collegando le conversazioni ai contatti e mostrando solo le informazioni realmente disponibili."
+      statusLabel="Anagrafiche e KPI presenti nell'area riservata"
+      statusDescription="La sincronizzazione con PMS, le regole di segmentazione e la qualità dei dati vengono verificate per ogni struttura durante l'onboarding."
+      capabilitiesTitle="Le funzioni CRM già presenti"
+      capabilitiesIntro="Nessuna promessa generica di retention o aumento dei ricavi: il valore dipende dalla qualità dei dati e dai processi adottati dal team."
+      capabilities={capabilities}
+      availableNow={[
+        "Creazione, modifica, ricerca e filtri dei contatti per tenant.",
+        "Consenso marketing, stato di disiscrizione, tag e livello VIP.",
+        "Scheda con soggiorni e KPI aggregati quando i dati sono presenti.",
+        "Collegamento e acquisizione controllata dei contatti dalle email.",
+      ]}
+      requiresVerification={[
+        "Configurazione e collaudo del connettore PMS della struttura.",
+        "Valutazione dinamica dei segmenti e loro uso come destinatari di campagna.",
+        "Regole di calcolo del lead score e provenienza del dato.",
+      ]}
+      faqs={faqs}
+      related={[
+        {
+          href: "/features/inbox-omnicanale",
+          title: "Inbox per hotel",
+          description: "Collega conversazioni email e lavoro del team ai profili ospite.",
+        },
+        {
+          href: "/features/email-marketing",
+          title: "Campagne email",
+          description: "Prepara campagne usando dati e consensi del CRM verificati.",
+        },
+      ]}
+      ctaTitle="Verifichiamo insieme dati e PMS"
+      ctaDescription="La demo parte dal database ospiti e dal connettore disponibile, così distinguiamo subito ciò che è attivabile da ciò che richiede integrazione."
+      schemaName="CRM alberghiero per contatti, consensi e soggiorni"
+      schemaDescription={description}
+    />
   )
 }

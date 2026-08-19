@@ -54,8 +54,15 @@ export async function GET(request: NextRequest) {
         if (res.error) {
           console.error(`[v0][poll-email] ${res.email}: ${res.error}`)
         } else {
+          // Le riconciliazioni fallite compaiono NELLA riga di riepilogo: prima
+          // finivano solo in una `console.error` separata, mentre il riepilogo
+          // diceva `err=0` e `stars+0/-0` — indistinguibile da "tutto bene,
+          // nulla da fare". Chi legge i log vedeva una riga sana.
+          const riconciliazioniFallite = res.reconcileFailures?.length
+            ? ` reconcile-FALLITE=${res.reconcileFailures.join(",")}`
+            : ""
           console.log(
-            `[v0][poll-email] ${res.email}: scanned=${res.scanned} imported=${res.imported} dup=${res.duplicates} err=${res.errors} stars+${res.starsAdded ?? 0}/-${res.starsRemoved ?? 0} spam=${res.spamSynced ?? 0} trash=${res.trashSynced ?? 0} restored=${res.restored ?? 0} read=${res.readSynced ?? 0}`,
+            `[v0][poll-email] ${res.email}: scanned=${res.scanned} imported=${res.imported} dup=${res.duplicates} err=${res.errors} stars+${res.starsAdded ?? 0}/-${res.starsRemoved ?? 0} spam=${res.spamSynced ?? 0} trash=${res.trashSynced ?? 0} restored=${res.restored ?? 0} read=${res.readSynced ?? 0}${riconciliazioniFallite}`,
           )
         }
         results.push(res)

@@ -1,0 +1,509 @@
+"use client"
+
+import { useState, useEffect, use } from "react"
+import { Mail, MessageSquare, Phone, Plus, Trash2, AlertTriangle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import Link from "next/link"
+import { AdminHeader } from "@/components/admin/admin-header"
+import { Switch } from "@/components/ui/switch"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { TrackingField, TrackingPreset, FieldType } from "@/lib/demand/fields"
+
+interface Mailbox {
+  id: string
+  email_address: string
+  display_name: string | null
+}
+
+const FIELD_TYPE_LABELS: Record<FieldType, string> = {
+  text: "Testo",
+  date: "Data",
+  number: "Numero",
+  enum: "Scelta fra opzioni",
+  boolean: "Sì / No",
+}
+
+const KIND_LABELS: Record<string, string> = {
+  whatsapp: "WhatsApp",
+  telegram: "Telegram",
+  chat: "Chat sul sito",
+}
+
+export default function GroupTrackingPage({ params }: { params: Promise<{ groupId: string }> }) {
+  const { groupId } = use(params)
+
+  const [groupName, setGroupName] = useState("")
+  const [presets, setPresets] = useState<TrackingPreset[]>([])
+  const [mailboxes, setMailboxes] = useState<Mailbox[]>([])
+  const [messagingKinds, setMessagingKinds] = useState<string[]>([])
+  const [extractionCount, setExtractionCount] = useState(0)
+  // Si parte da `true`: se fosse `false`, durante il caricamento comparirebbe
+  // per un istante l'avviso di estrazione ferma anche quando tutto funziona.
+  const [schedulerReady, setSchedulerReady] = useState(true)
+
+  const [enabled, setEnabled] = useState(false)
+  const [preset, setPreset] = useState("libero")
+  const [fields, setFields] = useState<TrackingField[]>([])
+  const [emailIds, setEmailIds] = useState<string[]>([])
+  const [kinds, setKinds] = useState<string[]>([])
+  const [includePhone, setIncludePhone] = useState(false)
+  const [savedFields, setSavedFields] = useState<string>("[]")
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [running, setRunning] = useState(false)
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
+
+  useEffect(() => {
+    load()
+  }, [groupId])
+
+  async function load() {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/admin/groups/${groupId}/tracking`)
+      if (!res.ok) throw new Error((await res.json()).error ?? "Lettura non riuscita")
+      const data = await res.json()
+      setGroupName(data.group?.name ?? "")
+      setPresets(data.presets ?? [])
+      setMailboxes(data.mailboxes ?? [])
+      setMessagingKinds(data.messagingKinds ?? [])
+      setExtractionCount(data.extractionCount ?? 0)
+      setSchedulerReady(data.schedulerReady !== false)
+      if (data.config) {
+        setEnabled(Boolean(data.config.is_enabled))
+        setPreset(data.config.preset ?? "libero")
+        setFields(data.config.fields ?? [])
+        setSavedFields(JSON.stringify(data.config.fields ?? []))
+        setEmailIds(data.config.sources?.email_channel_ids ?? [])
+        setKinds(data.config.sources?.messaging_kinds ?? [])
+        setIncludePhone(Boolean(data.config.sources?.include_phone))
+      }
+    } catch (e) {
+      setMessage({ kind: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function applyPreset(key: string) {
+    setPreset(key)
+    const found = presets.find((p) => p.key === key)
+    if (found) setFields(found.fields)
+  }
+
+  function updateField(index: number, patch: Partial<TrackingField>) {
+    setFields((prev) => prev.map((f, i) => (i === index ? { ...f, ...patch } : f)))
+  }
+
+  /**
+   * Avvio a mano di una passata.
+   *
+   * La rotta esisteva gia' ma nessuno la chiamava: un'estrazione avviabile solo
+   * da un cron che oggi non parte lascia l'operatore senza alcuna via. Al
+   * termine si ricarica la scheda, cosi' il conteggio delle conversazioni lette
+   * riflette subito il lavoro appena fatto invece di restare al valore vecchio.
+   */
+  async function runNow() {
+    setRunning(true)
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/admin/groups/${groupId}/tracking/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Avvio non riuscito")
+      const r = data.report ?? {}
+      // Si usa `scanned`, non `byRules + byModel`: le conversazioni scartate
+      // come non pertinenti (`skippedNoise`) vengono comunque registrate come
+      // lette, quindi entrano nel contatore qui sotto. Misurato: il contatore
+      // sale di `byRules + byModel + skippedNoise`, cioe' esattamente `scanned`
+      // (12 = 4+4+4). Sommando solo le prime due il messaggio diceva 35 mentre
+      // il contatore saliva di 51: due numeri sulla stessa schermata che si
+      // contraddicono fanno sospettare un errore anche quando non c'e'.
+      const lette = r.scanned ?? 0
+      const chiamate = r.calls ?? 0
+      const conRichiesta = r.withDemand ?? 0
+      setMessage({
+        kind: "ok",
+        text:
+          lette === 0 && chiamate === 0
+            ? `Nessuna conversazione nuova da leggere (${r.alreadyDone ?? 0} già fatte).`
+            : `${lette === 1 ? "Letta 1 conversazione nuova" : `Lette ${lette} conversazioni nuove`}, di cui ` +
+              `${conRichiesta === 1 ? "1 con una richiesta" : `${conRichiesta} con una richiesta`}` +
+              `${chiamate ? `, più ${chiamate === 1 ? "1 telefonata" : `${chiamate} telefonate`}` : ""}.`,
+      })
+      await load()
+    } catch (e) {
+      setMessage({ kind: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  async function save() {
+    setSaving(true)
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/admin/groups/${groupId}/tracking`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          is_enabled: enabled,
+          preset,
+          fields,
+          sources: { email_channel_ids: emailIds, messaging_kinds: kinds, include_phone: includePhone },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? "Salvataggio non riuscito")
+      setSavedFields(JSON.stringify(data.config?.fields ?? []))
+      setMessage({
+        kind: "ok",
+        text: data.fieldsChanged
+          ? "Salvato. I campi sono cambiati: le conversazioni verranno riesaminate con le domande nuove."
+          : "Salvato.",
+      })
+    } catch (e) {
+      setMessage({ kind: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const fieldsChanged = JSON.stringify(fields) !== savedFields
+  const referenceField = presets.find((p) => p.key === preset)?.referenceField ?? null
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AdminHeader title="Cervello del gruppo" backHref="/admin/users" backLabel="Gruppi di lavoro" />
+        <main className="mx-auto max-w-4xl px-4 py-8">
+          <p className="text-sm text-muted-foreground">Caricamento…</p>
+        </main>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <AdminHeader
+        title={groupName ? `Cervello: ${groupName}` : "Cervello del gruppo"}
+        subtitle="Cosa leggere dalle conversazioni di questo reparto, e cosa ricavarne"
+        backHref="/admin/users"
+        backLabel="Gruppi di lavoro"
+      />
+      <main className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
+        {/* Titolo e sottotitolo stanno nell'AdminHeader: ripeterli qui parola per
+            parola aggiungeva un secondo <h1> alla pagina e sembrava un errore di
+            resa. */}
+
+        {/* Il nome "Cervello" faceva credere che questa pagina insegnasse
+            all'assistente a rispondere. Non e' cosi': qui si MISURA quanta
+            domanda arriva. Chi risponde, e cio' che impara, sta in Assistente
+            IA - detto a schermo perche' due voci simili senza spiegazione si
+            scambiano per doppioni. */}
+        <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
+          Questa pagina <strong className="font-medium text-foreground">misura la domanda</strong>: conta richieste di
+          camere, tavoli e preventivi ricavandole dalle conversazioni, e le riporta sul calendario. Non insegna
+          all&apos;assistente cosa rispondere: quello si cura in{" "}
+          <Link href="/admin/knowledge" className="underline underline-offset-4 hover:text-foreground">
+            Assistente IA
+          </Link>
+          , dove le domande rimaste senza risposta diventano nuove fonti.
+        </p>
+        {message ? (
+          <div
+            role="status"
+            className={
+              message.kind === "ok"
+                ? "rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground"
+                : "rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+            }
+          >
+            {message.text}
+          </div>
+        ) : null}
+
+        <Card>
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <CardTitle className="text-base">Cervello attivo</CardTitle>
+              <CardDescription className="text-pretty">
+                Da spento non legge e non spende nulla. Le estrazioni già fatte restano.
+              </CardDescription>
+            </div>
+            <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Attiva il cervello per questo gruppo" />
+          </CardHeader>
+          {extractionCount > 0 || (enabled && !schedulerReady) ? (
+            <CardContent className="flex flex-col gap-3">
+              {extractionCount > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Finora ha ricavato dati da <span className="font-medium text-foreground">{extractionCount}</span>{" "}
+                  conversazioni.
+                </p>
+              ) : null}
+              {/* Un interruttore acceso che non produce nulla e' peggio di uno
+                  spento: chi guarda crede che il lavoro sia in corso. L'esecuzione
+                  oraria e' protetta da un segreto e senza quello non parte, quindi
+                  qui lo si dice apertamente invece di lasciare il conteggio fermo
+                  senza spiegazione. */}
+              {enabled && !schedulerReady ? (
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-foreground">
+                  <span className="font-medium">Estrazione automatica ferma.</span> Il cervello è acceso, ma
+                  l&apos;esecuzione ogni ora non può partire perché manca la variabile{" "}
+                  <code className="font-mono text-xs">CRON_SECRET</code> nelle impostazioni del progetto. Puoi comunque
+                  avviarla a mano dal pulsante qui sotto.
+                </p>
+              ) : null}
+            </CardContent>
+          ) : null}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Cosa fa questo reparto</CardTitle>
+            <CardDescription className="text-pretty">
+              Sceglierne uno imposta i campi da estrarre. Restano modificabili uno per uno.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              {presets.map((p) => (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => applyPreset(p.key)}
+                  aria-pressed={preset === p.key}
+                  className={
+                    preset === p.key
+                      ? "flex flex-col gap-1 rounded-lg border-2 border-primary bg-primary/5 p-4 text-left"
+                      : "flex flex-col gap-1 rounded-lg border border-border p-4 text-left hover:border-primary/40"
+                  }
+                >
+                  <span className="text-sm font-medium">{p.label}</span>
+                  <span className="text-xs text-muted-foreground text-pretty">{p.description}</span>
+                </button>
+              ))}
+            </div>
+            {referenceField ? (
+              <p className="text-xs text-muted-foreground text-pretty">
+                Il campo <span className="font-mono">{referenceField}</span> colloca la richiesta nel calendario: è la
+                data dell&apos;evento chiesto, non quella del messaggio.
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Da dove leggere</CardTitle>
+            <CardDescription className="text-pretty">
+              Solo le sorgenti scelte. Senza almeno una, il cervello non si accende.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <fieldset className="flex flex-col gap-3">
+              <legend className="flex items-center gap-2 text-sm font-medium">
+                <Mail className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Caselle email
+              </legend>
+              {mailboxes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nessuna casella collegata a questa struttura.</p>
+              ) : (
+                mailboxes.map((m) => (
+                  <label key={m.id} className="flex items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={emailIds.includes(m.id)}
+                      onChange={(e) =>
+                        setEmailIds((prev) => (e.target.checked ? [...prev, m.id] : prev.filter((x) => x !== m.id)))
+                      }
+                    />
+                    <span>{m.email_address}</span>
+                  </label>
+                ))
+              )}
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-3">
+              <legend className="flex items-center gap-2 text-sm font-medium">
+                <MessageSquare className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                Messaggistica
+              </legend>
+              {messagingKinds.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nessun canale di messaggistica collegato.</p>
+              ) : (
+                messagingKinds.map((k) => (
+                  <label key={k} className="flex items-center gap-3 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border"
+                      checked={kinds.includes(k)}
+                      onChange={(e) =>
+                        setKinds((prev) => (e.target.checked ? [...prev, k] : prev.filter((x) => x !== k)))
+                      }
+                    />
+                    <span>{KIND_LABELS[k] ?? k}</span>
+                  </label>
+                ))
+              )}
+            </fieldset>
+
+            <label className="flex items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border"
+                checked={includePhone}
+                onChange={(e) => setIncludePhone(e.target.checked)}
+              />
+              <Phone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <span>Chiamate del centralino</span>
+            </label>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Cosa ricavare</CardTitle>
+            <CardDescription className="text-pretty">
+              Ogni campo diventa una domanda posta a ogni conversazione. Il suggerimento è l&apos;istruzione vera:
+              scriverlo bene conta più di aggiungere campi.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {fields.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nessun campo. Scegli cosa fa il reparto qui sopra, oppure aggiungine uno.
+              </p>
+            ) : (
+              fields.map((f, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex min-w-40 flex-1 flex-col gap-1.5">
+                      <Label htmlFor={`label-${i}`} className="text-xs">
+                        Nome
+                      </Label>
+                      <Input
+                        id={`label-${i}`}
+                        value={f.label}
+                        onChange={(e) => updateField(i, { label: e.target.value })}
+                      />
+                    </div>
+                    <div className="flex min-w-32 flex-col gap-1.5">
+                      <Label htmlFor={`key-${i}`} className="text-xs">
+                        Chiave
+                      </Label>
+                      <Input
+                        id={`key-${i}`}
+                        value={f.key}
+                        onChange={(e) => updateField(i, { key: e.target.value })}
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                    <div className="flex min-w-40 flex-col gap-1.5">
+                      <Label className="text-xs">Tipo</Label>
+                      <Select value={f.type} onValueChange={(v) => updateField(i, { type: v as FieldType })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(FIELD_TYPE_LABELS) as FieldType[]).map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {FIELD_TYPE_LABELS[t]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setFields((prev) => prev.filter((_, x) => x !== i))}
+                      aria-label={`Togli il campo ${f.label || f.key}`}
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor={`hint-${i}`} className="text-xs">
+                      Come riconoscerlo
+                    </Label>
+                    <Input
+                      id={`hint-${i}`}
+                      value={f.hint ?? ""}
+                      placeholder="Es. confermata solo se c'è una conferma esplicita"
+                      onChange={(e) => updateField(i, { hint: e.target.value })}
+                    />
+                  </div>
+                  {f.type === "enum" ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor={`opt-${i}`} className="text-xs">
+                        Opzioni ammesse, separate da virgola
+                      </Label>
+                      <Input
+                        id={`opt-${i}`}
+                        value={(f.options ?? []).join(", ")}
+                        onChange={(e) =>
+                          updateField(i, {
+                            options: e.target.value
+                              .split(",")
+                              .map((s) => s.trim())
+                              .filter(Boolean),
+                          })
+                        }
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ))
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              className="w-fit bg-transparent"
+              onClick={() => setFields((prev) => [...prev, { key: "", label: "", type: "text" }])}
+            >
+              <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
+              Aggiungi un campo
+            </Button>
+          </CardContent>
+        </Card>
+
+        {fieldsChanged && extractionCount > 0 ? (
+          <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground text-pretty">
+              Hai cambiato i campi: salvando, le {extractionCount} conversazioni già lette verranno riesaminate con le
+              domande nuove. Le risposte vecchie restano, ma non vengono più usate.
+            </p>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={save} disabled={saving || running}>
+            {saving ? "Salvataggio…" : "Salva"}
+          </Button>
+          {/* Si mostra solo se il cervello e' acceso: la rotta rifiuta di
+              eseguire una configurazione spenta, e un pulsante che risponde
+              sempre con un errore e' peggio di un pulsante assente. */}
+          {enabled ? (
+            <Button variant="outline" onClick={runNow} disabled={running || saving} className="bg-transparent">
+              {running ? "Lettura in corso…" : "Leggi ora le conversazioni"}
+            </Button>
+          ) : null}
+          {enabled ? <Badge variant="secondary">Attivo</Badge> : <Badge variant="outline">Spento</Badge>}
+        </div>
+      </main>
+    </div>
+  )
+}

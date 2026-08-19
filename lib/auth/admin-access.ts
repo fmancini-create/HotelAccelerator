@@ -32,6 +32,21 @@ export interface CallerIdentity {
 // Tenant used by the dev/preview bypass (matches lib/auth-property.ts).
 const DEV_PROPERTY_ID = "c16ad260-2c34-4544-9909-5cd444773986"
 
+/**
+ * `adminUserId` da scrivere in una colonna `uuid`, oppure `null`.
+ *
+ * Serve perche' l'identita' non e' sempre un uuid: la scorciatoia di sviluppo
+ * restituisce "dev-admin-id" e un super amministratore non ha scheda operatore.
+ * Passare quel valore a una colonna `uuid` fa rifiutare l'INTERA scrittura dal
+ * database, quindi il riferimento a chi ha agito resta vuoto (le colonne sono
+ * nullable) invece di far fallire l'operazione. La stessa cautela e' applicata
+ * in `lib/inbox/identity.ts`.
+ */
+export function adminUserIdPerDatabase(valore: string | null | undefined): string | null {
+  if (!valore) return null
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(valore) ? valore : null
+}
+
 export class AccessError extends Error {
   status: number
   constructor(message: string, status: number) {

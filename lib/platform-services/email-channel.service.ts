@@ -67,7 +67,9 @@ export class EmailChannelService {
       throw new ValidationError("Indirizzo email non valido")
     }
 
-    const existing = await this.repository.findByEmail(data.email_address)
+    // Limitato alla struttura: senza filtro, una casella collegata da un altro
+    // albergo bloccava questo con un messaggio fuorviante.
+    const existing = await this.repository.findByEmail(data.email_address, propertyId)
     if (existing) {
       throw new ConflictError("Questo indirizzo email è già configurato")
     }
@@ -131,7 +133,7 @@ export class EmailChannelService {
     }
 
     if (data.email_address !== channel.email_address) {
-      const existing = await this.repository.findByEmail(data.email_address)
+      const existing = await this.repository.findByEmail(data.email_address, propertyId)
       if (existing && existing.id !== channelId) {
         throw new ConflictError("Questo indirizzo email è già configurato")
       }
@@ -196,7 +198,9 @@ export class EmailChannelService {
     refreshToken: string,
     expiresIn: number,
   ): Promise<void> {
-    const existing = await this.repository.findByEmail(email)
+    // Limitato alla struttura: senza filtro, riconnettere una casella condivisa
+    // avrebbe scritto i token di questo albergo nel canale di un altro.
+    const existing = await this.repository.findByEmail(email, propertyId)
     if (existing) {
       await this.repository.update(existing.id, {
         provider,
@@ -222,6 +226,13 @@ export class EmailChannelService {
         oauth_access_token: accessToken,
         oauth_refresh_token: refreshToken,
         oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
+        // Chi collega una casella la collega PER sincronizzarla: il valore
+        // predefinito del repository e' `false`, e non passandolo qui ogni
+        // casella appena collegata nasceva con la sincronizzazione automatica
+        // SPENTA. Sommato al fatto che la pagina seleziona da sola il canale
+        // piu' recente, l'utente tornava da Google e trovava l'interruttore
+        // spento: sembrava che l'attivazione non venisse salvata.
+        sync_enabled: true,
       })
     }
   }

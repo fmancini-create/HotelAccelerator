@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, Building2, CalendarDays, KanbanSquare, ListTodo, Phone, Settings, Users } from "lucide-react"
+import { BarChart3, Database, Building2, CalendarDays, KanbanSquare, ListTodo, Phone, Settings, Users } from "lucide-react"
 
 // Ogni sezione dell'area CRM va elencata qui: questa barra e' l'unico indice completo
 // del perimetro. Una pagina che esiste ma non compare sembra un pezzo mancante del
@@ -19,6 +19,10 @@ const items = [
   { href: "/admin/crm/activities", label: "Attività", icon: ListTodo },
   { href: "/admin/crm/calls", label: "Chiamate", icon: Phone },
   { href: "/admin/crm/calendar", label: "Calendario", icon: CalendarDays },
+  // "PMS" e' l'etichetta che la dashboard CRM usa già per questa pagina: tenerla
+  // identica evita due nomi per la stessa cosa, e fa stare le voci nella barra
+  // senza tracimare (misurato a schermo: oltre ~95 caratteri l'ultima viene tagliata).
+  { href: "/admin/crm/pms-sync", label: "PMS", icon: Database },
   { href: "/admin/crm/settings", label: "Impostazioni", icon: Settings },
 ]
 

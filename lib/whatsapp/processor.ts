@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { normalizeWhatsAppNumber } from "./client"
+import { trovaAnagraficaPerNumero } from "@/lib/crm/contact-identity"
 
 /**
  * Normalized inbound WhatsApp message extracted from the Meta webhook payload.
@@ -62,7 +63,20 @@ export class WhatsAppProcessor {
       const name = msg.fromName?.trim() || `+${phone}`
 
       const contact = await this.findOrCreateContact(propertyId, phone, name)
-      const conversation = await this.findOrCreateConversation(propertyId, channelId, contact.id, phone, name)
+      // Il nome veniva scritto solo alla creazione e mai piu' aggiornato: una
+      // scheda nata a giugno con l'etichetta "FM" restava "FM" per sempre, anche
+      // quando WhatsApp iniziava a dichiarare "Filippo Mancini". Si aggiorna solo
+      // dove il nome l'ha messo il canale, mai un nome scritto da una persona.
+      // Se l'anagrafica e' curata, in elenco va il SUO nome; se e' nata dal canale,
+      // vale il nome che WhatsApp dichiara adesso.
+      const nomeMostrato = await this.aggiornaNomeDaProfilo(propertyId, contact, name)
+      const conversation = await this.findOrCreateConversation(
+        propertyId,
+        channelId,
+        contact.id,
+        phone,
+        nomeMostrato,
+      )
 
       const { data: message, error: msgError } = await this.supabase
         .from("messages")
@@ -128,26 +142,24 @@ export class WhatsAppProcessor {
   }
 
   /**
-   * Find-or-create a contact keyed by phone. WhatsApp contacts have no email,
-   * so we match on whatsapp_id first, then phone. Existing contacts are never
-   * mutated (consistent with the email auto-capture immutability policy).
+   * Trova-o-crea l'anagrafica di un numero WhatsApp.
+   *
+   * Il riconoscimento avviene sulle cifre (vedi `trovaAnagraficaPerNumero`), non
+   * per uguaglianza di stringa. Le anagrafiche esistenti non vengono modificate
+   * qui: il numero viene salvato solo quando il cliente dichiara un'email che
+   * corrisponde a una scheda in rubrica, cioe' con una conferma.
    */
-  private async findOrCreateContact(propertyId: string, phone: string, name: string) {
-    const { data: byWa } = await this.supabase
-      .from("contacts")
-      .select("id")
-      .eq("property_id", propertyId)
-      .eq("whatsapp_id", phone)
-      .maybeSingle()
-    if (byWa) return byWa
-
-    const { data: byPhone } = await this.supabase
-      .from("contacts")
-      .select("id")
-      .eq("property_id", propertyId)
-      .eq("phone", phone)
-      .maybeSingle()
-    if (byPhone) return byPhone
+  private async findOrCreateContact(
+    propertyId: string,
+    phone: string,
+    name: string,
+  ): Promise<{ id: string; name?: string | null; source?: string | null }> {
+    // Riconoscimento sulle CIFRE, come fa il centralino: l'uguaglianza esatta
+    // fra il numero del webhook (`393358046836`) e un numero scritto a mano in
+    // rubrica (`+39 335 8046836`) non riesce mai, e ogni messaggio creava una
+    // scheda nuova accanto a quella che c'era gia'.
+    const riconosciuta = await trovaAnagraficaPerNumero(this.supabase, propertyId, phone)
+    if (riconosciuta) return { id: riconosciuta.id, name: riconosciuta.name, source: riconosciuta.source }
 
     const { data: created, error } = await this.supabase
       .from("contacts")
@@ -158,7 +170,7 @@ export class WhatsAppProcessor {
         whatsapp_id: phone,
         source: "whatsapp",
       })
-      .select("id")
+      .select("id, name, source")
       .single()
 
     if (error) {
@@ -166,7 +178,7 @@ export class WhatsAppProcessor {
       if (error.code === "23505") {
         const { data: again } = await this.supabase
           .from("contacts")
-          .select("id")
+          .select("id, name, source")
           .eq("property_id", propertyId)
           .eq("whatsapp_id", phone)
           .maybeSingle()
@@ -175,6 +187,58 @@ export class WhatsAppProcessor {
       throw error
     }
     return created
+  }
+
+  /**
+   * Allinea il nome mostrato a quello che il canale dichiara ADESSO, e
+   * restituisce il nome da usare in elenco.
+   *
+   * Il nome veniva scritto una volta sola, alla creazione: la scheda nata il
+   * 18/06 con l'etichetta "FM" e' rimasta "FM" anche quando WhatsApp ha
+   * iniziato a dichiarare il nome completo. Si aggiorna SOLO quando il nome
+   * attuale l'ha messo il canale (`source = 'whatsapp'`): un nome scritto da
+   * una persona in rubrica non si tocca, altrimenti chi usa un soprannome su
+   * WhatsApp riscriverebbe l'anagrafica dell'albergo.
+   */
+  private async aggiornaNomeDaProfilo(
+    propertyId: string,
+    contact: { id: string; name?: string | null; source?: string | null },
+    nomeProfilo: string,
+  ): Promise<string> {
+    const attuale = contact.name?.trim() || ""
+    const nuovo = nomeProfilo.trim()
+    const curata = contact.source != null && contact.source !== "whatsapp"
+
+    // Anagrafica curata: comanda la rubrica.
+    if (curata) return attuale || nuovo
+    // Niente da aggiornare, oppure il canale non dichiara un nome utile
+    // (il ripiego e' il numero stesso: non sostituisce un nome).
+    if (!nuovo || nuovo === attuale || nuovo.startsWith("+")) return attuale || nuovo
+
+    const { error } = await this.supabase
+      .from("contacts")
+      .update({ name: nuovo, updated_at: new Date().toISOString() })
+      .eq("id", contact.id)
+      .eq("property_id", propertyId)
+      // Rete di sicurezza: la condizione e' anche nella query, cosi' una scheda
+      // curata non puo' essere modificata nemmeno per un errore di chiamata.
+      .eq("source", "whatsapp")
+
+    if (error) {
+      console.log(`[v0] aggiornamento nome profilo non riuscito: ${error.message}`)
+      return attuale || nuovo
+    }
+
+    // Anche l'elenco mostra ancora il nome vecchio: la conversazione conserva
+    // una copia del nome, scritta alla creazione.
+    await this.supabase
+      .from("conversations")
+      .update({ contact_name: nuovo, subject: `WhatsApp · ${nuovo}`, updated_at: new Date().toISOString() })
+      .eq("property_id", propertyId)
+      .eq("channel", "whatsapp")
+      .eq("contact_id", contact.id)
+
+    return nuovo
   }
 
   /**

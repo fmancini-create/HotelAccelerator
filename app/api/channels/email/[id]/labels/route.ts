@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
+import { SENZA_CARTELLA, SENZA_CARTELLA_NOME } from "@/lib/inbox/folder-visibility"
 
 // GET - Carica etichette e il loro stato di sincronizzazione
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -40,10 +41,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = await request.json()
 
-    const { labelId, syncEnabled } = body
+    const { labelId, visible, name } = body
 
-    if (!labelId) {
+    if (!labelId || typeof labelId !== "string") {
       return NextResponse.json({ error: "labelId richiesto" }, { status: 400 })
+    }
+    if (typeof visible !== "boolean") {
+      return NextResponse.json({ error: "visible deve essere true o false" }, { status: 400 })
     }
 
     const access = await getChannelAccess(request)
@@ -52,21 +56,34 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     const supabase = access.supabase
 
-    const { error } = await supabase
-      .from("email_labels")
-      .update({
-        type: syncEnabled ? "synced" : "ignored",
+    // Si crea la riga se manca: le cartelle arrivano da Gmail e nel database non
+    // esiste nulla finche' l'utente non decide qualcosa. Un semplice update non
+    // troverebbe niente da aggiornare e la scelta si perderebbe in silenzio —
+    // ed e' esattamente cio' che accadeva prima, aggravato dal fatto che il
+    // filtro cercava l'id Gmail ("INBOX") nella colonna dell'id interno.
+    //
+    // La chiave del conflitto e' (channel_id, gmail_id) perche' "INBOX" esiste
+    // in ogni casella: da solo non identifica una cartella.
+    const nomeCartella =
+      labelId === SENZA_CARTELLA ? SENZA_CARTELLA_NOME : typeof name === "string" && name.trim() ? name.trim() : labelId
+
+    const { error } = await supabase.from("email_labels").upsert(
+      {
+        channel_id: channelId,
+        property_id: propertyId,
+        gmail_id: labelId,
+        name: nomeCartella,
+        visible_in_inbox: visible,
         updated_at: new Date().toISOString(),
-      })
-      .eq("id", labelId)
-      .eq("channel_id", channelId)
-      .eq("property_id", propertyId)
+      },
+      { onConflict: "channel_id,gmail_id" },
+    )
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, visible })
   } catch (error) {
     console.error("Error updating email label:", error)
     return NextResponse.json({ error: "Errore nell'aggiornamento dell'etichetta" }, { status: 500 })

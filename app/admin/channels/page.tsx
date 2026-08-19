@@ -24,6 +24,7 @@ import {
   Linkedin,
 } from "lucide-react"
 import Link from "next/link"
+import { toast } from "sonner"
 import { AdminHeader } from "@/components/admin/admin-header"
 
 const CHANNEL_CATEGORIES = [
@@ -124,17 +125,27 @@ const CHANNEL_CATEGORIES = [
   {
     id: "voice",
     name: "Voce",
-    description: "Canali vocali con trascrizione AI",
+    // Non prometto "trascrizione AI": richiede l'audio della chiamata, che
+    // passa da un bridge esterno e in questo progetto non esiste.
+    description: "Centralino collegato al CRM",
     channels: [
       {
         id: "phone",
-        name: "Telefono IP",
-        description: "Chiamate VoIP con trascrizione AI",
+        name: "Telefono IP (3CX)",
+        // La vecchia descrizione promise "trascrizione AI", che NON esiste:
+        // trascrivere richiede l'audio, che passa dal bridge e qui non c'e'.
+        // Descrivo cio' che la pagina fa davvero.
+        description: "Chiamate dal CRM e riconoscimento del chiamante",
         icon: Phone,
         color: "bg-purple-500",
         configPath: "/admin/channels/phone",
         available: true,
-        comingSoon: true,
+        // Il centralino ORA e' collegabile: la pagina di configurazione esiste
+        // e le rotte 3CX sono attive. Lasciando comingSoon:true la scheda
+        // mostrava un pulsante "Notificami" SPENTO invece del collegamento
+        // (riga ~394), quindi la pagina era irraggiungibile dal menu': avevo
+        // rifatto la stanza lasciando la porta chiusa a chiave.
+        comingSoon: false,
       },
     ],
   },
@@ -153,6 +164,9 @@ interface ChannelStatus {
 export default function ChannelsPage() {
   const router = useRouter()
   const [channelStatuses, setChannelStatuses] = useState<Record<string, ChannelStatus>>({})
+  // Canale in corso di modifica: blocca doppi clic, che manderebbero due
+  // richieste opposte e lascerebbero uno stato incerto.
+  const [togglingChannel, setTogglingChannel] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [propertyId, setPropertyId] = useState<string | null>(null)
 
@@ -202,12 +216,16 @@ export default function ChannelsPage() {
         data: Array<{ id: string; is_active: boolean }> | null
       }
 
+      // `embed_scripts` NON ha ne' `is_active` ne' `script_type` (verificato
+      // sullo schema): la query precedente chiedeva DUE colonne inesistenti,
+      // quindi tornava sempre errore e la scheda Chat risultava eternamente
+      // "Non configurato". Lo stato reale e' `status`, lo stesso campo che il
+      // widget pubblico controlla per decidere se mostrarsi.
       const { data: chatWidgets } = (await supabase
         .from("embed_scripts")
-        .select("id, is_active")
-        .eq("property_id", adminUser.property_id)
-        .eq("script_type", "chat")) as {
-        data: Array<{ id: string; is_active: boolean }> | null
+        .select("id, status")
+        .eq("property_id", adminUser.property_id)) as {
+        data: Array<{ id: string; status: string }> | null
       }
 
       const { data: waChannels } = (await supabase
@@ -241,9 +259,9 @@ export default function ChannelsPage() {
       }
       statuses.chat = {
         id: "chat",
-        enabled: chatWidgets?.some((c) => c.is_active) || false,
+        enabled: chatWidgets?.some((c) => c.status === "active") || false,
         configured: (chatWidgets?.length || 0) > 0,
-        activeConnections: chatWidgets?.filter((c) => c.is_active).length || 0,
+        activeConnections: chatWidgets?.filter((c) => c.status === "active").length || 0,
       }
       const waConfigured = (waChannels || []).filter((c) => c.config?.phone_number_id)
       statuses.whatsapp = {
@@ -259,6 +277,49 @@ export default function ChannelsPage() {
         enabled: tgConfigured.some((c) => c.is_active),
         configured: tgConfigured.length > 0,
         activeConnections: tgConfigured.filter((c) => c.is_active).length,
+      }
+
+      // Centralino: NON interrogo telephony_integrations dal browser. Quella
+      // tabella ha RLS attiva SENZA policy (le credenziali del centralino non
+      // devono essere leggibili dal client), quindi una lettura con chiave
+      // anonima tornerebbe ZERO RIGHE IN SILENZIO: la scheda direbbe "Non
+      // configurato" anche a centralino collegato. Passo dalla rotta server.
+      try {
+        const phoneRes = await fetch("/api/telephony/3cx", { cache: "no-store" })
+        if (phoneRes.ok) {
+          // Nomi dei campi PRESI DALLA ROTTA (snake_case), non indovinati:
+          // avevo scritto baseUrl/hasClientSecret/isActive e la scheda avrebbe
+          // detto "Non configurato" per sempre. Un tipo scritto a mano che
+          // mente non viene bocciato da tsc.
+          const phoneData = (await phoneRes.json()) as {
+            integration?: {
+              is_active?: boolean
+              base_url?: string | null
+              has_credentials?: { client_secret?: boolean }
+              last_check_status?: string | null
+            } | null
+          }
+          const integration = phoneData.integration
+          // "Configurato" solo con indirizzo E secret presenti: con uno dei due
+          // mancanti nessuna chiamata potrebbe partire, quindi dichiararlo
+          // configurato sarebbe una risposta sbagliata.
+          const configured = Boolean(integration?.base_url && integration?.has_credentials?.client_secret)
+          // "Attivo" solo se l'ULTIMA VERIFICA e' andata a buon fine: con
+          // credenziali piene ma connessione fallita, dire "Attivo" sarebbe una
+          // risposta sbagliata data per valida (la pagina di dettaglio usa lo
+          // stesso criterio, last_check_status === "ok").
+          const active = configured && integration?.is_active !== false && integration?.last_check_status === "ok"
+          statuses.phone = {
+            id: "phone",
+            enabled: active,
+            configured,
+            activeConnections: active ? 1 : 0,
+          }
+        }
+      } catch (phoneError) {
+        // Rete irraggiungibile: lascio lo stato iniziale (non configurato)
+        // invece di inventare un "attivo".
+        console.error("[v0] stato centralino non leggibile:", phoneError)
       }
 
       setChannelStatuses(statuses)
@@ -312,6 +373,64 @@ export default function ChannelsPage() {
         <div className="animate-pulse text-ha-brand-soft-foreground">Caricamento canali...</div>
       </div>
     )
+  }
+
+  /**
+   * Accende/spegne un canale. Passa dalla rotta server perche' le tabelle dei
+   * canali contengono credenziali e sono chiuse al ruolo anonimo: un update dal
+   * browser verrebbe scartato dalle policy senza errore e l'interruttore
+   * tornerebbe indietro da solo.
+   */
+  const handleToggleChannel = async (channelId: string, next: boolean) => {
+    const status = channelStatuses[channelId]
+    if (!status?.configured || togglingChannel) return
+
+    setTogglingChannel(channelId)
+    // Stato precedente conservato per poterlo RIPRISTINARE se il server
+    // rifiuta: lasciare l'interruttore sulla nuova posizione dopo un errore
+    // mostrerebbe "Attivo" per un canale rimasto spento.
+    const previous = status
+    setChannelStatuses((prev) => ({
+      ...prev,
+      [channelId]: { ...previous, enabled: next, activeConnections: next ? Math.max(1, previous.activeConnections) : 0 },
+    }))
+
+    try {
+      const res = await fetch("/api/channels/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: channelId, enabled: next }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; updated?: number }
+
+      if (!res.ok) {
+        setChannelStatuses((prev) => ({ ...prev, [channelId]: previous }))
+        toast.error(data.error || "Modifica non riuscita")
+        return
+      }
+
+      // Il numero di connessioni toccate arriva dal server: email puo' averne
+      // piu' di una (oggi 2), e l'utente deve sapere che l'interruttore agisce
+      // su tutte, non su una sola.
+      const n = data.updated ?? 0
+      toast.success(
+        next
+          ? n > 1
+            ? `Canale attivato (${n} connessioni)`
+            : "Canale attivato"
+          : n > 1
+            ? `Canale disattivato (${n} connessioni)`
+            : "Canale disattivato",
+      )
+      // Rileggo dal database invece di fidarmi dello stato locale: e' il dato
+      // salvato che conta.
+      await fetchChannelStatuses()
+    } catch {
+      setChannelStatuses((prev) => ({ ...prev, [channelId]: previous }))
+      toast.error("Rete non raggiungibile: stato invariato")
+    } finally {
+      setTogglingChannel(null)
+    }
   }
 
   const activeCount = Object.values(channelStatuses).filter((s) => s.enabled).length
@@ -394,11 +513,21 @@ export default function ChannelsPage() {
                           {!channel.comingSoon && (
                             <>
                               {isConfigured && (
-                                <div className="flex items-center gap-2">
+                                // La scheda intera e' cliccabile: senza fermare la
+                                // propagazione, premere l'interruttore aprirebbe ANCHE
+                                // la pagina di configurazione, facendo perdere di vista
+                                // l'esito del comando.
+                                <div
+                                  className="flex items-center gap-2"
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                >
                                   <span className="text-xs text-muted-foreground">{isEnabled ? "Attivo" : "Spento"}</span>
                                   <Switch
                                     checked={isEnabled}
-                                    disabled={!isConfigured}
+                                    disabled={!isConfigured || togglingChannel === channel.id}
+                                    onCheckedChange={(next) => handleToggleChannel(channel.id, next)}
+                                    aria-label={`${isEnabled ? "Disattiva" : "Attiva"} il canale ${channel.name}`}
                                     className="data-[state=checked]:bg-ha-success"
                                   />
                                 </div>

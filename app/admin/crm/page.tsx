@@ -25,6 +25,7 @@ import {
   Tag,
   Globe,
   Heart,
+  AlertCircle,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -98,6 +99,10 @@ export default function CRMPage() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [showContactDialog, setShowContactDialog] = useState(false)
   const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  // Senza questo, una risposta non riuscita lasciava a schermo l'elenco
+  // PRECEDENTE senza dirlo (`if (contactsRes.ok)` e nient'altro): l'operatore
+  // avrebbe letto contatti non corrispondenti al filtro appena scelto.
+  const [contactsError, setContactsError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -116,11 +121,22 @@ export default function CRMPage() {
         fetch("/api/admin/crm/stats"),
       ])
 
-      if (contactsRes.ok) setContacts(await contactsRes.json())
+      if (contactsRes.ok) {
+        setContacts(await contactsRes.json())
+        setContactsError(null)
+      } else {
+        // L'elenco viene svuotato: mostrare i contatti del filtro precedente
+        // sotto un filtro nuovo sarebbe una risposta sbagliata presentata come
+        // valida.
+        const detail = await contactsRes.json().catch(() => null)
+        setContacts([])
+        setContactsError(detail?.error || `Impossibile caricare i contatti (errore ${contactsRes.status}).`)
+      }
       if (segmentsRes.ok) setSegments(await segmentsRes.json())
       if (statsRes.ok) setStats(await statsRes.json())
     } catch (error) {
       console.error("Error fetching CRM data:", error)
+      setContactsError("Impossibile contattare il servizio: elenco non aggiornato.")
     } finally {
       setLoading(false)
     }
@@ -181,6 +197,9 @@ export default function CRMPage() {
           <p className="text-muted-foreground">Database intelligente per marketing targettizzato</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/admin/crm/pms-sync">PMS</Link>
+          </Button>
           <Button variant="outline" asChild>
             <Link href="/admin/crm/settings">Impostazioni</Link>
           </Button>
@@ -273,6 +292,16 @@ export default function CRMPage() {
         </TabsList>
 
         <TabsContent value="contacts" className="space-y-4">
+          {contactsError && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-4 text-sm text-foreground"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+              <p className="text-pretty">{contactsError}</p>
+            </div>
+          )}
+
           {/* Filters */}
           <Card>
             <CardContent className="pt-4">

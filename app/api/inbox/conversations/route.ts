@@ -8,6 +8,47 @@ import type { ConversationListOptions, GmailLabel, InboxSort } from "@/lib/types
 const ALLOWED_SORTS: InboxSort[] = ["smart", "date_desc", "date_asc", "sender_asc", "sender_desc"]
 import { handleServiceError } from "@/lib/errors"
 
+/** Quante conversazioni si possono chiedere al massimo (tetto di Supabase). */
+const LIMITE_MASSIMO = 1000
+const LIMITE_PREDEFINITO = 50
+
+/**
+ * Interpreta il numero di conversazioni richieste.
+ *
+ * Prima era `Number.parseInt(valore || "50")` senza alcun controllo, e i valori
+ * assurdi passavano indisturbati (misurato su questa rotta):
+ *  - `limit=abc` -> `NaN` -> **inbox vuota con esito 200**: il caso peggiore,
+ *    perche' sembra "non hai messaggi" invece di segnalare un errore;
+ *  - `limit=0` -> zero conversazioni, sempre con esito 200;
+ *  - `limit=-5` -> **500**;
+ *  - `limit=99999` -> 1000 conversazioni **senza dire** che l'elenco e' troncato.
+ *
+ * Un valore inservibile torna al predefinito invece di svuotare l'elenco: una
+ * pagina di dimensione diversa e' un inconveniente, un'inbox vuota e' una bugia.
+ */
+function risolviLimite(grezzo: string | null): { richiesto: number | null; applicato: number; troncato: boolean } {
+  const numero = Number(grezzo)
+  const valido = grezzo !== null && grezzo.trim() !== "" && Number.isFinite(numero) && Math.floor(numero) >= 1
+
+  if (!valido) {
+    return { richiesto: grezzo === null || grezzo.trim() === "" ? null : Number.isFinite(numero) ? numero : null, applicato: LIMITE_PREDEFINITO, troncato: false }
+  }
+
+  const richiesto = Math.floor(numero)
+  return {
+    richiesto,
+    applicato: Math.min(richiesto, LIMITE_MASSIMO),
+    troncato: richiesto > LIMITE_MASSIMO,
+  }
+}
+
+/** Scorrimento: un valore non valido o negativo parte dall'inizio, non rompe. */
+function interoNonNegativo(grezzo: string | null): number {
+  const numero = Number(grezzo)
+  if (grezzo === null || grezzo.trim() === "" || !Number.isFinite(numero)) return 0
+  return Math.max(0, Math.floor(numero))
+}
+
 export async function GET(request: NextRequest) {
   try {
     console.log("[v0] Inbox conversations API called")
@@ -38,12 +79,18 @@ export async function GET(request: NextRequest) {
       access = { restrict: true, emailChannelIds: [], messagingChannelIds: [], chatChannelIds: [] }
     }
 
+    const limite = risolviLimite(searchParams.get("limit"))
+
     const options: ConversationListOptions = {
       status: (searchParams.get("status") as any) || "open",
       channel: (searchParams.get("channel") as any) || undefined,
-      limit: Number.parseInt(searchParams.get("limit") || "50"),
-      offset: Number.parseInt(searchParams.get("offset") || "0"),
+      limit: limite.applicato,
+      offset: interoNonNegativo(searchParams.get("offset")),
       search: searchParams.get("search") || undefined,
+      // Conversazioni precise, per aprire una bozza che sta fuori dalla pagina
+      // caricata. Restano dentro `propertyId` e dentro `access`: chiedere un id
+      // di un'altra struttura o di un canale non assegnato non restituisce nulla.
+      ids: searchParams.get("ids")?.split(",").filter(Boolean) || undefined,
       filter: (searchParams.get("filter") as any) || undefined,
       mode,
       gmail_label: gmailLabel || undefined,
@@ -56,7 +103,18 @@ export async function GET(request: NextRequest) {
     const conversations = await service.listConversations(propertyId, options)
     console.log("[v0] Found conversations:", conversations.length)
 
-    return NextResponse.json({ conversations })
+    // Il tetto va DICHIARATO, non subito in silenzio: chi chiede 5.000
+    // conversazioni e ne riceve 1.000 deve poter sapere che l'elenco e'
+    // troncato, altrimenti crede di vedere tutto.
+    return NextResponse.json({
+      conversations,
+      limite: {
+        richiesto: limite.richiesto,
+        applicato: limite.applicato,
+        troncato: limite.troncato,
+        massimo: LIMITE_MASSIMO,
+      },
+    })
   } catch (error) {
     // handleServiceError distingue gia' le condizioni di auth attese (log
     // breve, 401) dai guasti veri (log con stack). Prima qui c'era un

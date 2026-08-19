@@ -10,6 +10,7 @@ import type {
 import { ValidationError, NotFoundError } from "@/lib/errors"
 import { logCommand } from "@/lib/logging/command-log"
 import { sendGmailEmail } from "@/lib/gmail-client"
+import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 import { getWhatsAppChannelForConversation } from "@/lib/whatsapp/channels"
 import { sendWhatsAppText } from "@/lib/whatsapp/client"
 import { getTelegramChannelForConversation } from "@/lib/telegram/channels"
@@ -100,7 +101,10 @@ export class InboxWriteService {
     return { bookingData: command.bookingData }
   }
 
-  async sendMessage(command: SendMessageCommand, actorId?: string) {
+  // `actorLabel` e' il nome da mostrare nella colonna "Inviato da". Va congelato
+  // qui perche' `actorId` e' vuoto per i super amministratori (che non hanno una
+  // scheda operatore) e diventerebbe illeggibile per chi lascia l'azienda.
+  async sendMessage(command: SendMessageCommand, actorId?: string, actorLabel?: string | null) {
     const conversation = await this.repository.getConversation(command.conversationId, command.propertyId)
     if (!conversation) {
       throw new NotFoundError("Conversation not found")
@@ -161,6 +165,7 @@ export class InboxWriteService {
       actorId || null,
       "text",
       [],
+      actorLabel ?? null,
     )
     await this.repository.updateLastMessageAt(command.conversationId, command.propertyId)
     await logCommand({
@@ -173,6 +178,30 @@ export class InboxWriteService {
       result: { messageId: message.id },
     })
     return message
+  }
+
+  /**
+   * Firma dell'operatore che sta scrivendo, ricavata dalla sessione.
+   *
+   * Non fallisce mai: se non c'e' sessione (invii automatici) o il client non
+   * espone `auth` (nei test il servizio riceve un oggetto vuoto), restituisce
+   * `null` e il messaggio parte senza firma. Un messaggio che non parte sarebbe
+   * un danno peggiore di un messaggio senza firma.
+   */
+  private async resolveSignatureHtml(): Promise<string | null> {
+    try {
+      const auth = (this.supabase as any)?.auth
+      if (typeof auth?.getUser !== "function") return null
+      const {
+        data: { user },
+      } = await auth.getUser()
+      if (!user?.id) return null
+      const { html } = await getUserSignature(this.supabase, user.id)
+      return html
+    } catch (error) {
+      console.error("[v0] resolveSignatureHtml error:", error)
+      return null
+    }
   }
 
   private async sendEmailViaGmail(
@@ -260,7 +289,15 @@ export class InboxWriteService {
     }
 
     // Convert plain text to simple HTML
-    const htmlContent = `<div style="font-family: Arial, sans-serif;">${content.replace(/\n/g, "<br>")}</div>`
+    const bodyHtml = `<div style="font-family: Arial, sans-serif;">${content.replace(/\n/g, "<br>")}</div>`
+
+    // La firma dell'operatore va accodata anche qui. Le rotte Gmail
+    // (`/api/gmail/compose` e `/api/gmail/threads/[id]/reply`) la aggiungevano
+    // gia', ma questa e' la via usata dalla Inbox unificata: senza, la stessa
+    // risposta partiva CON firma in modalita' Gmail e SENZA in modalita' tutti
+    // i canali. Ora la Inbox mostra la firma nel riquadro, quindi l'incoerenza
+    // sarebbe diventata una bugia visibile.
+    const htmlContent = appendSignatureHtml(bodyHtml, await this.resolveSignatureHtml())
 
     // Threading only for replies, not for forwards (forward = fresh email).
     const threadId = isForward ? undefined : conversation.metadata?.gmail_thread_id

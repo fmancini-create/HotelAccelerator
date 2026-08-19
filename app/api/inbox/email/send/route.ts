@@ -116,6 +116,25 @@ export async function POST(request: Request) {
       ? await getUserSignature(supabase, authUser.id)
       : { html: null, text: null }
 
+    // Chi sta rispondendo. Questa rotta conosceva GIA' l'autore (lo legge qui
+    // sopra per la firma) ma non lo registrava sul messaggio: 51 risposte su 54
+    // erano senza autore, e qualunque conteggio "per operatore" sarebbe stato
+    // falso. Si usa `authUser.id` perche' in questo progetto e' anche la chiave
+    // di `admin_users` (lo conferma getUserSignature, che cerca per `id`).
+    // Resta nullo quando la chiamata arriva da un'automazione senza sessione:
+    // e' la verita', meglio di un autore inventato.
+    let senderId: string | null = null
+    let senderName: string | null = null
+    if (authUser) {
+      senderId = authUser.id
+      const { data: autore } = await supabase
+        .from("admin_users")
+        .select("name, email")
+        .eq("id", authUser.id)
+        .maybeSingle()
+      senderName = autore?.name ?? autore?.email ?? authUser.email ?? null
+    }
+
     const htmlBody = appendSignatureHtml(content.replace(/\n/g, "<br>"), signatureHtml)
     const textBody = appendSignatureText(content, signatureText)
 
@@ -139,6 +158,8 @@ export async function POST(request: Request) {
         property_id: property_id,
         content: content,
         sender_type: "agent",
+        sender_id: senderId,
+        sender_name: senderName,
         content_type: "text",
         metadata: {
           email_sent: true,

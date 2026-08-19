@@ -7,6 +7,7 @@ import {
   type KnowledgeBaseSummary,
 } from "@/components/admin/knowledge/knowledge-bases-manager"
 import type { ChannelRow } from "@/components/admin/knowledge/channel-bases-assignment"
+import { KnowledgeGaps } from "@/components/admin/knowledge/knowledge-gaps"
 import { Sparkles } from "lucide-react"
 
 export const dynamic = "force-dynamic"
@@ -93,6 +94,17 @@ export default async function KnowledgePage() {
         </div>
 
         <KnowledgeBasesManager initialBases={initialBases} initialChannels={initialChannels} />
+
+        {/*
+          L'anello: le basi si impostano qui sopra, poi l'esperienza delle
+          conversazioni le alimenta. Sta in questa pagina e non in una voce
+          separata perche' approvare una risposta E' un modo di curare le basi.
+          Compare solo se esiste almeno una base: senza basi non ci sono lacune
+          da rivedere, e una scheda vuota sembrerebbe un guasto.
+        */}
+        {initialBases.length > 0 && (
+          <KnowledgeGaps bases={initialBases.map((b) => ({ id: b.id, name: b.name }))} />
+        )}
       </div>
     </div>
   )

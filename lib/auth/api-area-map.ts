@@ -34,6 +34,10 @@
 export const PUBLIC_API_PREFIXES: string[] = [
   // Widget e script serviti sui siti dei clienti (visitatori anonimi).
   "/api/chat/widget",
+  // Widget chat multipli: l'autorizzazione e' la chiave pubblica nell'URL, non
+  // una sessione. Il `property_id` si ricava dalla chiave e non viene mai letto
+  // dal corpo della richiesta.
+  "/api/public/chat-widget",
   "/api/messages/impression",
   "/api/messages/rules",
   "/api/public/embed",
@@ -53,6 +57,12 @@ export const PUBLIC_API_PREFIXES: string[] = [
   "/api/external",
   // Lettura pagina pubblicata per slug: serve la resa del sito pubblico.
   "/api/cms/pages/by-slug",
+  // Le due rotte che il centralino 3CX chiama DA FUORI (ricerca del contatto
+  // all'arrivo della chiamata e registrazione a fine chiamata): si autenticano
+  // col segreto della struttura, non con un cookie, e nessuna persona le apre.
+  // Chiedere loro un'area di membro le romperebbe con un 401 a ogni squillo.
+  "/api/telephony/3cx/lookup",
+  "/api/telephony/3cx/journal",
 ]
 
 /**
@@ -104,6 +114,17 @@ export const API_AREA_MAP: Record<string, string> = {
   "/api/admin/billing": "billing",
   "/api/admin/quotas": "billing",
   "/api/stripe/checkout": "billing",
+  // Il portale Stripe gestisce l'abbonamento come il checkout: stessa area.
+  "/api/stripe/portal": "billing",
+
+  // Telefonia: `/api/telephony/calls` chiamava GIA' `requireAreaApi("calls")`
+  // al suo interno, quindi qui non si aggiunge un'intenzione nuova, si rende
+  // valida per tutte le rotte sorelle (interni, click-to-call, centralino 3CX)
+  // che erano rimaste fuori. Misurato l'effetto sull'unico membro non
+  // amministratore presente: ha crm, marketing, message-rules, monitoring,
+  // todos e NON ha "calls" ⇒ senza l'area Telefonate non usa il telefono,
+  // che e' esattamente cio' che l'area dovrebbe significare.
+  "/api/telephony": "calls",
 
   // --- Aree di base: sempre concesse, mappate per non lasciarle "non
   //     classificate" nel controllo di copertura ---
@@ -114,11 +135,32 @@ export const API_AREA_MAP: Record<string, string> = {
   "/api/kpi": "inbox",
   "/api/admin/revenue": "dashboard",
   "/api/channels": "settings",
+  // Token di accesso API della struttura: vive sotto Impostazioni. Il presidio
+  // effettivo e' `requireTenantAdmin` DENTRO la rotta, perche' "settings" e'
+  // un'area baseline (concessa a tutti) e da sola non proteggerebbe nulla.
+  "/api/admin/api-access": "settings",
   "/api/admin/domains": "settings",
   "/api/admin/setup": "settings",
   "/api/admin/cleanup": "settings",
   "/api/platform/me": "profile",
   "/api/platform/switch-tenant": "profile",
+
+  // Presenza dell'operatore: il segnalatore e' reso da `app/admin/layout.tsx`,
+  // quindi parte su OGNI pagina per OGNI membro. Mapparla su un'area
+  // concedibile la farebbe negare a chi non l'ha, cioe' un errore a ogni
+  // caricamento; ed e' informazione sul proprio stato, quindi "profile".
+  "/api/admin/presence": "profile",
+
+  // Base di conoscenza e impostazioni del bot: NON esiste un'area dedicata
+  // (le chiavi vere sono 19 e nessuna e' "ai" o "knowledge"), e inventarla qui
+  // significherebbe negare l'accesso in nome di un'area che nessuno puo'
+  // concedere, perche' non compare nell'elenco dei permessi. Resta quindi
+  // "settings", che e' anche il posto dove si configura il bot.
+  "/api/admin/ai": "settings",
+
+  // Widget di chat: si governano da `app/admin/channels/chat`, e `/api/channels`
+  // e' gia' mappato su "settings": stessa pagina, stessa area.
+  "/api/admin/chat-widgets": "settings",
 }
 
 /** True se il percorso e' una rotta pubblica (nessun controllo di area). */

@@ -2,9 +2,21 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { generateReply, type ConversationTurn } from "./generate"
 import { contactIsComplete, registerStaffHandoff } from "./handoff"
-import { getBasesForChannel } from "./knowledge-bases"
+import { getBasesForChannel, type AiMode } from "./knowledge-bases"
+import { eUnaLacuna, registraLacuna } from "./gaps"
+import {
+  trovaCandidatiPerNumero,
+  trovaCandidatiPerEmail,
+  scegliAnagrafica,
+  segnalazioneAmbiguita,
+  registraSegnalazione,
+  datiNotiDaAnagrafica,
+  type AnagraficaTrovata,
+  type DatiNoti,
+  type Segnalazione,
+} from "@/lib/crm/contact-identity"
 
-export type AiChannel = "telegram" | "whatsapp" | "email"
+export type AiChannel = "telegram" | "whatsapp" | "email" | "chat"
 
 export interface RunAutopilotArgs {
   supabase: SupabaseClient
@@ -20,6 +32,18 @@ export interface RunAutopilotArgs {
    * Should return the provider message id when available (for idempotency).
    */
   send?: (text: string) => Promise<{ externalId?: string } | void>
+  /**
+   * Forza la modalita' ignorando quella della base primaria.
+   *
+   * Serve al caso "nessun operatore collegato": una bozza che aspetta
+   * un'approvazione lascia l'ospite senza risposta finche' qualcuno non torna
+   * alla scrivania. Chi chiama decide, perche' la regola di presenza non e'
+   * competenza dell'assistente.
+   *
+   * `disabled` non viene mai scavalcato: se la struttura ha spento l'IA, la
+   * vuole spenta anche di notte, e sovrascriverlo sarebbe disobbedire.
+   */
+  modeOverride?: Exclude<AiMode, "disabled">
 }
 
 export type AutopilotAction = "sent" | "draft" | "skipped"
@@ -56,12 +80,26 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   if (!primary || baseIds.length === 0) {
     return { action: "skipped", reason: "no_base_linked" }
   }
-  const mode = primary.mode
+  // L'override si applica DOPO aver letto la base ma solo se la base non e'
+  // spenta: l'ordine conta, perche' altrimenti una struttura che ha disattivato
+  // l'assistente se lo vedrebbe riaccendere appena esce l'ultimo operatore.
+  const mode = primary.mode === "disabled" ? "disabled" : (args.modeOverride ?? primary.mode)
   if (mode === "disabled") {
     return { action: "skipped", reason: "base_disabled" }
   }
 
   const history = await loadHistory(supabase, conversationId, propertyId)
+
+  // Chi sta scrivendo, PRIMA di generare: il bot chiedeva nome, email e telefono
+  // a un mittente che era gia' in rubrica, e su WhatsApp chiedeva il numero da
+  // cui stava leggendo il messaggio.
+  const identita = await caricaIdentita(supabase, propertyId, conversationId)
+
+  // Il numero risponde a piu' schede curate: il sistema ne usa una per
+  // rispondere, ma dichiara di non aver deciso il collegamento.
+  if (identita.ambiguita) {
+    await registraSegnalazione(supabase, propertyId, conversationId, identita.ambiguita)
+  }
 
   const result = await generateReply(
     {
@@ -69,10 +107,42 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
       persona: primary.persona,
       language: primary.language,
       confidenceThreshold: primary.confidence_threshold,
+      datiNoti: identita.datiNoti,
     },
     incomingText,
     history,
   )
+
+  // L'esperienza torna nelle basi: quando la base NON copriva la domanda, la
+  // richiesta viene messa in coda per l'approvazione di una persona. Si registra
+  // qui, prima dei rami per modo, perche' la lacuna esiste allo stesso modo se
+  // la risposta e' stata inviata, salvata come bozza o non data affatto.
+  //
+  // Mai bloccante: l'ospite sta aspettando una risposta e un problema nello
+  // scrivere la lacuna non deve togliergliela.
+  try {
+    if (
+      eUnaLacuna({
+        soloSaluto: result.greetingOnly,
+        fondata: result.grounded,
+        domanda: incomingText,
+      })
+    ) {
+      await registraLacuna({
+        supabase,
+        propertyId,
+        conversationId,
+        channel,
+        knowledgeBaseId: primary.id,
+        domanda: incomingText,
+        rispostaIa: result.answer,
+        similarity: result.confidence,
+        threshold: primary.confidence_threshold,
+      })
+    }
+  } catch (err) {
+    console.log(`[v0] registrazione lacuna fallita: ${err instanceof Error ? err.message : String(err)}`)
+  }
 
   if (!result.answer) {
     // No confident answer from the knowledge base. In autopilot mode we send a
@@ -83,9 +153,10 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
       // This text must not claim the request was forwarded: in this branch no
       // handoff has been registered, so "ho inoltrato la richiesta" would be
       // false. It asks for the details that make a real handoff possible.
-      const fallback =
-        primary.fallback_message?.trim() ||
-        "Grazie per il messaggio! Su questa richiesta preferisco farla rispondere direttamente dal nostro staff: può indicarmi nome, cognome, email e telefono così li faccio ricontattare?"
+      // Il testo predefinito chiedeva sempre "nome, cognome, email e telefono",
+      // anche a chi scriveva da un numero noto e con l'anagrafica in rubrica.
+      // Si chiedono solo i dati che mancano davvero.
+      const fallback = primary.fallback_message?.trim() || testoRipiego(identita.datiNoti)
       let externalId: string | undefined
       try {
         const sendResult = await send(fallback)
@@ -111,6 +182,8 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
             ai_generated: true,
             ai_fallback: true,
             ai_confidence: result.confidence,
+            ai_grounded: result.grounded,
+            ai_reason: result.reason ?? null,
             ai_knowledge_base_id: primary.id,
           },
         })
@@ -145,14 +218,51 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   // contatto con lo staff" a ManuBot task exists and the conversation is
   // flagged in the inbox. Registering after sending would leave a window where
   // the promise is already made and nothing backs it.
+  // Un'email dichiarata in chat non prova l'identita': puo' appartenere a
+  // un'altra persona. Il sistema propone il candidato, ma non modifica mai il
+  // CRM senza conferma umana.
+  let unioneMeta: Record<string, unknown> | undefined
+  const emailDichiarata = result.contact?.email?.trim() || null
+  if (emailDichiarata && identita.numero) {
+    const candidati = await trovaCandidatiPerEmail(supabase, propertyId, emailDichiarata, identita.anagrafica?.id)
+    const ambiguita = segnalazioneAmbiguita(candidati, `all'email ${emailDichiarata}`)
+
+    if (ambiguita) {
+      // Piu' schede curate con la stessa email: il sistema non sceglie. Unire a
+      // caso e' peggio che lasciare separato, quindi decide una persona.
+      await registraSegnalazione(supabase, propertyId, conversationId, ambiguita)
+      unioneMeta = { crm_anagrafica_ambigua: true }
+    } else {
+      const esistente = scegliAnagrafica(candidati)
+      if (esistente) {
+        unioneMeta = { crm_anagrafica_da_confermare_id: esistente.id }
+        await registraSegnalazione(supabase, propertyId, conversationId, {
+          tipo: "da_confermare",
+          testo: `L'email dichiarata corrisponde a ${esistente.name ?? esistente.email ?? "un'anagrafica esistente"}. Confermare manualmente il collegamento prima di modificare il CRM.`,
+          candidate: [{ id: esistente.id, nome: esistente.name ?? null, email: esistente.email ?? null }],
+          rilevata_il: new Date().toISOString(),
+        })
+      }
+    }
+  }
+
+  // Il recapito noto dal canale COMPLETA i dati: chiedere il numero a chi sta
+  // scrivendo da quel numero bloccava il passaggio allo staff per un dato che
+  // il sistema aveva in mano.
+  const contattoCompleto = {
+    ...result.contact,
+    email: result.contact?.email?.trim() || identita.datiNoti?.email || null,
+    phone: result.contact?.phone?.trim() || identita.numero || null,
+  }
+
   let handoffMeta: Record<string, unknown> | undefined
-  if (result.staffRequested && contactIsComplete(result.contact)) {
+  if (result.staffRequested && contactIsComplete(contattoCompleto)) {
     const handoff = await registerStaffHandoff({
       supabase,
       propertyId,
       conversationId,
       channel,
-      contact: result.contact,
+      contact: contattoCompleto,
       question: incomingText,
     })
     handoffMeta = {
@@ -177,9 +287,15 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     channel,
     ai_generated: true,
     ai_confidence: result.confidence,
+    // Il punteggio da solo non dice se la risposta si appoggiava alla base: la
+    // soglia della base puo' cambiare dopo, e allora lo stesso numero
+    // significherebbe il contrario. Il fatto viene salvato quando e' noto.
+    ai_grounded: result.grounded,
+    ai_reason: result.reason ?? null,
     ai_source_ids: result.usedChunks.map((c) => c.source_id),
     ai_knowledge_base_id: primary.id,
     ...(handoffMeta ?? {}),
+    ...(unioneMeta ?? {}),
   }
 
   // ON REQUEST: store a draft for operator approval; do not deliver.
@@ -248,6 +364,93 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   }
 
   return { action: "skipped", reason: "unknown_mode" }
+}
+
+/**
+ * Testo di ripiego, con le sole domande necessarie.
+ *
+ * Non promette mai che la richiesta e' stata inoltrata: in questo ramo nessun
+ * passaggio allo staff e' stato registrato.
+ */
+function testoRipiego(datiNoti: DatiNoti | null): string {
+  const mancano: string[] = []
+  if (!datiNoti?.nome) mancano.push("il suo nome e cognome")
+  if (!datiNoti?.email) mancano.push("un'email")
+
+  const apertura = "Grazie per il messaggio! Su questa richiesta preferisco farla rispondere direttamente dal nostro staff"
+
+  if (mancano.length === 0) {
+    // Nome ed email note e numero noto: non c'e' nulla da chiedere.
+    return `${apertura}. Ho tutto quello che serve per farla ricontattare.`
+  }
+  if (datiNoti?.email && datiNoti.daAnagraficaEsistente) {
+    return `${apertura}: mi confermate ${mancano.join(" e ")}? Le risulta l'email ${datiNoti.email}.`
+  }
+  return `${apertura}: può indicarmi ${mancano.join(" e ")} così li faccio ricontattare?`
+}
+
+interface Identita {
+  datiNoti: DatiNoti | null
+  anagrafica: AnagraficaTrovata | null
+  numero: string | null
+  /** Piu' schede curate rispondono a questo numero: decide una persona. */
+  ambiguita: Segnalazione | null
+}
+
+/**
+ * Chi sta scrivendo in questa conversazione.
+ *
+ * Il numero non si legge dall'anagrafica (che spesso non lo ha) ma dai messaggi
+ * in arrivo: `metadata.from_phone` e' scritto dal webhook WhatsApp ed e' il
+ * mittente reale, non un dato copiato a mano.
+ */
+async function caricaIdentita(
+  supabase: SupabaseClient,
+  propertyId: string,
+  conversationId: string,
+): Promise<Identita> {
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("contact_id")
+    .eq("id", conversationId)
+    .eq("property_id", propertyId)
+    .maybeSingle()
+
+  const { data: ultimoIngresso } = await supabase
+    .from("messages")
+    .select("metadata")
+    .eq("conversation_id", conversationId)
+    .eq("property_id", propertyId)
+    .eq("sender_type", "customer")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const meta = (ultimoIngresso?.metadata ?? {}) as Record<string, unknown>
+  const numero = typeof meta.from_phone === "string" && meta.from_phone.trim() ? meta.from_phone.trim() : null
+  const nomeProfilo = typeof meta.from_name === "string" ? meta.from_name : null
+
+  let anagrafica: AnagraficaTrovata | null = null
+  if (conv?.contact_id) {
+    const { data } = await supabase
+      .from("contacts")
+      .select("id, name, email, phone, whatsapp_id, source")
+      .eq("id", conv.contact_id as string)
+      .maybeSingle()
+    anagrafica = (data as unknown as AnagraficaTrovata) ?? null
+  }
+
+  // Anagrafica creata dal canale (nome "FM", nessuna email): non e' un
+  // riconoscimento. Si tenta il riconoscimento vero sul numero.
+  let ambiguita: Segnalazione | null = null
+  if (numero && (!anagrafica || anagrafica.source === "whatsapp")) {
+    const candidati = await trovaCandidatiPerNumero(supabase, propertyId, numero)
+    ambiguita = segnalazioneAmbiguita(candidati, `al numero +${numero}`)
+    const riconosciuta = scegliAnagrafica(candidati)
+    if (riconosciuta && riconosciuta.source !== "whatsapp") anagrafica = riconosciuta
+  }
+
+  return { datiNoti: datiNotiDaAnagrafica(anagrafica, numero, nomeProfilo), anagrafica, numero, ambiguita }
 }
 
 /**

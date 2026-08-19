@@ -19,6 +19,17 @@ export interface GenerateReplyResult {
   staffRequested: boolean
   /** Contact details gathered anywhere in the conversation. */
   contact: HandoffContact
+  /**
+   * La risposta si appoggia davvero alla base di conoscenza.
+   *
+   * `reason` non basta a chi chiama: "conversational" copre due casi opposti -
+   * un saluto (niente da cercare) e una domanda vera che la base non copriva
+   * (una lacuna). Chi registra le lacune deve poter distinguere i due, quindi
+   * il fatto viene dichiarato invece di essere ricostruito dal punteggio.
+   */
+  grounded: boolean
+  /** Il messaggio in arrivo era soltanto un saluto: non conteneva domande. */
+  greetingOnly: boolean
 }
 
 /**
@@ -66,6 +77,11 @@ export interface ReplyConfig {
   persona?: string | null
   language?: string
   confidenceThreshold?: number
+  /**
+   * Chi sta scrivendo, quando il sistema lo sa. Serve a non chiedere dati che
+   * abbiamo gia': su WhatsApp il numero e' l'identita' del canale.
+   */
+  datiNoti?: DatiNotiCliente | null
 }
 
 /**
@@ -91,6 +107,71 @@ function buildContextualQuery(incomingMessage: string, history: ConversationTurn
   // Cap each turn so a long earlier reply cannot drown out the new message.
   const parts = recent.map((t) => t.content.trim().slice(0, 300))
   return [...parts, incomingMessage].join("\n")
+}
+
+/**
+ * Words that, on their own, open a conversation instead of continuing one.
+ *
+ * Deliberately excludes "grazie", "ok", "sì", "prego", "certo": those ARE
+ * continuations ("sì grazie" after an offer must resume the thread), and
+ * treating them as openers would undo that behaviour.
+ */
+const GREETING_WORDS = new Set([
+  "ciao",
+  "salve",
+  "buongiorno",
+  "buonasera",
+  "buonanotte",
+  "buon",
+  "giorno",
+  "sera",
+  "notte",
+  "hello",
+  "hi",
+  "hey",
+  "ehi",
+  "hola",
+  "bonjour",
+  "salut",
+  "hallo",
+  "guten",
+  "tag",
+  "abend",
+  "morgen",
+  "good",
+  "morning",
+  "evening",
+  "afternoon",
+  "day",
+])
+
+/**
+ * True when the message is nothing but a greeting.
+ *
+ * Measured on the real conversation: a bare "Ciao" sent after a thread about
+ * the pool was answered with a description of the pool. Both "Ciao" of that
+ * conversation scored the *identical* similarity (0.712175222745368), because
+ * the score comes from the contextual query — the greeting inherits whatever
+ * the previous turns were about — so the same input produced a greeting once
+ * and an off-topic answer the other time. A coin flip, not a behaviour.
+ *
+ * A greeting carries no question, so there is nothing to retrieve: it must be
+ * answered as a greeting, and never used as an excuse to resume an old topic.
+ */
+function isGreetingOnly(message: string): boolean {
+  const cleaned = message
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    // Drop punctuation and emoji so "Ciao!" and "ciao 👋" still count.
+    .replace(/[^a-z\s]+/g, " ")
+    .trim()
+  if (!cleaned) return false
+  const words = cleaned.split(/\s+/).filter(Boolean)
+  // A longer sentence containing "ciao" ("ciao, avete la piscina?") is a real
+  // question and must keep its normal handling.
+  if (words.length === 0 || words.length > 3) return false
+  return words.every((w) => GREETING_WORDS.has(w))
 }
 
 /** Merge two retrievals, keeping the best similarity per chunk. */
@@ -143,14 +224,68 @@ function normalizeContact(raw: {
  * precondition: without a way to reach the guest, the staff cannot answer, so
  * the promise must not be made yet.
  */
-const STAFF_HANDOFF_RULE = [
-  "- CONTATTO CON LO STAFF: se il cliente chiede (o accetta) di essere messo in contatto con una persona, PRIMA raccogli nome, cognome, email e telefono.",
-  "  Chiedi in UNA sola frase i dati che mancano, senza rielencare quelli che ti ha già dato.",
-  "  NON dire MAI di aver inoltrato la richiesta, di averla presa in carico o che lo staff risponderà: la conferma viene aggiunta dal sistema solo quando la richiesta è stata registrata davvero.",
-  "  Quando hai già nome, cognome e un recapito, limitati a un breve ringraziamento senza promesse e senza richiedere dati che il cliente ti ha già dato.",
-].join("\n")
+/**
+ * Regola del passaggio allo staff, costruita sui dati che il sistema HA GIA'.
+ *
+ * Era un testo fisso che chiedeva sempre "nome, cognome, email e telefono".
+ * Su WhatsApp il telefono E' l'identita' del canale da cui arriva il messaggio:
+ * chiederlo significa chiedere una cosa che si ha in mano, e infatti nella
+ * conversazione reale il bot ha domandato il numero a chi stava scrivendo
+ * proprio da quel numero. Lo stesso vale per il nome e l'email quando il
+ * mittente e' riconosciuto in rubrica: al massimo si chiede una conferma.
+ */
+export function regolaContattoStaff(datiNoti?: DatiNotiCliente | null): string {
+  const righe = [
+    "- CONTATTO CON LO STAFF: se il cliente chiede (o accetta) di essere messo in contatto con una persona, servono un nome e un recapito.",
+  ]
 
-function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boolean): string {
+  const noti: string[] = []
+  if (datiNoti?.nome) noti.push(`nome: ${datiNoti.nome}`)
+  if (datiNoti?.email) noti.push(`email: ${datiNoti.email}`)
+  if (datiNoti?.numero) noti.push(`telefono: +${datiNoti.numero}`)
+
+  if (noti.length > 0) {
+    righe.push(`  DATI CHE ABBIAMO GIÀ e che NON devi chiedere: ${noti.join(" · ")}.`)
+  }
+
+  if (datiNoti?.numero) {
+    righe.push(
+      "  Il cliente ti sta scrivendo da questo numero: NON chiedere MAI il numero di telefono su questo canale.",
+    )
+  }
+
+  if (datiNoti?.email && datiNoti?.daAnagraficaEsistente) {
+    righe.push(
+      `  L'email risulta già registrata: al massimo chiedi una conferma ("confermo che possiamo scriverle a ${datiNoti.email}?"), non chiederla come se non l'avessimo.`,
+    )
+  }
+
+  righe.push(
+    "  Chiedi in UNA sola frase soltanto i dati che mancano davvero, senza rielencare quelli noti o già ricevuti.",
+    "  Se non manca nulla, NON fare domande.",
+    "  NON dire MAI di aver inoltrato la richiesta, di averla presa in carico o che lo staff risponderà: la conferma viene aggiunta dal sistema solo quando la richiesta è stata registrata davvero.",
+    "  Non chiedere un dato e nello stesso messaggio dire che la richiesta è stata passata: sono due cose che si contraddicono.",
+  )
+
+  return righe.join("\n")
+}
+
+/** Cosa il sistema sa gia' di chi scrive, per non richiederglielo. */
+export interface DatiNotiCliente {
+  nome: string | null
+  email: string | null
+  numero: string | null
+  daAnagraficaEsistente: boolean
+}
+
+function buildSystemPrompt(
+  config: ReplyConfig,
+  context: string,
+  grounded: boolean,
+  greetingOnly = false,
+  datiNoti?: DatiNotiCliente | null,
+): string {
+  const STAFF_HANDOFF_RULE = regolaContattoStaff(datiNoti)
   const persona =
     config.persona?.trim() ||
     "Sei l'assistente virtuale di una struttura ricettiva. Rispondi in modo cortese, professionale e conciso."
@@ -188,7 +323,13 @@ function buildSystemPrompt(config: ReplyConfig, context: string, grounded: boole
     `- Rispondi SEMPRE nella lingua del cliente (lingua predefinita: ${language}).`,
     "- CONVERSA in modo naturale e umano: saluta, ringrazia, riconosci quello che dice il cliente, mantieni il filo del discorso e, se la richiesta è vaga, chiedi cortesemente di cosa ha bisogno.",
     "- NON inventare MAI informazioni sulla struttura: orari, prezzi, disponibilità, servizi, politiche, indirizzi. Se non sono nelle INFORMAZIONI DISPONIBILI, non affermarle in nessun modo.",
-    "- COERENZA: ciò che hai già detto in questa conversazione resta valido. Non contraddirlo e non negarlo mai. Se il cliente ti chiede di proseguire su un argomento che hai già trattato (es. 'prego mi dica', 'sì grazie'), riprendi quel filo invece di dire che non hai informazioni.",
+    ...(greetingOnly
+      ? [
+          "- Il cliente ti ha SOLO salutato: rispondi con un saluto cordiale e chiedi come puoi aiutarlo. NON riprendere argomenti precedenti, NON descrivere servizi e NON dare informazioni che non ti ha chiesto.",
+        ]
+      : [
+          "- COERENZA: ciò che hai già detto in questa conversazione resta valido. Non contraddirlo e non negarlo mai. Se il cliente ti chiede di proseguire su un argomento che hai già trattato (es. 'prego mi dica', 'sì grazie'), riprendi quel filo invece di dire che non hai informazioni.",
+        ]),
     "- Se il cliente chiede un'informazione che non hai MAI dato e che non è nelle INFORMAZIONI DISPONIBILI, ammettilo in una frase senza giri di parole e proponi di far intervenire un membro dello staff.",
     "- LINK: se una fonte pertinente riporta un indirizzo web nella riga '(fonte: ...)' e il cliente chiede dove prenotare o dove trovare qualcosa, forniscilo per intero. Non inventare MAI un indirizzo che non sia scritto qui sotto.",
     "- Se hai proposto due alternative e il cliente risponde in modo ambiguo (es. 'sì grazie'), chiedi quale preferisce invece di scegliere al posto suo.",
@@ -226,17 +367,25 @@ export async function generateReply(
   // self-contained question) and the message prefixed with the recent turns
   // (best for follow-ups such as "prego mi dica"). Keeping the strongest match
   // from either means a follow-up no longer loses the subject of the thread.
-  const contextualQuery = buildContextualQuery(incomingMessage, history)
-  const [directChunks, contextualChunks] = await Promise.all([
-    retrieveContext(config.baseIds, incomingMessage, { minSimilarity: 0 }),
-    contextualQuery
-      ? retrieveContext(config.baseIds, contextualQuery, { minSimilarity: 0 })
-      : Promise.resolve([] as RetrievedChunk[]),
-  ])
+  // A bare greeting is answered as a greeting: no retrieval at all, so the
+  // previous topic cannot leak in through the contextual query, and no facts are
+  // available to state. As a bonus this spares two embedding calls on the
+  // cheapest possible message.
+  const greetingOnly = isGreetingOnly(incomingMessage)
+
+  const contextualQuery = greetingOnly ? null : buildContextualQuery(incomingMessage, history)
+  const [directChunks, contextualChunks] = greetingOnly
+    ? [[] as RetrievedChunk[], [] as RetrievedChunk[]]
+    : await Promise.all([
+        retrieveContext(config.baseIds, incomingMessage, { minSimilarity: 0 }),
+        contextualQuery
+          ? retrieveContext(config.baseIds, contextualQuery, { minSimilarity: 0 })
+          : Promise.resolve([] as RetrievedChunk[]),
+      ])
   const chunks = mergeChunks(directChunks, contextualChunks)
 
   const topSimilarity = chunks.length > 0 ? chunks[0].similarity : 0
-  const grounded = topSimilarity >= threshold
+  const grounded = !greetingOnly && topSimilarity >= threshold
 
   // In conversational mode only clearly-related chunks are surfaced, so a noisy
   // match can never become the basis for an invented answer.
@@ -256,7 +405,7 @@ export async function generateReply(
   const { object } = await generateObject({
     model: CHAT_MODEL,
     schema: replySchema,
-    system: buildSystemPrompt(config, context, grounded),
+    system: buildSystemPrompt(config, context, grounded, greetingOnly, config.datiNoti),
     messages: [
       ...history.slice(-8).map((t) => ({ role: t.role, content: t.content })),
       { role: "user" as const, content: incomingMessage },
@@ -274,6 +423,8 @@ export async function generateReply(
       reason: chunks.length === 0 ? "no_match" : "low_confidence",
       staffRequested: object.staff_requested,
       contact,
+      grounded,
+      greetingOnly,
     }
   }
 
@@ -284,5 +435,7 @@ export async function generateReply(
     reason: grounded ? "ok" : "conversational",
     staffRequested: object.staff_requested,
     contact,
+    grounded,
+    greetingOnly,
   }
 }

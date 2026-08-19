@@ -57,11 +57,16 @@ export function TenantSwitcher() {
     return null
   }
 
-  const active = data.tenants.find((t) => t.id === data.activePropertyId) || data.tenants[0]
+  // La struttura registrata nel cookie, se c'e'.
+  const selected = data.tenants.find((t) => t.id === data.activePropertyId) ?? null
 
   // Tenant admin or non-admin member on a single property: show a read-only
   // badge for context (only super_admins get the full switcher below).
   if (data.role === "tenant_admin" || data.role === "member") {
+    // Qui il ripiego sull'unica struttura e' legittimo: per questi ruoli il
+    // server ricava la struttura da `admin_users.property_id`, non dal cookie,
+    // quindi il badge descrive un ambito che esiste davvero.
+    const active = selected ?? data.tenants[0]
     if (!active) return null
     return (
       <div
@@ -115,7 +120,10 @@ export function TenantSwitcher() {
           ) : (
             <Building2 className="h-3.5 w-3.5 text-[#6b7280]" />
           )}
-          <span className="truncate max-w-[180px]">{active?.name || "Seleziona tenant"}</span>
+          {/* Senza scelta registrata NON si mostra il nome della prima struttura:
+              sembrerebbe attiva mentre le pagine restano vuote. Si chiede di
+              scegliere, che e' l'azione che sblocca davvero i dati. */}
+          <span className="truncate max-w-[180px]">{selected?.name ?? "Scegli la struttura"}</span>
           <ChevronsUpDown className="h-3 w-3 text-[#9ca3af]" />
         </Button>
       </DropdownMenuTrigger>

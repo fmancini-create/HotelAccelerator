@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { CartelleEmail } from "@/components/admin/channels/cartelle-email"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -322,7 +323,11 @@ export default function EmailChannelsClient() {
       if (response.ok) {
         const data = await response.json()
         setSettings({
-          autoSync: data.sync_enabled ?? true,
+          // Allineato al servizio periodico, che sincronizza solo se il valore
+          // e' esattamente `true`: mostrare l'interruttore acceso "per
+          // benevolenza" farebbe credere attiva una sincronizzazione che non
+          // avviene.
+          autoSync: data.sync_enabled === true,
           notifications: data.notifications_enabled ?? true,
           autoContacts: data.auto_create_contacts ?? false,
           syncAttachments: data.save_attachments ?? true,
@@ -635,53 +640,10 @@ export default function EmailChannelsClient() {
     toast({ title: "Copiato negli appunti!" })
   }
 
-  const handleLabelToggle = async (labelId: string, enabled: boolean) => {
-    if (!selectedChannel) return
-
-    // Ottimistic update
-    setLabels((prevLabels) =>
-      prevLabels.map((label) => (label.id === labelId ? { ...label, sync_enabled: enabled } : label)),
-    )
-
-    try {
-      const headers = await getAuthHeaders()
-      const response = await fetch(`/api/channels/email/${selectedChannel.id}/labels`, {
-        method: "PATCH",
-        headers,
-        credentials: "include",
-        body: JSON.stringify({ labelId, syncEnabled: enabled }),
-      })
-
-      if (!response.ok) {
-        // Revert on error
-        setLabels((prevLabels) =>
-          prevLabels.map((label) => (label.id === labelId ? { ...label, sync_enabled: !enabled } : label)),
-        )
-        toast({
-          title: "Errore",
-          description: "Impossibile aggiornare l'etichetta",
-          variant: "destructive",
-        })
-        return
-      }
-
-      toast({
-        title: enabled ? "Etichetta attivata" : "Etichetta disattivata",
-        description: `La sincronizzazione per questa etichetta è stata ${enabled ? "attivata" : "disattivata"}.`,
-      })
-    } catch (error) {
-      console.error("Error toggling label:", error)
-      // Revert on error
-      setLabels((prevLabels) =>
-        prevLabels.map((label) => (label.id === labelId ? { ...label, sync_enabled: !enabled } : label)),
-      )
-      toast({
-        title: "Errore",
-        description: "Impossibile aggiornare l'etichetta",
-        variant: "destructive",
-      })
-    }
-  }
+  // Il vecchio `handleLabelToggle` viveva qui: inviava `syncEnabled` e scriveva
+  // su una colonna inesistente, quindi non ha mai salvato nulla. La gestione
+  // delle cartelle e' passata al componente `CartelleEmail`, che parla con la
+  // rotta corretta per tutte le caselle.
 
   const handleSettingToggle = async (setting: keyof typeof settings, enabled: boolean) => {
     if (!selectedChannel) return
@@ -1174,97 +1136,11 @@ export default function EmailChannelsClient() {
 
           {/* FOLDERS TAB */}
           <TabsContent value="folders" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FolderSync className="h-5 w-5" />
-                  Cartelle e Etichette Gmail
-                </CardTitle>
-                <CardDescription>Seleziona quali cartelle sincronizzare con la piattaforma</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {!selectedChannel ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <FolderSync className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>Seleziona un account Gmail per gestire le cartelle</p>
-                  </div>
-                ) : selectedChannel.provider !== "gmail" ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>La sincronizzazione cartelle è disponibile solo per Gmail</p>
-                  </div>
-                ) : loadingLabels ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* System Labels */}
-                    <div>
-                      <h4 className="text-sm font-medium mb-3">Cartelle di Sistema</h4>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {labels
-                          .filter((l) => l.type === "system" && GMAIL_SYSTEM_LABELS[l.id])
-                          .map((label) => {
-                            const config = GMAIL_SYSTEM_LABELS[label.id]
-                            return (
-                              <div
-                                key={label.id}
-                                className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div className={config.color}>{config.icon}</div>
-                                  <div>
-                                    <p className="font-medium">{config.name}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      {label.messagesTotal} messaggi ({label.messagesUnread} non letti)
-                                    </p>
-                                  </div>
-                                </div>
-                                <Switch
-                                  checked={label.sync_enabled !== false}
-                                  onCheckedChange={(checked) => handleLabelToggle(label.id, checked)}
-                                />
-                              </div>
-                            )
-                          })}
-                      </div>
-                    </div>
-
-                    {/* Custom Labels */}
-                    {labels.filter((l) => l.type === "user").length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium mb-3">Etichette Personalizzate</h4>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {labels
-                            .filter((l) => l.type === "user")
-                            .map((label) => (
-                              <div
-                                key={label.id}
-                                className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                              >
-                                <div className="flex items-center gap-3">
-                                  <Tag className="w-4 h-4 text-muted-foreground" />
-                                  <div>
-                                    <p className="font-medium">{label.name}</p>
-                                    <p className="text-xs text-muted-foreground">{label.messagesTotal} messaggi</p>
-                                  </div>
-                                </div>
-                                <Switch
-                                  checked={label.sync_enabled !== false}
-                                  onCheckedChange={(checked) => handleLabelToggle(label.id, checked)}
-                                />
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <p className="text-sm text-muted-foreground">Le modifiche vengono riflesse anche in Gmail</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* Tutte le caselle insieme: prima la scheda ne apriva UNA sola in
+                automatico senza dirlo, e con 5 caselle collegate sembrava che
+                ce ne fosse una. Il componente si carica da se' perche' i
+                conteggi non dipendono dalla casella selezionata altrove. */}
+            <CartelleEmail />
           </TabsContent>
 
           {/* SETTINGS TAB */}
@@ -1275,6 +1151,20 @@ export default function EmailChannelsClient() {
                   <Settings className="h-5 w-5" />
                   Impostazioni Sincronizzazione
                 </CardTitle>
+                {/* Queste impostazioni valgono per UNA casella, non per tutte:
+                    senza dirlo, con piu' caselle collegate sembra che
+                    l'attivazione non venga salvata, mentre in realta' si sta
+                    guardando una casella diversa da quella modificata. */}
+                <CardDescription>
+                  {selectedChannel ? (
+                    <>
+                      Valgono solo per <span className="font-medium text-foreground">{selectedChannel.email_address}</span>
+                      {channels.length > 1 ? " — ogni casella ha le proprie impostazioni." : "."}
+                    </>
+                  ) : (
+                    "Seleziona una casella per vedere le sue impostazioni."
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center justify-between">

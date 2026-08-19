@@ -2,6 +2,8 @@ import type { MetadataRoute } from "next"
 import { headers } from "next/headers"
 import { getCurrentTenant, isPlatformDomain } from "@/lib/get-tenant"
 
+const PLATFORM_URL = "https://www.hotelaccelerator.com"
+
 /**
  * Robots.txt dinamico multi-tenant con SEO ottimizzato
  * - Platform domain: indicizza landing pages
@@ -15,24 +17,16 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const isPlatform = await isPlatformDomain()
 
   if (isPlatform) {
-    // Robots per dominio piattaforma (hotelaccelerator.com)
-    const baseUrl = `${protocol}://${host || "hotelaccelerator.com"}`
-
     return {
       rules: [
         {
           userAgent: "*",
-          allow: ["/", "/features/"],
-          disallow: ["/admin/", "/api/", "/_next/", "/scripts/", "/super-admin/"],
-        },
-        {
-          userAgent: "Googlebot",
-          allow: ["/", "/features/"],
-          disallow: ["/admin/", "/api/", "/_next/", "/scripts/", "/super-admin/"],
+          allow: ["/", "/features/", "/request-access", "/privacy", "/terms"],
+          disallow: ["/admin/", "/api/", "/scripts/", "/super-admin/"],
         },
       ],
-      sitemap: `${baseUrl}/sitemap.xml`,
-      host: baseUrl,
+      sitemap: `${PLATFORM_URL}/sitemap.xml`,
+      host: PLATFORM_URL,
     }
   }
 
@@ -66,7 +60,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/admin/", "/api/", "/_next/", "/scripts/"],
+        disallow: ["/admin/", "/api/", "/scripts/"],
       },
     ],
     sitemap: `${baseUrl}/sitemap.xml`,
