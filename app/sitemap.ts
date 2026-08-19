@@ -16,6 +16,9 @@ const PLATFORM_PAGES = [
   { path: "/terms", changeFrequency: "yearly" as const, priority: 0.3 },
 ]
 
+const PLATFORM_URL = "https://www.hotelaccelerator.com"
+const PLATFORM_LAST_MODIFIED = new Date("2026-08-18")
+
 /**
  * Sitemap dinamica multi-tenant con supporto piattaforma
  */
@@ -28,12 +31,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const isPlatform = await isPlatformDomain()
 
   if (isPlatform) {
-    // Sitemap per dominio piattaforma
-    const baseUrl = `${protocol}://${host || "hotelaccelerator.com"}`
-
     return PLATFORM_PAGES.map((page) => ({
-      url: `${baseUrl}${page.path}`,
-      lastModified: new Date(),
+      url: `${PLATFORM_URL}${page.path}`,
+      lastModified: PLATFORM_LAST_MODIFIED,
       changeFrequency: page.changeFrequency,
       priority: page.priority,
     }))
@@ -56,7 +56,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return FRONTEND_PAGES.map((page) => ({
     url: `${baseUrl}${page.path}`,
-    lastModified: new Date(),
     changeFrequency: page.changeFrequency,
     priority: page.priority,
   }))

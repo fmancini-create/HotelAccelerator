@@ -1,237 +1,126 @@
-import type { Metadata } from "next"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Mail, ArrowRight, Send, BarChart3, Clock, Sparkles, FileText, Target, Zap } from "lucide-react"
-import { PlatformFooter } from "@/components/platform-footer"
-import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
+import { BarChart3, ContactRound, FileEdit, Mail, Send, Tags } from "lucide-react"
+import { buildFeatureMetadata, FeatureLandingPage } from "@/components/platform/feature-landing-page"
 
-export const metadata: Metadata = {
-  title: "Email Marketing per Hotel - Campagne Automatizzate | HotelAccelerator",
-  description:
-    "Email marketing professionale per hotel. Campagne automatizzate pre e post soggiorno, template professionali, A/B testing, analytics dettagliati. 2x engagement rate. Aumenta le prenotazioni dirette.",
+const description =
+  "Prepara campagne email per hotel usando contatti e segmenti del CRM. Bozze e metriche sono disponibili; invio e automazioni si attivano solo dopo verifica."
+
+export const metadata = buildFeatureMetadata({
+  slug: "email-marketing",
+  title: "Campagne email per hotel e CRM",
+  description,
   keywords: [
     "email marketing hotel",
-    "newsletter hotel",
     "campagne email hotel",
-    "automazione email hotel",
-    "marketing automation hotel",
-    "template email hotel",
-    "email pre soggiorno",
-    "email post soggiorno",
+    "newsletter hotel",
+    "crm email hotel",
+    "gestione campagne albergo",
+    "marketing alberghiero",
   ],
-  openGraph: {
-    title: "Email Marketing per Hotel - Automatizza e Converti | HotelAccelerator",
-    description: "Email marketing professionale per hotel. Campagne automatizzate, A/B testing, 2x engagement rate.",
-    type: "website",
-  },
-  alternates: {
-    canonical: "https://hotelaccelerator.com/features/email-marketing",
-  },
-}
+})
 
-const features = [
+const capabilities = [
   {
-    icon: Sparkles,
-    title: "Automazioni Pre-Soggiorno",
+    icon: FileEdit,
+    title: "Bozze di campagna",
     description:
-      "Email di benvenuto, informazioni utili, upselling servizi. Tutto automatico basato sulla data di arrivo.",
+      "Salva nome, oggetto, testo di anteprima, mittente, reply-to e contenuto della campagna nell'area del tenant.",
   },
   {
-    icon: Send,
-    title: "Campagne Post-Soggiorno",
-    description: "Richiesta recensioni, offerte per il ritorno, newsletter stagionali. Mantieni viva la relazione.",
+    icon: ContactRound,
+    title: "Collegamento al CRM",
+    description:
+      "La campagna può riferirsi a un segmento del CRM; destinatari e consenso devono essere verificati prima dell'invio.",
   },
   {
-    icon: FileText,
-    title: "Template Professionali",
-    description: "Decine di template pronti per hotel. Personalizzabili, responsive, ottimizzati per le conversioni.",
-  },
-  {
-    icon: Target,
-    title: "A/B Testing",
-    description: "Testa oggetti, contenuti, orari di invio. Scopri cosa funziona meglio con il tuo pubblico.",
+    icon: Tags,
+    title: "Stati operativi",
+    description:
+      "L'elenco distingue bozze, programmate, in invio, inviate e sospese quando questi stati sono valorizzati dal processo.",
   },
   {
     icon: BarChart3,
-    title: "Analytics Dettagliati",
-    description: "Open rate, click rate, conversioni, revenue generato. Report chiari per ogni campagna.",
+    title: "Metriche archiviate",
+    description:
+      "La dashboard legge conteggi di invio, consegna, apertura, clic, rimbalzi e disiscrizioni quando la fonte li ha registrati.",
   },
   {
-    icon: Clock,
-    title: "Invio Ottimizzato",
-    description: "Machine learning per l'orario migliore di invio. Massimizza l'apertura delle email.",
+    icon: Mail,
+    title: "Contenuto email",
+    description:
+      "L'interfaccia raccoglie contenuto HTML e offre una vista di anteprima per controllare la campagna prima di procedere.",
+  },
+  {
+    icon: Send,
+    title: "Invio sotto verifica",
+    description:
+      "L'invio reale non viene dichiarato attivo finché provider, destinatari, consensi, retry e tracciamento non sono collaudati.",
   },
 ]
 
-const automations = [
-  { name: "Welcome Email", trigger: "Dopo prenotazione", openRate: "65%" },
-  { name: "Pre-Arrival", trigger: "3 giorni prima", openRate: "72%" },
-  { name: "Post-Stay", trigger: "1 giorno dopo", openRate: "45%" },
-  { name: "Win-Back", trigger: "6 mesi dopo", openRate: "28%" },
+const faqs = [
+  {
+    question: "HotelAccelerator invia già campagne automatiche pre e post soggiorno?",
+    answer:
+      "No, non come funzione dichiarata production-ready. La creazione e l'archiviazione delle campagne sono presenti; automazioni, scheduling e invio reale devono essere completati e collaudati.",
+  },
+  {
+    question: "Le metriche di apertura e clic sono reali?",
+    answer:
+      "La dashboard legge i valori memorizzati per ogni campagna. I numeri sono significativi solo quando il provider di invio e il tracking sono configurati correttamente.",
+  },
+  {
+    question: "Posso usare i segmenti del CRM?",
+    answer:
+      "Il collegamento dati è predisposto, ma la valutazione dinamica dei segmenti e l'elenco definitivo dei destinatari devono essere verificati prima dell'uso.",
+  },
+  {
+    question: "Sono disponibili A/B test e invio all'orario migliore?",
+    answer:
+      "Queste funzioni non sono presentate come disponibili nello stato attuale. Saranno comunicate solo dopo implementazione e prova nel codice e su un tenant reale.",
+  },
 ]
 
 export default function EmailMarketingLandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      {/* Schema.org */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            name: "HotelAccelerator Email Marketing",
-            applicationCategory: "BusinessApplication",
-            description: "Email marketing professionale per hotel con automazioni",
-            operatingSystem: "Web",
-          }),
-        }}
-      />
-
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-        <nav className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <HotelAcceleratorMark className="h-8 w-8" priority />
-            <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/admin">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Accedi
-              </Button>
-            </Link>
-            <Link href="/request-access">
-              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Richiedi Demo
-              </Button>
-            </Link>
-          </div>
-        </nav>
-      </header>
-
-      {/* Hero */}
-      <section className="pt-32 pb-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-16">
-            <Link href="/" className="mx-auto mb-6 flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-              <ArrowRight className="h-4 w-4 rotate-180" />
-              Torna alla home
-            </Link>
-            <div className="mx-auto flex w-fit items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand mb-8">
-              <Mail className="h-4 w-4" />
-              Email Marketing
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 text-balance">
-              Email che trasformano ospiti in clienti fedeli
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              Campagne automatizzate <strong>pre e post soggiorno</strong> che aumentano le prenotazioni dirette. 2x
-              engagement rate rispetto alla media di settore.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/request-access">
-                <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                  Inizia con l'Email Marketing
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-12 border-y border-border">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-ha-brand mb-1">2x</div>
-              <div className="text-sm text-muted-foreground">Engagement rate</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-ha-brand mb-1">65%</div>
-              <div className="text-sm text-muted-foreground">Open rate medio</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-ha-brand mb-1">+35%</div>
-              <div className="text-sm text-muted-foreground">Prenotazioni dirette</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-ha-brand mb-1">∞</div>
-              <div className="text-sm text-muted-foreground">Automazioni</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Automations Table */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Automazioni che lavorano per te 24/7</h2>
-            <p className="text-muted-foreground">Imposta una volta, converti per sempre</p>
-          </div>
-
-          <div className="rounded-2xl border border-border overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-secondary/50">
-                <tr>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Automazione</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Trigger</th>
-                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">Open Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {automations.map((auto, i) => (
-                  <tr key={auto.name} className={i % 2 === 0 ? "bg-card/[0.02]" : ""}>
-                    <td className="p-4 font-medium">{auto.name}</td>
-                    <td className="p-4 text-muted-foreground">{auto.trigger}</td>
-                    <td className="p-4 text-right text-ha-brand font-semibold">{auto.openRate}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-24 px-4 bg-card/[0.02]">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Strumenti professionali per email che convertono</h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <article key={feature.title} className="p-6 rounded-2xl bg-secondary/50 border border-border">
-                <div className="w-12 h-12 rounded-xl bg-ha-brand-soft flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-ha-brand" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm">{feature.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-ha-brand/20 to-ha-brand-soft border border-ha-brand/20">
-            <Zap className="h-12 w-12 text-ha-brand mx-auto mb-6" />
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">Inizia a convertire con le email</h2>
-            <p className="text-muted-foreground mb-8">Prova gratuita di 14 giorni. Template inclusi, setup assistito.</p>
-            <Link href="/request-access">
-              <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                Richiedi Demo Gratuita
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <PlatformFooter />
-    </div>
+    <FeatureLandingPage
+      slug="email-marketing"
+      eyebrow="Campagne email"
+      icon={Mail}
+      title="Prepara campagne email partendo dai dati del CRM"
+      intro="Il modulo organizza bozze, contenuti, mittenti e metriche. L'invio automatico viene attivato solo quando provider, consensi e processo operativo sono stati verificati."
+      statusLabel="Creazione campagne presente; invio in consolidamento"
+      statusDescription="La pagina distingue ciò che è già nel codice dalle automazioni commerciali che non sono ancora dichiarate operative o vendibili."
+      capabilitiesTitle="Una base concreta per il marketing email"
+      capabilitiesIntro="Il focus attuale è rendere affidabili dati, consenso e destinatari prima di aggiungere automazioni o promesse di performance."
+      capabilities={capabilities}
+      availableNow={[
+        "Creazione e salvataggio di campagne associate alla struttura.",
+        "Campi per oggetto, mittente, contenuto, reply-to e segmento.",
+        "Elenco campagne e dashboard delle metriche memorizzate.",
+        "Autorizzazione dell'area marketing lato server.",
+      ]}
+      requiresVerification={[
+        "Provider di invio, deliverability, retry e gestione degli errori.",
+        "Destinatari effettivi, consenso e disiscrizione prima di ogni invio.",
+        "Scheduling, automazioni lifecycle, A/B test e attribuzione del ricavo.",
+      ]}
+      faqs={faqs}
+      related={[
+        {
+          href: "/features/crm",
+          title: "CRM alberghiero",
+          description: "Gestisci contatti, consensi e dati utili a definire il pubblico.",
+        },
+        {
+          href: "/features/analytics",
+          title: "Analytics e tracking",
+          description: "Consulta solo le metriche prodotte da fonti realmente collegate.",
+        },
+      ]}
+      ctaTitle="Partiamo da contatti e consensi reali"
+      ctaDescription="Nella demo controlliamo CRM, segmenti e provider prima di definire il flusso di invio adatto alla struttura."
+      schemaName="Gestione campagne email per hotel collegata al CRM"
+      schemaDescription={description}
+    />
   )
 }
