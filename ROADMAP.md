@@ -1,6 +1,6 @@
 # HotelAccelerator — Roadmap
 
-Ultimo aggiornamento: 2026-08-08
+Ultimo aggiornamento: 2026-08-18
 
 ## Principio di priorità
 
@@ -9,6 +9,7 @@ Il limite attuale non è la mancanza di idee, ma l'assenza di una fotografia tec
 ## Fase 0 — Audit e governo del progetto
 
 - [x] Inventariare repository, app, branch, deploy e database.
+- [x] Auditare contenuti e SEO del sito pubblico, rimuovendo claim non dimostrabili e allineando ogni pagina allo stato reale dei moduli; vedere `docs/PUBLIC_SITE_CONTENT_SEO_AUDIT_2026-08-18.md`.
 - [ ] Completare `README.md` e aggiungere un `AGENTS.md` root; Santaddeo ha già istruzioni dedicate.
 - [ ] Mappare schema, migrazioni, API, cron, webhook e variabili ambiente.
 - [ ] Verificare ogni riga di `MODULE_REGISTRY.md` con evidenza.
@@ -74,7 +75,7 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 - [ ] Onboarding self-service o assistito documentato.
 - [ ] Billing, piani, trial ed entitlement.
 - [ ] Supporto, SLA, runbook e disaster recovery.
-- [ ] Privacy, termini, DPA e retention.
+- [ ] Privacy, termini, DPA e retention; coerenza fattuale delle pagine pubbliche aggiornata, revisione legale professionale ancora necessaria.
 - [ ] Metriche di adozione, affidabilità e valore economico.
 
 ## Fuori priorità finché le fondazioni non sono chiuse

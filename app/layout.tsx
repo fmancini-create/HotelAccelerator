@@ -24,28 +24,27 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: {
-    default: "HotelAccelerator - Software Gestionale per Hotel | CRM, CMS, Email Marketing, AI",
+    default: "Software gestionale modulare per hotel | HotelAccelerator",
     template: "%s | HotelAccelerator",
   },
   description:
-    "La piattaforma SaaS all-in-one per hotel e strutture ricettive: CMS per siti web, CRM per gestione clienti, Email Marketing automatizzato, Inbox Omnicanale e AI Assistant. Aumenta le prenotazioni dirette fino al 35%.",
+    "Inbox Gmail, CRM alberghiero, CMS, tracking e AI assistita in moduli attivati in base al tenant e alle integrazioni realmente configurate.",
   keywords: [
     "software gestionale hotel",
     "crm hotel",
     "cms hotel",
-    "email marketing hotel",
-    "inbox omnicanale hotel",
-    "software prenotazioni hotel",
+    "campagne email hotel",
+    "inbox hotel",
+    "gestione messaggi hotel",
     "gestionale strutture ricettive",
     "saas hotel",
     "intelligenza artificiale hotel",
-    "marketing automation hotel",
-    "chatbot hotel",
+    "knowledge base hotel",
+    "ai assistita hotel",
     "analytics hotel",
-    "prenotazioni dirette hotel",
-    "fidelizzazione ospiti",
+    "tracking sito hotel",
   ],
-  authors: [{ name: "HotelAccelerator", url: "https://hotelaccelerator.com" }],
+  authors: [{ name: "HotelAccelerator", url: "https://www.hotelaccelerator.com" }],
   creator: "HotelAccelerator",
   publisher: "HotelAccelerator",
   formatDetection: {
@@ -53,34 +52,34 @@ export const metadata: Metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL("https://hotelaccelerator.com"),
+  metadataBase: new URL("https://www.hotelaccelerator.com"),
   alternates: {
-    canonical: "https://hotelaccelerator.com",
+    canonical: "https://www.hotelaccelerator.com",
     languages: {
-      "it-IT": "https://hotelaccelerator.com",
+      "it-IT": "https://www.hotelaccelerator.com",
     },
   },
   openGraph: {
     type: "website",
     locale: "it_IT",
-    url: "https://hotelaccelerator.com",
+    url: "https://www.hotelaccelerator.com",
     siteName: "HotelAccelerator",
-    title: "HotelAccelerator - La Piattaforma Completa per Hotel",
+    title: "Software gestionale modulare per hotel | HotelAccelerator",
     description:
-      "CMS, CRM, Email Marketing, Inbox Omnicanale e AI in un'unica soluzione. Aumenta le prenotazioni dirette fino al 35%.",
+      "Inbox Gmail, CRM alberghiero, CMS, tracking e AI assistita, con stato delle funzioni e verifiche dichiarati.",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "HotelAccelerator - Software Gestionale per Hotel",
+        alt: "HotelAccelerator - software gestionale modulare per hotel",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "HotelAccelerator - Software Gestionale per Hotel",
-    description: "La piattaforma SaaS all-in-one per hotel: CRM, CMS, Email Marketing, Inbox Omnicanale e AI.",
+    title: "Software gestionale modulare per hotel | HotelAccelerator",
+    description: "Inbox Gmail, CRM, CMS, tracking e AI assistita con attivazione guidata.",
     images: ["/og-image.png"],
   },
   robots: {
@@ -93,9 +92,6 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
       "max-snippet": -1,
     },
-  },
-  verification: {
-    google: "your-google-verification-code",
   },
   category: "technology",
   /*
@@ -115,7 +111,6 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-icon-hotelaccelerator.png", sizes: "180x180" }],
   },
   manifest: "/manifest.json",
-    generator: 'v0.app'
 }
 
 export default async function RootLayout({

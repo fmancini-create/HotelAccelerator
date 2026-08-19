@@ -1,10 +1,12 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-08-08
+Ultimo aggiornamento: 2026-08-18
 
 ## Avvertenza
 
 Questa prima versione consolida requisiti emersi nelle conversazioni. Non è ancora un audit completo del codice. Salvo evidenza indicata, lo stato è `Da verificare`. Nessuna riga autorizza a dichiarare una funzione vendibile.
+
+L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati senza promuoverli. Evidenze, claim rimossi e limiti dichiarati sono documentati in `docs/PUBLIC_SITE_CONTENT_SEO_AUDIT_2026-08-18.md`.
 
 ## Stati ufficiali
 

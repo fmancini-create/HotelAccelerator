@@ -1,11 +1,19 @@
 import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
+import type { Metadata } from "next"
 import { Button } from "@/components/ui/button"
 import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 
-export const metadata = {
-  title: "Termini e Condizioni | HotelAccelerator",
+export const metadata: Metadata = {
+  title: { absolute: "Termini e Condizioni | HotelAccelerator" },
   description: "Termini e Condizioni di Servizio di HotelAccelerator - Regole per l'utilizzo della piattaforma.",
+  alternates: { canonical: "https://www.hotelaccelerator.com/terms" },
+  openGraph: {
+    title: "Termini e Condizioni | HotelAccelerator",
+    description: "Condizioni generali per l'accesso e l'utilizzo dei servizi HotelAccelerator.",
+    type: "website",
+    url: "https://www.hotelaccelerator.com/terms",
+  },
 }
 
 export default function TermsPage() {
@@ -31,7 +39,7 @@ export default function TermsPage() {
       <main className="pt-32 pb-20 px-4">
         <div className="container mx-auto max-w-3xl">
           <h1 className="text-3xl md:text-4xl font-bold mb-2">Termini e Condizioni di Servizio</h1>
-          <p className="text-gray-400 mb-12">Ultimo aggiornamento: 27 dicembre 2025</p>
+          <p className="text-gray-400 mb-12">Ultimo aggiornamento: 18 agosto 2026</p>
 
           <div className="prose prose-invert prose-gray max-w-none space-y-8">
             <p className="text-gray-300 leading-relaxed">
@@ -108,56 +116,17 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="text-xl font-semibold text-white mb-4">8. Piani, prova gratuita, SLA e pagamenti</h2>
+              <h2 className="text-xl font-semibold text-white mb-4">8. Accesso e condizioni commerciali</h2>
               <p className="text-gray-300 leading-relaxed mb-4">
-                L&apos;accesso a HotelAccelerator e ai suoi moduli può prevedere piani gratuiti o a pagamento. I
-                contenuti, i limiti e i prezzi aggiornati di ciascun piano, così come gli eventuali componenti
-                aggiuntivi (add-on), sono indicati nella relativa offerta o nella pagina prezzi. Per i piani a
-                pagamento:
+                Moduli abilitati, durata, prezzo, fatturazione, rinnovo, disdetta, supporto ed eventuali livelli di
+                servizio sono definiti esclusivamente nell&apos;offerta, nell&apos;ordine o nel contratto sottoscritto dal
+                cliente. Le pagine pubbliche descrivono il prodotto ma non attribuiscono automaticamente il diritto a
+                uno specifico piano, periodo di prova, livello di servizio o integrazione.
               </p>
-              <ul className="list-disc list-inside space-y-2 text-gray-300">
-                <li>la fatturazione avviene con cadenza mensile o annuale, secondo il piano scelto;</li>
-                <li>i pagamenti sono elaborati tramite fornitori di pagamento sicuri e, salvo diversa indicazione, sono
-                ricorrenti fino a disdetta (art. 8-bis);</li>
-                <li>la cancellazione interrompe gli addebiti futuri ma non dà diritto al rimborso di quelli già
-                maturati, salvo quanto diversamente previsto dalla legge;</li>
-                <li>eventuali servizi o integrazioni su misura sono fatturati separatamente.</li>
-              </ul>
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">8.1 Prova gratuita</h3>
               <p className="text-gray-300 leading-relaxed">
-                Ove offerta, la prova gratuita (ad esempio di <strong>14 giorni</strong> su determinati moduli) consente
-                l&apos;utilizzo delle funzionalità indicate nella relativa offerta e, salvo diversa indicazione, non
-                richiede una carta di credito. Al termine del periodo la prova non si converte automaticamente in un
-                piano a pagamento: per proseguire è necessaria l&apos;attivazione volontaria di un piano. La prova è
-                riservata ai nuovi clienti e non è ripetibile per la stessa struttura, salvo diverso accordo.
-              </p>
-              <h3 className="text-lg font-semibold text-white mt-6 mb-3">8.2 Livelli di servizio (SLA)</h3>
-              <p className="text-gray-300 leading-relaxed">
-                Le previsioni relative a priorità di gestione, supporto prioritario o &laquo;SLA garantito&raquo;
-                indicate per alcuni piani o funzionalità si applicano come SLA vincolanti, con eventuali tempi di
-                intervento, indennizzi o penali, <strong>esclusivamente ai piani e ai clienti per i quali siano
-                espressamente previsti e quantificati</strong> nel piano sottoscritto o in uno specifico accordo. Per
-                gli altri piani il supporto è fornito secondo le migliori possibilità, senza garanzia di tempi
-                predeterminati. Restano ferme le previsioni dell&apos;art. 9.
-              </p>
-            </section>
-
-            <section>
-              <h2 className="text-xl font-semibold text-white mb-4">8-bis. Disdetta e rinnovo degli abbonamenti</h2>
-              <p className="text-gray-300 leading-relaxed mb-4">
-                Gli abbonamenti si rinnovano automaticamente alla scadenza del periodo scelto. Per disdire &egrave;
-                sufficiente disattivare autonomamente il rinnovo automatico direttamente dalla piattaforma, dall&apos;area
-                Fatturazione &gt; Gestisci abbonamento, senza penali e senza necessit&agrave; di alcuna comunicazione
-                scritta, entro i seguenti termini:
-              </p>
-              <ul className="list-disc list-inside space-y-2 text-gray-300">
-                <li><strong>Abbonamenti mensili:</strong> almeno 7 giorni prima della scadenza.</li>
-                <li><strong>Abbonamenti annuali:</strong> almeno 30 giorni prima della normale scadenza.</li>
-              </ul>
-              <p className="text-gray-300 leading-relaxed mt-4">
-                In assenza di disdetta entro tali termini, il servizio si rinnova automaticamente per un ulteriore
-                periodo pari a quello scelto. In ogni caso il servizio resta attivo fino al termine del periodo già
-                pagato.
+                Eventuali funzionalità di fatturazione o gestione autonoma dell&apos;abbonamento si applicano solo quando
+                sono espressamente abilitate per il cliente e disciplinate dai relativi accordi. In caso di differenza,
+                prevalgono i documenti commerciali e contrattuali sottoscritti.
               </p>
             </section>
 
@@ -216,7 +185,7 @@ export default function TermsPage() {
       {/* Footer */}
       <footer className="py-8 px-4 border-t border-white/10">
         <div className="container mx-auto text-center text-sm text-gray-500">
-          © 2025 HotelAccelerator. Tutti i diritti riservati.
+          © 2026 4Bid S.r.l. – Tutti i diritti riservati
         </div>
       </footer>
     </div>

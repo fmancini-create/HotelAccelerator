@@ -1,241 +1,126 @@
-import type { Metadata } from "next"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Globe, ArrowRight, Smartphone, Search, Languages, Palette, Zap, Shield } from "lucide-react"
-import { PlatformFooter } from "@/components/platform-footer"
-import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
+import { FileClock, Globe2, Images, LayoutTemplate, RotateCcw, Search } from "lucide-react"
+import { buildFeatureMetadata, FeatureLandingPage } from "@/components/platform/feature-landing-page"
 
-export const metadata: Metadata = {
-  title: "CMS per Hotel - Crea il Sito Web del Tuo Hotel | HotelAccelerator",
-  description:
-    "CMS professionale per hotel e strutture ricettive. Crea un sito web SEO-optimized, multilingua, mobile-first. Aumenta la visibilità organica del 300%. Nessuna competenza tecnica richiesta.",
+const description =
+  "Crea e pubblica il sito del tuo hotel con pagine, media, metadati SEO, versioni e rollback. Domini e pubblicazione hanno onboarding assistito."
+
+export const metadata = buildFeatureMetadata({
+  slug: "cms",
+  title: "CMS per hotel con sito web e SEO",
+  description,
   keywords: [
-    "cms hotel",
+    "cms per hotel",
     "sito web hotel",
-    "creare sito hotel",
-    "cms strutture ricettive",
-    "sito web b&b",
     "website builder hotel",
-    "seo hotel",
-    "sito multilingua hotel",
+    "seo per hotel",
+    "sito strutture ricettive",
+    "gestione sito albergo",
   ],
-  openGraph: {
-    title: "CMS per Hotel - Crea il Sito Web Perfetto | HotelAccelerator",
-    description:
-      "CMS professionale per hotel. Sito web SEO-optimized, multilingua, mobile-first. +300% visibilità organica.",
-    type: "website",
-  },
-  alternates: {
-    canonical: "https://hotelaccelerator.com/features/cms",
-  },
-}
+})
 
-const features = [
+const capabilities = [
+  {
+    icon: LayoutTemplate,
+    title: "Template e pagine",
+    description:
+      "Imposta struttura, navigazione e sezioni del sito partendo da template dedicati all'ospitalità.",
+  },
+  {
+    icon: Images,
+    title: "Libreria media",
+    description:
+      "Carica e organizza immagini della struttura in una libreria separata per tenant e riutilizzabile nelle pagine.",
+  },
   {
     icon: Search,
-    title: "SEO Ottimizzato",
+    title: "Metadati SEO per pagina",
     description:
-      "Meta tag, sitemap automatica, schema markup, URL SEO-friendly. Tutto configurato per posizionarti su Google.",
+      "Titoli, descrizioni, URL e navigazione vengono salvati nel documento pubblicato e resi dal sito pubblico.",
   },
   {
-    icon: Languages,
-    title: "Multilingua Nativo",
-    description: "Gestisci contenuti in italiano, inglese, tedesco, francese. Ogni lingua con URL e SEO dedicati.",
-  },
-  {
-    icon: Smartphone,
-    title: "Mobile-First Design",
+    icon: FileClock,
+    title: "Pubblicazioni versionate",
     description:
-      "Design responsive che si adatta perfettamente a smartphone e tablet. Il 70% delle prenotazioni arriva da mobile.",
+      "Ogni pubblicazione crea una versione immutabile: la bozza resta separata dal contenuto visibile agli ospiti.",
   },
   {
-    icon: Palette,
-    title: "Editor Visuale",
-    description: "Modifica testi, immagini e layout senza toccare codice. Preview in tempo reale delle modifiche.",
-  },
-  {
-    icon: Zap,
-    title: "Velocità Estrema",
+    icon: RotateCcw,
+    title: "Rollback controllato",
     description:
-      "Pagine ottimizzate per Core Web Vitals. Caricamento sotto i 2 secondi per un'esperienza utente perfetta.",
+      "Una versione precedente può essere ripristinata creando una nuova pubblicazione tracciata, senza modifiche silenziose.",
   },
   {
-    icon: Shield,
-    title: "Hosting Sicuro",
-    description: "SSL gratuito, backup automatici, protezione DDoS. Il tuo sito sempre online e protetto.",
+    icon: Globe2,
+    title: "Sottodominio o dominio proprio",
+    description:
+      "Il pannello gestisce disponibilità, verifica DNS e stato HTTPS prima di mostrare il sito come pronto.",
   },
 ]
 
-const benefits = [
-  { metric: "+300%", label: "Visibilità organica" },
-  { metric: "< 2s", label: "Tempo di caricamento" },
-  { metric: "100%", label: "Mobile responsive" },
-  { metric: "4+", label: "Lingue supportate" },
+const faqs = [
+  {
+    question: "Il CMS pubblica automaticamente ogni modifica?",
+    answer:
+      "No. La bozza viene validata e pubblicata solo con un'azione esplicita. Il sito pubblico usa una versione attiva separata e tracciata.",
+  },
+  {
+    question: "Posso usare il dominio del mio hotel?",
+    answer:
+      "Sì, dopo la configurazione e la verifica dei record DNS richiesti. Il link pubblico viene indicato come pronto solo quando dominio, SSL e routing risultano validi.",
+  },
+  {
+    question: "È già un servizio self-service per qualsiasi struttura?",
+    answer:
+      "Non ancora. Il codice di pubblicazione e rollback è presente, ma il collaudo end-to-end e il provisioning del dominio vengono completati con onboarding assistito.",
+  },
+  {
+    question: "Il CMS include funzioni SEO?",
+    answer:
+      "Gestisce metadati e URL delle pagine pubblicate. Il posizionamento organico dipende poi da contenuti, autorevolezza, performance e concorrenza: non viene promesso un aumento percentuale prestabilito.",
+  },
 ]
 
-export default function CMSLandingPage() {
+export default function CmsLandingPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Schema.org */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            name: "HotelAccelerator CMS",
-            applicationCategory: "WebApplication",
-            description: "CMS professionale per hotel e strutture ricettive con SEO ottimizzato",
-            operatingSystem: "Web",
-            offers: {
-              "@type": "Offer",
-              price: "99",
-              priceCurrency: "EUR",
-            },
-          }),
-        }}
-      />
-
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-md">
-        <nav className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <HotelAcceleratorMark className="h-8 w-8" priority />
-            <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <Link href="/admin">
-              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-                Accedi
-              </Button>
-            </Link>
-            <Link href="/request-access">
-              <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Richiedi Demo
-              </Button>
-            </Link>
-          </div>
-        </nav>
-      </header>
-
-      {/* Hero */}
-      <section className="pt-32 pb-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-16">
-            <Link href="/" className="mx-auto mb-6 flex w-fit items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-              <ArrowRight className="h-4 w-4 rotate-180" />
-              Torna alla home
-            </Link>
-            <div className="mx-auto flex w-fit items-center gap-2 px-4 py-2 rounded-full bg-ha-brand-soft border border-ha-brand/20 text-sm text-ha-brand mb-8">
-              <Globe className="h-4 w-4" />
-              CMS per Hotel
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-6 text-balance">
-              Il sito web che il tuo hotel merita
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              Crea un sito professionale <strong>SEO-optimized</strong>, multilingua e mobile-first. Aumenta la
-              visibilità organica del 300% senza competenze tecniche.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/request-access">
-                <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                  Crea il Tuo Sito
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="https://www.ibarronci.com" target="_blank">
-                <Button size="lg" variant="outline" className="h-14 rounded-full border-ha-brand bg-transparent px-8 text-lg font-semibold text-ha-brand-soft-foreground hover:bg-ha-brand-soft">
-                  Vedi Demo Live
-                </Button>
-              </Link>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-12 border-y border-border">
-            {benefits.map((benefit) => (
-              <div key={benefit.label} className="text-center">
-                <div className="text-3xl font-bold text-ha-brand mb-1">{benefit.metric}</div>
-                <div className="text-sm text-muted-foreground">{benefit.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Tutto quello che serve per un sito perfetto</h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
-              Un CMS progettato specificamente per le esigenze delle strutture ricettive
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {features.map((feature) => (
-              <article key={feature.title} className="p-6 rounded-2xl bg-secondary/50 border border-border">
-                <div className="w-12 h-12 rounded-xl bg-ha-brand-soft flex items-center justify-center mb-4">
-                  <feature.icon className="h-6 w-6 text-ha-brand" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm">{feature.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Use Cases */}
-      <section className="py-24 px-4 bg-card/[0.02]">
-        <div className="container mx-auto max-w-5xl">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Perfetto per ogni struttura</h2>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
-              <h3 className="text-xl font-semibold mb-2">Hotel</h3>
-              <p className="text-muted-foreground text-sm">
-                Presenta camere, servizi, offerte speciali con un design elegante e professionale.
-              </p>
-            </div>
-            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
-              <h3 className="text-xl font-semibold mb-2">B&B</h3>
-              <p className="text-muted-foreground text-sm">
-                Un sito accogliente che trasmette l'atmosfera unica della tua struttura.
-              </p>
-            </div>
-            <div className="p-6 rounded-2xl bg-secondary/50 border border-border text-center">
-              <h3 className="text-xl font-semibold mb-2">Resort & Spa</h3>
-              <p className="text-muted-foreground text-sm">
-                Gallerie immersive, presentazione servizi wellness, prenotazione esperienze.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-24 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <div className="p-8 md:p-12 rounded-3xl bg-gradient-to-b from-ha-brand/20 to-ha-brand-soft border border-ha-brand/20">
-            <Globe className="h-12 w-12 text-ha-brand mx-auto mb-6" />
-            <h2 className="text-2xl md:text-3xl font-bold mb-4">Crea il sito del tuo hotel oggi</h2>
-            <p className="text-muted-foreground mb-8">Inizia con una demo gratuita. Nessuna carta di credito richiesta.</p>
-            <Link href="/request-access">
-              <Button size="lg" className="h-14 gap-2 rounded-full bg-ha-brand px-8 text-lg font-semibold text-ha-brand-foreground hover:bg-ha-brand/90">
-                Richiedi Demo Gratuita
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <PlatformFooter />
-    </div>
+    <FeatureLandingPage
+      slug="cms"
+      eyebrow="CMS per hotel"
+      icon={Globe2}
+      title="Crea e pubblica il sito del tuo hotel con controllo delle versioni"
+      intro="HotelAccelerator separa bozza e sito pubblico, valida il documento prima della pubblicazione e conserva lo storico per poter tornare a una versione precedente."
+      statusLabel="Pubblicazione e rollback presenti nel codice"
+      statusDescription="L'attivazione su una struttura richiede ancora collaudo guidato del sito pubblico, del dominio e della configurazione infrastrutturale."
+      capabilitiesTitle="Un CMS alberghiero costruito per pubblicare in sicurezza"
+      capabilitiesIntro="Le funzioni descritte qui corrispondono ai flussi presenti nel repository, senza promettere risultati SEO automatici o generazione AI non verificata."
+      capabilities={capabilities}
+      availableNow={[
+        "Bozza tenant-aware con documento JSON validato lato server.",
+        "Pubblicazioni immutabili, versione attiva e rollback tracciato.",
+        "Renderer pubblico unico per sottodominio e dominio personalizzato.",
+        "Libreria media e metadati SEO associati alle pagine.",
+      ]}
+      requiresVerification={[
+        "Collaudo end-to-end sul tenant e controllo responsive delle pagine pubblicate.",
+        "Configurazione delle variabili Vercel, DNS, verifica dominio e SSL.",
+        "Funzioni AI, comandi vocali ed editor avanzato prima di considerarli vendibili su larga scala.",
+      ]}
+      faqs={faqs}
+      related={[
+        {
+          href: "/features/analytics",
+          title: "Analytics e tracking",
+          description: "Misura sessioni ed eventi dei siti configurati, nel rispetto del consenso.",
+        },
+        {
+          href: "/features/ai-assistant",
+          title: "AI assistita",
+          description: "Usa contenuti verificati per proporre bozze di risposta al team.",
+        },
+      ]}
+      ctaTitle="Valutiamo il sito e il dominio della tua struttura"
+      ctaDescription="Durante la demo verifichiamo contenuti, dominio, pubblicazione e funzioni realmente attivabili per il tuo tenant."
+      schemaName="CMS per hotel con sito web e pubblicazione versionata"
+      schemaDescription={description}
+    />
   )
 }

@@ -17,7 +17,9 @@ export function PlatformFooter() {
               textClassName="font-semibold text-foreground"
             />
 
-            <p className="text-sm text-muted-foreground">La piattaforma completa per hotel e strutture ricettive.</p>
+            <p className="text-sm text-muted-foreground">
+              Software modulare per operazioni, contenuti e dati delle strutture ricettive.
+            </p>
           </div>
 
           {/* Prodotto */}
@@ -36,12 +38,12 @@ export function PlatformFooter() {
               </li>
               <li>
                 <Link href="/features/email-marketing" className="hover:text-ha-brand transition-colors">
-                  Email Marketing
+                  Campagne email
                 </Link>
               </li>
               <li>
                 <Link href="/features/inbox-omnicanale" className="hover:text-ha-brand transition-colors">
-                  Inbox Omnicanale
+                  Inbox per hotel
                 </Link>
               </li>
               <li>
@@ -51,7 +53,7 @@ export function PlatformFooter() {
               </li>
               <li>
                 <Link href="/features/ai-assistant" className="hover:text-ha-brand transition-colors">
-                  AI Assistant
+                  AI assistita
                 </Link>
               </li>
             </ul>
