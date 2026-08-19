@@ -1,6 +1,6 @@
 # HotelAccelerator — Project Overview
 
-Ultimo aggiornamento: 2026-08-07
+Ultimo aggiornamento: 2026-08-19
 
 ## Missione
 
@@ -29,6 +29,7 @@ AutoExel, MyPetSenseAI, Ecomobility e altri esperimenti restano separati finché
 - Provider esterni sostituibili tramite adapter.
 - Ogni funzione comprende UI, dati, backend, autorizzazioni, errori, audit, test e monitoraggio.
 - Nessuna funzione è dichiarata completa senza evidenze.
+- Il prodotto deve restare comprensibile e governabile anche da un founder non tecnico che lavora con assistenti AI e v0.
 
 ## Utenti principali
 
@@ -47,16 +48,16 @@ AutoExel, MyPetSenseAI, Ecomobility e altri esperimenti restano separati finché
 4. Rendere costi, marginalità, liquidità e manutenzioni misurabili.
 5. Trasformare dati e conversazioni in decisioni e automazioni controllabili.
 6. Offrire prodotti utilizzabili singolarmente e una suite coerente.
+7. Scalare a migliaia di strutture senza trasformare l'operatività in un progetto IT per l'albergatore.
 
 ## Documenti governanti
 
+- `AGENTS.md`: regole operative per agenti AI e sviluppo assistito.
 - `MODULE_REGISTRY.md`: inventario e maturità delle funzioni.
 - `ARCHITECTURE.md`: confini tecnici e principi invarianti.
 - `DECISIONS.md`: decisioni architetturali e di prodotto.
 - `INTEGRATIONS.md`: provider, responsabilità e stato dei connettori.
 - `ROADMAP.md`: priorità e sequenza di realizzazione.
-- `docs/ISTRUZIONI_CHATGPT_HOTELACCELERATOR.md`: istruzioni compatte per ChatGPT.
-- `docs/ISTRUZIONI_V0_CLOUD_HOTELACCELERATOR.md`: istruzioni estese per v0 Cloud.
 
 ## Regola di aggiornamento
 
