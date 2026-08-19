@@ -190,13 +190,25 @@ export function DashboardCard({ panel, dati }: { panel: DashboardPanel; dati: Da
         </Guscio>
       )
 
+    // Le sorgenti escluse vanno dichiarate a schermo: un totale piu' basso senza
+    // spiegazione sembra un calo del lavoro invece di una scelta. E se sono state
+    // escluse tutte, lo zero e' voluto, non un guasto.
     case "volumes":
       return (
-        <Guscio panel={panel}>
+        <Guscio
+          panel={panel}
+          vuoto={d?.nessunaInclusa === true}
+          sensoZero="nessuna sorgente scelta per le statistiche"
+        >
           <Voce label="Email" valore={d?.email} />
           <Voce label="Chat" valore={d?.chat} />
           <Voce label="WhatsApp" valore={d?.whatsapp} />
           <Voce label="Telegram" valore={d?.telegram} />
+          {typeof d?.escluse === "number" && d.escluse > 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {d.escluse === 1 ? "1 sorgente esclusa" : `${d.escluse} sorgenti escluse`} dalle statistiche
+            </p>
+          ) : null}
         </Guscio>
       )
 

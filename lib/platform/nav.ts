@@ -36,6 +36,7 @@
 import {
   Activity,
   BarChart3,
+  Gauge,
   Boxes,
   CalendarClock,
   FileText,
@@ -150,6 +151,19 @@ export const NAV_ENTRIES: NavEntry[] = [
     module: "inbox",
     area: "calls",
     primary: true,
+  },
+  {
+    // Operativa (si consulta, non si configura) ma riservata a chi amministra:
+    // confronta i colleghi fra loro. Senza `adminOnly` il menu la offrirebbe a
+    // chiunque, mentre il layout la nega: menu e guardia direbbero cose diverse,
+    // che e' il difetto dei tre elenchi divergenti gia' corretto.
+    id: "operator-performance",
+    href: "/admin/operator-performance",
+    label: "Performance operatori",
+    description: "Quante risposte manda ciascuno e quanto attende chi scrive",
+    placement: "operative",
+    icon: Gauge,
+    adminOnly: true,
   },
   {
     id: "marketing",
@@ -312,6 +326,21 @@ export const NAV_ENTRIES: NavEntry[] = [
     placement: "settings",
     icon: BarChart3,
     module: "tracking",
+    area: "tracking",
+  },
+  {
+    // Quali caselle e canali contano nei numeri del cruscotto.
+    //
+    // Area "tracking" (come le altre pagine di statistiche) ma SENZA `module`:
+    // legare la voce al modulo tracking la farebbe sparire dove quel modulo non
+    // e' attivo, e la scelta serve comunque, perche' i volumi per canale si
+    // contano anche senza tracciamento dei siti.
+    id: "analytics-sources",
+    href: "/admin/settings/analytics-sources",
+    label: "Sorgenti statistiche",
+    description: "Caselle e canali che contano nei numeri del cruscotto",
+    placement: "settings",
+    icon: BarChart3,
     area: "tracking",
   },
   {

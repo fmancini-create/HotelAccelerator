@@ -27,6 +27,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { getMemberEffectiveAreas } from "@/lib/auth/area-access"
 import { dashboardProfileLabel, visiblePanels } from "@/lib/platform/dashboard"
+import { canaleIncluso, listAnalyticsSources } from "@/lib/platform/analytics-sources"
 
 export const dynamic = "force-dynamic"
 
@@ -241,14 +242,48 @@ export async function GET(request: NextRequest) {
       dati.presence = { minuti: PRESENZA_MINUTI, persone: null }
     }
 
-    // Volumi per canale.
+    // Volumi per canale, limitati alle sorgenti scelte per le statistiche.
+    //
+    // Senza questo filtro l'email faceva 7.682: un numero vero come somma e
+    // fuorviante come indicazione, perche' includeva due caselle di 4BID Srl
+    // (l'agenzia) e la posta personale del titolare (6.806 conversazioni). Non
+    // diceva quanto lavora l'hotel.
+    //
+    // Le due meta' del filtro non sono simmetriche, ed e' una misura non una
+    // preferenza: le conversazioni email hanno tutte la casella collegata
+    // (7.684 su 7.684), quelle di chat/WhatsApp/Telegram non ce l'hanno mai
+    // (0 su 9). Per la messaggistica l'unico filtro possibile e' il tipo.
+    const { filter: sorgenti } = await listAnalyticsSources(sb, propertyId)
+    const caselle = sorgenti.emailChannelIds
+
+    const perTipo = (tipo: string) => async (): Promise<Numero> => {
+      if (!canaleIncluso(sorgenti, tipo)) return 0
+      return conta("conversations", (q) => q.eq("channel", tipo))
+    }
+
     const [email, chat, whatsapp, telegram] = await Promise.all([
-      conta("conversations", (q) => q.eq("channel", "email")),
-      conta("conversations", (q) => q.eq("channel", "chat")),
-      conta("conversations", (q) => q.eq("channel", "whatsapp")),
-      conta("conversations", (q) => q.eq("channel", "telegram")),
+      caselle !== null && caselle.length === 0
+        ? Promise.resolve(0 as Numero)
+        : conta("conversations", (q) => {
+            const base = q.eq("channel", "email")
+            return caselle === null ? base : base.in("channel_id", caselle)
+          }),
+      perTipo("chat")(),
+      perTipo("whatsapp")(),
+      perTipo("telegram")(),
     ])
-    dati.volumes = { email, chat, whatsapp, telegram }
+
+    dati.volumes = {
+      email,
+      chat,
+      whatsapp,
+      telegram,
+      // La card dichiara quante sorgenti sono state escluse: un totale piu'
+      // basso senza spiegazione sembrerebbe un calo del lavoro.
+      escluse: sorgenti.escluse,
+      tutteIncluse: sorgenti.tutteIncluse,
+      nessunaInclusa: sorgenti.nessunaInclusa,
+    }
 
     // Attivita' per persona.
     //

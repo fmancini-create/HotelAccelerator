@@ -24,7 +24,8 @@
     "test:phone-display": "tsx scripts/test-phone-display.ts",
     "test:knowledge-gaps": "tsx scripts/test-knowledge-gaps.ts",
     "check:nav": "tsx scripts/check-nav-manifest.ts",
-    "check:dashboard": "tsx scripts/check-dashboard-manifest.ts"
+    "check:dashboard": "tsx scripts/check-dashboard-manifest.ts",
+    "check:analytics": "tsx scripts/check-analytics-performance.ts"
   },
   "dependencies": {
     "@edge-runtime/vm": "latest",
