@@ -26,7 +26,8 @@
     "check:nav": "tsx scripts/check-nav-manifest.ts",
     "check:dashboard": "tsx scripts/check-dashboard-manifest.ts",
     "check:analytics": "tsx scripts/check-analytics-performance.ts",
-    "check:crm-nav": "tsx scripts/check-crm-nav.mjs"
+    "check:crm-nav": "tsx scripts/check-crm-nav.mjs",
+    "test:crm-nav-sabotaggi": "tsx scripts/test-crm-nav-sabotaggi.mjs"
   },
   "dependencies": {
     "@edge-runtime/vm": "latest",
