@@ -1,47 +1,62 @@
-import { ArrowDownLeft, ArrowUpRight, Clock3, PhoneCall, PhoneMissed, Users } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
 import { CrmCallPanel } from "@/components/crm/crm-call-panel"
+import { CrmCallsRecent } from "@/components/crm/crm-calls-recent"
 
-const calls = [
-  { time: "09:42", contact: "Marco Bianchi", company: "Hotel Aurora", number: "+39 055 123456", direction: "Outbound", outcome: "Risposta", duration: "04:18", operator: "Commerciale 1" },
-  { time: "09:18", contact: "Laura Rossi", company: "Borgo Toscano", number: "+39 0577 456789", direction: "Inbound", outcome: "Risposta", duration: "02:41", operator: "Commerciale 1" },
-  { time: "08:56", contact: "Andrea Verdi", company: "Resort Panorama", number: "+39 06 987654", direction: "Outbound", outcome: "Non risposta", duration: "—", operator: "Commerciale 2" },
-]
-
-const stats = [
-  ["Chiamate oggi", "18", PhoneCall],
-  ["Risposte", "11", Users],
-  ["Non risposte", "7", PhoneMissed],
-  ["Durata media", "03:26", Clock3],
-]
-
-export default function CrmCallsPage() {
+/**
+ * Telefonate nello spazio CRM.
+ *
+ * COSA C'ERA PRIMA: una tabella di tre chiamate inventate (nomi, numeri, esiti)
+ * e quattro riquadri con "Durata media 03:26". Quel numero era il piu' dannoso
+ * di tutti: `/api/telephony/calls` si RIFIUTA di calcolare una durata media, e
+ * lo spiega nel proprio commento — per i gruppi di squillo `duration_seconds`
+ * contiene il tempo di SQUILLO, non di conversazione, quindi mediarlo produce un
+ * minutaggio che nessuno puo' interpretare. La pagina dimostrativa mostrava
+ * esattamente la cifra che il codice vero considera inattendibile.
+ *
+ * PERCHE' NON UN SECONDO REGISTRO: `/admin/calls` esiste gia' e legge le
+ * telefonate vere (251 in archivio) con filtri, ricerca per numero,
+ * paginazione, esito dedotto e nomi degli interni — oltre 450 righe di
+ * interfaccia. Ricostruirle qui avrebbe creato due registri destinati a
+ * divergere al primo cambiamento. Questa pagina mostra le ultime telefonate e
+ * rimanda la' per tutto il resto, come fa gia' `crm/contacts/page.tsx` con
+ * l'elenco dei contatti.
+ *
+ * IL PERMESSO E' LA PARTE DELICATA, E QUI C'ERA UN DIFETTO MIO. Il registro
+ * richiede l'area "calls", questo spazio l'area "crm": due permessi DISTINTI, e
+ * dei due membri con l'area CRM uno NON ha l'area Telefonate. Avevo quindi
+ * valutato il permesso qui, con `evaluateAreaAccess("calls")`, per non mandarlo
+ * contro una porta chiusa. Aprendo la pagina come quell'utente vero, il rimando
+ * "Apri le Telefonate" compariva comunque, accanto al diniego dell'elenco:
+ * due verdetti opposti sulla stessa domanda.
+ *
+ * Il motivo, misurato: in un componente server non c'e' una `request` da
+ * passare, e senza `request` `getDevBypass` concede il bypass di sviluppo solo
+ * perche' `NODE_ENV === "development"`, restituendo l'identita' finta
+ * `dev@hotelaccelerator.local` con i poteri di super-admin. La pagina giudicava
+ * un utente che non era quello collegato, mentre `/api/telephony/calls` — che
+ * riceve la richiesta con i cookie — giudicava quello vero e negava.
+ *
+ * Percio' IL GIUDICE E' UNO SOLO: l'API. Richiede la stessa area "calls" della
+ * pagina `/admin/calls`, quindi la sua risposta e' la prova diretta che quella
+ * porta si apre, e non puo' divergere da una seconda valutazione. Diniego
+ * dichiarato e rimando al registro completo vivono entrambi in
+ * `CrmCallsRecent`, guidati da quell'unica risposta.
+ *
+ * La chiamata in uscita resta disponibile in ogni caso: il click-to-call
+ * richiede l'area "crm", non "calls".
+ */
+export default async function CrmCallsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Chiamate</h1>
-        <p className="text-muted-foreground">Postazione telefonica CRM predisposta per l'integrazione 3CX.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Telefonate</h1>
+        <p className="text-muted-foreground text-pretty">
+          Chiama un numero e consulta le ultime telefonate registrate dal centralino.
+        </p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map(([label, value, Icon]) => (
-          <Card key={label as string}><CardContent className="flex items-center justify-between p-4"><div><p className="text-sm text-muted-foreground">{label as string}</p><p className="text-2xl font-bold">{value as string}</p></div><Icon className="h-5 w-5 text-muted-foreground" /></CardContent></Card>
-        ))}
-      </div>
+
       <CrmCallPanel />
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
-              <thead className="border-b bg-muted/30 text-left text-xs uppercase tracking-wide text-muted-foreground"><tr>{["Ora", "Contatto", "Azienda", "Numero", "Direzione", "Esito", "Durata", "Operatore"].map((heading) => <th key={heading} className="px-4 py-3 font-medium">{heading}</th>)}</tr></thead>
-              <tbody className="divide-y">
-                {calls.map((call) => <tr key={`${call.time}-${call.number}`} className="hover:bg-muted/20"><td className="px-4 py-3">{call.time}</td><td className="px-4 py-3 font-medium">{call.contact}</td><td className="px-4 py-3">{call.company}</td><td className="px-4 py-3 font-mono text-xs">{call.number}</td><td className="px-4 py-3"><span className="inline-flex items-center gap-1">{call.direction === "Inbound" ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}{call.direction}</span></td><td className="px-4 py-3"><Badge variant={call.outcome === "Risposta" ? "secondary" : "outline"}>{call.outcome}</Badge></td><td className="px-4 py-3">{call.duration}</td><td className="px-4 py-3">{call.operator}</td></tr>)}
-              </tbody>
-            </table>
-          </div>
-          <div className="border-t px-4 py-3 text-xs text-muted-foreground">Dati demo locali: nessuna scrittura sul database.</div>
-        </CardContent>
-      </Card>
+
+      <CrmCallsRecent />
     </div>
   )
 }
