@@ -2,8 +2,15 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, Building2, CalendarDays, KanbanSquare, ListTodo, Phone, Users } from "lucide-react"
+import { BarChart3, Building2, CalendarDays, KanbanSquare, ListTodo, Phone, Settings, Users } from "lucide-react"
 
+// Ogni sezione dell'area CRM va elencata qui: questa barra e' l'unico indice completo
+// del perimetro. Una pagina che esiste ma non compare sembra un pezzo mancante del
+// prodotto, anche quando e' raggiungibile da un link altrove.
+//
+// L'elenco e' sorvegliato da `pnpm check:crm-nav`, che confronta le voci con le
+// cartelle reali sotto app/admin/crm nei due versi: una sezione senza voce e una voce
+// senza pagina fanno arrossire la prova.
 const items = [
   { href: "/admin/crm", label: "Dashboard", icon: BarChart3, exact: true },
   { href: "/admin/crm/contacts", label: "Contatti", icon: Users },
@@ -12,6 +19,7 @@ const items = [
   { href: "/admin/crm/activities", label: "Attività", icon: ListTodo },
   { href: "/admin/crm/calls", label: "Chiamate", icon: Phone },
   { href: "/admin/crm/calendar", label: "Calendario", icon: CalendarDays },
+  { href: "/admin/crm/settings", label: "Impostazioni", icon: Settings },
 ]
 
 export function CrmWorkspaceNav() {
@@ -26,6 +34,7 @@ export function CrmWorkspaceNav() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={`flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${active ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
             >
               <Icon className="h-4 w-4" aria-hidden />

@@ -15,7 +15,8 @@
     "simulate:area-guard": "tsx scripts/simulate-area-guard.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:santaddeo": "tsc --noEmit -p apps/santaddeo/tsconfig.json",
-    "typecheck:all": "pnpm run typecheck && pnpm run typecheck:santaddeo"
+    "typecheck:all": "pnpm run typecheck && pnpm run typecheck:santaddeo",
+    "check:crm-nav": "tsx scripts/check-crm-nav.mjs"
   },
   "dependencies": {
     "@edge-runtime/vm": "latest",
