@@ -58,10 +58,9 @@ export async function GET(request: NextRequest) {
       .select("id, name, subdomain, type")
       .order("name", { ascending: true })
     tenants = (properties || []).map((p) => ({ ...p, type: normalizeTenantType(p.type) }))
-    // If no active cookie but tenants exist, default to the first one for convenience.
-    if (!activePropertyId && tenants.length > 0) {
-      activePropertyId = tenants[0].id
-    }
+    // Non inventare un tenant attivo quando manca il cookie: il selettore
+    // mostrerebbe una struttura che le API non possono usare. L'utente deve
+    // scegliere esplicitamente, cosi' POST /switch-tenant salva il contesto.
 
     return NextResponse.json({
       role: "super_admin",
