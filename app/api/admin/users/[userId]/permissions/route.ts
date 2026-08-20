@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { GRANTABLE_AREA_KEYS } from "@/lib/platform/areas"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { risolviTempoDisconnessione, tempoAmmesso } from "@/lib/auth/auto-logout"
 
 /**
  * Per-user channel permissions.
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Ensure the target user belongs to this tenant.
     const { data: user } = await supabase
       .from("admin_users")
-      .select("id, name, email, role, is_tenant_admin, property_id")
+      .select("id, name, email, role, is_tenant_admin, property_id, auto_logout_minutes")
       .eq("id", userId)
       .eq("property_id", propertyId)
       .maybeSingle()
@@ -115,7 +116,30 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .map((r: { area_key: string }) => r.area_key)
       .filter((k: string) => GRANTABLE_AREA_KEYS.has(k))
 
-    return NextResponse.json({ user, permissions, areas })
+    // Disconnessione automatica: oltre al valore scelto sull'utente serve
+    // sapere cosa impongono i suoi gruppi. Senza questo, un amministratore che
+    // lascia la casella su "segui i gruppi" non ha modo di sapere quale tempo
+    // sia davvero in vigore, e crederebbe che non ce ne sia nessuno.
+    const { data: appartenenze } = await supabase
+      .from("user_group_members")
+      .select("user_groups!inner(name, auto_logout_minutes)")
+      .eq("user_id", userId)
+
+    const gruppiTempo = (appartenenze ?? [])
+      .map((a: any) => a.user_groups)
+      .filter((g: any) => g && typeof g.auto_logout_minutes === "number")
+      .map((g: any) => ({ nome: g.name as string, minuti: g.auto_logout_minutes as number }))
+
+    const autoLogout = {
+      valoreUtente: (user as any).auto_logout_minutes ?? null,
+      gruppi: gruppiTempo,
+      risolto: risolviTempoDisconnessione({
+        valoreUtente: (user as any).auto_logout_minutes,
+        gruppi: gruppiTempo,
+      }),
+    }
+
+    return NextResponse.json({ user, permissions, areas, autoLogout })
   } catch (error: any) {
     // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
@@ -193,6 +217,30 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const { error: areaErr } = await supabase.from("user_area_permissions").insert(areaRows)
         if (areaErr) throw areaErr
       }
+    }
+
+    // Disconnessione automatica per inattivita'.
+    //
+    // Il campo si tocca SOLO se il client lo ha inviato: `"autoLogoutMinutes" in
+    // body` e non un controllo sul valore, perche' `null` e' un valore legittimo
+    // e significa "segui i gruppi". Confondere "non inviato" con "null"
+    // azzererebbe la scelta a ogni salvataggio parziale fatto da un'altra parte
+    // della pagina.
+    if ("autoLogoutMinutes" in body) {
+      const grezzo = (body as any).autoLogoutMinutes
+      // Accettiamo solo i tempi dell'elenco, oppure null per tornare ai gruppi.
+      // Un valore fuori elenco viene rifiutato invece di essere corretto in
+      // silenzio: salvare un tempo diverso da quello scelto e' peggio che dire
+      // che non si puo' fare.
+      if (grezzo !== null && !tempoAmmesso(grezzo)) {
+        return NextResponse.json({ error: "Tempo di disconnessione non valido" }, { status: 400 })
+      }
+      const { error: logoutErr } = await supabase
+        .from("admin_users")
+        .update({ auto_logout_minutes: grezzo })
+        .eq("id", userId)
+        .eq("property_id", propertyId)
+      if (logoutErr) throw logoutErr
     }
 
     return NextResponse.json({ success: true, count: rows.length })
