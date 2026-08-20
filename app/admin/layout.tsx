@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { PlatformShell } from "@/components/platform/platform-shell"
 import { ClientToaster } from "@/components/admin/client-toaster"
 import { OperatorPresenceBeacon } from "@/components/admin/operator-presence-beacon"
+import { AutoLogoutWatchdog } from "@/components/admin/auto-logout-watchdog"
 
 export const metadata: Metadata = {
   title: {
@@ -27,6 +28,10 @@ export default function AdminLayout({
       {/* Montato nel layout, non nelle singole pagine: un operatore che lavora
           in inbox e' presente anche se non ha aperto la pagina dei widget. */}
       <OperatorPresenceBeacon />
+      {/* Disconnessione automatica: qui e non nelle pagine, perche' deve valere
+          ovunque. Se la persona (o i suoi gruppi) non ha un tempo impostato,
+          non disegna e non fa nulla. */}
+      <AutoLogoutWatchdog />
     </PlatformShell>
   )
 }

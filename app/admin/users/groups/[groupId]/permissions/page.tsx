@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
 import { AreaPermissionsMatrix } from "@/components/admin/area-permissions-matrix"
+import { AutoLogoutPicker } from "@/components/admin/auto-logout-picker"
 
 interface ChannelPermission {
   id?: string
@@ -31,8 +32,14 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
   const [group, setGroup] = useState<{ id: string; name: string; color: string } | null>(null)
   const [permissions, setPermissions] = useState<ChannelPermission[]>([])
   const [areas, setAreas] = useState<string[]>([])
+  const [autoLogout, setAutoLogout] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Questa pagina non diceva NULLA dopo il salvataggio (c'era un commento
+  // "Show success" senza codice). Con un tempo di disconnessione in gioco il
+  // silenzio e' un difetto: chi imposta 5 minuti deve sapere se e' stato preso.
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     loadData()
@@ -69,6 +76,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
         })
         setPermissions(mergedPermissions)
         setAreas(data.areas || [])
+        setAutoLogout(data.autoLogoutMinutes ?? null)
       }
     } catch (e) {
       console.error("Error loading data:", e)
@@ -79,23 +87,33 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
 
   async function savePermissions() {
     setSaving(true)
+    setSaved(false)
+    setError("")
     try {
       const res = await fetch(`/api/admin/groups/${groupId}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions, areas }),
+        body: JSON.stringify({ permissions, areas, autoLogoutMinutes: autoLogout }),
       })
-      if (res.ok) {
-        // Show success
+      if (!res.ok) {
+        // Prima l'errore finiva solo nella console del browser: chi salvava
+        // vedeva la pagina immobile e credeva che fosse andata bene.
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || "Errore nel salvataggio")
+        return
       }
+      setSaved(true)
     } catch (e) {
-      console.error("Error saving permissions:", e)
+      setError("Errore nel salvataggio")
     } finally {
       setSaving(false)
     }
   }
 
   function updatePermission(channelType: string, field: "can_read" | "can_write" | "can_manage", value: boolean) {
+    // Toccando un permesso il messaggio "salvato" deve spegnersi, altrimenti
+    // resta a dire il falso su modifiche non ancora salvate.
+    setSaved(false)
     setPermissions((prev) =>
       prev.map((p) => {
         if (p.channel_type === channelType && !p.channel_id) {
@@ -144,8 +162,39 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
           }
         />
 
+        {error && (
+          <div className="mt-6 rounded-lg border border-ha-error-soft bg-ha-error-soft px-4 py-3 text-sm text-ha-error-soft-foreground">
+            {error}
+          </div>
+        )}
+
+        {saved && !error && (
+          <div className="mt-6 rounded-lg border border-ha-success-soft bg-ha-success-soft px-4 py-3 text-sm text-ha-success-soft-foreground">
+            Permessi salvati correttamente.
+          </div>
+        )}
+
         <div className="mt-6">
-          <AreaPermissionsMatrix value={areas} onChange={setAreas} disabled={saving} />
+          <AreaPermissionsMatrix
+            value={areas}
+            onChange={(next) => {
+              setSaved(false)
+              setAreas(next)
+            }}
+            disabled={saving}
+          />
+        </div>
+
+        <div className="mt-6">
+          <AutoLogoutPicker
+            ambito="gruppo"
+            valore={autoLogout}
+            disabled={saving}
+            onChange={(v) => {
+              setSaved(false)
+              setAutoLogout(v)
+            }}
+          />
         </div>
 
         <div className="mt-6">

@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { GRANTABLE_AREA_KEYS } from "@/lib/platform/areas"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import { tempoAmmesso } from "@/lib/auth/auto-logout"
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ groupId: string }> }) {
   try {
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Verify group belongs to property
     const { data: group } = await supabase
       .from("user_groups")
-      .select("id")
+      .select("id, auto_logout_minutes")
       .eq("id", groupId)
       .eq("property_id", propertyId)
       .single()
@@ -38,7 +39,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .map((r: { area_key: string }) => r.area_key)
       .filter((k: string) => GRANTABLE_AREA_KEYS.has(k))
 
-    return NextResponse.json({ permissions: permissions || [], areas })
+    return NextResponse.json({
+      permissions: permissions || [],
+      areas,
+      autoLogoutMinutes: (group as any).auto_logout_minutes ?? null,
+    })
   } catch (error: any) {
     // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
@@ -104,6 +109,22 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const { error: areaErr } = await supabase.from("group_area_permissions").insert(areaRows)
         if (areaErr) throw areaErr
       }
+    }
+
+    // Disconnessione automatica per i membri del gruppo. Come sopra, il campo
+    // si tocca solo se inviato: `null` significa "il gruppo non impone nulla"
+    // ed e' diverso da "non inviato".
+    if ("autoLogoutMinutes" in body) {
+      const grezzo = (body as any).autoLogoutMinutes
+      if (grezzo !== null && !tempoAmmesso(grezzo)) {
+        return NextResponse.json({ error: "Tempo di disconnessione non valido" }, { status: 400 })
+      }
+      const { error: logoutErr } = await supabase
+        .from("user_groups")
+        .update({ auto_logout_minutes: grezzo })
+        .eq("id", groupId)
+        .eq("property_id", propertyId)
+      if (logoutErr) throw logoutErr
     }
 
     return NextResponse.json({ success: true })
