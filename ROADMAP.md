@@ -1,23 +1,26 @@
 # HotelAccelerator — Roadmap
 
-Ultimo aggiornamento: 2026-08-18
+Ultimo aggiornamento: 2026-08-19
 
 ## Principio di priorità
 
-Il limite attuale non è la mancanza di idee, ma l'assenza di una fotografia tecnica verificata e di fondazioni trasversali complete. Non si devono aggiungere nuovi grandi moduli prima di conoscere lo stato reale e mettere sotto controllo sicurezza, tenant e automazioni.
+Il limite attuale non è la mancanza di idee, ma l'assenza di una fotografia tecnica verificata e di fondazioni trasversali complete. Le nuove idee vengono registrate, ma l'ordine di sviluppo resta: sicurezza e dati, affidabilità, valore per l'hotel, semplicità operativa, velocità, estetica.
+
+La roadmap Super Admin e' un cruscotto operativo: non sostituisce `MODULE_REGISTRY.md` e non puo' promuovere da sola lo stato tecnico di una funzione.
 
 ## Fase 0 — Audit e governo del progetto
 
 - [x] Inventariare repository, app, branch, deploy e database.
 - [x] Auditare contenuti e SEO del sito pubblico, rimuovendo claim non dimostrabili e allineando ogni pagina allo stato reale dei moduli; vedere `docs/PUBLIC_SITE_CONTENT_SEO_AUDIT_2026-08-18.md`.
-- [ ] Completare `README.md` e aggiungere un `AGENTS.md` root; Santaddeo ha già istruzioni dedicate.
+- [x] Aggiungere `AGENTS.md` root con regole per sviluppo AI-assisted e founder non tecnico.
+- [ ] Completare `README.md`.
 - [ ] Mappare schema, migrazioni, API, cron, webhook e variabili ambiente.
 - [ ] Verificare ogni riga di `MODULE_REGISTRY.md` con evidenza.
 - [ ] Identificare mock, codice morto e funzioni duplicate.
 - [ ] Registrare owner e unico esecutore di ogni automazione.
 - [ ] Portare a zero i 333 errori residui del typecheck autonomo Santaddeo; il Core è verde e il primo lotto Santaddeo (autenticazione + Pricing Grid) ha rimosso 25 errori al 2026-08-08.
 - [x] Centralizzare la configurazione Supabase Santaddeo e rimuovere fallback hardcoded e redirect impliciti tra ambienti.
-- [x] Separare i test unitari Vitest di Santaddeo dagli E2E Playwright; baseline: 5 suite e 27 test unitari verdi al 2026-08-08.
+- [x] Separare i test unitari Vitest di Santaddeo dagli E2E Playwright.
 
 Uscita: registro attendibile, rischi P0/P1 e architettura as-is documentata.
 
@@ -30,6 +33,7 @@ Uscita: registro attendibile, rischi P0/P1 e architettura as-is documentata.
 - [ ] Audit trail, logging, error model e correlation ID condivisi.
 - [ ] Monitoraggio di cron, webhook e connettori.
 - [ ] Test automatici minimi multi-tenant e recovery.
+- [ ] Roadmap Super Admin persistente server-side, auditata e con evidenza tecnica collegabile.
 
 Uscita: fondazioni almeno `Multi-tenant` per i flussi prioritari.
 
@@ -46,37 +50,63 @@ Uscita: fondazioni almeno `Multi-tenant` per i flussi prioritari.
 
 Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 
-## Fase 3 — Esperienza unificata
+## Fase 3 — Esperienza unificata e lavoro quotidiano
 
 - [ ] Dashboard aggregata affidabile.
 - [ ] Navigazione e accesso ai satelliti senza nuovo login.
 - [ ] Centro notifiche e attività.
 - [ ] CRM ospite e identity resolution.
 - [ ] Eventi cross-module senza accessi diretti tra database.
+- [ ] HR: anagrafica dipendenti, reparti, ruoli e turni.
+- [ ] Check-in/check-out dipendente con geolocalizzazione, privacy e policy configurabili.
+- [ ] Sessione di lavoro collegata a turno/presenza e instradamento delle attività.
+- [ ] Presenza operatore in tempo reale per inbox e assegnazioni.
 
-## Fase 4 — Crescita e vendita diretta
+## Fase 4 — Comunicazione, AI e vendita diretta
 
-- [ ] CMS/sito AI-first.
-- [ ] Tracking, attribuzione e consenso.
-- [ ] Booking widget con PMS e pagamenti.
-- [ ] Automazioni marketing e recupero abbandoni.
-- [ ] Inbox multicanale progressiva.
+- [ ] Inbox multicanale progressiva: Outlook/IMAP, WhatsApp, Telegram, Instagram, Facebook, sito, booking engine, OTA e VoIP secondo API disponibili.
+- [ ] Assistente vocale AI per telefonate e messaggi vocali con handoff umano e contesto preservato.
+- [ ] Analisi conversazioni: intenti, richieste, sentiment, qualità, conversione e insight aggregati di mercato.
+- [ ] CMS/sito AI-first, multilingua, SEO/GEO e hosting.
+- [ ] Booking widget con disponibilità, preventivo, pagamento, alternative, extra e integrazione PMS.
+- [ ] Tracking, attribuzione, consenso e recupero abbandoni.
 
-## Fase 5 — Intelligence avanzata
+## Fase 5 — Marketing Hub
+
+- [ ] Generazione contenuti social da eventi, offerte, disponibilità e calendario editoriale.
+- [ ] Workflow di approvazione umana e pubblicazione programmata.
+- [ ] Email marketing automatico basato su CRM, consenso, segmenti e lifecycle.
+- [ ] Campagne Meta Ads e Google Ads con interfaccia semplificata, budget guardrail, attribution e stop automatici configurabili.
+- [ ] Misurazione incremento ricavi/costi evitati prima di aumentare l'autonomia dell'AI.
+
+## Fase 6 — Intelligence avanzata
 
 - [ ] Rate shopper, parity e forecast.
 - [ ] Domanda da voli e treni.
 - [ ] Reputazione/OTA e analytics, quando autorizzati.
 - [ ] Forecast economico, cassa, DSCR e benchmark.
 - [ ] Manutenzione preventiva e analisi guasti.
+- [ ] Knowledge layer condiviso per strutture, policy, servizi, FAQ e contesto operativo, separato dal provider AI.
 
-## Fase 6 — Vendibilità
+## Fase 7 — Vendibilità e scala
 
 - [ ] Onboarding self-service o assistito documentato.
 - [ ] Billing, piani, trial ed entitlement.
 - [ ] Supporto, SLA, runbook e disaster recovery.
 - [ ] Privacy, termini, DPA e retention; coerenza fattuale delle pagine pubbliche aggiornata, revisione legale professionale ancora necessaria.
 - [ ] Metriche di adozione, affidabilità e valore economico.
+- [ ] Feature flag e rollout graduale per funzioni costose/rischiose.
+- [ ] Test di carico e capacity planning sui flussi condivisi prima di grandi rollout.
+
+## Regola per nuove idee
+
+Una nuova funzione entra in sviluppo solo se:
+
+1. il dominio proprietario e' chiaro;
+2. non duplica una capability gia' esistente;
+3. ha un beneficio misurabile su tempo staff, ricavi/costi, esperienza ospite o affidabilita';
+4. sono chiari dati, autorizzazioni, integrazioni e costo operativo;
+5. non sottrae capacita' a un rischio P0/P1 senza decisione esplicita.
 
 ## Fuori priorità finché le fondazioni non sono chiuse
 
