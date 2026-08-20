@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { authenticateInbound } from "@/lib/telephony/inbound-auth"
 import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
-import { getVoiceProduct, VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
+import { VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
 import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
 
@@ -37,24 +37,25 @@ function authError(status: 401 | 403 | 500) {
 /**
  * Contratto v1 chiamato dallo strumento personalizzato dell'agente vocale 3CX.
  *
- * Il prodotto sta nella query dell'URL configurato sul route point, non nel
- * testo deciso dal modello: il tasto 1 non puo' quindi interrogare per errore la
- * base del tasto 3. Il tenant e' ricavato esclusivamente dal segreto 3CX.
+ * La base e' fissata nella query dell'URL configurato sul route point, non nel
+ * testo deciso dal modello: un agente non puo' interrogare una base diversa.
+ * Il tenant e' ricavato esclusivamente dal segreto 3CX.
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.slice(0, 100) || randomUUID()
   const auth = await authenticateInbound(request)
   if (!auth.ok) return authError(auth.status)
 
-  const product = getVoiceProduct(request.nextUrl.searchParams.get("product"))
-  if (!product) {
-    return NextResponse.json({ error: "Prodotto vocale non valido", request_id: requestId }, { status: 400, headers: NO_STORE })
+  const knowledgeBaseId = request.nextUrl.searchParams.get("knowledge_base")?.trim() || ""
+  if (!z.string().uuid().safeParse(knowledgeBaseId).success) {
+    return NextResponse.json({ error: "Base di conoscenza non valida", request_id: requestId }, { status: 400, headers: NO_STORE })
   }
+  const agent = { key: knowledgeBaseId, label: "Assistente telefonico" }
 
   const rate = takeVoiceRequest(auth.propertyId)
   if (!rate.allowed) {
     return NextResponse.json(
-      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "rate_limited"), request_id: requestId },
+      { ...serviceErrorVoiceResponse(agent, VOICE_FALLBACK_EXTENSION, "rate_limited"), request_id: requestId },
       {
         status: 429,
         headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterSeconds) },
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
   try {
     const response = await answerVoiceQuestion({
       propertyId: auth.propertyId,
-      productKey: product.key,
+      knowledgeBaseId,
       question: parsed.data.question,
       history: parsed.data.history,
       callerNumber: parsed.data.caller_number,
@@ -100,11 +101,11 @@ export async function POST(request: NextRequest) {
     console.error("[3cx-voice] query failed", {
       requestId,
       propertyId: auth.propertyId,
-      product: product.key,
+      knowledgeBaseId,
       error: error instanceof Error ? error.message : "unknown",
     })
     return NextResponse.json(
-      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "provider_error"), request_id: requestId },
+      { ...serviceErrorVoiceResponse(agent, VOICE_FALLBACK_EXTENSION, "provider_error"), request_id: requestId },
       { status: 502, headers: NO_STORE },
     )
   }

@@ -4,7 +4,7 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
 import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
-import { resolveVoiceKnowledgeBase, VOICE_PRODUCTS } from "@/lib/telephony/voice-products"
+import { createVoiceAgentLinks } from "@/lib/telephony/voice-links"
 
 /**
  * Restituisce gli URL da incollare nel template CRM di 3CX.
@@ -34,35 +34,8 @@ export async function GET(request: NextRequest) {
     const base = forwardedHost ? `${proto}://${forwardedHost}` : (process.env.NEXT_PUBLIC_APP_URL || "")
     const root = base.replace(/\/+$/, "")
     const query = `property=${encodeURIComponent(propertyId)}&token=${encodeURIComponent(secret)}`
-    const voiceQuery = `property=${encodeURIComponent(propertyId)}`
     const knowledgeBases = await getKnowledgeBases(propertyId)
-    const voiceAgents = VOICE_PRODUCTS.map((product) => {
-      const resolution = resolveVoiceKnowledgeBase(product, knowledgeBases)
-      const knowledgeBase = resolution.ok
-        ? {
-            id: resolution.base.id,
-            name: resolution.base.name,
-            source_count: resolution.base.source_count,
-            matched_by: resolution.matchedBy,
-          }
-        : null
-      const status = !resolution.ok
-        ? resolution.reason
-        : resolution.base.source_count < 1
-          ? "empty"
-          : "ready"
-
-      return {
-        key: product.key,
-        dtmf: product.dtmf,
-        label: product.label,
-        suggested_extension: product.suggestedExtension,
-        fallback_extension: "200",
-        status,
-        knowledge_base: knowledgeBase,
-        query_url: `${root}/api/telephony/3cx/voice/v1/query?${voiceQuery}&product=${encodeURIComponent(product.key)}`,
-      }
-    })
+    const voiceAgents = createVoiceAgentLinks({ rootUrl: root, propertyId, knowledgeBases })
 
     return NextResponse.json({
       lookup_url: `${root}/api/telephony/3cx/lookup?${query}&number=[Number]`,

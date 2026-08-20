@@ -3,17 +3,12 @@ import { generateReply, type ConversationTurn } from "@/lib/ai/generate"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
 import { trovaAnagraficaPerNumero } from "@/lib/crm/contact-identity"
 import { createServiceClient } from "@/lib/supabase/server"
-import {
-  getVoiceProduct,
-  resolveVoiceKnowledgeBase,
-  VOICE_FALLBACK_EXTENSION,
-  type VoiceProductKey,
-} from "@/lib/telephony/voice-products"
+import { VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
 import { buildVoiceResponse, serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
 
 export interface VoiceQuestionInput {
   propertyId: string
-  productKey: VoiceProductKey
+  knowledgeBaseId: string
   question: string
   history: ConversationTurn[]
   callerNumber?: string
@@ -31,23 +26,16 @@ function digits(value: string | undefined): string | null {
 }
 
 export async function answerVoiceQuestion(input: VoiceQuestionInput) {
-  const product = getVoiceProduct(input.productKey)
-  if (!product) throw new Error("Prodotto vocale non valido")
-
   const bases = await getKnowledgeBases(input.propertyId)
-  const resolution = resolveVoiceKnowledgeBase(product, bases)
+  const base = bases.find((candidate) => candidate.id === input.knowledgeBaseId)
+  const agent = { key: input.knowledgeBaseId, label: base?.name ?? "Assistente telefonico" }
 
-  if (!resolution.ok) {
-    return serviceErrorVoiceResponse(
-      product,
-      VOICE_FALLBACK_EXTENSION,
-      resolution.reason === "ambiguous" ? "knowledge_base_ambiguous" : "knowledge_base_not_found",
-    )
+  if (!base) {
+    return serviceErrorVoiceResponse(agent, VOICE_FALLBACK_EXTENSION, "knowledge_base_not_found")
   }
 
-  const base = resolution.base
   if (base.source_count < 1) {
-    return serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "knowledge_base_empty")
+    return serviceErrorVoiceResponse(agent, VOICE_FALLBACK_EXTENSION, "knowledge_base_empty")
   }
 
   const callerNumber = digits(input.callerNumber)
@@ -79,8 +67,8 @@ export async function answerVoiceQuestion(input: VoiceQuestionInput) {
 
   return {
     ok: true as const,
-    product: { key: product.key, label: product.label },
-    knowledge_base: { id: base.id, name: base.name, matched_by: resolution.matchedBy },
+    agent,
+    knowledge_base: { id: base.id, name: base.name },
     speech: decision.speech,
     confidence: decision.confidence,
     grounded: decision.grounded,

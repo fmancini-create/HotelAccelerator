@@ -23,17 +23,14 @@ type Integration = {
 
 type VoiceAgentLink = {
   key: string
-  dtmf: string
   label: string
-  suggested_extension: string
   fallback_extension: string
-  status: "ready" | "not_found" | "ambiguous" | "empty"
+  status: "ready" | "empty"
   knowledge_base: {
     id: string
     name: string
     source_count: number
-    matched_by: "marker" | "name"
-  } | null
+  }
   query_url: string
 }
 
@@ -441,15 +438,15 @@ export default function PhoneChannelPage() {
           </Card>
 
           <Card>
-            <CardHeader>
-              <div className="flex items-start gap-3">
+              <CardHeader>
+                <div className="flex items-start gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ha-brand-soft">
                   <Bot className="h-5 w-5 text-ha-brand-soft-foreground" aria-hidden="true" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">Assistenti vocali AI 4 BID</CardTitle>
+                  <CardTitle className="text-lg">Agenti telefonici AI</CardTitle>
                   <CardDescription className="text-pretty">
-                    Collega i tasti 1–4 alle quattro basi di conoscenza del tenant. Se la risposta non è sicura, la
+                    Crea un agente per ciascuna base di conoscenza di questo tenant. Se la risposta non è sicura, la
                     chiamata passa all&apos;interno 200.
                   </CardDescription>
                 </div>
@@ -463,49 +460,35 @@ export default function PhoneChannelPage() {
                   ) : (
                     <Bot className="mr-2 h-4 w-4" aria-hidden="true" />
                   )}
-                  {voicePreparing ? "Verifica in corso…" : "Prepara i quattro assistenti"}
+                  {voicePreparing ? "Preparazione…" : "Genera gli agenti dalle basi di conoscenza"}
                 </Button>
               ) : (
                 <div className="space-y-3">
                   {voiceAgents.map((agent) => {
                     const ready = agent.status === "ready"
-                    const statusText =
-                      agent.status === "ready"
-                        ? "Pronta"
-                        : agent.status === "empty"
-                          ? "Senza fonti"
-                          : agent.status === "ambiguous"
-                            ? "Nome ambiguo"
-                            : "Base non trovata"
+                    const statusText = agent.status === "ready" ? "Pronto" : "Senza fonti"
                     return (
                       <div key={agent.key} className="rounded-lg border p-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
-                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-sm font-semibold">
-                              {agent.dtmf}
-                            </span>
                             <div>
                               <p className="font-medium">{agent.label}</p>
                               <p className="text-xs text-muted-foreground">
-                                Interno 3CX suggerito {agent.suggested_extension} · fallback {agent.fallback_extension}
+                                Base di conoscenza collegata · fallback {agent.fallback_extension}
                               </p>
                             </div>
                           </div>
                           <Badge variant={ready ? "default" : "secondary"}>{statusText}</Badge>
                         </div>
 
-                        {agent.knowledge_base && (
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            Base: <strong className="text-foreground">{agent.knowledge_base.name}</strong> ·{" "}
-                            {agent.knowledge_base.source_count} fonti
-                          </p>
-                        )}
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Base: <strong className="text-foreground">{agent.knowledge_base.name}</strong> ·{" "}
+                          {agent.knowledge_base.source_count} fonti
+                        </p>
 
                         {!ready && (
                           <p className="mt-3 text-xs text-destructive text-pretty">
-                            {agent.status === "empty"
-                              ? "Aggiungi almeno una fonte alla base prima di collegarla a 3CX."
-                              : `Nella descrizione della base corretta aggiungi il marker [voice:${agent.key}].`}
+                            Aggiungi almeno una fonte alla base prima di collegarla a 3CX.
                           </p>
                         )}
 
@@ -527,6 +510,12 @@ export default function PhoneChannelPage() {
                     )
                   })}
                 </div>
+              )}
+
+              {voiceAgents?.length === 0 && (
+                <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                  Non ci sono basi di conoscenza in questo tenant. Creane una in AI → Knowledge Source, poi torna qui.
+                </p>
               )}
 
               <p className="text-xs text-muted-foreground text-pretty leading-relaxed">

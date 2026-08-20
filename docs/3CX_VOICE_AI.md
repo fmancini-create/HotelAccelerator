@@ -4,24 +4,19 @@ Stato al 2026-08-20: **Codice** nel Core; collegamento e prova sul PBX ancora da
 
 ## Scopo
 
-Il menu 3CX del numero 0558290741 inoltra i tasti a quattro assistenti:
+Ogni tenant puo' creare i propri agenti telefonici: ciascun agente e' collegato a una base di conoscenza dello stesso
+tenant. La lista non usa prodotti o basi predefiniti: Villa I Barronci, 4BID e ogni altro cliente vedono solo le
+proprie basi. Il collegamento CRM telefonico generico resta disponibile per ciascun tenant.
 
-| Tasto | Prodotto | Interno 3CX suggerito | Base HotelAccelerator |
-|---|---|---:|---|
-| 1 | Hotel Accelerator | 810 | `Hotel Accelerator` |
-| 2 | Santaddeo RMS | 811 | `Santaddeo RMS` |
-| 3 | Hotel Profit AI | 812 | `Hotel Profit AI` |
-| 4 | ManuBot | 813 | `ManuBot` |
-| 0 / fallback | Operatore | 200 | — |
-
-Gli interni 810–813 sono suggerimenti: prima di crearli va verificato che siano liberi nel PBX. Il fallback 200 è
-invece una decisione del flusso corrente.
+Il tenant decide nel proprio 3CX quali tasti, route point o numeri assegnare agli agenti. HotelAccelerator genera un
+URL per ciascuna base di conoscenza; il fallback corrente e' l'interno 200.
 
 ## Responsabilità
 
 - **3CX** possiede chiamata, audio, riconoscimento vocale, sintesi vocale e trasferimento.
 - **HotelAccelerator Core** possiede tenant, selezione della base, retrieval, risposta fondata e soglia di confidenza.
-- Il modello non sceglie liberamente la base: ogni route point usa un URL con una chiave prodotto fissa.
+- Il modello non sceglie liberamente la base: ogni route point usa un URL con l'identificativo della base scelto dal
+  tenant, verificato lato server.
 - Una risposta non fondata, una richiesta di operatore o un errore impongono il trasferimento al 200.
 
 Questa separazione segue il modello documentato da 3CX per gli
@@ -30,16 +25,11 @@ tenant e sulle basi di conoscenza.
 
 ## Associazione delle basi
 
-La risoluzione avviene solo dentro le basi già filtrate per `property_id`.
+La selezione avviene solo dentro le basi già filtrate per `property_id`.
 
-1. Metodo consigliato: nella descrizione inserire uno dei marker:
-   - `[voice:hotel-accelerator]`
-   - `[voice:santaddeo-rms]`
-   - `[voice:hotel-profit-ai]`
-   - `[voice:manubot]`
-2. In assenza del marker viene accettato un nome esatto fra gli alias previsti.
-3. Zero risultati o più risultati portano al fallback: il sistema non indovina per sottostringa.
-4. Una base senza fonti non viene usata.
+1. L'amministratore crea o sceglie una base nel tenant corrente.
+2. La pagina Telefono genera un collegamento univoco per quella base.
+3. Una base senza fonti non viene usata.
 
 Nessuna nuova tabella o colonna è richiesta.
 
@@ -50,7 +40,7 @@ Nessuna nuova tabella o colonna è richiesta.
 Parametri query:
 
 - `property`: tenant;
-- `product`: una delle quattro chiavi prodotto.
+- `knowledge_base`: identificativo della base scelta dal tenant.
 
 Intestazione obbligatoria:
 
@@ -93,13 +83,13 @@ un proprio fallback al 200 se la chiamata HTTP non produce JSON.
 ## Configurazione operativa
 
 1. In HotelAccelerator aprire **Canali → Telefono IP**.
-2. In **Assistenti vocali AI 4 BID** premere **Prepara i quattro assistenti**.
-3. Tutte le righe devono risultare `Pronta`; altrimenti correggere marker o fonti.
+2. In **Agenti telefonici AI** premere **Genera gli agenti dalle basi di conoscenza**.
+3. Tutte le righe devono risultare `Pronto`; altrimenti aggiungere fonti alla rispettiva base.
 4. In 3CX installare da **Integrazioni → Script di chiamata → Aggiungi dallo store** lo script OpenAI Voice Agent
    previsto dalla versione del PBX.
-5. Creare quattro copie/route point, una per ogni prodotto, e configurare nel custom tool l'URL mostrato da
+5. Creare in 3CX un route point per ogni agente desiderato e configurare nel custom tool l'URL mostrato da
    HotelAccelerator.
-6. Collegare i tasti 1–4 dell'IVR agli interni/route point corrispondenti.
+6. Collegare i tasti dell'IVR agli interni/route point corrispondenti.
 7. Impostare 200 come `FallbackDestination`.
 8. Provare una domanda presente e una assente da ogni base. La seconda deve trasferire al 200.
 

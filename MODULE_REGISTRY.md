@@ -20,7 +20,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | Accesso suite | Login unico, SSO, tenant context, accesso per ruolo/modulo/abbonamento | Specifica | Verificare flussi e contratti tra prodotti |
 | Inbox email Gmail | OAuth, lettura diretta, import incrementale, Pub/Sub, poll di fallback, label e riconciliazione stato | Tenant reale | Villa I Barronci verificata; completare test di recovery, autenticazione webhook, osservabilità e modello Sent/KPI prima di promuovere lo stato |
 | Inbox omnicanale | Gmail, Outlook, IMAP/SMTP, WhatsApp, Telegram, Instagram, Facebook, sito, booking, OTA, 3CX | Specifica | Inventariare connettori reali e mock |
-| Assistente vocale 3CX | IVR 4 BID, quattro basi tenant-aware, risposta fondata, riconoscimento chiamante e fallback interno 200 | Codice | Endpoint v1, configuratore URL e test presenti; installare custom tool sul PBX e collaudare ogni base prima di promuovere a Demo |
+| Assistente vocale 3CX | Agenti telefonici creati dalle basi del singolo tenant, risposta fondata, riconoscimento chiamante e fallback interno 200 | Codice | Nessun catalogo 4BID predefinito: ogni tenant espone solo le proprie basi; installare custom tool sul PBX e collaudare ogni agente prima di promuovere a Demo |
 | Gestione conversazioni | Assegnazione, stati, priorità, tag, note, SLA, template, allegati, ricerca, traduzione | Specifica | Audit UI, schema, API e permessi |
 | AI inbox | Intenti, estrazione dati, riassunti, risposte, escalation, sentiment, upselling, knowledge base | Specifica | Definire provider, valutazioni, privacy e human-in-the-loop |
 | CRM | Profilo ospite, deduplica, soggiorni, consensi, segmenti, pipeline, follow-up, LTV | Specifica | Definire identity resolution e data ownership |
