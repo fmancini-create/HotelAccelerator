@@ -22,10 +22,21 @@
  * fatto nulla: un vuoto senza spiegazione e' la bugia piu' facile da scrivere.
  */
 
-import { useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, ExternalLink, Eye, EyeOff, KeyRound, Loader2, ShieldAlert, TriangleAlert } from "lucide-react"
+import {
+  ArrowLeft,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  ShieldAlert,
+  TriangleAlert,
+} from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -83,13 +94,51 @@ export default function PmsShadowPage() {
 
   const [corniceAperta, setCorniceAperta] = useState(false)
 
+  /**
+   * SCHERMO PIENO. Il gestionale e' un'interfaccia densa: dentro un riquadro
+   * stretto le colonne di destra restano tagliate e la persona non riesce a
+   * lavorarci. Qui usiamo lo schermo pieno del browser, non un finto
+   * ingrandimento con CSS: solo il primo esce davvero dal menu e dalla barra
+   * del nostro sito, restituendo alla cornice tutta l'altezza dello schermo.
+   *
+   * Lo stato NON si aggiorna al clic: si aggiorna ascoltando il browser
+   * (`fullscreenchange`). Cosi' l'uscita con il tasto Esc - che avviene senza
+   * passare dal nostro pulsante - non lascia il pulsante a dire il falso.
+   */
+  const contenitoreRef = useRef<HTMLDivElement | null>(null)
+  const [schermoPieno, setSchermoPieno] = useState(false)
+
+  useEffect(() => {
+    const allinea = () => setSchermoPieno(Boolean(document.fullscreenElement))
+    document.addEventListener("fullscreenchange", allinea)
+    return () => document.removeEventListener("fullscreenchange", allinea)
+  }, [])
+
+  const cambiaSchermoPieno = useCallback(() => {
+    const el = contenitoreRef.current
+    if (!el) return
+    if (document.fullscreenElement) {
+      void document.exitFullscreen()
+    } else {
+      // Puo' essere rifiutata (permessi del browser): in quel caso lo stato
+      // resta invariato perche' dipende dall'evento, non dal clic.
+      void el.requestFullscreen?.().catch(() => undefined)
+    }
+  }, [])
+
   const webUrl = cfg?.config?.webUrl ?? null
   const nomePms = cfg?.config?.nome ?? cfg?.config?.pmsType ?? "il gestionale"
   const procedure = proc?.procedure ?? []
   const soglia = proc?.sogliaPredefinita ?? null
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6">
+    /**
+     * Larghezza: il gestionale ha bisogno di spazio. Con `max-w-5xl` (~1024px)
+     * meno i margini della scheda, a Scidoo restavano circa 900px e le colonne
+     * di destra finivano tagliate. Qui la pagina usa la larghezza disponibile;
+     * i testi restano leggibili perche' hanno un limite loro.
+     */
+    <main className="mx-auto flex w-full max-w-[1700px] flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-2">
         <Link
           href="/admin/crm/pms-sync"
@@ -153,6 +202,21 @@ export default function PmsShadowPage() {
                     </>
                   )}
                 </Button>
+                {corniceAperta ? (
+                  <Button size="sm" variant="ghost" onClick={cambiaSchermoPieno}>
+                    {schermoPieno ? (
+                      <>
+                        <Minimize2 className="size-4" aria-hidden="true" />
+                        Esci da schermo pieno
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="size-4" aria-hidden="true" />
+                        Schermo pieno
+                      </>
+                    )}
+                  </Button>
+                ) : null}
                 <Button asChild size="sm" variant="ghost">
                   <a href={webUrl} target="_blank" rel="noreferrer noopener">
                     <ExternalLink className="size-4" aria-hidden="true" />
@@ -171,12 +235,32 @@ export default function PmsShadowPage() {
                  * sembrerebbe un guasto nostro. Il contenuto resta comunque
                  * illeggibile per noi: e' il browser a garantirlo, non noi.
                  */
-                <iframe
-                  src={webUrl}
-                  title={`${nomePms} (gestionale esterno)`}
-                  className="h-[640px] w-full rounded-md border bg-background"
-                  referrerPolicy="no-referrer"
-                />
+                <div
+                  ref={contenitoreRef}
+                  className={
+                    schermoPieno
+                      ? "flex h-screen w-screen flex-col bg-background"
+                      : "flex w-full flex-col"
+                  }
+                >
+                  <iframe
+                    src={webUrl}
+                    title={`${nomePms} (gestionale esterno)`}
+                    /**
+                     * Altezza: prima era fissa a 640px e tagliava il gestionale
+                     * in basso. Ora segue la finestra (togliendo lo spazio di
+                     * intestazione e pulsanti) e a schermo pieno prende tutto.
+                     * Il minimo evita che su una finestra molto bassa il
+                     * riquadro diventi una fessura inutilizzabile.
+                     */
+                    className={
+                      schermoPieno
+                        ? "h-full w-full border-0 bg-background"
+                        : "h-[calc(100vh-19rem)] min-h-[560px] w-full rounded-md border bg-background"
+                    }
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
               ) : (
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   {"Il riquadro si apre solo quando lo chiedi: caricare il gestionale a ogni visita rallenterebbe la pagina."}
