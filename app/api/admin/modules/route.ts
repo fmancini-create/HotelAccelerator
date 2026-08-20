@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getModulesWithState } from "@/lib/modules"
+import { toTenantModuleViews } from "@/lib/modules/tenant-view"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const dynamic = "force-dynamic"
@@ -19,7 +20,10 @@ export async function GET(request: NextRequest) {
     const supabase = createServiceClient()
     const modules = await getModulesWithState(supabase, propertyId)
 
-    return NextResponse.json({ propertyId, modules })
+    // Si manda il PREZZO, non il costo che sosteniamo noi: dal costo si legge il
+    // nostro margine. `toTenantModuleViews` toglie il campo dall'oggetto, quindi
+    // non finisce nel JSON nemmeno per distrazione.
+    return NextResponse.json({ propertyId, modules: toTenantModuleViews(modules) })
   } catch (error) {
     // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
