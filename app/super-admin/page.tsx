@@ -13,6 +13,7 @@ import {
   ArrowDownRight,
   XCircle,
   Zap,
+  Calculator,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -365,6 +366,20 @@ export default function SuperAdminDashboard() {
                   <div>
                     <p className="font-medium text-neutral-900">Billing</p>
                     <p className="text-xs text-neutral-500">Fatturazione e piani</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+
+            <Link href="/super-admin/module-costs">
+              <Card className="hover:border-neutral-300 transition-colors cursor-pointer">
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600">
+                    <Calculator className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-neutral-900">Costi moduli</p>
+                    <p className="text-xs text-neutral-500">Costo e prezzo add-on</p>
                   </div>
                 </CardContent>
               </Card>

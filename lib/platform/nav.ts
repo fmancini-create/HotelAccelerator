@@ -39,6 +39,7 @@ import {
   Gauge,
   Boxes,
   CalendarClock,
+  Database,
   FileText,
   Globe,
   Image as ImageIcon,
@@ -408,6 +409,27 @@ export const NAV_ENTRIES: NavEntry[] = [
     placement: "settings",
     icon: Activity,
     adminOnly: true,
+  },
+  {
+    /*
+     * Il collegamento al gestionale si CONFIGURA, quindi sta fra le
+     * impostazioni. La voce "PMS" nella barra del CRM ora apre direttamente il
+     * gestionale, che e' cio' che si usa ogni giorno: la configurazione si
+     * tocca una volta e poi non si guarda piu'.
+     *
+     * `area: "crm"` e non `adminOnly`: la guardia vera di queste pagine e'
+     * `requireAreaPage("crm")` nel layout di app/admin/crm. Mettere qui
+     * `adminOnly` farebbe dire al menu una cosa e alla guardia un'altra, che e'
+     * il difetto dei tre elenchi divergenti gia' corretto in questo file.
+     */
+    id: "pms-config",
+    href: "/admin/crm/pms-sync",
+    label: "Collegamento gestionale",
+    description: "Credenziali e stato della sincronizzazione con il PMS della struttura",
+    placement: "settings",
+    icon: Database,
+    module: "crm",
+    area: "crm",
   },
   {
     id: "profile",
