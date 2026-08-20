@@ -55,30 +55,21 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Una funzione non puo essere Online se Codice non e attivo" }, { status: 400 })
     }
 
+    // The database trigger writes the matching audit row in the same transaction.
+    // If audit insertion fails, this update fails too: roadmap state cannot drift from its audit trail.
     const { data: updated, error: updateError } = await supabase
       .from("platform_product_roadmap")
-      .update({ code_ready: nextCode, online_ready: nextOnline, updated_by_email: actorEmail, updated_at: new Date().toISOString() })
+      .update({
+        code_ready: nextCode,
+        online_ready: nextOnline,
+        updated_by_email: actorEmail,
+        updated_at: new Date().toISOString(),
+      })
       .eq("roadmap_key", roadmapKey)
       .select("roadmap_key, area, capability, code_ready, online_ready, note, sort_order, updated_by_email, updated_at")
       .single()
 
     if (updateError) throw updateError
-
-    const { error: auditError } = await supabase.from("platform_product_roadmap_audit").insert({
-      roadmap_key: roadmapKey,
-      actor_email: actorEmail,
-      previous_code_ready: current.code_ready,
-      previous_online_ready: current.online_ready,
-      next_code_ready: nextCode,
-      next_online_ready: nextOnline,
-    })
-
-    if (auditError) {
-      // The status change succeeded, so report the audit failure loudly instead of hiding it.
-      console.error("[super-admin-roadmap] audit insert failed", { roadmapKey, actorEmail, auditError })
-      return NextResponse.json({ error: "Stato aggiornato ma audit non registrato: intervento richiesto" }, { status: 500 })
-    }
-
     return NextResponse.json({ item: updated })
   } catch (error) {
     return handleServiceError(error)
