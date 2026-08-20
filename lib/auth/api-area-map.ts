@@ -158,6 +158,14 @@ export const API_AREA_MAP: Record<string, string> = {
   // caricamento; ed e' informazione sul proprio stato, quindi "profile".
   "/api/admin/presence": "profile",
 
+  // Tempo di disconnessione automatica. Stessa natura di `presence`: e' letta
+  // dal layout amministrativo su OGNI pagina per OGNI membro, e riguarda un
+  // dato della persona stessa (fra quanto scade la propria sessione).
+  // Mapparla su un'area concedibile la farebbe negare a chi non ha quell'area:
+  // la disconnessione automatica smetterebbe di funzionare proprio per gli
+  // utenti con meno permessi, cioe' quelli per cui protegge di piu'.
+  "/api/me/auto-logout": "profile",
+
   // Base di conoscenza e impostazioni del bot: NON esiste un'area dedicata
   // (le chiavi vere sono 19 e nessuna e' "ai" o "knowledge"), e inventarla qui
   // significherebbe negare l'accesso in nome di un'area che nessuno puo'

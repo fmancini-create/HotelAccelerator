@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
 import { AreaPermissionsMatrix } from "@/components/admin/area-permissions-matrix"
+import { AutoLogoutPicker } from "@/components/admin/auto-logout-picker"
+import type { GruppoConTempo } from "@/lib/auth/auto-logout"
 
 interface ChannelPermission {
   channel_type: string
@@ -39,6 +41,10 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
   const [user, setUser] = useState<TargetUser | null>(null)
   const [permissions, setPermissions] = useState<ChannelPermission[]>([])
   const [areas, setAreas] = useState<string[]>([])
+  // Disconnessione automatica: il valore scelto sulla persona (null = segui i
+  // gruppi) e i tempi dei suoi gruppi, che servono a spiegare cosa vale davvero.
+  const [autoLogout, setAutoLogout] = useState<number | null>(null)
+  const [gruppiTempo, setGruppiTempo] = useState<GruppoConTempo[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -63,6 +69,8 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       setUser(data.user)
       setPermissions(data.permissions || [])
       setAreas(data.areas || [])
+      setAutoLogout(data.autoLogout?.valoreUtente ?? null)
+      setGruppiTempo(data.autoLogout?.gruppi ?? [])
     } catch (e) {
       setError("Errore nel caricamento dei permessi")
     } finally {
@@ -101,7 +109,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       const res = await fetch(`/api/admin/users/${userId}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions, areas }),
+        body: JSON.stringify({ permissions, areas, autoLogoutMinutes: autoLogout }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -179,6 +187,25 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
             />
           </div>
         )}
+
+        {/*
+          Fuori dal blocco riservato ai non amministratori: un amministratore ha
+          piu' accesso, non meno, quindi il suo computer lasciato aperto e' il
+          caso piu' rischioso. Nasconderglielo sarebbe esattamente il contrario
+          di una protezione.
+        */}
+        <div className="mt-6">
+          <AutoLogoutPicker
+            ambito="utente"
+            valore={autoLogout}
+            gruppi={gruppiTempo}
+            disabled={saving}
+            onChange={(v) => {
+              setSaved(false)
+              setAutoLogout(v)
+            }}
+          />
+        </div>
 
         <div className="mt-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Canali</h2>
