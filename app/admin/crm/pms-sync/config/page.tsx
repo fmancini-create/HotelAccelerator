@@ -21,6 +21,7 @@ type Config = {
   nome: string | null
   apiUrl: string | null
   propertyCode: string | null
+  webUrl: string | null
   isActive: boolean
   segretoPresente: boolean
   segretoCifrato: boolean | null
@@ -43,6 +44,7 @@ export default function PmsConfigPage() {
   const [apiUrl, setApiUrl] = useState("")
   const [authCode, setAuthCode] = useState("")
   const [propertyCode, setPropertyCode] = useState("")
+  const [webUrl, setWebUrl] = useState("")
   const [isActive, setIsActive] = useState(false)
   const [mostraCodice, setMostraCodice] = useState(false)
   const [salvataggio, setSalvataggio] = useState(false)
@@ -56,6 +58,10 @@ export default function PmsConfigPage() {
     if (!data || precompilato) return
     setApiUrl(data.config?.apiUrl ?? fornitore?.baseUrlPredefinito ?? "")
     setPropertyCode(data.config?.propertyCode ?? "")
+    // Nessun valore suggerito: l'indirizzo del gestionale cambia da struttura a
+    // struttura e non lo conosciamo. Un predefinito "plausibile" aprirebbe la
+    // cornice sul sito sbagliato.
+    setWebUrl(data.config?.webUrl ?? "")
     setIsActive(data.config?.isActive ?? true)
     setPrecompilato(true)
   }, [data, precompilato, fornitore])
@@ -74,6 +80,7 @@ export default function PmsConfigPage() {
           // Vuoto = non lo sto cambiando. La rotta conserva quello già salvato.
           authCode,
           propertyCode,
+          webUrl,
           isActive,
         }),
       })
@@ -226,6 +233,24 @@ export default function PmsConfigPage() {
                   autoComplete="off"
                   spellCheck={false}
                 />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="webUrl">Indirizzo web del gestionale (facoltativo)</Label>
+                <Input
+                  id="webUrl"
+                  value={webUrl}
+                  onChange={(e) => setWebUrl(e.target.value)}
+                  placeholder="https://..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby="webUrl-aiuto"
+                />
+                <p id="webUrl-aiuto" className="text-xs leading-relaxed text-muted-foreground">
+                  {
+                    "L'indirizzo che apri nel browser per lavorare nel gestionale, non quello dell'API qui sopra. Serve solo per aprire il gestionale dentro HotelAccelerator: se lo lasci vuoto, quella schermata resta spenta e lo dichiara."
+                  }
+                </p>
               </div>
 
               <Separator />
