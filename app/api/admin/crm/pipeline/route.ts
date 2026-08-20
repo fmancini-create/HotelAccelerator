@@ -3,20 +3,38 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getCurrentProperty } from "@/lib/auth-property"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireAreaApi } from "@/lib/auth/area-access"
-import { acquisitaDalSito, faseDi, type FaseKey } from "@/lib/crm/date-requests"
+import { getCallerIdentity, adminUserIdPerDatabase } from "@/lib/auth/admin-access"
+import {
+  acquisitaDalSito,
+  classificaConversazione,
+  faseDi,
+  notaEsitoIA,
+  FASI,
+  type FaseKey,
+} from "@/lib/crm/date-requests"
 
 /**
  * Pipeline commerciale: le richieste di date in `contact_date_requests`.
  *
- * DUE BLOCCHI, MAI SOMMATI. Le righe con `source` di gestionale (scidoo,
- * myrestoo) sono conferme di prenotazioni fatte sul sito, non trattative
- * lavorate da qualcuno: stanno in un elenco separato e non entrano nei conteggi
- * per fase. Mescolarle direbbe che il lavoro commerciale ha convertito 181
- * richieste su 200, quando le richieste vere sono 27.
+ * ─── DUE BLOCCHI, MAI SOMMATI ───
  *
- * MISURATO AL MOMENTO DELLA SCRITTURA: 200 righe, 173 da Scidoo e 27 da
- * conversazioni di persone; esiti "confermata" 181, "aperta" 18, nessun esito 1;
- * zero tariffe, perché nessun payload delle estrazioni contiene un prezzo.
+ * Le righe di gestionale (scidoo, myrestoo) sono conferme di prenotazioni fatte
+ * sul sito, non trattative lavorate da qualcuno: stanno in un elenco separato e
+ * non entrano nei conteggi per fase. Mescolarle direbbe che il lavoro
+ * commerciale ha convertito 181 richieste su 200, quando le richieste vere sono
+ * poche decine.
+ *
+ * ─── COSA VIENE ESCLUSO, E PERCHÉ SI CONTA ───
+ *
+ * L'estrattore legge date da qualunque email le contenga. Fra le righe "di
+ * persone" finiscono così pratiche interne (rimborsi, richieste di intervento)
+ * e conversazioni di prova. Vengono escluse, ma il loro numero è DICHIARATO
+ * nella risposta: un'esclusione silenziosa è indistinguibile da una perdita di
+ * dati, e chi guarda deve poter dire "sono 8, non sono spariti".
+ *
+ * MISURATO ALLA SCRITTURA: 200 righe totali — 173 dal gestionale, 27 da
+ * conversazioni di persone, di cui 6 interne e 2 di prova escluse, e 1 conferma
+ * del gestionale riconosciuta dall'oggetto e spostata fra le acquisite.
  */
 
 /** Tetto di righe lette, con troncamento DICHIARATO nella risposta. */
@@ -33,6 +51,9 @@ interface RigaDb {
   outcome: string | null
   source: string | null
   quoted_rate_cents: number | null
+  stage: string | null
+  stage_set_by: string | null
+  stage_set_at: string | null
   created_at: string | null
 }
 
@@ -42,6 +63,10 @@ export interface RichiestaPipeline extends RigaDb {
   chi: string | null
   /** Canale della conversazione d'origine, quando disponibile. */
   canale: string | null
+  /** Oggetto della conversazione: serve a capire di cosa si tratta. */
+  oggetto: string | null
+  /** Cosa ha letto l'IA, come nota. Mai usato per collocare la riga. */
+  nota_ia: string | null
 }
 
 export interface RispostaPipeline {
@@ -55,8 +80,12 @@ export interface RispostaPipeline {
     acquisite: number
     /** Conteggi per fase, calcolati SOLO sulle richieste lavorabili. */
     per_fase: Record<FaseKey, number>
-    /** Righe senza data di arrivo estratta (esistono: 12 alla scrittura). */
+    /** Righe senza data di arrivo estratta. */
     senza_data: number
+    /** Escluse perché non sono richieste di clienti, con il perché. */
+    escluse: { interne: number; prove: number }
+    /** Conferme del gestionale riconosciute dall'oggetto e spostate. */
+    conferme_da_oggetto: number
     troncato: boolean
   }
 }
@@ -71,10 +100,21 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServiceClient()
 
+    // Il dominio della struttura serve a riconoscere la posta interna. Viene
+    // letto dal database e non scritto nel codice: incollarlo qui avrebbe
+    // funzionato per una struttura e smesso di funzionare alla seconda.
+    const { data: struttura, error: erroreStruttura } = await supabase
+      .from("properties")
+      .select("domain, custom_domain")
+      .eq("id", propertyId)
+      .maybeSingle()
+    if (erroreStruttura) throw erroreStruttura
+    const dominio = struttura?.domain ?? struttura?.custom_domain ?? null
+
     const { data, error } = await supabase
       .from("contact_date_requests")
       .select(
-        "id, conversation_id, contact_id, requested_check_in, requested_check_out, nights, guests_adults, outcome, source, quoted_rate_cents, created_at",
+        "id, conversation_id, contact_id, requested_check_in, requested_check_out, nights, guests_adults, outcome, source, quoted_rate_cents, stage, stage_set_by, stage_set_at, created_at",
       )
       .eq("property_id", propertyId)
       // Le richieste più imminenti in cima; `id` come ultima chiave per un
@@ -88,47 +128,80 @@ export async function GET(request: NextRequest) {
     const troncato = tutte.length > TETTO
     const righe = troncato ? tutte.slice(0, TETTO) : tutte
 
-    // Nomi: si leggono dalle conversazioni collegate. `contact_id` è vuoto su
-    // tutte le righe misurate (le conversazioni non sono agganciate a un
-    // contatto), quindi senza questo passaggio la colonna "chi" sarebbe vuota.
+    // Nomi e oggetti: si leggono dalle conversazioni collegate. `contact_id` è
+    // vuoto su tutte le righe misurate, quindi senza questo passaggio la
+    // colonna "chi" sarebbe vuota e la classificazione impossibile.
     const idConversazioni = Array.from(
       new Set(righe.map((r) => r.conversation_id).filter((v): v is string => Boolean(v))),
     )
-    const nomi = new Map<string, { chi: string | null; canale: string | null }>()
+    const dettagli = new Map<
+      string,
+      { chi: string | null; canale: string | null; oggetto: string | null; email: string | null }
+    >()
     for (let i = 0; i < idConversazioni.length; i += 200) {
       const lotto = idConversazioni.slice(i, i + 200)
       const { data: conv, error: erroreConv } = await supabase
         .from("conversations")
-        .select("id, contact_name, contact_email, channel")
+        .select("id, contact_name, contact_email, subject, channel")
         .eq("property_id", propertyId)
         .in("id", lotto)
       if (erroreConv) throw erroreConv
       for (const c of conv ?? []) {
         const nome = (c.contact_name ?? "").trim() || (c.contact_email ?? "").trim() || null
-        nomi.set(c.id as string, { chi: nome, canale: (c.channel as string) ?? null })
+        dettagli.set(c.id as string, {
+          chi: nome,
+          canale: (c.channel as string) ?? null,
+          oggetto: (c.subject as string) ?? null,
+          email: (c.contact_email as string) ?? null,
+        })
       }
     }
 
-    const arricchite: RichiestaPipeline[] = righe.map((r) => {
-      const extra = r.conversation_id ? nomi.get(r.conversation_id) : undefined
-      return {
+    const richieste: RichiestaPipeline[] = []
+    const acquisite: RichiestaPipeline[] = []
+    const escluse = { interne: 0, prove: 0 }
+    let conferme_da_oggetto = 0
+
+    for (const r of righe) {
+      const extra = r.conversation_id ? dettagli.get(r.conversation_id) : undefined
+      const arricchita: RichiestaPipeline = {
         ...r,
         fase: faseDi(r),
         chi: extra?.chi ?? null,
         canale: extra?.canale ?? null,
+        oggetto: extra?.oggetto ?? null,
+        nota_ia: notaEsitoIA(r.outcome),
       }
-    })
 
-    const acquisite = arricchite.filter((r) => acquisitaDalSito(r.source ?? ""))
-    const richieste = arricchite.filter((r) => !acquisitaDalSito(r.source ?? ""))
+      // Il gestionale si riconosce prima di tutto dal `source` registrato.
+      if (acquisitaDalSito(r.source ?? "")) {
+        acquisite.push(arricchita)
+        continue
+      }
 
-    const per_fase: Record<FaseKey, number> = {
-      da_qualificare: 0,
-      aperta: 0,
-      preventivo_inviato: 0,
-      confermata: 0,
-      persa: 0,
+      const classe = classificaConversazione(
+        { contact_email: extra?.email ?? null, subject: extra?.oggetto ?? null },
+        dominio,
+      )
+      if (classe === "interna") {
+        escluse.interne += 1
+        continue
+      }
+      if (classe === "prova") {
+        escluse.prove += 1
+        continue
+      }
+      if (classe === "conferma_gestionale") {
+        // Prenotazione già chiusa dal motore: appartiene al secondo blocco anche
+        // se il mittente non l'aveva rivelata.
+        conferme_da_oggetto += 1
+        acquisite.push(arricchita)
+        continue
+      }
+      richieste.push(arricchita)
     }
+
+    const per_fase = Object.fromEntries(FASI.map((f) => [f.key, 0])) as Record<FaseKey, number>
     // SOLO sulle richieste lavorabili: è il punto per cui i blocchi sono due.
     for (const r of richieste) per_fase[r.fase] += 1
 
@@ -136,11 +209,13 @@ export async function GET(request: NextRequest) {
       richieste,
       acquisite,
       riepilogo: {
-        totale: arricchite.length,
+        totale: righe.length,
         richieste: richieste.length,
         acquisite: acquisite.length,
         per_fase,
-        senza_data: arricchite.filter((r) => !r.requested_check_in).length,
+        senza_data: richieste.filter((r) => !r.requested_check_in).length,
+        escluse,
+        conferme_da_oggetto,
         troncato,
       },
     }
@@ -155,11 +230,17 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Tariffa preventivata, inserita a mano.
+ * Le due cose che una persona può decidere: la fase e la tariffa.
  *
- * È l'unico campo scrivibile: le estrazioni non contengono prezzi (verificato su
- * tutti i 1.333 payload), quindi senza questo la fase "Preventivo inviato"
- * sarebbe irraggiungibile — una colonna che non può riempirsi.
+ * La fase finisce in `stage`, con autore e istante, e NON in `outcome`:
+ * `outcome` è ciò che l'IA ha letto, e alla prima rilettura della conversazione
+ * l'estrattore lo riscrive. Se la decisione dell'operatore stesse lì, verrebbe
+ * cancellata da un ricalcolo senza che nessuno se ne accorga.
+ *
+ * `stage_set_by` può restare vuoto quando chi agisce non ha un id utente valido
+ * (è il caso dello sviluppo in locale): il vincolo nel database lo ammette, ma
+ * pretende sempre l'istante. Meglio "deciso, non sappiamo da chi" che una
+ * decisione senza traccia.
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -170,26 +251,61 @@ export async function PATCH(request: NextRequest) {
     }
 
     const corpo = (await request.json().catch(() => null)) as
-      | { id?: unknown; tariffa_cents?: unknown }
+      | { id?: unknown; tariffa_cents?: unknown; fase?: unknown }
       | null
     const id = typeof corpo?.id === "string" ? corpo.id.trim() : ""
     if (!id) {
       return NextResponse.json({ error: "Richiesta non indicata." }, { status: 400 })
     }
 
-    // `null` cancella la tariffa; un numero la imposta. Validato qui e non solo
-    // nell'interfaccia: la rotta è raggiungibile anche senza passare da lei.
-    const grezza = corpo?.tariffa_cents
-    let tariffa: number | null
-    if (grezza === null) {
-      tariffa = null
-    } else if (typeof grezza === "number" && Number.isInteger(grezza) && grezza >= 0 && grezza <= 100_000_000) {
-      tariffa = grezza === 0 ? null : grezza
-    } else {
-      return NextResponse.json(
-        { error: "Tariffa non valida: attesi centesimi interi fra 0 e 100.000.000, oppure null." },
-        { status: 400 },
-      )
+    const modifiche: Record<string, unknown> = {}
+
+    // ── Fase ──
+    if (corpo && "fase" in corpo) {
+      const grezza = corpo.fase
+      if (grezza === null) {
+        // Torna "Da qualificare" e cancella anche autore e istante, altrimenti
+        // resterebbe scritto "deciso da X" su una riga che nessuno ha deciso.
+        modifiche.stage = null
+        modifiche.stage_set_by = null
+        modifiche.stage_set_at = null
+      } else if (typeof grezza === "string" && FASI.some((f) => f.key === grezza)) {
+        const identity = await getCallerIdentity(request)
+        modifiche.stage = grezza
+        modifiche.stage_set_by = adminUserIdPerDatabase(identity?.adminUserId)
+        modifiche.stage_set_at = new Date().toISOString()
+      } else {
+        return NextResponse.json(
+          { error: `Fase non valida. Ammesse: ${FASI.map((f) => f.key).join(", ")}, oppure null.` },
+          { status: 400 },
+        )
+      }
+    }
+
+    // ── Tariffa ──
+    // Validata qui e non solo nell'interfaccia: la rotta è raggiungibile anche
+    // senza passare da lei.
+    if (corpo && "tariffa_cents" in corpo) {
+      const grezza = corpo.tariffa_cents
+      if (grezza === null) {
+        modifiche.quoted_rate_cents = null
+      } else if (
+        typeof grezza === "number" &&
+        Number.isInteger(grezza) &&
+        grezza >= 0 &&
+        grezza <= 100_000_000
+      ) {
+        modifiche.quoted_rate_cents = grezza === 0 ? null : grezza
+      } else {
+        return NextResponse.json(
+          { error: "Tariffa non valida: attesi centesimi interi fra 0 e 100.000.000, oppure null." },
+          { status: 400 },
+        )
+      }
+    }
+
+    if (Object.keys(modifiche).length === 0) {
+      return NextResponse.json({ error: "Nessuna modifica indicata." }, { status: 400 })
     }
 
     const supabase = createServiceClient()
@@ -199,10 +315,10 @@ export async function PATCH(request: NextRequest) {
     // essere trovata e poi scartata dal codice.
     const { data, error } = await supabase
       .from("contact_date_requests")
-      .update({ quoted_rate_cents: tariffa })
+      .update(modifiche)
       .eq("id", id)
       .eq("property_id", propertyId)
-      .select("id, outcome, quoted_rate_cents")
+      .select("id, outcome, quoted_rate_cents, stage, stage_set_by, stage_set_at")
       .maybeSingle()
     if (error) throw error
     if (!data) {
@@ -212,9 +328,12 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({
       id: data.id,
       quoted_rate_cents: data.quoted_rate_cents,
+      stage: data.stage,
+      stage_set_at: data.stage_set_at,
       // La fase si ricalcola qui: l'interfaccia non deve dedurla per conto suo,
       // o le due regole divergerebbero.
-      fase: faseDi(data as { outcome: string | null; quoted_rate_cents: number | null }),
+      fase: faseDi(data as { stage: string | null; quoted_rate_cents: number | null }),
+      nota_ia: notaEsitoIA(data.outcome),
     })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)

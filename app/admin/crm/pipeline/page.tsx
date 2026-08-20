@@ -26,8 +26,16 @@ import { FASI, type FaseKey } from "@/lib/crm/date-requests"
  * 181 richieste su 200, mentre quelle scritte da persone sono 27.
  *
  * Nessuna colonna "valore" precompilata: le estrazioni non contengono prezzi
- * (verificato su tutti i 1.333 payload), quindi la tariffa si scrive a mano ed è
- * l'unico campo modificabile di questa pagina.
+ * (verificato su tutti i 1.333 payload), quindi la tariffa si scrive a mano.
+ *
+ * LA FASE NON È PIÙ DEDOTTA DALL'ESITO, e la pagina non lo dice più. Prima
+ * questa intestazione prometteva «la fase dedotta dall'esito»: era vero e
+ * sbagliato insieme. Misurando, gli esiti letti dall'IA sulle righe di persone
+ * erano {aperta: 14, confermata: 4}, ma dentro quei numeri convivono lead veri e
+ * fornitori: "Chiusura TUS114A" di Topcruises compariva in **Confermata** e il
+ * caseificio in **Richiesta aperta**. La pagina raccontava vendite che nessuno
+ * ha fatto. Ora tutto nasce in "Da qualificare" e solo una persona sposta le
+ * righe; l'esito dell'IA resta visibile come nota.
  */
 
 interface Richiesta {
@@ -40,9 +48,14 @@ interface Richiesta {
   outcome: string | null
   source: string | null
   quoted_rate_cents: number | null
+  stage: string | null
+  stage_set_at: string | null
   fase: FaseKey
   chi: string | null
   canale: string | null
+  oggetto: string | null
+  /** Cosa ha letto l'IA. Si mostra come nota, non colloca la riga. */
+  nota_ia: string | null
 }
 
 interface Risposta {
@@ -54,6 +67,8 @@ interface Risposta {
     acquisite: number
     per_fase: Record<FaseKey, number>
     senza_data: number
+    escluse: { interne: number; prove: number }
+    conferme_da_oggetto: number
     troncato: boolean
   }
 }
@@ -83,7 +98,7 @@ function CellaTariffa({
   onSalvato,
 }: {
   riga: Richiesta
-  onSalvato: (id: string, cents: number | null, fase: FaseKey) => void
+  onSalvato: (id: string, aggiornamenti: Partial<Richiesta>) => void
 }) {
   const [aperto, setAperto] = useState(false)
   const [valore, setValore] = useState("")
@@ -125,7 +140,7 @@ function CellaTariffa({
       // La fase arriva DAL SERVER: calcolarla qui creerebbe una seconda regola,
       // e le due potrebbero divergere facendo saltare la riga in un'altra fase
       // al primo ricarico.
-      onSalvato(riga.id, body.quoted_rate_cents ?? null, body.fase as FaseKey)
+      onSalvato(riga.id, { quoted_rate_cents: body.quoted_rate_cents ?? null, fase: body.fase as FaseKey })
       setAperto(false)
     } catch {
       setErrore("Server non raggiungibile")
@@ -198,6 +213,76 @@ function CellaTariffa({
   )
 }
 
+/**
+ * Selettore di fase: è l'azione che rende "Da qualificare" un punto di partenza
+ * invece di un vicolo cieco.
+ *
+ * Un `select` nativo e non un menu costruito a mano: funziona da tastiera, con
+ * i lettori di schermo e sul telefono senza che io debba rifare tre
+ * comportamenti che il browser già dà giusti.
+ */
+function CellaFase({
+  riga,
+  onSalvato,
+}: {
+  riga: Richiesta
+  onSalvato: (id: string, aggiornamenti: Partial<Richiesta>) => void
+}) {
+  const [salvataggio, setSalvataggio] = useState(false)
+  const [errore, setErrore] = useState("")
+
+  const cambia = async (valore: string) => {
+    setSalvataggio(true)
+    setErrore("")
+    try {
+      const res = await fetch("/api/admin/crm/pipeline", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        // Stringa vuota = "riportala fra le non decise", che nel database è
+        // `stage` nullo insieme ad autore e istante.
+        body: JSON.stringify({ id: riga.id, fase: valore === "" ? null : valore }),
+      })
+      const body = await res.json().catch(() => null)
+      if (!res.ok) {
+        setErrore(body?.error || "Salvataggio non riuscito")
+        return
+      }
+      onSalvato(riga.id, { fase: body.fase as FaseKey, stage: body.stage ?? null, stage_set_at: body.stage_set_at ?? null })
+    } catch {
+      setErrore("Server non raggiungibile")
+    } finally {
+      setSalvataggio(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <select
+        value={riga.stage ?? ""}
+        onChange={(e) => void cambia(e.target.value)}
+        disabled={salvataggio}
+        aria-label={`Fase della richiesta di ${riga.chi ?? "contatto senza nome"}`}
+        className={`rounded-full border-0 px-2 py-1 text-xs font-medium ${COLORE_FASE[riga.fase]} disabled:opacity-50`}
+      >
+        <option value="">Da qualificare</option>
+        {FASI.filter((f) => f.key !== "da_qualificare").map((f) => (
+          <option key={f.key} value={f.key}>
+            {f.etichetta}
+          </option>
+        ))}
+      </select>
+      {/* La nota dell'IA sta SOTTO la fase e dice chi l'ha detta: senza
+          l'attribuzione sembrerebbe un dato certo invece di una lettura. */}
+      {riga.nota_ia ? <span className="text-[11px] text-muted-foreground">{riga.nota_ia}</span> : null}
+      {errore ? (
+        <span className="text-xs text-destructive" role="alert">
+          {errore}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 export default function CrmPipelinePage() {
   const [dati, setDati] = useState<Risposta | null>(null)
   const [caricamento, setCaricamento] = useState(true)
@@ -237,19 +322,14 @@ export default function CrmPipelinePage() {
     void carica()
   }, [carica])
 
-  const aggiornaRiga = useCallback((id: string, cents: number | null, fase: FaseKey) => {
+  const aggiornaRiga = useCallback((id: string, aggiornamenti: Partial<Richiesta>) => {
     setDati((prec) => {
       if (!prec) return prec
-      const richieste = prec.richieste.map((r) => (r.id === id ? { ...r, quoted_rate_cents: cents, fase } : r))
-      // I conteggi per fase si RICALCOLANO dalle righe: aggiornare solo la riga
-      // lascerebbe i totali in cima a raccontare lo stato precedente.
-      const per_fase: Record<FaseKey, number> = {
-        da_qualificare: 0,
-        aperta: 0,
-        preventivo_inviato: 0,
-        confermata: 0,
-        persa: 0,
-      }
+      const richieste = prec.richieste.map((r) => (r.id === id ? { ...r, ...aggiornamenti } : r))
+      // I conteggi per fase si RICALCOLANO dalle righe, e l'elenco delle fasi
+      // viene da FASI: scriverle a mano qui significherebbe dimenticarne una
+      // alla prossima aggiunta, e quella colonna resterebbe a zero per sempre.
+      const per_fase = Object.fromEntries(FASI.map((f) => [f.key, 0])) as Record<FaseKey, number>
       for (const r of richieste) per_fase[r.fase] += 1
       return { ...prec, richieste, riepilogo: { ...prec.riepilogo, per_fase } }
     })
@@ -261,7 +341,12 @@ export default function CrmPipelinePage() {
     return filtro ? tutte.filter((x) => x.fase === filtro) : tutte
   }, [dati, filtro])
 
-  const fasiDaMostrare = FASI.filter((f) => f.sempreVisibile || (r?.per_fase[f.key] ?? 0) > 0)
+  // Tutte le fasi si mostrano sempre. Prima "Persa" compariva solo se piena,
+  // perché nessuna estrazione produceva quell'esito e una colonna eternamente
+  // vuota suggeriva un dato inesistente. Ora la fase la decide una persona:
+  // ogni colonna è raggiungibile, e nasconderne una nasconderebbe un'azione
+  // possibile invece di un dato mancante.
+  const fasiDaMostrare = FASI
 
   return (
     <div className="space-y-6">
@@ -382,17 +467,12 @@ export default function CrmPipelinePage() {
                     </thead>
                     <tbody className="divide-y">
                       {visibili.map((x) => {
-                        const fase = FASI.find((f) => f.key === x.fase)
                         return (
                           <tr key={x.id} className="hover:bg-muted/20">
-                            <td className="px-4 py-3">
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${COLORE_FASE[x.fase]}`}
-                              >
-                                {fase?.etichetta ?? x.fase}
-                              </span>
+                            <td className="px-4 py-3 align-top">
+                              <CellaFase riga={x} onSalvato={aggiornaRiga} />
                             </td>
-                            <td className="px-4 py-3 font-medium">
+                            <td className="px-4 py-3 align-top font-medium">
                               {x.conversation_id ? (
                                 <Link
                                   href={`/admin/inbox?conversation=${x.conversation_id}`}
@@ -404,6 +484,15 @@ export default function CrmPipelinePage() {
                                 (x.chi ?? "Senza nome")
                               )}
                               {x.canale ? <span className="ml-2 text-xs text-muted-foreground">{x.canale}</span> : null}
+                              {/* L'oggetto è ciò che permette di capire in un
+                                  colpo d'occhio se è un cliente o un fornitore:
+                                  senza di esso "Da qualificare" sarebbe un
+                                  elenco di nomi da aprire uno per uno. */}
+                              {x.oggetto ? (
+                                <span className="mt-0.5 block max-w-[22rem] truncate text-xs text-muted-foreground">
+                                  {x.oggetto}
+                                </span>
+                              ) : null}
                             </td>
                             {/* "Date non estratte" è diverso da una data vuota:
                                 alcune richieste hanno un esito ma nessuna data,

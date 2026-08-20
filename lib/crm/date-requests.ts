@@ -187,6 +187,95 @@ export function riferimentoStabile(
   return `conv:${e.conversation_id}|${arrivo ?? "senza-arrivo"}|${partenza ?? "senza-partenza"}`
 }
 
+/* ───────────────── Cosa NON è una richiesta commerciale ───────────────── */
+
+/**
+ * L'estrattore legge date da qualunque email le contenga, e ha ragione a farlo:
+ * il suo compito è leggere, non giudicare. Ma il risultato è che fra le righe
+ * "di persone" finiscono cose che non sono richieste di un cliente.
+ *
+ * MISURATO sulle 27 righe non di gestionale (19/08/2026):
+ *   • 6  pratiche interne da `@ibarronci.com` — rimborsi, una richiesta di
+ *        intervento, un invito su calendario fra colleghe
+ *   • 2  conversazioni "ZZ PROVA browser", cioè prove di qualcuno
+ *   • 1  conferma del gestionale sfuggita: "Morin Deborah this is your booking
+ *        confirmation", senza email mittente, quindi il segnale `method` non
+ *        l'aveva riconosciuta
+ *   • 18 esterne genuine, dentro cui però convivono lead veri (allotment gruppi
+ *        di Topcruises, preventivi da Matrimonio.com, WhatsApp, chat dal sito) e
+ *        fornitori o newsletter (caseificio, piscina, banca, Booking, BeeFamily)
+ */
+export type ClasseConversazione = "interna" | "prova" | "conferma_gestionale" | "lavorabile"
+
+export interface DatiConversazione {
+  contact_email?: string | null
+  subject?: string | null
+}
+
+/**
+ * Il dominio della struttura NON è scritto qui a mano.
+ *
+ * Viene da `properties.domain` (valore reale letto oggi: `ibarronci.com`).
+ * Incollare il dominio nel codice avrebbe funzionato per questa struttura e
+ * silenziosamente smesso di funzionare per la seconda — cioè il difetto
+ * sarebbe comparso proprio quando il prodotto cresce.
+ */
+export function normalizzaDominio(domain: string | null | undefined): string | null {
+  const d = String(domain ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/\/.*$/, "")
+  return d ? d : null
+}
+
+/**
+ * Riconosce una notifica del gestionale dall'OGGETTO.
+ *
+ * Serve perché il segnale principale (`method = regole:scidoo`) dipende dal
+ * mittente, e una conversazione senza email mittente sfugge: è esattamente il
+ * caso misurato di "Morin Deborah this is your booking confirmation". Una
+ * prenotazione già chiusa dal motore non deve comparire come lavoro
+ * commerciale da fare.
+ */
+export function confermaDaOggetto(subject: string | null | undefined): boolean {
+  const s = String(subject ?? "").toLowerCase()
+  if (!s) return false
+  return s.includes("this is your booking confirmation") || s.includes("prenotazione confermata")
+}
+
+/**
+ * Classifica la conversazione da cui nasce la richiesta.
+ *
+ * Le due esclusioni si basano su regole misurabili e non su un elenco di
+ * mittenti da aggiornare a mano:
+ *   • interna  → il mittente è del dominio della struttura, cioè posta di casa
+ *   • prova    → l'oggetto contiene "ZZ PROVA", la convenzione già usata da chi
+ *                fa verifiche sul sito
+ *
+ * Tutto il resto è `lavorabile`: fornitori e newsletter INCLUSI. Non li escludo
+ * perché non esiste un segnale che distingua un fornitore da un lead — sono
+ * tutti domini esterni — e un elenco di domini invecchierebbe al primo
+ * fornitore nuovo, che ricadrebbe fra le richieste senza che nessuno lo noti.
+ * Restano visibili in "Da qualificare", dove una persona li scarta in un colpo
+ * d'occhio: un falso positivo davanti agli occhi costa meno di una richiesta
+ * vera nascosta da una regola troppo furba.
+ */
+export function classificaConversazione(
+  conv: DatiConversazione | null | undefined,
+  dominioStruttura: string | null,
+): ClasseConversazione {
+  const email = String(conv?.contact_email ?? "").trim().toLowerCase()
+  const subject = String(conv?.subject ?? "")
+
+  const dominio = normalizzaDominio(dominioStruttura)
+  if (dominio && email.endsWith(`@${dominio}`)) return "interna"
+  if (/zz\s*prova/i.test(subject)) return "prova"
+  if (confermaDaOggetto(subject)) return "conferma_gestionale"
+  return "lavorabile"
+}
+
 /* ─────────────────────────── Le fasi ─────────────────────────── */
 
 export type FaseKey = "da_qualificare" | "aperta" | "preventivo_inviato" | "confermata" | "persa"
@@ -195,64 +284,79 @@ export interface Fase {
   key: FaseKey
   etichetta: string
   descrizione: string
-  /**
-   * Se falso, la colonna compare solo quando ha almeno una riga.
-   *
-   * Serve per "persa": nessuna estrazione produce quell'esito (misurato: solo
-   * "aperta", "confermata" e null), quindi una colonna sempre vuota
-   * suggerirebbe un dato che non esiste. Le altre quattro sono tutte
-   * raggiungibili, "Preventivo inviato" perché la tariffa si inserisce a mano.
-   */
-  sempreVisibile: boolean
 }
 
 export const FASI: Fase[] = [
   {
     key: "da_qualificare",
     etichetta: "Da qualificare",
-    descrizione: "L'estrazione non ha rilevato un esito: va letta da una persona.",
-    sempreVisibile: true,
+    descrizione: "Nessuna persona ha ancora deciso: qui arriva tutto ciò che l'estrattore ha letto.",
   },
   {
     key: "aperta",
     etichetta: "Richiesta aperta",
-    descrizione: "Il cliente ha chiesto disponibilità e non ha ancora una risposta chiusa.",
-    sempreVisibile: true,
+    descrizione: "Un operatore l'ha riconosciuta come richiesta da lavorare.",
   },
   {
     key: "preventivo_inviato",
     etichetta: "Preventivo inviato",
     descrizione: "C'è una tariffa preventivata inserita da un operatore.",
-    sempreVisibile: true,
   },
   {
     key: "confermata",
     etichetta: "Confermata",
-    descrizione: "La richiesta si è chiusa con una prenotazione.",
-    sempreVisibile: true,
+    descrizione: "Un operatore l'ha chiusa con una prenotazione.",
   },
   {
     key: "persa",
     etichetta: "Persa",
-    descrizione: "Chiusa senza prenotazione.",
-    sempreVisibile: false,
+    descrizione: "Un operatore l'ha chiusa senza prenotazione.",
   },
 ]
 
 /**
- * Fase di una riga, dedotta dall'esito estratto e dalla tariffa inserita a mano.
+ * Fase di una riga. Solo segnali UMANI la collocano.
  *
- * Precedenza dichiarata, perché i due segnali possono coesistere: un esito
- * chiuso (confermata/persa) VINCE sulla tariffa. Una richiesta confermata con un
- * preventivo dentro è confermata — retrocederla a "Preventivo inviato" perché
- * qualcuno ha scritto una cifra farebbe sparire una vendita dalla colonna
- * giusta.
+ * ─── Perché l'esito letto dall'IA non colloca più niente ───
+ *
+ * Prima questa funzione dedotto la fase da `outcome`. Sembrava informativo ed
+ * era sbagliato, e l'ho capito misurando: fra le righe non di gestionale gli
+ * esiti sono {aperta: 14, confermata: 4}, ma dentro quei numeri convivono lead
+ * veri e fornitori. Con la deduzione automatica, "Chiusura TUS114A" di
+ * Topcruises appariva in **Confermata** e il caseificio in **Richiesta aperta**:
+ * la pagina avrebbe raccontato trattative vinte che nessuno ha vinto e lavoro
+ * aperto che non esiste.
+ *
+ * L'esito dell'IA resta e si vede, ma come NOTA ("l'IA ha letto: confermata"):
+ * un suggerimento per chi legge, non un verdetto che muove i conteggi.
+ *
+ * ─── Precedenza, dichiarata ───
+ *
+ *   1. `stage` scelto da un operatore VINCE su tutto. È una decisione umana
+ *      registrata con autore e istante: nessun ricalcolo la può scavalcare.
+ *   2. Altrimenti, una tariffa inserita a mano vale come fase: scrivere una
+ *      cifra è già un atto di un operatore, e l'IA non ne produce mai
+ *      (misurato: 0 righe su 200 con un prezzo nel payload).
+ *   3. Altrimenti "Da qualificare".
  */
-export function faseDi(riga: { outcome: string | null; quoted_rate_cents: number | null }): FaseKey {
-  const esito = (riga.outcome ?? "").toLowerCase()
-  if (esito === "confermata" || esito === "confirmed") return "confermata"
-  if (esito === "persa" || esito === "lost") return "persa"
+export function faseDi(riga: {
+  stage: string | null
+  quoted_rate_cents: number | null
+}): FaseKey {
+  const scelta = (riga.stage ?? "").trim()
+  if (scelta && FASI.some((f) => f.key === scelta)) return scelta as FaseKey
   if (riga.quoted_rate_cents !== null && riga.quoted_rate_cents > 0) return "preventivo_inviato"
-  if (esito === "aperta" || esito === "open") return "aperta"
   return "da_qualificare"
+}
+
+/**
+ * Come mostrare l'esito letto dall'IA, senza spacciarlo per una decisione.
+ *
+ * Restituisce `null` quando l'IA non ha letto niente: meglio nessuna nota che
+ * una nota vuota, che sembrerebbe un dato mancante invece di un'assenza.
+ */
+export function notaEsitoIA(outcome: string | null | undefined): string | null {
+  const e = String(outcome ?? "").trim()
+  if (!e) return null
+  return `l'IA ha letto: ${e}`
 }
