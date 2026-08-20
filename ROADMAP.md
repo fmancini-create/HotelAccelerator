@@ -1,6 +1,6 @@
 # HotelAccelerator — Roadmap
 
-Ultimo aggiornamento: 2026-08-19
+Ultimo aggiornamento: 2026-08-20
 
 ## Principio di priorità
 
@@ -65,7 +65,7 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 ## Fase 4 — Comunicazione, AI e vendita diretta
 
 - [ ] Inbox multicanale progressiva: Outlook/IMAP, WhatsApp, Telegram, Instagram, Facebook, sito, booking engine, OTA e VoIP secondo API disponibili.
-- [ ] Assistente vocale AI per telefonate e messaggi vocali con handoff umano e contesto preservato.
+- [ ] Assistente vocale AI per telefonate e messaggi vocali con handoff umano e contesto preservato. Bridge 3CX → basi tenant-aware e fallback 200 in stato `Codice`; restano script sul PBX, prova tenant reale, persistenza controllata del contesto e osservabilità.
 - [ ] Analisi conversazioni: intenti, richieste, sentiment, qualità, conversione e insight aggregati di mercato.
 - [ ] CMS/sito AI-first, multilingua, SEO/GEO e hosting.
 - [ ] Booking widget con disponibilità, preventivo, pagamento, alternative, extra e integrazione PMS.

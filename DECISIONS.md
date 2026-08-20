@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-08-08
+Ultimo aggiornamento: 2026-08-20
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -88,6 +88,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: HotelAccelerator HR e' un modulo `product` opzionale governato da `tenant_modules`.
 - La prima versione gestisce reparti, anagrafiche, turni, pubblicazione, notifiche, risposte e richieste di assenza.
 - Cedolini e documenti sensibili saranno introdotti solo con storage privato, audit accessi e associazione AI confermata da una persona.
+
+## ADR-015 — 3CX possiede la chiamata, il Core possiede conoscenza e tenant
+
+- Stato: accettata
+- Decisione: 3CX gestisce media, riconoscimento/sintesi vocale, route point e trasferimento; HotelAccelerator espone un contratto HTTP versionato e autenticato che seleziona una sola base nel tenant e genera una risposta fondata.
+- Conseguenza: il modello non riceve un `base_id` arbitrario e non può attraversare prodotti o tenant; assenza, ambiguità, bassa confidenza, richiesta umana ed errore portano all'interno 200. Il codice cliente resta fuori dal contratto finché non esiste una fonte autorevole.
 
 ## Decisioni aperte
 

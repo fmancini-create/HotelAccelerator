@@ -34,6 +34,7 @@ const casi = [
   ["/api/external/manubot", null, "API esterna a token"],
   ["/api/cms/pages/by-slug", null, "Lettura pubblica per slug"],
   ["/api/channels/email/oauth/callback", null, "Callback OAuth"],
+  ["/api/telephony/3cx/voice/v1/query", null, "Assistente vocale 3CX a token"],
 
   // --- Super admin: fuori dal controllo di area ---
   ["/api/super-admin/structures", null, "Super admin"],

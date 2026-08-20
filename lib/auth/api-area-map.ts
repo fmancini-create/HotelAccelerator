@@ -57,12 +57,13 @@ export const PUBLIC_API_PREFIXES: string[] = [
   "/api/external",
   // Lettura pagina pubblicata per slug: serve la resa del sito pubblico.
   "/api/cms/pages/by-slug",
-  // Le due rotte che il centralino 3CX chiama DA FUORI (ricerca del contatto
-  // all'arrivo della chiamata e registrazione a fine chiamata): si autenticano
+  // Le rotte che il centralino 3CX chiama DA FUORI (ricerca del contatto,
+  // registrazione a fine chiamata e strumento dell'assistente vocale): si autenticano
   // col segreto della struttura, non con un cookie, e nessuna persona le apre.
   // Chiedere loro un'area di membro le romperebbe con un 401 a ogni squillo.
   "/api/telephony/3cx/lookup",
   "/api/telephony/3cx/journal",
+  "/api/telephony/3cx/voice",
 ]
 
 /**
