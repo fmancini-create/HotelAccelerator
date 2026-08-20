@@ -1,5 +1,4 @@
 import type { GenerateReplyResult } from "@/lib/ai/generate"
-import type { VoiceProduct } from "@/lib/telephony/voice-products"
 
 export type VoiceTransferReason = "none" | "staff_requested" | "not_grounded" | "no_answer" | "service_error"
 
@@ -63,14 +62,10 @@ export function buildVoiceResponse(
   }
 }
 
-export function serviceErrorVoiceResponse(
-  product: VoiceProduct,
-  destination: string,
-  diagnosticCode: string,
-) {
+export function serviceErrorVoiceResponse(agent: { key: string; label: string }, destination: string, diagnosticCode: string) {
   return {
     ok: false as const,
-    product: { key: product.key, label: product.label },
+    agent,
     speech: DEFAULT_HANDOFF_SPEECH,
     confidence: 0,
     grounded: false,
