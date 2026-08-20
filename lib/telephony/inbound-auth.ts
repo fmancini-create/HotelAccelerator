@@ -11,12 +11,14 @@ import { loadTelephonyRow, inboundSecretOf, type TelephonyRow } from "@/lib/tele
  * confronto del segreto. Due copie divergono, e a divergere in silenzio sarebbe
  * stato il controllo di sicurezza.
  *
- * Il segreto arriva in due modi, entrambi accettati:
+ * Il segreto arriva in tre modi, tutti accettati:
  *  - `?token=` nella query, come nella prima versione;
  *  - intestazione Basic, con il segreto come nome utente. E' il modo usato dai
  *    template CRM di 3CX (`<Authentication Type="Basic">`), e permette di NON
  *    scrivere il segreto dentro il file del template: l'operatore lo incolla
  *    nel campo "API Key" della console.
+ *  - `X-HotelAccelerator-Key` per gli strumenti HTTP degli agenti vocali:
+ *    evita che il segreto compaia nell'URL e nei log di accesso intermedi.
  */
 
 export type InboundAuthResult =
@@ -34,6 +36,9 @@ function constantTimeEquals(provided: string, expected: string): boolean {
 
 /** Estrae il segreto presentato da 3CX: query oppure utente dell'intestazione Basic. */
 function presentedToken(request: NextRequest): string {
+  const fromHeader = request.headers.get("x-hotelaccelerator-key")?.trim()
+  if (fromHeader) return fromHeader
+
   const fromQuery = new URL(request.url).searchParams.get("token")?.trim()
   if (fromQuery) return fromQuery
 

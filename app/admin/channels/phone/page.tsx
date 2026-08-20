@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, CheckCircle2, Copy, Loader2, Phone, PhoneOutgoing, Save } from "lucide-react"
+import { AlertCircle, Bot, CheckCircle2, Copy, Loader2, Phone, PhoneOutgoing, Save } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { TelephonyExtensionsCard } from "@/components/admin/telephony-extensions-card"
 
@@ -21,6 +21,22 @@ type Integration = {
   last_check_error: string | null
 }
 
+type VoiceAgentLink = {
+  key: string
+  dtmf: string
+  label: string
+  suggested_extension: string
+  fallback_extension: string
+  status: "ready" | "not_found" | "ambiguous" | "empty"
+  knowledge_base: {
+    id: string
+    name: string
+    source_count: number
+    matched_by: "marker" | "name"
+  } | null
+  query_url: string
+}
+
 export default function PhoneChannelPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -32,6 +48,8 @@ export default function PhoneChannelPage() {
   const [result, setResult] = useState<{ ok: boolean; message: string; extensions?: string[] } | null>(null)
   const [apiKey, setApiKey] = useState("")
   const [preparing, setPreparing] = useState(false)
+  const [voicePreparing, setVoicePreparing] = useState(false)
+  const [voiceAgents, setVoiceAgents] = useState<VoiceAgentLink[] | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -122,6 +140,36 @@ export default function PhoneChannelPage() {
       await load()
     } finally {
       setPreparing(false)
+    }
+  }
+
+  async function prepareVoiceAgents() {
+    setVoicePreparing(true)
+    setResult(null)
+    try {
+      // La stessa chiave in ingresso autentica CRM e voce. La rotta e'
+      // idempotente: se esiste gia', non la ruota e non invalida 3CX.
+      const secretRes = await fetch("/api/telephony/3cx/crm-link", { method: "POST" })
+      const secretData = await secretRes.json().catch(() => null)
+      if (!secretRes.ok || !secretData?.api_key) {
+        setResult({ ok: false, message: secretData?.error || "Non è stato possibile preparare gli assistenti vocali." })
+        return
+      }
+
+      const res = await fetch("/api/telephony/3cx/inbound-urls", { cache: "no-store" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !Array.isArray(data?.voice_agents)) {
+        setResult({ ok: false, message: data?.error || "Non è stato possibile generare i collegamenti vocali." })
+        return
+      }
+
+      setVoiceAgents(data.voice_agents as VoiceAgentLink[])
+      setApiKey(String(secretData.api_key))
+      await load()
+    } catch {
+      setResult({ ok: false, message: "Impossibile contattare il servizio." })
+    } finally {
+      setVoicePreparing(false)
     }
   }
 
@@ -389,6 +437,105 @@ export default function PhoneChannelPage() {
                   </ol>
                 </>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ha-brand-soft">
+                  <Bot className="h-5 w-5 text-ha-brand-soft-foreground" aria-hidden="true" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Assistenti vocali AI 4 BID</CardTitle>
+                  <CardDescription className="text-pretty">
+                    Collega i tasti 1–4 alle quattro basi di conoscenza del tenant. Se la risposta non è sicura, la
+                    chiamata passa all&apos;interno 200.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!voiceAgents ? (
+                <Button variant="outline" onClick={prepareVoiceAgents} disabled={voicePreparing}>
+                  {voicePreparing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Bot className="mr-2 h-4 w-4" aria-hidden="true" />
+                  )}
+                  {voicePreparing ? "Verifica in corso…" : "Prepara i quattro assistenti"}
+                </Button>
+              ) : (
+                <div className="space-y-3">
+                  {voiceAgents.map((agent) => {
+                    const ready = agent.status === "ready"
+                    const statusText =
+                      agent.status === "ready"
+                        ? "Pronta"
+                        : agent.status === "empty"
+                          ? "Senza fonti"
+                          : agent.status === "ambiguous"
+                            ? "Nome ambiguo"
+                            : "Base non trovata"
+                    return (
+                      <div key={agent.key} className="rounded-lg border p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+                              {agent.dtmf}
+                            </span>
+                            <div>
+                              <p className="font-medium">{agent.label}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Interno 3CX suggerito {agent.suggested_extension} · fallback {agent.fallback_extension}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge variant={ready ? "default" : "secondary"}>{statusText}</Badge>
+                        </div>
+
+                        {agent.knowledge_base && (
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            Base: <strong className="text-foreground">{agent.knowledge_base.name}</strong> ·{" "}
+                            {agent.knowledge_base.source_count} fonti
+                          </p>
+                        )}
+
+                        {!ready && (
+                          <p className="mt-3 text-xs text-destructive text-pretty">
+                            {agent.status === "empty"
+                              ? "Aggiungi almeno una fonte alla base prima di collegarla a 3CX."
+                              : `Nella descrizione della base corretta aggiungi il marker [voice:${agent.key}].`}
+                          </p>
+                        )}
+
+                        <div className="mt-3 flex items-start gap-2">
+                          <code className="min-w-0 flex-1 break-all rounded-md border bg-muted/50 px-3 py-2 text-[11px] leading-relaxed">
+                            {agent.query_url}
+                          </code>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => copy(`Voce-${agent.key}`, agent.query_url)}
+                            aria-label={`Copia il collegamento di ${agent.label}`}
+                          >
+                            <Copy className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </div>
+                        {copied === `Voce-${agent.key}` && <p className="mt-1 text-xs text-ha-success">Copiato.</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground text-pretty leading-relaxed">
+                Gli URL non contengono la chiave segreta. Lo script 3CX deve inviare la chiave di collegamento mostrata
+                sopra nell&apos;intestazione X-HotelAccelerator-Key. Il testo della chiamata non viene salvato nel
+                database da questo collegamento; il provider AI lo elabora secondo le proprie condizioni. Il codice
+                cliente non viene ancora verificato: non esiste oggi un campo anagrafico affidabile da usare senza
+                modificare il database.
+              </p>
             </CardContent>
           </Card>
 
