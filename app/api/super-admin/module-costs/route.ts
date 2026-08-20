@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    const items = (data ?? []).map((row) => {
+    const items = (data ?? []).map((row: Record<string, unknown>) => {
       const costo = (row.monthly_cost_cents as number | null) ?? null
       return {
         key: row.key as string,
