@@ -67,7 +67,6 @@ import { AiDraftPanel } from "@/components/admin/inbox/ai-draft-panel"
 import { AddToKnowledgeButton } from "@/components/admin/inbox/add-to-knowledge-button"
 import { VistaBozze } from "@/components/admin/inbox/vista-bozze"
 import { toast } from "sonner"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
   DialogContent,
@@ -490,9 +489,14 @@ export default function InboxPage() {
 
   // ── Inbox Mode ──
   type InboxMode = "gmail" | "smart"
-  // Default to the unified ("smart") inbox so all channels (Email, WhatsApp,
-  // Telegram, Chat) are visible together. "gmail" is the Gmail-only mirror view.
-  const [inboxMode, setInboxMode] = useState<InboxMode>("smart")
+  // Sempre inbox unificata: tutti i canali (Email, WhatsApp, Telegram, Chat)
+  // insieme. Il selettore "Tutti i canali / Gmail" in alto a destra e' stato
+  // rimosso su richiesta, quindi "gmail" (lo specchio della sola casella Gmail)
+  // non e' piu' raggiungibile dall'interfaccia: nessuno scrive questo stato.
+  // I rami "inboxMode === 'gmail'" piu' sotto restano nel file ma non vengono
+  // percorsi. Se serve riesumare quella vista va rimesso un comando che la
+  // selezioni, non basta cambiare il valore iniziale qui.
+  const [inboxMode] = useState<InboxMode>("smart")
 
   // ── Lavorazione condivisa ──
   // Chi sta scrivendo cosa, in questa struttura. Vale per entrambe le modalita':
@@ -2598,12 +2602,6 @@ export default function InboxPage() {
 
         {/* Right icons */}
         <div className="flex items-center gap-1 ml-auto">
-          <Tabs value={inboxMode} onValueChange={(v) => setInboxMode(v as InboxMode)}>
-            <TabsList className="bg-transparent border-0 h-8">
-              <TabsTrigger value="smart" className="text-xs h-6">Tutti i canali</TabsTrigger>
-              <TabsTrigger value="gmail" className="text-xs h-6">Gmail</TabsTrigger>
-            </TabsList>
-          </Tabs>
           <Button
             variant="ghost"
             size="icon"
