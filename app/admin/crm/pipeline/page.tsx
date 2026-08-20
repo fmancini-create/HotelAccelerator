@@ -354,7 +354,7 @@ export default function CrmPipelinePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Pipeline</h1>
           <p className="text-muted-foreground text-pretty">
-            Le richieste di date estratte dalle conversazioni, con la fase dedotta dall&apos;esito.
+            Le richieste di date lette nelle conversazioni. Nascono tutte da qualificare: la fase la decidi tu.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void carica()} disabled={caricamento}>
@@ -521,8 +521,26 @@ export default function CrmPipelinePage() {
                 <div className="border-t px-4 py-3 text-xs text-muted-foreground text-pretty leading-relaxed">
                   <span className="tabular-nums text-foreground">{r?.richieste ?? 0}</span> richieste scritte da persone,
                   di cui <span className="tabular-nums text-foreground">{r?.senza_data ?? 0}</span> senza date estratte.
-                  La fase è dedotta dall&apos;esito registrato dall&apos;estrazione; la tariffa si inserisce a mano
-                  perché le conversazioni non contengono prezzi.
+                  Nessuna fase è dedotta automaticamente: l&apos;esito letto dall&apos;IA è mostrato come nota perché
+                  fra queste righe convivono clienti veri e fornitori, e nessun segnale li distingue. La tariffa si
+                  inserisce a mano perché le conversazioni non contengono prezzi.
+                  {/* Le esclusioni si DICHIARANO. Un elenco che nasconde righe
+                      senza dirlo è indistinguibile da un elenco incompleto. */}
+                  {(r?.escluse.interne ?? 0) + (r?.escluse.prove ?? 0) > 0 ? (
+                    <>
+                      {" "}
+                      Escluse <span className="tabular-nums text-foreground">{r?.escluse.interne ?? 0}</span> pratiche
+                      interne e <span className="tabular-nums text-foreground">{r?.escluse.prove ?? 0}</span>{" "}
+                      conversazioni di prova.
+                    </>
+                  ) : null}
+                  {(r?.conferme_da_oggetto ?? 0) > 0 ? (
+                    <>
+                      {" "}
+                      <span className="tabular-nums text-foreground">{r?.conferme_da_oggetto ?? 0}</span> conferme del
+                      gestionale riconosciute dall&apos;oggetto sono nel blocco delle acquisite.
+                    </>
+                  ) : null}
                   {r?.troncato ? " Elenco parziale: lette le prime 5.000 richieste." : ""}
                 </div>
               </CardContent>
@@ -543,7 +561,15 @@ export default function CrmPipelinePage() {
                       Arrivano dalle notifiche del gestionale: sono prenotazioni già chiuse dal motore, non trattative
                       lavorate da un operatore. Restano fuori dai conteggi per fase qui sopra, perché sommarle direbbe
                       che il lavoro commerciale ha portato{" "}
-                      <span className="tabular-nums text-foreground">{r?.totale ?? 0}</span> richieste invece di{" "}
+                      {/* La somma si CALCOLA dai due blocchi. Qui c'era `totale`,
+                          cioè tutte le righe lette (200): includeva anche le 8
+                          escluse, che non compaiono in nessuno dei due blocchi.
+                          Il numero avrebbe sostenuto l'argomento giusto con una
+                          cifra che non corrisponde a niente sullo schermo. */}
+                      <span className="tabular-nums text-foreground">
+                        {(r?.richieste ?? 0) + (r?.acquisite ?? 0)}
+                      </span>{" "}
+                      richieste invece di{" "}
                       <span className="tabular-nums text-foreground">{r?.richieste ?? 0}</span>.
                     </p>
                     <p className="text-xs text-muted-foreground">
