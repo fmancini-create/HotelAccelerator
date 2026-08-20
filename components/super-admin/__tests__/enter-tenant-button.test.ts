@@ -34,12 +34,29 @@ describe("super-admin: entrare in una struttura", () => {
       /read.?only|sola.?lettura/i,
     )
 
+    /*
+     * ATTENZIONE — qui avevo un buco, trovato provando a far FALLIRE la prova.
+     * Elencavo le formulazioni vietate: cercavo "modalita SOLA LETTURA" ma il
+     * sabotaggio scriveva "modalita' SOLA LETTURA" con l'apostrofo, e la prova
+     * restava VERDE con la bugia rimessa in pagina.
+     * Regola: un elenco di frasi vietate non protegge, perche' basta cambiare
+     * una lettera per aggirarlo. Si PRETENDE invece che l'avvertenza corretta
+     * sia presente, cosi' toccarla arrossisce in ogni caso.
+     */
+    const dettaglio = leggi(DETTAGLIO)
+    expect(dettaglio, "il dettaglio non avverte che le azioni sono REALI").toMatch(
+      /le azioni che farai sono reali/i,
+    )
+    expect(dettaglio, "il dettaglio non nega esplicitamente la sola lettura").toMatch(/non in sola lettura/i)
+
     for (const p of [ELENCO, DETTAGLIO]) {
       const s = leggi(p)
-      // Si accetta la frase che NEGA la sola lettura ("non in sola lettura"):
-      // si cerca quindi la promessa in positivo.
-      const promesse = s.match(/READ-ONLY|Read-only|modalit[aà] SOLA LETTURA|\(Read-only\)/g) || []
-      expect(promesse, `${p}: promette la sola lettura: ${promesse.join(", ")}`).toHaveLength(0)
+      // Rete di sicurezza aggiuntiva: nessuna promessa in positivo, in
+      // qualunque grafia, con o senza accento o apostrofo.
+      const promesse = s.match(/READ-?ONLY|Read-only|SOLA\s*LETTURA/gi) || []
+      const ammesse = promesse.filter((x) => !/non in sola lettura/i.test(x))
+      const bugie = ammesse.filter((x) => !new RegExp(`non in ${x}`, "i").test(s))
+      expect(bugie, `${p}: promette la sola lettura: ${bugie.join(", ")}`).toHaveLength(0)
     }
   })
 
