@@ -84,6 +84,12 @@ export const SUPER_ADMIN_API_PREFIXES: string[] = ["/api/super-admin"]
 export const API_AREA_MAP: Record<string, string> = {
   // --- Aree concedibili: qui il controllo cambia davvero qualcosa ---
   "/api/admin/crm": "crm",
+  // Le rotte del CRM non stanno tutte sotto /api/admin: la sincronizzazione col
+  // PMS e la sua configurazione vivono sotto /api/crm, che era NON CLASSIFICATO
+  // (misurato: `check:area-guard` le elencava entrambe). Con la modalita' attuale
+  // "enforce" quella mancanza non era teorica: un membro senza l'area CRM poteva
+  // chiamare a mano la sincronizzazione, che scrive nella rubrica.
+  "/api/crm": "crm",
   "/api/admin/todos": "todos",
 
   "/api/admin/photos": "photos",
