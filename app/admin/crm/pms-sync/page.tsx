@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleSlash,
+  KeyRound,
   Loader2,
   PlayCircle,
   RefreshCw,
@@ -295,7 +296,15 @@ export default function PmsSyncPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Connessione</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-base">Connessione</CardTitle>
+            <Button asChild variant="outline" size="sm" className="gap-2">
+              <Link href="/admin/crm/pms-config">
+                <KeyRound className="h-4 w-4" />
+                {provider.fake ? "Collega il PMS" : "Modifica credenziali"}
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
