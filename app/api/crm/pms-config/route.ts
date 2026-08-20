@@ -47,6 +47,15 @@ type CorpoPut = {
   apiUrl?: unknown
   authCode?: unknown
   propertyCode?: unknown
+  /**
+   * Indirizzo WEB del gestionale: quello che la persona apre per lavorare.
+   * NON e' `apiUrl`: quello e' l'endpoint che risponde JSON (per Scidoo finisce
+   * in `/api/v1/`). Incorniciare l'API mostrerebbe una pagina di testo.
+   * Non lo indoviniamo noi: l'indirizzo del gestionale cambia da struttura a
+   * struttura e un valore "plausibile" scritto qui aprirebbe la cornice sul sito
+   * sbagliato senza che nessuno capisca perche'.
+   */
+  webUrl?: unknown
   isActive?: unknown
 }
 
@@ -95,6 +104,7 @@ export async function GET(request: NextRequest) {
           nome: data.name ?? null,
           apiUrl: data.api_url ?? null,
           propertyCode: typeof settings.property_code === "string" ? settings.property_code : null,
+          webUrl: typeof settings.web_url === "string" ? settings.web_url : null,
           isActive: Boolean(data.is_active),
           segretoPresente: Boolean(segreto),
           segretoCifrato: segreto ? isEncryptedSecret(segreto) : null,
@@ -168,6 +178,37 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "L'indirizzo API deve usare https." }, { status: 400 })
   }
 
+  // Indirizzo web del gestionale: facoltativo, ma se c'e' deve essere https e
+  // deve essere un indirizzo, non una parola. Serve alla cornice: una cornice
+  // aperta su http verrebbe bloccata dal browser perche' la nostra pagina e'
+  // https, e l'utente vedrebbe un riquadro bianco senza spiegazione.
+  const webUrlGrezzo = testo(corpo.webUrl)
+  let webUrl = ""
+  if (webUrlGrezzo) {
+    let u: URL
+    try {
+      u = new URL(webUrlGrezzo)
+    } catch {
+      return NextResponse.json({ error: `Indirizzo web non valido ("${webUrlGrezzo}").` }, { status: 400 })
+    }
+    if (u.protocol !== "https:") {
+      return NextResponse.json({ error: "L'indirizzo web del gestionale deve usare https." }, { status: 400 })
+    }
+    // Errore facile da fare e difficile da capire: incollare qui l'indirizzo
+    // dell'API. La cornice mostrerebbe del testo JSON o un errore di
+    // autorizzazione, e sembrerebbe un guasto nostro.
+    if (u.pathname.includes("/api/")) {
+      return NextResponse.json(
+        {
+          error:
+            "Questo sembra l'indirizzo dell'API, non del gestionale. Serve l'indirizzo che apri per lavorare (quello che vedi nel browser).",
+        },
+        { status: 400 },
+      )
+    }
+    webUrl = u.toString()
+  }
+
   const sb = createServiceClient()
   const { data: esistente, error: erroreLettura } = await sb
     .from("pms_integrations")
@@ -215,6 +256,8 @@ export async function PUT(request: NextRequest) {
   const settings: Record<string, unknown> = { ...settingsEsistenti }
   if (propertyCode) settings.property_code = propertyCode
   else delete settings.property_code
+  if (webUrl) settings.web_url = webUrl
+  else delete settings.web_url
 
   const etichetta =
     connettoriDisponibili().find((c) => c.slug === pmsType)?.etichetta ?? pmsType
