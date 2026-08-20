@@ -45,6 +45,20 @@ export interface PlatformArea {
    * sensitive sections (user management, billing, platform config).
    */
   adminOnly?: boolean
+  /**
+   * L'area si concede, ma da sola la concessione NON basta: la persona deve
+   * anche essere responsabile (capogruppo) di almeno un gruppo della struttura.
+   *
+   * Serve perche' le due categorie esistenti non bastavano: `adminOnly` la
+   * chiude a chiunque non sia amministratore, mentre un'area normale si apre a
+   * qualunque membro a cui venga concessa. Qui la richiesta era "amministratore
+   * oppure capogruppo, se il permesso e' attivo": due condizioni in E.
+   *
+   * Il filtro vive in `getMemberEffectiveAreas`, cioe' nella stessa funzione che
+   * alimenta sia il menu sia le guardie di pagine e API: cosi' non possono
+   * dire cose diverse.
+   */
+  requiresGroupLead?: boolean
 }
 
 export const PLATFORM_AREAS: PlatformArea[] = [
@@ -60,6 +74,17 @@ export const PLATFORM_AREAS: PlatformArea[] = [
   // amministratori: le chiamate senza risposta servono a chi sta alla reception,
   // mentre la configurazione del centralino resta in Canali (solo admin).
   { key: "calls", label: "Telefonate", group: "operative", href: "/admin/calls" },
+  // Cosa ha imparato l'agente guardando lavorare nel gestionale. Riservata:
+  // e' il registro di COME lavora il personale, quindi la vede chi risponde del
+  // lavoro (amministratore o capogruppo), non chiunque abbia il CRM.
+  // L'etichetta dice a chi concede che il permesso da solo non apre nulla.
+  {
+    key: "pms_learning",
+    label: "Apprendimento agente (solo capogruppo)",
+    group: "operative",
+    href: "/admin/crm/pms-sync/apprendimento",
+    requiresGroupLead: true,
+  },
   { key: "todos", label: "Todos", group: "operative", href: "/admin/todos" },
   { key: "marketing", label: "Email Marketing", group: "operative", href: "/admin/marketing" },
   { key: "monitoring", label: "Monitoring", group: "operative", href: "/admin/monitoring" },

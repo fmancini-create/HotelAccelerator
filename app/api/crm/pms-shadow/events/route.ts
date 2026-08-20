@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
-import { accessErrorStatus, isAccessError, requireTenantAdmin } from "@/lib/auth/admin-access"
+import { accessErrorStatus, getCallerIdentity, isAccessError, requireTenantAdmin } from "@/lib/auth/admin-access"
 import { connettoreEsiste } from "@/lib/pms/connectors/registry"
 import {
   chiaveProcedura,
@@ -277,8 +277,39 @@ export async function POST(request: NextRequest) {
   })
 }
 
+/**
+ * Chi puo' LEGGERE le procedure imparate.
+ *
+ * Non e' la stessa porta del POST. Scrivere e' un atto della sorgente tecnica e
+ * resta all'amministratore (vedi la nota in testa al file). Leggere serve a chi
+ * risponde del lavoro: l'amministratore e il capogruppo a cui l'area
+ * "pms_learning" e' stata concessa.
+ *
+ * Le due condizioni non sono ripetute qui: l'area "pms_learning" e' dichiarata
+ * `requiresGroupLead` nel catalogo, e `getMemberEffectiveAreas` la toglie a chi
+ * non e' responsabile. Cosi' questa rotta, la pagina e il menu leggono la
+ * stessa decisione da un solo posto.
+ */
+async function identificaLettore(request: NextRequest) {
+  const decision = await requireAreaApi("pms_learning", request)
+  if (isAreaDenied(decision)) return { negato: areaDeniedResponse(decision) as NextResponse }
+
+  const identity = await getCallerIdentity(request)
+  if (!identity) {
+    return { negato: NextResponse.json({ error: "Non autenticato" }, { status: 401 }) as NextResponse }
+  }
+  if (!identity.propertyId) {
+    // Un super admin senza struttura attiva non ha un perimetro da leggere:
+    // meglio dirlo che restituire le procedure di una struttura a caso.
+    return {
+      negato: NextResponse.json({ error: "Nessuna struttura attiva selezionata" }, { status: 400 }) as NextResponse,
+    }
+  }
+  return { propertyId: identity.propertyId }
+}
+
 export async function GET(request: NextRequest) {
-  const id = await identifica(request)
+  const id = await identificaLettore(request)
   if (id.negato) return id.negato
   const propertyId = id.propertyId!
 

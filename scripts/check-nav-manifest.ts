@@ -84,12 +84,23 @@ console.log("\n== 4. Menu e catalogo aree concordano ==")
  * Il catalogo classifica le AREE, il manifesto classifica le VOCI. Dove
  * esistono entrambi devono dire la stessa cosa, altrimenti chi legge il
  * catalogo per capire i permessi si costruisce un'idea sbagliata di dov'e' la
- * voce. Unica eccezione dichiarata: l'area "tracking" copre sia le pagine
- * operative sia quelle di impostazione (una sola chiave protegge tutto
- * /admin/tracking), quindi le sue voci stanno legittimamente in entrambi i
- * gruppi.
+ * voce. Eccezioni dichiarate, entrambe per lo stesso motivo: una sola chiave
+ * d'area protegge sia le pagine che si USANO ogni giorno sia quelle che si
+ * IMPOSTANO una volta, quindi le voci di quell'area stanno legittimamente in
+ * entrambi i gruppi.
+ *
+ * - "tracking": una sola chiave protegge tutto /admin/tracking.
+ * - "crm": `requireAreaPage("crm")` nel layout di app/admin/crm protegge sia le
+ *   pagine operative (Contatti, Pipeline, PMS/gestionale) sia il "Collegamento
+ *   gestionale", che sta fra le Impostazioni perche' si configura una volta
+ *   sola. Non si spezza la chiave in due: darebbe due permessi da gestire per
+ *   una sola area, e chi ha accesso al CRM deve poter sistemare il collegamento
+ *   del proprio gestionale.
+ *
+ * Questa non e' una deroga per far passare la prova: la prova 5 continua a
+ * pretendere che "Collegamento gestionale" stia fra le impostazioni.
  */
-const AREE_CON_DUE_COLLOCAZIONI = new Set(["tracking"])
+const AREE_CON_DUE_COLLOCAZIONI = new Set(["tracking", "crm"])
 for (const entry of NAV_ENTRIES.filter((e) => e.area && !AREE_CON_DUE_COLLOCAZIONI.has(e.area as string))) {
   const area = PLATFORM_AREAS.find((a) => a.key === entry.area)
   if (!area) continue
@@ -131,6 +142,12 @@ for (const id of [
   "tracking-sites",
   "embed-scripts",
   "profile",
+  /*
+   * Il collegamento al gestionale. Serve NOMINARLO qui: l'area "crm" e' fra le
+   * AREE_CON_DUE_COLLOCAZIONI, quindi la prova 4 non la controlla piu' e senza
+   * questa riga nessuno si accorgerebbe se tornasse fra le operative.
+   */
+  "pms-config",
 ]) {
   check(`"${id}" e' fra le impostazioni`, collocazione(id) === "settings", `risulta ${collocazione(id)}`)
 }

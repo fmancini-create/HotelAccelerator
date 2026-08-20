@@ -27,6 +27,7 @@ import useSWR from "swr"
 import Link from "next/link"
 import {
   ArrowLeft,
+  ArrowRight,
   ExternalLink,
   Eye,
   EyeOff,
@@ -34,34 +35,15 @@ import {
   Loader2,
   Maximize2,
   Minimize2,
-  ShieldAlert,
-  TriangleAlert,
 } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 
 type ConfigStato = {
   configurata: boolean
   config: { pmsType: string | null; nome: string | null; webUrl: string | null; isActive: boolean } | null
 }
-
-type Procedura = {
-  id: string
-  pms_type: string
-  title: string
-  occurrences: number
-  risk: "basso" | "medio" | "alto"
-  status: "osservata" | "proposta" | "autonoma" | "bloccata"
-  autonomy_threshold: number
-  steps_summary: unknown
-  first_seen_at: string
-  last_seen_at: string
-}
-
-type ProcedureStato = { procedure: Procedura[]; sogliaPredefinita: number }
 
 const fetcher = async (url: string) => {
   const res = await fetch(url, { credentials: "include" })
@@ -69,28 +51,23 @@ const fetcher = async (url: string) => {
   return res.json()
 }
 
-const ETICHETTA_STATO: Record<Procedura["status"], string> = {
-  osservata: "Solo osservata",
-  proposta: "Propone e attende",
-  autonoma: "Agisce da sola",
-  bloccata: "Bloccata da una persona",
-}
-
-const ETICHETTA_RISCHIO: Record<Procedura["risk"], string> = {
-  basso: "Rischio basso",
-  medio: "Rischio medio",
-  alto: "Rischio alto",
-}
-
 export default function PmsShadowPage() {
   const { data: cfg, isLoading: cfgCarica } = useSWR<ConfigStato>("/api/crm/pms-config", fetcher, {
     revalidateOnFocus: false,
   })
-  const {
-    data: proc,
-    isLoading: procCarica,
-    error: procErrore,
-  } = useSWR<ProcedureStato>("/api/crm/pms-shadow/events", fetcher, { revalidateOnFocus: false })
+  /*
+   * Serve solo per decidere se MOSTRARE il rimando all'area riservata.
+   *
+   * Si leggono le aree effettive, cioe' la stessa fonte che presidia la pagina
+   * di destinazione: nessuna regola duplicata da tenere allineata. Per gli
+   * amministratori `areas` arriva vuoto (nessun filtro), percio' `isAdmin` va
+   * controllato a parte, altrimenti l'unica persona che vede tutto sarebbe
+   * l'unica a non vedere il rimando.
+   */
+  const { data: me } = useSWR<{ isAdmin?: boolean; areas?: string[] }>("/api/platform/me", fetcher, {
+    revalidateOnFocus: false,
+  })
+  const puoVedereApprendimento = me?.isAdmin === true || (me?.areas ?? []).includes("pms_learning")
 
   const [corniceAperta, setCorniceAperta] = useState(false)
 
@@ -128,8 +105,6 @@ export default function PmsShadowPage() {
 
   const webUrl = cfg?.config?.webUrl ?? null
   const nomePms = cfg?.config?.nome ?? cfg?.config?.pmsType ?? "il gestionale"
-  const procedure = proc?.procedure ?? []
-  const soglia = proc?.sogliaPredefinita ?? null
 
   return (
     /**
@@ -271,79 +246,38 @@ export default function PmsShadowPage() {
         </CardContent>
       </Card>
 
-      {/* --- Le procedure imparate --- */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{"Cosa ha imparato l'agente"}</CardTitle>
-          <CardDescription className="leading-relaxed">
-            {soglia
-              ? `Una procedura passa da osservata a proposta quando la stessa sequenza si ripete ${soglia} volte. Le azioni a rischio alto restano sempre da approvare.`
-              : "Le procedure che lo staff ripete, raccolte guardando come si lavora."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {procCarica ? (
-            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              Lettura delle procedure...
-            </p>
-          ) : procErrore ? (
-            <p className="flex items-start gap-2 text-sm text-destructive">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              {"Le procedure non sono leggibili in questo momento. Meglio dirlo che mostrare un elenco vuoto."}
-            </p>
-          ) : procedure.length === 0 ? (
-            <div className="flex flex-col gap-3 rounded-md border border-dashed p-4">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <ShieldAlert className="size-4 text-muted-foreground" aria-hidden="true" />
-                {"Nessuna sorgente di osservazione collegata"}
-              </p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {
-                  "L'elenco e' vuoto perche' nessuno sta guardando, non perche' lo staff non abbia fatto nulla. Il riquadro qui sopra non puo' registrare: il browser vieta a un sito di leggere dentro la cornice di un altro sito, e vale anche per noi."
-                }
-              </p>
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {
-                  "Per imparare serve un browser comandato dal nostro server, che va acceso su una macchina sempre attiva. Le tabelle e la porta d'ingresso sono pronte: appena la sorgente e' collegata, le procedure appaiono qui."
-                }
-              </p>
-            </div>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {procedure.map((p) => {
-                const mancanti = Math.max(0, p.autonomy_threshold - p.occurrences)
-                return (
-                  <li key={p.id} className="flex flex-col gap-2 rounded-md border p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{p.title}</p>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Badge variant={p.risk === "alto" ? "destructive" : p.risk === "medio" ? "secondary" : "outline"}>
-                          {ETICHETTA_RISCHIO[p.risk]}
-                        </Badge>
-                        <Badge variant={p.status === "autonoma" ? "default" : "outline"}>
-                          {ETICHETTA_STATO[p.status]}
-                        </Badge>
-                      </div>
-                    </div>
-                    <Separator />
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      {`Vista ${p.occurrences} ${p.occurrences === 1 ? "volta" : "volte"}.`}{" "}
-                      {p.risk === "alto"
-                        ? "Tocca soldi o cancellazioni: resta da approvare a mano, qualunque sia il numero di ripetizioni."
-                        : p.status === "autonoma"
-                          ? "Ha superato la soglia e agisce da sola."
-                          : mancanti > 0
-                            ? `Altre ${mancanti} ripetizioni prima di poter agire da sola.`
-                            : "Ha raggiunto la soglia: attende conferma."}
-                    </p>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      {/*
+       * --- Rimando all'area riservata ---
+       *
+       * L'elenco delle procedure NON e' piu' qui: e' il registro di come lavora
+       * il personale e vive in un'area riservata (amministratore o capogruppo
+       * autorizzato).
+       *
+       * Il rimando compare SOLO a chi puo' entrare davvero. La condizione legge
+       * le stesse aree effettive che presidiano la pagina, quindi qui non c'e'
+       * una seconda regola da tenere allineata: un collegamento mostrato a chi
+       * verrebbe respinto sarebbe una porta disegnata su un muro.
+       */}
+      {puoVedereApprendimento && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{"Cosa ha imparato l'agente"}</CardTitle>
+            <CardDescription className="leading-relaxed">
+              {
+                "Le procedure ripetute nel gestionale stanno in un'area riservata, perche' descrivono come lavorano le persone."
+              }
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/crm/pms-sync/apprendimento">
+                Apri l&apos;apprendimento dell&apos;agente
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </main>
   )
 }
