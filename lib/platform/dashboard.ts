@@ -139,7 +139,11 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
     // 7678, cioe' tutto lo storico importato). Promettere 24 ore su un totale
     // storico e' lo stesso difetto dell'arretrato, quindi il testo viene
     // allineato a cio' che il codice calcola davvero.
-    hint: "Da dove arrivano le conversazioni: totali per canale su tutto lo storico.",
+    //
+    // Ora il conteggio dipende dalle sorgenti scelte in Impostazioni: il testo non
+    // puo' piu' dire "tutti i canali", perche' direbbe il falso appena qualcuno
+    // esclude una casella. Quante sono escluse lo dichiara la card.
+    hint: "Da dove arrivano le conversazioni: totali su tutto lo storico, per le sorgenti scelte per le statistiche.",
     kind: "metrics",
     adminOnly: true,
     href: "/admin/inbox",

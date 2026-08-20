@@ -24,7 +24,12 @@
     "test:phone-display": "tsx scripts/test-phone-display.ts",
     "test:knowledge-gaps": "tsx scripts/test-knowledge-gaps.ts",
     "check:nav": "tsx scripts/check-nav-manifest.ts",
-    "check:dashboard": "tsx scripts/check-dashboard-manifest.ts"
+    "check:dashboard": "tsx scripts/check-dashboard-manifest.ts",
+    "check:analytics": "tsx scripts/check-analytics-performance.ts",
+    "check:crm-nav": "tsx scripts/check-crm-nav.mjs",
+    "test:crm-nav-sabotaggi": "tsx scripts/test-crm-nav-sabotaggi.mjs",
+    "test:pipeline": "vitest run lib/crm/__tests__/date-requests.test.ts",
+    "test:pipeline-sabotaggi": "node scripts/sabotaggi-date-requests.mjs"
   },
   "dependencies": {
     "@edge-runtime/vm": "latest",

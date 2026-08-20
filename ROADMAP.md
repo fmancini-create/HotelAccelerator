@@ -11,13 +11,14 @@ La roadmap Super Admin e' un cruscotto operativo: non sostituisce `MODULE_REGIST
 ## Fase 0 — Audit e governo del progetto
 
 - [x] Inventariare repository, app, branch, deploy e database.
+- [x] Auditare contenuti e SEO del sito pubblico, rimuovendo claim non dimostrabili e allineando ogni pagina allo stato reale dei moduli; vedere `docs/PUBLIC_SITE_CONTENT_SEO_AUDIT_2026-08-18.md`.
 - [x] Aggiungere `AGENTS.md` root con regole per sviluppo AI-assisted e founder non tecnico.
 - [ ] Completare `README.md`.
 - [ ] Mappare schema, migrazioni, API, cron, webhook e variabili ambiente.
 - [ ] Verificare ogni riga di `MODULE_REGISTRY.md` con evidenza.
 - [ ] Identificare mock, codice morto e funzioni duplicate.
 - [ ] Registrare owner e unico esecutore di ogni automazione.
-- [ ] Portare a zero gli errori residui del typecheck autonomo Santaddeo.
+- [ ] Portare a zero i 333 errori residui del typecheck autonomo Santaddeo; il Core è verde e il primo lotto Santaddeo (autenticazione + Pricing Grid) ha rimosso 25 errori al 2026-08-08.
 - [x] Centralizzare la configurazione Supabase Santaddeo e rimuovere fallback hardcoded e redirect impliciti tra ambienti.
 - [x] Separare i test unitari Vitest di Santaddeo dagli E2E Playwright.
 
@@ -92,7 +93,7 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 - [ ] Onboarding self-service o assistito documentato.
 - [ ] Billing, piani, trial ed entitlement.
 - [ ] Supporto, SLA, runbook e disaster recovery.
-- [ ] Privacy, termini, DPA e retention.
+- [ ] Privacy, termini, DPA e retention; coerenza fattuale delle pagine pubbliche aggiornata, revisione legale professionale ancora necessaria.
 - [ ] Metriche di adozione, affidabilità e valore economico.
 - [ ] Feature flag e rollout graduale per funzioni costose/rischiose.
 - [ ] Test di carico e capacity planning sui flussi condivisi prima di grandi rollout.
