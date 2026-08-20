@@ -30,6 +30,14 @@ export interface ModuleCatalogEntry {
   isCore: boolean
   sortOrder: number
   isAvailable: boolean
+  /**
+   * Costo mensile in centesimi che sosteniamo per ogni struttura che usa il
+   * modulo. `null` = non ancora determinato (NON "gratis").
+   *
+   * Il prezzo di vendita non e' qui perche' non si salva: si calcola con
+   * `prezzoVenditaCentesimi` in lib/modules/pricing.ts.
+   */
+  monthlyCostCents: number | null
 }
 
 export interface TenantModule {
@@ -59,6 +67,8 @@ function mapCatalogRow(row: Record<string, unknown>): ModuleCatalogEntry {
     isCore: Boolean(row.is_core),
     sortOrder: (row.sort_order as number) ?? 100,
     isAvailable: row.is_available !== false,
+    // `?? null` e non `?? 0`: un costo che non c'e' non e' un costo di zero.
+    monthlyCostCents: (row.monthly_cost_cents as number | null) ?? null,
   }
 }
 
@@ -77,7 +87,7 @@ export async function getModuleCatalog(
 ): Promise<ModuleCatalogEntry[]> {
   const { data, error } = await supabase
     .from("modules")
-    .select("key, name, description, icon, category, is_core, sort_order, is_available")
+    .select("key, name, description, icon, category, is_core, sort_order, is_available, monthly_cost_cents")
     .eq("is_available", true)
     .order("sort_order", { ascending: true })
 

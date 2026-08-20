@@ -22,7 +22,13 @@ const items = [
   // "PMS" e' l'etichetta che la dashboard CRM usa già per questa pagina: tenerla
   // identica evita due nomi per la stessa cosa, e fa stare le voci nella barra
   // senza tracimare (misurato a schermo: oltre ~95 caratteri l'ultima viene tagliata).
-  { href: "/admin/crm/pms-sync", label: "PMS", icon: Database },
+  //
+  // Punta al GESTIONALE, non alla configurazione: il gestionale e' quello che si
+  // apre ogni giorno, mentre le credenziali si impostano una volta. La
+  // configurazione ora sta fra le Impostazioni (voce "Collegamento gestionale"),
+  // e `pnpm check:crm-nav` verifica che ci sia davvero: se qualcuno la togliesse
+  // da la', quella pagina resterebbe senza nessuna porta d'ingresso.
+  { href: "/admin/crm/pms-sync/gestionale", label: "PMS", icon: Database },
   { href: "/admin/crm/settings", label: "Impostazioni", icon: Settings },
 ]
 

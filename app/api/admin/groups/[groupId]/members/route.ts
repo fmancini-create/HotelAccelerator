@@ -26,6 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .select(`
         id,
         user_id,
+        is_lead,
         admin_users!inner (
           id,
           name,
@@ -36,12 +37,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (error) throw error
 
-    const formattedMembers = members?.map((m: { id: string; user_id: string; admin_users: unknown }) => ({
-      id: m.id,
-      user_id: m.user_id,
-      user_name: (m.admin_users as any)?.name || "",
-      user_email: (m.admin_users as any)?.email || "",
-    }))
+    const formattedMembers = members?.map(
+      (m: { id: string; user_id: string; is_lead?: boolean | null; admin_users: unknown }) => ({
+        id: m.id,
+        user_id: m.user_id,
+        user_name: (m.admin_users as any)?.name || "",
+        user_email: (m.admin_users as any)?.email || "",
+        // Responsabile di QUESTO gruppo. `=== true` e non un valore verosimile:
+        // un `null` non deve diventare "forse si'".
+        is_lead: m.is_lead === true,
+      }),
+    )
 
     return NextResponse.json({ members: formattedMembers || [] })
   } catch (error: any) {

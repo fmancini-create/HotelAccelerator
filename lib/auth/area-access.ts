@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server"
 import { redirect } from "next/navigation"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
-import { BASELINE_AREA_KEYS, GRANTABLE_AREA_KEYS } from "@/lib/platform/areas"
+import { BASELINE_AREA_KEYS, GRANTABLE_AREA_KEYS, PLATFORM_AREAS } from "@/lib/platform/areas"
 
 /**
  * Area-level access control.
@@ -36,9 +36,11 @@ export async function getMemberEffectiveAreas(propertyId: string, adminUserId: s
   }
 
   // Grants inherited from the user's groups.
+  // `is_lead` viaggia con la stessa lettura: serve piu' sotto per le aree
+  // riservate ai responsabili, e una query in meno e' una query in meno.
   const { data: memberships } = await supabase
     .from("user_group_members")
-    .select("group_id")
+    .select("group_id, is_lead")
     .eq("user_id", adminUserId)
 
   const groupIds = (memberships ?? []).map((m: { group_id: string }) => m.group_id).filter(Boolean)
@@ -51,6 +53,55 @@ export async function getMemberEffectiveAreas(propertyId: string, adminUserId: s
 
     for (const row of groupAreas ?? []) {
       if (GRANTABLE_AREA_KEYS.has(row.area_key)) effective.add(row.area_key)
+    }
+  }
+
+  /*
+   * Aree riservate ai responsabili.
+   *
+   * Alcune aree (vedi `requiresGroupLead` nel catalogo) non si aprono con la
+   * sola concessione: la persona deve anche essere capogruppo. Il filtro sta
+   * QUI, e non nella singola pagina, perche' questa funzione e' la stessa che
+   * alimenta il menu (`/api/platform/me`) e le guardie di pagine e API: se la
+   * regola stesse solo nella pagina, il menu mostrerebbe una voce che la
+   * guardia poi rifiuta, cioe' una porta disegnata su un muro.
+   *
+   * Si sottrae, mai si aggiunge: un capogruppo senza la concessione non entra.
+   * Le due condizioni sono in E.
+   */
+  const areeDaResponsabile = Array.from(effective).filter(
+    (k) => PLATFORM_AREAS.find((a) => a.key === k)?.requiresGroupLead,
+  )
+
+  if (areeDaResponsabile.length > 0) {
+    /*
+     * L'appartenenza non porta il property_id, quindi un `is_lead` potrebbe
+     * venire da un gruppo di un'ALTRA struttura: si accettano solo i gruppi di
+     * questa. Senza questo controllo, essere responsabile altrove aprirebbe
+     * un'area qui.
+     */
+    const gruppiGuidati = (memberships ?? [])
+      .filter((m: { group_id: string; is_lead?: boolean | null }) => m.is_lead === true)
+      .map((m: { group_id: string }) => m.group_id)
+      .filter(Boolean)
+
+    let eResponsabile = false
+    if (gruppiGuidati.length > 0) {
+      const { data: gruppiQui, error } = await supabase
+        .from("user_groups")
+        .select("id")
+        .eq("property_id", propertyId)
+        .in("id", gruppiGuidati)
+        .limit(1)
+      // Errore in lettura => si NEGA (fail-closed). E' l'opposto della scelta
+      // fatta dalla guardia d'area, che in caso di guasto lascia passare: la',
+      // non sapere nasconderebbe il lavoro a chi lo sta facendo; qui, non
+      // sapere aprirebbe il registro di come lavora il personale.
+      if (!error) eResponsabile = (gruppiQui ?? []).length > 0
+    }
+
+    if (!eResponsabile) {
+      for (const k of areeDaResponsabile) effective.delete(k)
     }
   }
 

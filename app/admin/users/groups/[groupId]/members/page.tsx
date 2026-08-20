@@ -2,7 +2,8 @@
 
 import { useState, useEffect, use } from "react"
 import Link from "next/link"
-import { ArrowLeft, Users, UserPlus, X, Check, Search } from "lucide-react"
+import { ArrowLeft, Users, UserPlus, X, Check, Search, ShieldCheck } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { AdminHeader } from "@/components/admin/admin-header"
@@ -12,6 +13,8 @@ interface GroupMember {
   user_id: string
   user_name: string
   user_email: string
+  /** Responsabile di QUESTO gruppo: il ruolo non si estende agli altri gruppi. */
+  is_lead: boolean
 }
 
 interface AvailableUser {
@@ -28,6 +31,8 @@ export default function GroupMembersPage({ params }: { params: Promise<{ groupId
   const [showAddMember, setShowAddMember] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
+  // Quale riga sta salvando: disabilita solo quel comando, non tutta la pagina.
+  const [leadInCorso, setLeadInCorso] = useState<string | null>(null)
 
   useEffect(() => {
     loadData()
@@ -73,6 +78,36 @@ export default function GroupMembersPage({ params }: { params: Promise<{ groupId
       }
     } catch (e) {
       console.error("Error adding member:", e)
+    }
+  }
+
+  /*
+   * Nomina o revoca il responsabile del gruppo.
+   *
+   * L'esito si vede: le altre azioni di questa pagina fanno `if (res.ok)` e in
+   * caso di errore non dicono nulla, cosi' chi clicca crede di aver salvato. Qui
+   * un errore va detto, perche' da questo ruolo dipende chi vede
+   * l'apprendimento dell'agente.
+   */
+  async function setLead(memberId: string, isLead: boolean) {
+    setLeadInCorso(memberId)
+    try {
+      const res = await fetch(`/api/admin/groups/${groupId}/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_lead: isLead }),
+      })
+      if (res.ok) {
+        toast.success(isLead ? "Nominato responsabile del gruppo" : "Non e' piu' responsabile del gruppo")
+        await loadData()
+      } else {
+        const errore = await res.json().catch(() => ({}))
+        toast.error(errore?.error || "Non e' stato possibile salvare")
+      }
+    } catch {
+      toast.error("Non e' stato possibile salvare")
+    } finally {
+      setLeadInCorso(null)
     }
   }
 
@@ -147,18 +182,43 @@ export default function GroupMembersPage({ params }: { params: Promise<{ groupId
                       {member.user_name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-medium">{member.user_name}</p>
+                      <p className="font-medium">
+                        {member.user_name}
+                        {member.is_lead && (
+                          <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary align-middle">
+                            <ShieldCheck className="w-3 h-3" aria-hidden="true" />
+                            Responsabile
+                          </span>
+                        )}
+                      </p>
                       <p className="text-sm text-muted-foreground">{member.user_email}</p>
                     </div>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive"
-                    onClick={() => removeMember(member.id)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    {/*
+                     * Il testo dice l'AZIONE, non lo stato: "Nomina
+                     * responsabile" su chi non lo e', "Revoca" su chi lo e'. Un
+                     * comando che nomina lo stato attuale lascia in dubbio se
+                     * cliccando lo si conferma o lo si cambia.
+                     */}
+                    <Button
+                      variant={member.is_lead ? "secondary" : "outline"}
+                      size="sm"
+                      disabled={leadInCorso === member.id}
+                      onClick={() => setLead(member.id, !member.is_lead)}
+                    >
+                      {member.is_lead ? "Revoca responsabile" : "Nomina responsabile"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      aria-label={`Rimuovi ${member.user_name} dal gruppo`}
+                      onClick={() => removeMember(member.id)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
 

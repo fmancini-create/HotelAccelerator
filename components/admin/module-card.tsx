@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
+import { formattaImporto } from "@/lib/modules/pricing"
 import {
   LayoutTemplate,
   Inbox,
@@ -15,6 +16,7 @@ import {
   TrendingUp,
   Wrench,
   BarChart3,
+  Bot,
   Lock,
   Loader2,
   type LucideIcon,
@@ -31,6 +33,7 @@ const ICONS: Record<string, LucideIcon> = {
   "trending-up": TrendingUp,
   wrench: Wrench,
   "bar-chart-3": BarChart3,
+  bot: Bot,
 }
 
 /**
@@ -73,6 +76,15 @@ export interface ModuleView {
   status: "active" | "inactive" | "trial"
   active: boolean
   expiresAt: string | null
+  /**
+   * Prezzo mensile in centesimi. `null` = ancora da definire, che NON vuol dire
+   * gratis: qui sotto viene scritto a parole, perche' un prezzo assente
+   * mostrato come "0 EUR" sarebbe una promessa sbagliata.
+   *
+   * Qui NON esiste il costo che sosteniamo noi: la vista che alimenta questa
+   * scheda lo elimina (lib/modules/tenant-view.ts).
+   */
+  monthlyPriceCents: number | null
 }
 
 export function ModuleCard({
@@ -159,8 +171,20 @@ export function ModuleCard({
         <CardDescription className="text-pretty">
           {module.description || "Nessuna descrizione disponibile."}
         </CardDescription>
+        {isPaid && (
+          <p className="mt-3 text-sm font-medium">
+            {module.monthlyPriceCents === null ? (
+              <span className="text-muted-foreground">Prezzo da definire</span>
+            ) : (
+              <>
+                {formattaImporto(module.monthlyPriceCents)}
+                <span className="font-normal text-muted-foreground"> al mese, per struttura</span>
+              </>
+            )}
+          </p>
+        )}
         {isPaid && !module.active && (
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-muted-foreground">
             Modulo a pagamento. L&apos;attivazione self-service sara&apos; disponibile a breve.
           </p>
         )}
