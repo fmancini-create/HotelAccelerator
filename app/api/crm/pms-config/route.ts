@@ -23,14 +23,19 @@ import { baseUrlPredefinito, connettoreEsiste, connettoriDisponibili } from "@/l
  * Rimandarlo al browser, anche mascherato con le ultime cifre, significherebbe
  * farlo transitare a ogni apertura di pagina e finire nei log del browser.
  *
- * PERCHE' DUE GUARDIE: `requireAreaApi` decide quale modulo, ma per l'area
- * "crm" e' oggi in modalita' "osserva" (misurato: registra il diniego e lascia
- * passare, per scelta di rollout). Va bene per una pagina che legge; qui si
- * scrivono l'indirizzo a cui il sistema si collega e il codice autorizzativo,
- * quindi serve una guardia che RIFIUTI: `requireTenantAdmin` lancia 401/403
- * indipendentemente da quella modalita'. Senza di essa, chiunque potesse
- * raggiungere la rotta potrebbe puntare il PMS al proprio server e ricevere il
- * codice della struttura a ogni sincronizzazione.
+ * PERCHE' DUE GUARDIE: rispondono a due domande diverse.
+ * `requireAreaApi("crm")` chiede "questa persona ha il modulo CRM?" e - misurato
+ * su `getAreaGuardMode`, che vale "enforce" a meno che AREA_GUARD_MODE valga
+ * esattamente "observe" - RIFIUTA davvero. `requireTenantAdmin` chiede una cosa
+ * che l'area non copre: "e' un amministratore della struttura?". Qui si scrivono
+ * l'indirizzo a cui il sistema si collega e il codice autorizzativo, quindi non
+ * basta avere il CRM: senza la seconda guardia un membro qualsiasi con il
+ * modulo potrebbe puntare il PMS al proprio server e ricevere il codice della
+ * struttura a ogni sincronizzazione.
+ *
+ * (Una versione precedente di questa nota diceva che l'area era in modalita'
+ * "osserva" e lasciava passare: era falso, e una nota falsa su una guardia e'
+ * peggio di nessuna nota.)
  */
 
 /** Campi che il GET puo' mostrare senza esporre segreti. */
