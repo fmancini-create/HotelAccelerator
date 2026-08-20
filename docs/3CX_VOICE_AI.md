@@ -114,7 +114,9 @@ effettivamente installata sul PBX, non ricostruito a memoria contro un'API poten
 - Limiti di lunghezza su domanda e storia; massimo otto turni.
 - Salvaguardia locale di 90 richieste/minuto per tenant; in produzione va affiancata da un limite distribuito/WAF.
 - Risposte `no-store`; testo e token non vengono inseriti nei log applicativi.
-- Il riconoscimento del chiamante riusa l'anagrafica telefonica esistente.
+- Il riconoscimento del chiamante riusa localmente l'anagrafica telefonica
+  esistente. Al provider AI viene passato soltanto il valore cliente
+  riconosciuto/non riconosciuto: nome, email e numero non lasciano il Core.
 
 ### Codice cliente
 
