@@ -125,13 +125,31 @@ export function ProcedureImparate() {
                   <Separator />
                   <p className="text-xs leading-relaxed text-muted-foreground">
                     {`Vista ${p.occurrences} ${p.occurrences === 1 ? "volta" : "volte"}.`}{" "}
-                    {p.risk === "alto"
-                      ? "Tocca soldi o cancellazioni: resta da approvare a mano, qualunque sia il numero di ripetizioni."
-                      : p.status === "autonoma"
-                        ? "Ha superato la soglia e agisce da sola."
-                        : mancanti > 0
-                          ? `Altre ${mancanti} ripetizioni prima di poter agire da sola.`
-                          : "Ha raggiunto la soglia: attende conferma."}
+                    {/*
+                     * "bloccata" va letto PRIMA del conteggio, e prima anche del
+                     * rischio.
+                     *
+                     * Difetto visto a schermo: una procedura bloccata da una
+                     * persona finiva nel ramo del conteggio e si leggeva "Ha
+                     * raggiunto la soglia: attende conferma", cioe' il contrario
+                     * di quello che era accaduto. Con poche ripetizioni sarebbe
+                     * stato peggio: "Altre N ripetizioni prima di poter agire da
+                     * sola" avrebbe promesso autonomia futura per qualcosa che
+                     * una persona ha fermato.
+                     *
+                     * Una decisione umana non si conta: il numero di ripetizioni
+                     * non la ribalta, quindi non deve nemmeno comparire come
+                     * spiegazione.
+                     */}
+                    {p.status === "bloccata"
+                      ? "Una persona l'ha fermata: non agira' da sola, per quante volte si ripeta."
+                      : p.risk === "alto"
+                        ? "Tocca soldi o cancellazioni: resta da approvare a mano, qualunque sia il numero di ripetizioni."
+                        : p.status === "autonoma"
+                          ? "Ha superato la soglia e agisce da sola."
+                          : mancanti > 0
+                            ? `Altre ${mancanti} ripetizioni prima di poter agire da sola.`
+                            : "Ha raggiunto la soglia: attende conferma."}
                   </p>
                 </li>
               )
