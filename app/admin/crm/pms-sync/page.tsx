@@ -299,7 +299,7 @@ export default function PmsSyncPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="text-base">Connessione</CardTitle>
             <Button asChild variant="outline" size="sm" className="gap-2">
-              <Link href="/admin/crm/pms-config">
+              <Link href="/admin/crm/pms-sync/config">
                 <KeyRound className="h-4 w-4" />
                 {provider.fake ? "Collega il PMS" : "Modifica credenziali"}
               </Link>
