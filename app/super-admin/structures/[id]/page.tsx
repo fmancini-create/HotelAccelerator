@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { Building2, ArrowLeft, User, AlertTriangle, MessageSquare, Zap, AlertCircle } from "lucide-react"
+import { Building2, ArrowLeft, AlertTriangle, MessageSquare, Zap, AlertCircle } from "lucide-react"
+import { EnterTenantButton } from "@/components/super-admin/enter-tenant-button"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -113,12 +114,6 @@ export default function StructureDetailPage() {
     }
   }
 
-  const handleImpersonate = () => {
-    if (!structure) return
-    console.log(`Impersonating structure: ${structure.name}`)
-    alert("Impersonation: Feature coming soon - will redirect to tenant view in READ-ONLY mode")
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
@@ -156,10 +151,7 @@ export default function StructureDetailPage() {
                 </div>
               </div>
             </div>
-            <Button onClick={handleImpersonate} variant="outline">
-              <User className="w-4 h-4 mr-2" />
-              View as tenant
-            </Button>
+            <EnterTenantButton propertyId={structure.id} propertyName={structure.name} label="Entra" />
           </div>
         </div>
       </header>
@@ -277,24 +269,33 @@ export default function StructureDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Impersonation Section */}
+          {/* Entra nella struttura */}
           <Card>
             <CardHeader>
-              <CardTitle>Impersonation</CardTitle>
-              <CardDescription>Access tenant view for support purposes</CardDescription>
+              <CardTitle>Entra nella struttura</CardTitle>
+              <CardDescription>Apri l&apos;area operativa nel contesto di questa struttura</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
+                {/*
+                 * Qui prima c'era scritto "modalita' SOLA LETTURA".
+                 * Era falso: cambiare struttura scrive il cookie del contesto
+                 * attivo e da' accesso PIENO, senza alcuna limitazione. Una
+                 * rassicurazione sbagliata e' peggio di nessuna rassicurazione,
+                 * perche' chi la legge agisce convinto di non poter fare danni.
+                 */}
                 <Alert>
                   <AlertDescription>
-                    Impersonation mode grants you READ-ONLY access to this tenant's dashboard. All actions will be
-                    logged.
+                    Entri nell&apos;area operativa con i permessi pieni di questa struttura:{" "}
+                    <strong>le azioni che farai sono reali</strong>, non in sola lettura.
                   </AlertDescription>
                 </Alert>
-                <Button onClick={handleImpersonate} variant="outline" className="w-full bg-transparent">
-                  <User className="w-4 h-4 mr-2" />
-                  View as tenant (Read-only)
-                </Button>
+                <EnterTenantButton
+                  propertyId={structure.id}
+                  propertyName={structure.name}
+                  label="Entra nella struttura"
+                  className="w-full"
+                />
               </div>
             </CardContent>
           </Card>
