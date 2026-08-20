@@ -78,6 +78,17 @@ describe("super-admin: entrare in una struttura", () => {
     expect(corpo, "non chiama la rotta che cambia struttura").toContain("/api/platform/switch-tenant")
     expect(corpo, "non porta nell'area operativa").toMatch(/router\.push\(\s*["']\/admin["']\s*\)/)
     expect(corpo, "manca il metodo POST").toContain('method: "POST"')
+    /*
+     * ATTENZIONE — secondo buco trovato provando a far FALLIRE la prova.
+     * Svuotando il corpo della richiesta (`JSON.stringify({})`) restava tutto
+     * verde: il pulsante chiamava la rotta giusta senza dire QUALE struttura,
+     * e la rotta avrebbe risposto 400 su ogni clic.
+     * Regola: verificare che si chiami la rotta non prova che si mandi il dato
+     * indispensabile. Va preteso anche il contenuto della richiesta.
+     */
+    expect(corpo, "non invia la struttura scelta: la rotta non saprebbe dove entrare").toMatch(
+      /JSON\.stringify\(\s*\{\s*propertyId\s*\}\s*\)/,
+    )
   })
 
   it("un fallimento si VEDE: nessun Toaster nell'area super-admin, quindi errore in pagina", () => {
