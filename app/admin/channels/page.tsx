@@ -26,6 +26,7 @@ import {
 import Link from "next/link"
 import { toast } from "sonner"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { ChannelKnowledgeAssignment } from "@/components/admin/channels/channel-knowledge-assignment"
 
 const CHANNEL_CATEGORIES = [
   {
@@ -198,21 +199,17 @@ export default function ChannelsPage() {
   const fetchChannelStatuses = async () => {
     try {
       const supabase = createClient()
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: adminUser } = await supabase.from("admin_users").select("property_id").eq("id", user.id).single()
-
-      if (!adminUser?.property_id) return
-      setPropertyId(adminUser.property_id)
+      const meResponse = await fetch("/api/platform/me", { credentials: "include", cache: "no-store" })
+      if (!meResponse.ok) return
+      const me = (await meResponse.json()) as { activePropertyId?: string | null }
+      const activePropertyId = me.activePropertyId ?? null
+      if (!activePropertyId) return
+      setPropertyId(activePropertyId)
 
       const { data: emailChannels } = (await supabase
         .from("email_channels")
         .select("id, is_active")
-        .eq("property_id", adminUser.property_id)) as {
+        .eq("property_id", activePropertyId)) as {
         data: Array<{ id: string; is_active: boolean }> | null
       }
 
@@ -224,14 +221,14 @@ export default function ChannelsPage() {
       const { data: chatWidgets } = (await supabase
         .from("embed_scripts")
         .select("id, status")
-        .eq("property_id", adminUser.property_id)) as {
+        .eq("property_id", activePropertyId)) as {
         data: Array<{ id: string; status: string }> | null
       }
 
       const { data: waChannels } = (await supabase
         .from("messaging_channels")
         .select("id, is_active, config")
-        .eq("property_id", adminUser.property_id)
+        .eq("property_id", activePropertyId)
         .eq("channel_type", "whatsapp")) as {
         data: Array<{ id: string; is_active: boolean; config: { phone_number_id?: string } }> | null
       }
@@ -239,7 +236,7 @@ export default function ChannelsPage() {
       const { data: tgChannels } = (await supabase
         .from("messaging_channels")
         .select("id, is_active, config")
-        .eq("property_id", adminUser.property_id)
+        .eq("property_id", activePropertyId)
         .eq("channel_type", "telegram")) as {
         data: Array<{ id: string; is_active: boolean; config: { bot_id?: string | number } }> | null
       }
@@ -572,6 +569,16 @@ export default function ChannelsPage() {
             </div>
           </div>
         ))}
+
+        <section id="basi-conoscenza" className="mb-8 scroll-mt-24">
+          <div className="mb-4">
+            <h2 className="text-xl font-medium text-foreground">Assistente IA</h2>
+            <p className="text-sm text-muted-foreground">
+              Decidi quali informazioni deve usare l&apos;assistente su ciascun canale.
+            </p>
+          </div>
+          <ChannelKnowledgeAssignment />
+        </section>
 
         {/* Help Section */}
         <Card className="bg-gradient-to-r from-primary to-ha-brand border-0">

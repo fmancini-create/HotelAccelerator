@@ -84,7 +84,7 @@ export async function getAuthenticatedPropertyId(request?: NextRequest): Promise
     .maybeSingle()
 
   if (collaborator?.role === "super_admin" && collaborator.is_active) {
-    const override = readActivePropertyOverride(request)
+    const override = await readActivePropertyOverride(request)
     if (override) return override
     throw new Error("Super admin: nessun tenant selezionato. Usa il selettore tenant.")
   }
@@ -292,7 +292,7 @@ export async function getAuthenticatedPropertyIdWithSuperAdminOverride(request?:
 
   // Super admins resolve via explicit ?property_id, else via active-tenant cookie.
   if (collaborator?.role === "super_admin" && collaborator?.is_active) {
-    const override = readActivePropertyOverride(request)
+    const override = await readActivePropertyOverride(request)
     if (override) return override
   }
 

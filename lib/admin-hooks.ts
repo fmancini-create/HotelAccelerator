@@ -2,22 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { adminUserFromPlatformMe, type AdminUser, type PlatformMePayload } from "@/lib/auth/admin-user-view"
 import { createClient } from "@/lib/supabase/client"
 
-export interface AdminUser {
-  id?: string
-  email: string
-  name: string
-  role: "super_admin" | "admin" | "editor"
-  can_upload: boolean
-  can_delete: boolean
-  can_move: boolean
-  can_manage_users: boolean
-  can_manage_categories?: boolean
-  property_id?: string
-  created_at?: string
-  updated_at?: string
-}
+export type { AdminUser } from "@/lib/auth/admin-user-view"
 
 export function useAdminAuth() {
   const [isLoading, setIsLoading] = useState(true)
@@ -25,6 +13,8 @@ export function useAdminAuth() {
   const router = useRouter()
 
   useEffect(() => {
+    let cancelled = false
+
     const checkAuth = async () => {
       try {
         // Only check auth on admin pages, but skip if we're already redirecting
@@ -57,39 +47,33 @@ export function useAdminAuth() {
           return
         }
 
-        const supabase = createClient()
+        const response = await fetch("/api/platform/me", {
+          credentials: "include",
+          cache: "no-store",
+        })
+        if (cancelled) return
 
-        // Check if user is logged in with Supabase
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-
-        if (!user) {
-          // Not logged in - don't redirect (pages handle their own auth guards)
+        if (response.status === 401) {
+          setAdminUser(null)
           setIsLoading(false)
           return
         }
+        if (!response.ok) throw new Error(`PLATFORM_ME_${response.status}`)
 
-        // User is logged in - fetch admin data from database
-        const { data: adminData, error } = await supabase.from("admin_users").select("*").eq("id", user.id).single()
-
-        if (error || !adminData) {
-          // User not in admin_users table - sign out but don't redirect
-          await supabase.auth.signOut()
-          setIsLoading(false)
-          return
-        }
-
-        setAdminUser(adminData as AdminUser)
+        const identity = (await response.json()) as PlatformMePayload
+        if (cancelled) return
+        setAdminUser(adminUserFromPlatformMe(identity))
         setIsLoading(false)
       } catch (error) {
         console.error("[v0] Auth error:", error)
-        setIsLoading(false)
+        if (!cancelled) setIsLoading(false)
       }
     }
 
-    checkAuth()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void checkAuth()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const logout = async () => {

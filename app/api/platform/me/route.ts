@@ -20,6 +20,13 @@ import { normalizeTenantType, type TenantType } from "@/lib/platform/tenant-type
 
 export const dynamic = "force-dynamic"
 
+function risposta(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "private, no-store, max-age=0" },
+  })
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
 
@@ -29,7 +36,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   if (authError || !user?.email) {
-    return NextResponse.json({ role: "none", tenants: [], activePropertyId: null }, { status: 401 })
+    return risposta({ role: "none", tenants: [], activePropertyId: null }, 401)
   }
 
   // 1. Check platform-level role first.
@@ -62,11 +69,15 @@ export async function GET(request: NextRequest) {
     // mostrerebbe una struttura che le API non possono usare. L'utente deve
     // scegliere esplicitamente, cosi' POST /switch-tenant salva il contesto.
 
-    return NextResponse.json({
+    return risposta({
       role: "super_admin",
+      adminUserId: null,
       isAdmin: true,
       isTenantAdmin: true,
       canManageUsers: true,
+      canUpload: true,
+      canDelete: true,
+      canMove: true,
       memberRole: "super_admin",
       email: user.email,
       name: collaborator?.name || user.email.split("@")[0],
@@ -85,7 +96,7 @@ export async function GET(request: NextRequest) {
   // access (role "tenant_admin") requires the is_tenant_admin flag.
   const { data: adminUser } = await supabase
     .from("admin_users")
-    .select("id, property_id, name, role, is_tenant_admin, can_manage_users")
+    .select("id, property_id, name, role, is_tenant_admin, can_manage_users, can_upload, can_delete, can_move")
     .eq("email", user.email)
     .maybeSingle()
 
@@ -113,12 +124,16 @@ export async function GET(request: NextRequest) {
       : [...BASELINE_AREA_KEYS]
   }
 
-  return NextResponse.json({
+  return risposta({
     // "tenant_admin" only for real admins; other members get "member".
     role: !adminUser ? "none" : isTenantAdmin ? "tenant_admin" : "member",
+    adminUserId: adminUser?.id ?? null,
     isAdmin: isTenantAdmin,
     isTenantAdmin,
     canManageUsers: adminUser?.can_manage_users === true,
+    canUpload: adminUser?.can_upload === true,
+    canDelete: adminUser?.can_delete === true,
+    canMove: adminUser?.can_move === true,
     memberRole: adminUser?.role ?? null,
     email: user.email,
     name: adminUser?.name || user.email.split("@")[0],

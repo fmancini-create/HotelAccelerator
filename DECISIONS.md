@@ -108,6 +108,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: la macchina browser legge nome e URL da `pms_browser_configs`; non consulta il registro dei connettori, non seleziona fornitori e non richiede endpoint o chiavi API del PMS.
 - Conseguenza: qualunque gestionale web HTTPS può essere incorporato con lo stesso flusso. `pms_integrations` resta riservata alle sincronizzazioni strutturate e facoltative, senza condizionare l'accesso interattivo.
 
+## ADR-018 — Una sola identità applicativa per tenant e superadmin
+
+- Stato: accettata
+- Decisione: le pagine client leggono ruolo, operatore e tenant attivo da `/api/platform/me`; le pagine server usano `getCallerIdentity`/`getAuthenticatedPropertyId`, che leggono anche il cookie del tenant selezionato quando non ricevono un `NextRequest`.
+- Conseguenza: l'assenza di una riga `admin_users` non disconnette più un superadmin. `platform_collaborators` resta la fonte del ruolo globale, `admin_users` quella dei ruoli tenant e il contesto selezionato resta esplicito.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.
