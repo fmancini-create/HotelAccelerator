@@ -30,6 +30,17 @@ export interface ResolvedChannelAi {
   baseIds: string[]
 }
 
+export type KnowledgeChannelSource = "messaging" | "email"
+
+export interface KnowledgeChannelSummary {
+  id: string
+  source: KnowledgeChannelSource
+  channel_type: string
+  display_name: string | null
+  is_active: boolean
+  baseIds: string[]
+}
+
 export type KnowledgeBasePatch = Partial<
   Pick<
     KnowledgeBase,
@@ -146,16 +157,137 @@ export async function deleteKnowledgeBase(baseId: string, propertyId: string): P
 }
 
 /**
+ * Elenca tutti i canali a cui si puo' associare una base.
+ *
+ * Le caselle email vivono in `email_channels`, mentre WhatsApp, Telegram e i
+ * widget chat vivono in `messaging_channels`. Tenerle distinte nel database
+ * preserva le foreign key; questa funzione le presenta come un solo elenco
+ * tenant-scoped alla UI.
+ */
+export async function getKnowledgeChannels(propertyId: string): Promise<KnowledgeChannelSummary[]> {
+  const supabase = createServiceClient()
+  const [messagingResult, emailResult] = await Promise.all([
+    supabase
+      .from("messaging_channels")
+      .select("id, channel_type, display_name, is_active")
+      .eq("property_id", propertyId)
+      .order("channel_type", { ascending: true }),
+    supabase
+      .from("email_channels")
+      .select("id, name, display_name, email_address, is_active")
+      .eq("property_id", propertyId)
+      .order("email_address", { ascending: true }),
+  ])
+
+  if (messagingResult.error) {
+    throw new Error(`Lettura canali di messaggistica fallita: ${messagingResult.error.message}`)
+  }
+  if (emailResult.error) {
+    throw new Error(`Lettura canali email fallita: ${emailResult.error.message}`)
+  }
+
+  type MessagingRecord = {
+    id: string
+    channel_type: string
+    display_name: string | null
+    is_active: boolean
+  }
+  type EmailRecord = {
+    id: string
+    name: string
+    display_name: string | null
+    email_address: string
+    is_active: boolean | null
+  }
+
+  const messaging = (messagingResult.data ?? []) as MessagingRecord[]
+  const email = (emailResult.data ?? []) as EmailRecord[]
+
+  const [messagingLinksResult, emailLinksResult] = await Promise.all([
+    messaging.length > 0
+      ? supabase
+          .from("channel_knowledge_bases")
+          .select("channel_id, knowledge_base_id, position")
+          .in(
+            "channel_id",
+            messaging.map((channel) => channel.id),
+          )
+      : Promise.resolve({ data: [], error: null }),
+    email.length > 0
+      ? supabase
+          .from("email_channel_knowledge_bases")
+          .select("email_channel_id, knowledge_base_id, position")
+          .in(
+            "email_channel_id",
+            email.map((channel) => channel.id),
+          )
+      : Promise.resolve({ data: [], error: null }),
+  ])
+
+  if (messagingLinksResult.error) {
+    throw new Error(`Lettura associazioni messaggistica fallita: ${messagingLinksResult.error.message}`)
+  }
+  if (emailLinksResult.error) {
+    throw new Error(`Lettura associazioni email fallita: ${emailLinksResult.error.message}`)
+  }
+
+  type OrderedLink = { knowledge_base_id: string; position: number }
+  const messagingLinks = new Map<string, OrderedLink[]>()
+  for (const link of (messagingLinksResult.data ?? []) as Array<OrderedLink & { channel_id: string }>) {
+    const current = messagingLinks.get(link.channel_id) ?? []
+    current.push(link)
+    messagingLinks.set(link.channel_id, current)
+  }
+
+  const emailLinks = new Map<string, OrderedLink[]>()
+  for (const link of (emailLinksResult.data ?? []) as Array<OrderedLink & { email_channel_id: string }>) {
+    const current = emailLinks.get(link.email_channel_id) ?? []
+    current.push(link)
+    emailLinks.set(link.email_channel_id, current)
+  }
+
+  const orderedIds = (links: OrderedLink[]) =>
+    [...links].sort((a, b) => a.position - b.position).map((link) => link.knowledge_base_id)
+
+  return [
+    ...email.map((channel) => {
+      const name = channel.display_name?.trim() || channel.name?.trim()
+      return {
+        id: channel.id,
+        source: "email" as const,
+        channel_type: "email",
+        display_name: name ? `${name} · ${channel.email_address}` : channel.email_address,
+        is_active: channel.is_active !== false,
+        baseIds: orderedIds(emailLinks.get(channel.id) ?? []),
+      }
+    }),
+    ...messaging.map((channel) => ({
+      id: channel.id,
+      source: "messaging" as const,
+      channel_type: channel.channel_type,
+      display_name: channel.display_name,
+      is_active: channel.is_active,
+      baseIds: orderedIds(messagingLinks.get(channel.id) ?? []),
+    })),
+  ]
+}
+
+/**
  * Resolve the knowledge bases linked to a channel, ordered by position.
  * The first (position 0) is the primary base that drives behavior; every
  * linked base contributes content to retrieval via `baseIds`.
  */
-export async function getBasesForChannel(channelId: string): Promise<ResolvedChannelAi> {
+export async function getBasesForChannel(
+  channelId: string,
+  source: KnowledgeChannelSource = "messaging",
+): Promise<ResolvedChannelAi> {
   const supabase = createServiceClient()
+  const table = source === "email" ? "email_channel_knowledge_bases" : "channel_knowledge_bases"
+  const channelColumn = source === "email" ? "email_channel_id" : "channel_id"
   const { data, error } = await supabase
-    .from("channel_knowledge_bases")
+    .from(table)
     .select("position, knowledge_bases(*)")
-    .eq("channel_id", channelId)
+    .eq(channelColumn, channelId)
     .order("position", { ascending: true })
 
   if (error || !data) return { bases: [], primary: null, baseIds: [] }
@@ -186,9 +318,11 @@ export async function setChannelBases(
   channelId: string,
   orderedBaseIds: string[],
   propertyId: string,
+  source: KnowledgeChannelSource = "messaging",
 ): Promise<void> {
   const supabase = createServiceClient()
-  const { error } = await supabase.rpc("set_channel_knowledge_bases", {
+  const functionName = source === "email" ? "set_email_channel_knowledge_bases" : "set_channel_knowledge_bases"
+  const { error } = await supabase.rpc(functionName, {
     p_channel_id: channelId,
     p_property_id: propertyId,
     p_base_ids: orderedBaseIds,

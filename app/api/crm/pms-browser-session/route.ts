@@ -195,7 +195,14 @@ export async function POST(request: NextRequest) {
     sessionId = created.session.id
 
     const puppeteer = (await import("puppeteer-core")).default
-    browser = await puppeteer.connect({ browserWSEndpoint: created.session.connectUrl })
+    // Puppeteer imposta 800x600 per default anche quando Browserbase ha creato
+    // la sessione a 1920x1080. `null` conserva il viewport remoto: senza questo
+    // il PMS passa al layout compatto e la Live View mostra solo una parte
+    // dell'area di lavoro.
+    browser = await puppeteer.connect({
+      browserWSEndpoint: created.session.connectUrl,
+      defaultViewport: null,
+    })
     const pages = await browser.pages()
     const page = pages[0] ?? (await browser.newPage())
     await page.goto(webUrl, { waitUntil: "domcontentloaded", timeout: 45_000 })

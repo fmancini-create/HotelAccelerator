@@ -78,8 +78,9 @@ export default function PmsShadowPage() {
           return
         }
 
-        if (response.status === 409 && body?.retryAfterMs && tentativo < 7) {
-          await new Promise((resolve) => setTimeout(resolve, Math.min(body.retryAfterMs, 3_000)))
+        const retryAfterMs = body?.retryAfterMs
+        if (response.status === 409 && typeof retryAfterMs === "number" && retryAfterMs > 0 && tentativo < 7) {
+          await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfterMs, 3_000)))
           continue
         }
 
@@ -125,7 +126,10 @@ export default function PmsShadowPage() {
   const iframeSrc = sessione?.liveViewUrl ?? webUrl
 
   return (
-    <main data-pms-immersive-page className="relative h-full min-h-[520px] w-full overflow-hidden bg-background">
+    <main
+      data-pms-immersive-page
+      className="fixed inset-0 z-[60] h-[100dvh] w-screen overflow-hidden overscroll-none bg-background"
+    >
       <button
         type="button"
         aria-label="Mostra il menu HotelAccelerator"
@@ -167,7 +171,7 @@ export default function PmsShadowPage() {
           <iframe
             src={iframeSrc}
             title={`${nomePms} (gestionale esterno)`}
-            className="h-full w-full border-0 bg-background"
+            className="absolute inset-0 h-full w-full border-0 bg-background"
             referrerPolicy="no-referrer"
             sandbox={sessione ? "allow-same-origin allow-scripts" : undefined}
             allow={sessione ? "clipboard-read; clipboard-write" : undefined}

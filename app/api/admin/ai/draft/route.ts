@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
     let config: ReplyConfig | null = null
     const channelId = (conversation as { channel_id: string | null } | null)?.channel_id ?? null
     if (channelId) {
-      const { primary, baseIds } = await getBasesForChannel(channelId)
+      // `conversations.channel_id` punta alle caselle in `email_channels`.
+      // Gli altri canali conservano il proprio id nei metadata e arrivano qui
+      // senza channel_id, quindi questa risoluzione e' specifica per Email.
+      const { primary, baseIds } = await getBasesForChannel(channelId, "email")
       if (primary && baseIds.length > 0) {
         config = {
           baseIds,

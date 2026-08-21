@@ -24,7 +24,7 @@ export interface RunAutopilotArgs {
   conversationId: string
   /** Channel type, used only for message metadata/logging. */
   channel: AiChannel
-  /** The specific messaging_channels row id — drives which knowledge bases are used. */
+  /** The specific email_channels or messaging_channels row id that selects the knowledge bases. */
   channelId: string
   incomingText: string
   /**
@@ -76,7 +76,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
 
   // Resolve the knowledge bases linked to this specific channel. The primary
   // base (position 0) drives behavior; retrieval spans all linked bases.
-  const { primary, baseIds } = await getBasesForChannel(channelId)
+  const { primary, baseIds } = await getBasesForChannel(channelId, channel === "email" ? "email" : "messaging")
   if (!primary || baseIds.length === 0) {
     return { action: "skipped", reason: "no_base_linked" }
   }
