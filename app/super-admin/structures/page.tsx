@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Building2, Plus, Eye, Ban, CheckCircle, User } from "lucide-react"
+import { Building2, Plus, Eye, Ban, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { EnterTenantButton } from "@/components/super-admin/enter-tenant-button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 
@@ -141,11 +142,6 @@ export default function StructuresPage() {
     }
   }
 
-  const handleImpersonate = (structure: Structure) => {
-    console.log(`Impersonando struttura: ${structure.name}`)
-    alert("Impersonificazione: Funzionalità in arrivo - reindirizzamento alla vista tenant in modalità SOLA LETTURA")
-  }
-
   const filteredStructures = structures.filter(
     (s) =>
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -258,9 +254,11 @@ export default function StructuresPage() {
                             <Eye className="w-4 h-4" />
                           </Button>
                         </Link>
-                        <Button variant="outline" size="sm" onClick={() => handleImpersonate(structure)}>
-                          <User className="w-4 h-4" />
-                        </Button>
+                        <EnterTenantButton
+                          propertyId={structure.id}
+                          propertyName={structure.name}
+                          label="Entra"
+                        />
                         <Button variant="outline" size="sm" onClick={() => handleToggleStatus(structure)}>
                           {structure.status === "suspended" ? (
                             <CheckCircle className="w-4 h-4" />
