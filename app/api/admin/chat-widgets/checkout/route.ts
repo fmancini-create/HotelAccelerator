@@ -68,6 +68,9 @@ export async function POST(request: NextRequest) {
         // Utile in assistenza: dice quanti widget aveva al momento dell'acquisto.
         widgetPrimaAcquisto: String(quota.limite),
       },
+      subscription_data: {
+        metadata: { propertyId, kind: "chat_widget_extra", project: "hotelaccelerator" },
+      },
       success_url: `${appUrl}/admin/channels/chat?acquisto=ok`,
       cancel_url: `${appUrl}/admin/channels/chat?acquisto=annullato`,
       allow_promotion_codes: true,
