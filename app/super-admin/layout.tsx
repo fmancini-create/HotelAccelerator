@@ -3,34 +3,41 @@
 import type React from "react"
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import Link from "next/link"
-import { LayoutDashboard, Building2, Users, CreditCard, Settings, LogOut, ChevronDown, ListChecks } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
-import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
-import { PlatformFooter as CompanyFooter } from "@/components/platform-footer"
+import { PlatformShell } from "@/components/platform/platform-shell"
+import { ClientToaster } from "@/components/admin/client-toaster"
 import { AutoLogoutWatchdog } from "@/components/admin/auto-logout-watchdog"
 
-const navigation = [
-  { name: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
-  { name: "Roadmap", href: "/super-admin/roadmap", icon: ListChecks },
-  { name: "Strutture", href: "/super-admin/structures", icon: Building2 },
-  { name: "Collaboratori", href: "/super-admin/collaborators", icon: Users },
-  { name: "Billing", href: "/super-admin/billing", icon: CreditCard },
-]
-
+/**
+ * La cornice delle sezioni di piattaforma.
+ *
+ * PRIMA: questo file conteneva un'intestazione TUTTA SUA — logo, menu a cinque
+ * voci scritte a mano, tendina utente e pulsante di uscita — gemella di quella
+ * che `PlatformShell` fornisce a `/admin`. Due barre da tenere allineate a mano,
+ * con le conseguenze che si sono viste:
+ *
+ *  - il menu dichiarava 5 voci mentre le pagine su disco erano 7, quindi "Costi
+ *    moduli" e "Nuovo cliente" si raggiungevano solo scrivendo l'indirizzo;
+ *  - non c'era il selettore della struttura, ne' un modo per tornare all'area
+ *    operativa: da qui si entrava e non si usciva piu';
+ *  - mancava il <Toaster>, quindi ogni `toast.success`/`toast.error` delle
+ *    pagine di piattaforma era MUTO: l'azione riusciva o falliva in silenzio;
+ *  - mancava la disconnessione per inattivita', e il ruolo con piu' poteri era
+ *    l'unico mai disconnesso.
+ *
+ * ORA: la stessa cornice di `/admin`. Le voci di piattaforma vivono nell'elenco
+ * unico `NAV_ENTRIES` (gruppo "Piattaforma", visibile solo a chi amministra la
+ * piattaforma), quindi qui non si dichiara piu' nessun menu.
+ *
+ * QUESTO FILE RESTA, e non e' un doppione: e' l'unico posto dove vive la
+ * GUARDIA di ruolo su `/super-admin/*`. Le pagine sotto mostrano i dati di tutti
+ * i clienti, e verificarlo per ogni pagina significherebbe dimenticarsene su
+ * quella nuova.
+ */
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const [isChecking, setIsChecking] = useState(true)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -42,15 +49,18 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
       try {
         const supabase = createClient()
         const hostname = typeof window !== "undefined" ? window.location.hostname : ""
-        const isLocalDevHost = process.env.NODE_ENV === "development" && (hostname === "localhost" || hostname === "127.0.0.1")
+        const isLocalDevHost =
+          process.env.NODE_ENV === "development" && (hostname === "localhost" || hostname === "127.0.0.1")
 
         if (isLocalDevHost) {
-          setUserEmail("dev@hotelaccelerator.local")
           setIsChecking(false)
           return
         }
 
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser()
         if (authError || !user) {
           router.push("/admin")
           return
@@ -73,9 +83,10 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
           return
         }
 
-        setUserEmail(collaborator.email)
         setIsChecking(false)
       } catch {
+        // In errore si NEGA: queste pagine mostrano i dati di tutti i clienti,
+        // e un guasto nel controllo non e' un permesso.
         router.push("/admin")
       }
     }
@@ -83,91 +94,33 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     checkAuth()
   }, [pathname, router])
 
-  const handleLogout = async () => {
-    try {
-      const supabase = createClient()
-      await supabase.auth.signOut()
-      router.push("/admin")
-    } catch (error) {
-      console.error("[v0] Logout error:", error)
-    }
-  }
-
+  // La pagina di accesso non ha cornice: non c'e' ancora nessuno da mostrare
+  // nella barra, ne' una sessione da chiudere per inattivita'.
   if (pathname === "/super-admin/login") return <>{children}</>
 
   if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <span className="w-8 h-8 border-4 border-border border-t-foreground rounded-full animate-spin" />
-          <p className="text-sm text-muted-foreground">Verifica autenticazione...</p>
+          <span
+            className="w-8 h-8 border-4 border-border border-t-foreground rounded-full animate-spin"
+            aria-hidden
+          />
+          <p className="text-sm text-muted-foreground">Verifico i tuoi permessi...</p>
         </div>
       </div>
     )
   }
 
-  const isActive = (href: string) => href === "/super-admin" ? pathname === "/super-admin" : pathname.startsWith(href)
-
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <header className="bg-card border-b border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/super-admin" className="flex items-center gap-2">
-              <HotelAcceleratorMark className="h-8 w-8" priority />
-              <span className="font-semibold text-foreground hidden sm:block">HotelAccelerator</span>
-              <span className="text-xs bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded font-medium">ADMIN</span>
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-1">
-              {navigation.map((item) => {
-                const Icon = item.icon
-                return (
-                  <Link key={item.name} href={item.href} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${isActive(item.href) ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`}>
-                    <Icon className="w-4 h-4" />{item.name}
-                  </Link>
-                )
-              })}
-            </nav>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="text-foreground hover:bg-muted">
-                  <div className="w-7 h-7 rounded-full bg-ha-brand text-ha-brand-foreground flex items-center justify-center mr-2"><span className="text-xs font-medium">SA</span></div>
-                  <span className="hidden sm:block text-sm">{userEmail}</span><ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild><Link href="/super-admin/settings" className="flex items-center gap-2"><Settings className="w-4 h-4" />Impostazioni</Link></DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-600"><LogOut className="w-4 h-4 mr-2" />Logout</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-        <div className="md:hidden border-t border-border">
-          <div className="flex overflow-x-auto">
-            {navigation.map((item) => {
-              const Icon = item.icon
-              return <Link key={item.name} href={item.href} className={`flex items-center gap-2 px-4 py-3 text-sm whitespace-nowrap ${isActive(item.href) ? "text-ha-brand-soft-foreground border-b-2 border-ha-brand" : "text-muted-foreground"}`}><Icon className="w-4 h-4" />{item.name}</Link>
-            })}
-          </div>
-        </div>
-      </header>
-      <main className="flex-1">{children}</main>
-      {/*
-       * Disconnessione automatica per inattivita'.
-       *
-       * Mancava: era montata solo in `app/admin/layout.tsx`, e quest'area si e'
-       * costruita un'intestazione tutta sua senza portarsela dietro. Risultato:
-       * il ruolo con piu' poteri sulla piattaforma era l'unico che non veniva
-       * mai disconnesso, mentre un normale operatore si'.
-       *
-       * Sta qui e non nelle singole pagine perche' deve valere su tutte. Non e'
-       * nel ramo della pagina di accesso: la' non c'e' sessione da chiudere.
-       */}
+    <PlatformShell>
+      {children}
+      {/* Mancava: senza di questo gli avvisi delle pagine di piattaforma non
+          comparivano affatto. Uno solo, perche' due mostrerebbero doppioni. */}
+      <ClientToaster />
+      {/* Mancava: il ruolo con piu' poteri era l'unico mai disconnesso per
+          inattivita'. Nel layout e non nelle pagine, per valere su tutte. */}
       <AutoLogoutWatchdog />
-      <CompanyFooter />
-    </div>
+    </PlatformShell>
   )
 }

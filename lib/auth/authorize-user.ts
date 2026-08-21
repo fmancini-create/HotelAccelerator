@@ -1,8 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-export type AuthorizeResult =
-  | { authorized: true; destination: "/admin/dashboard" | "/super-admin" }
-  | { authorized: false }
+/**
+ * Una sola destinazione dopo l'accesso.
+ *
+ * Prima erano due: "/admin/dashboard" per l'amministratore di una struttura e
+ * "/super-admin" per chi amministra la piattaforma, cioe' due cruscotti gemelli
+ * da tenere allineati a mano. Ora il cruscotto e' uno e mostra in cima la vista
+ * d'insieme a chi ne ha diritto, per cui non c'e' piu' niente da smistare qui.
+ *
+ * Il tipo resta un letterale invece di `string`: se un domani qualcuno rimettera'
+ * una seconda destinazione, dovra' farlo di proposito e non per distrazione.
+ */
+export type AuthorizeResult = { authorized: true; destination: "/admin/dashboard" } | { authorized: false }
 
 /**
  * Shared authorization gate applied AFTER a successful Supabase sign-in
@@ -41,7 +50,9 @@ export async function authorizeUser(
         .update({ last_login_at: new Date().toISOString() })
         .eq("id", collaborator.id)
 
-      return { authorized: true, destination: "/super-admin" }
+      // Stessa porta dell'amministratore di struttura: il cruscotto e' unico e
+      // decide da se' cosa mostrare in base al ruolo.
+      return { authorized: true, destination: "/admin/dashboard" }
     }
   }
 

@@ -380,6 +380,18 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     isAdmin,
+    /*
+     * Chi amministra la piattaforma, tenuto DISTINTO da `isAdmin`.
+     *
+     * `isAdmin` qui sopra e' `isSuperAdmin || isTenantAdmin`: giusto per i
+     * pannelli di una struttura, sbagliato per decidere se mostrare la vista
+     * d'insieme su tutti i clienti. Se il cruscotto si fidasse di `isAdmin`, un
+     * albergatore vedrebbe il fatturato complessivo della piattaforma e
+     * l'elenco dei concorrenti.
+     *
+     * Lo decide il server e non il browser: la pagina si limita a mostrare.
+     */
+    isPlatformAdmin: identita.isSuperAdmin === true,
     propertyId,
     profilo: dashboardProfileLabel(viewer),
     panels,
