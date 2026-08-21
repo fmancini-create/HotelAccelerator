@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 
 type ConfigStato = {
   configurata: boolean
-  config: { pmsType: string | null; nome: string | null; webUrl: string | null; isActive: boolean } | null
+  config: { name: string; webUrl: string; isActive: boolean } | null
 }
 
 type SessionePms = {
@@ -32,7 +32,7 @@ const fetcher = async (url: string) => {
  * contenuto sottostante appartiene a un altro dominio.
  */
 export default function PmsShadowPage() {
-  const { data: cfg, isLoading, error } = useSWR<ConfigStato>("/api/crm/pms-config", fetcher, {
+  const { data: cfg, isLoading, error } = useSWR<ConfigStato>("/api/crm/pms-browser-config", fetcher, {
     revalidateOnFocus: false,
   })
 
@@ -49,8 +49,8 @@ export default function PmsShadowPage() {
     document.documentElement.dataset.pmsMenuVisible = "true"
   }
 
-  const webUrl = cfg?.config?.webUrl ?? null
-  const nomePms = cfg?.config?.nome ?? cfg?.config?.pmsType ?? "Gestionale"
+  const webUrl = cfg?.config?.isActive ? cfg.config.webUrl : null
+  const nomePms = cfg?.config?.name ?? "Gestionale"
   const [sessione, setSessione] = useState<SessionePms | null>(null)
   const [avvio, setAvvio] = useState(false)
   const [erroreMacchina, setErroreMacchina] = useState(false)

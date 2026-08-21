@@ -8,8 +8,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   CircleSlash,
-  KeyRound,
   Loader2,
+  Monitor,
   PlayCircle,
   RefreshCw,
   ShieldAlert,
@@ -304,8 +304,8 @@ export default function PmsSyncPage() {
               </Button>
               <Button asChild variant="outline" size="sm" className="gap-2">
                 <Link href="/admin/crm/pms-sync/config">
-                  <KeyRound className="h-4 w-4" />
-                  {provider.fake ? "Collega il PMS" : "Modifica credenziali"}
+                  <Monitor className="h-4 w-4" />
+                  Accesso browser
                 </Link>
               </Button>
             </div>
