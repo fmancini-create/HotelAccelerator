@@ -82,6 +82,48 @@ async function handleCheckoutCompleted(
 ) {
   const { propertyId, planId, roomCount, propertyName, kind, quantity } = session.metadata || {}
 
+  // Salva subito l'anagrafica fiscale raccolta da Stripe, prima dei return
+  // dedicati agli add-on. In questo modo anche i rinnovi trovano dati completi.
+  if (propertyId && session.customer) {
+    const customer = await stripe.customers.retrieve(session.customer as string, { expand: ["tax_ids"] })
+    if (customer && !customer.deleted) {
+      const taxIds = customer.tax_ids?.data || []
+      const vat = taxIds.find((item) => item.type === "eu_vat")?.value
+      const taxCode = taxIds.find((item) => item.type === "it_cf")?.value
+      const fiscalUpdate: Record<string, string> = {}
+
+      if (customer.name) fiscalUpdate.billing_company_name = customer.name
+      if (customer.email) fiscalUpdate.billing_email = customer.email
+      if (vat) fiscalUpdate.billing_vat = vat
+      if (taxCode) fiscalUpdate.billing_tax_code = taxCode
+      if (customer.address?.line1) fiscalUpdate.billing_address = customer.address.line1
+      if (customer.address?.city) fiscalUpdate.billing_city = customer.address.city
+      if (customer.address?.postal_code) fiscalUpdate.billing_postal_code = customer.address.postal_code
+      if (customer.address?.state) fiscalUpdate.billing_province = customer.address.state
+
+      for (const field of session.custom_fields || []) {
+        if (field.key === "codice_sdi" && field.text?.value) {
+          fiscalUpdate.billing_sdi = field.text.value.toUpperCase()
+        }
+        if (field.key === "pec" && field.text?.value) {
+          fiscalUpdate.billing_pec = field.text.value.toLowerCase()
+        }
+      }
+
+      if (Object.keys(fiscalUpdate).length > 0) {
+        const { error } = await supabase.from("properties").update(fiscalUpdate).eq("id", propertyId)
+        if (error) console.error("[Stripe Webhook] Fiscal data update failed:", error)
+      }
+
+      const fiscalMetadata: Record<string, string> = {}
+      if (fiscalUpdate.billing_sdi) fiscalMetadata.codice_sdi = fiscalUpdate.billing_sdi
+      if (fiscalUpdate.billing_pec) fiscalMetadata.pec = fiscalUpdate.billing_pec
+      if (Object.keys(fiscalMetadata).length > 0) {
+        await stripe.customers.update(customer.id, { metadata: fiscalMetadata })
+      }
+    }
+  }
+
   // Extra WhatsApp number purchase: bump the property's quota so it can connect
   // one (or more) additional numbers immediately.
   if (kind === "whatsapp_extra_number") {

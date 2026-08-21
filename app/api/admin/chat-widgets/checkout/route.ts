@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
       customer_email: struttura.billing_email || undefined,
       metadata: {
         propertyId,
+        project: "hotelaccelerator",
         // Questa etichetta e' cio' che il webhook usa per riconoscere l'acquisto:
         // deve restare identica alla stringa attesa la'.
         kind: "chat_widget_extra",
@@ -67,10 +68,28 @@ export async function POST(request: NextRequest) {
         // Utile in assistenza: dice quanti widget aveva al momento dell'acquisto.
         widgetPrimaAcquisto: String(quota.limite),
       },
+      subscription_data: {
+        metadata: { propertyId, kind: "chat_widget_extra", project: "hotelaccelerator" },
+      },
       success_url: `${appUrl}/admin/channels/chat?acquisto=ok`,
       cancel_url: `${appUrl}/admin/channels/chat?acquisto=annullato`,
       allow_promotion_codes: true,
       billing_address_collection: "required",
+      tax_id_collection: { enabled: true },
+      custom_fields: [
+        {
+          key: "codice_sdi",
+          label: { type: "custom", custom: "Codice SDI (se disponibile)" },
+          type: "text",
+          optional: false,
+        },
+        {
+          key: "pec",
+          label: { type: "custom", custom: "PEC (alternativa al Codice SDI)" },
+          type: "text",
+          optional: true,
+        },
+      ],
       locale: "it",
     })
 

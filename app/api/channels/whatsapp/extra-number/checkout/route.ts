@@ -60,15 +60,34 @@ export async function POST(request: NextRequest) {
       customer_email: property.billing_email || undefined,
       metadata: {
         propertyId,
+        project: "hotelaccelerator",
         kind: "whatsapp_extra_number",
         quantity: "1",
         propertyName: property.name,
+      },
+      subscription_data: {
+        metadata: { propertyId, kind: "whatsapp_extra_number", project: "hotelaccelerator" },
       },
       success_url:
         successUrl || `${appUrl}/admin/channels/whatsapp?extra_number=success`,
       cancel_url: cancelUrl || `${appUrl}/admin/channels/whatsapp?extra_number=canceled`,
       allow_promotion_codes: true,
       billing_address_collection: "required",
+      tax_id_collection: { enabled: true },
+      custom_fields: [
+        {
+          key: "codice_sdi",
+          label: { type: "custom", custom: "Codice SDI (se disponibile)" },
+          type: "text",
+          optional: false,
+        },
+        {
+          key: "pec",
+          label: { type: "custom", custom: "PEC (alternativa al Codice SDI)" },
+          type: "text",
+          optional: true,
+        },
+      ],
       locale: "it",
     })
 
