@@ -197,12 +197,12 @@ export class EmailChannelService {
     accessToken: string,
     refreshToken: string,
     expiresIn: number,
-  ): Promise<void> {
+  ): Promise<EmailChannel> {
     // Limitato alla struttura: senza filtro, riconnettere una casella condivisa
     // avrebbe scritto i token di questo albergo nel canale di un altro.
     const existing = await this.repository.findByEmail(email, propertyId)
     if (existing) {
-      await this.repository.update(existing.id, {
+      return await this.repository.update(existing.id, {
         provider,
         oauth_access_token: accessToken,
         oauth_refresh_token: refreshToken,
@@ -215,26 +215,26 @@ export class EmailChannelService {
         last_sync_error: null,
         last_sync_error_at: null,
       })
-    } else {
-      await this.repository.create({
-        property_id: propertyId,
-        name: email,
-        email_address: email,
-        display_name: email,
-        is_active: true,
-        provider,
-        oauth_access_token: accessToken,
-        oauth_refresh_token: refreshToken,
-        oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
-        // Chi collega una casella la collega PER sincronizzarla: il valore
-        // predefinito del repository e' `false`, e non passandolo qui ogni
-        // casella appena collegata nasceva con la sincronizzazione automatica
-        // SPENTA. Sommato al fatto che la pagina seleziona da sola il canale
-        // piu' recente, l'utente tornava da Google e trovava l'interruttore
-        // spento: sembrava che l'attivazione non venisse salvata.
-        sync_enabled: true,
-      })
     }
+
+    return await this.repository.create({
+      property_id: propertyId,
+      name: email,
+      email_address: email,
+      display_name: email,
+      is_active: true,
+      provider,
+      oauth_access_token: accessToken,
+      oauth_refresh_token: refreshToken,
+      oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
+      // Chi collega una casella la collega PER sincronizzarla: il valore
+      // predefinito del repository e' `false`, e non passandolo qui ogni
+      // casella appena collegata nasceva con la sincronizzazione automatica
+      // SPENTA. Sommato al fatto che la pagina seleziona da sola il canale
+      // piu' recente, l'utente tornava da Google e trovava l'interruttore
+      // spento: sembrava che l'attivazione non venisse salvata.
+      sync_enabled: true,
+    })
   }
 
   async toggleChannelStatus(channelId: string, propertyId: string): Promise<ChannelWithAssignments> {

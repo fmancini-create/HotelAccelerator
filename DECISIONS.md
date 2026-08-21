@@ -132,6 +132,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: l'offerta di contatto dello staff e l'accettazione dell'ospite sono eventi distinti. Solo un'accettazione esplicita apre un record tenant-scoped in `conversation_staff_handoffs`; nome, recapito, domanda iniziale, annullamento e registrazione della richiesta vivono nel record, non nella memoria del modello.
 - Conseguenza: messaggi brevi come “come?” o un nome inviato in un turno successivo non possono perdere il contesto. L'assistente conferma l'inoltro solo dopo che esiste una traccia operativa durevole (todo o segnalazione inbox); una registrazione fallita resta esplicita e non viene presentata come presa in carico.
 
+## ADR-022 — Ogni nuova casella Gmail avvia uno storico riprendibile
+
+- Stato: accettata
+- Decisione: al termine dell'OAuth Gmail la pagina Canali avvia automaticamente la sincronizzazione storica del canale appena collegato. L'import procede per pagine salvando l'avanzamento nel database e riprende dopo ricaricamenti o interruzioni. Per le aziende con piu' caselle, la Inbox sincronizza l'elenco tenant-aware completo e non presume piu' l'esistenza di un solo canale Gmail.
+- Conseguenza: la lettura diretta delle cartelle non viene piu' confusa con l'import dei messaggi; il poll dei nuovi arrivi resta indipendente dallo storico e nessun `property_id` inviato dal browser autorizza l'OAuth o la sincronizzazione.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

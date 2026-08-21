@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS, type OAuthProvider, getOAuthRedirectUri } from "@/lib/oauth-config"
 import { EmailChannelService } from "@/lib/platform-services"
+import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 
 function fromBase64Url(str: string): string {
   const base64 = str.replace(/-/g, "+").replace(/_/g, "/")
@@ -33,6 +34,14 @@ export async function GET(request: NextRequest) {
 
     if (Date.now() - stateData.timestamp > 10 * 60 * 1000) {
       return NextResponse.redirect(new URL("/admin/channels/email?error=state_expired", request.url))
+    }
+
+    // Il tenant scritto nello state non e' una fonte autorizzativa: arriva dal
+    // browser ed e' modificabile. Dopo il ritorno da Google deve coincidere con
+    // il tenant autenticato (compreso il cookie scelto dal superadmin).
+    const authenticatedPropertyId = await getAuthenticatedPropertyId(request)
+    if (authenticatedPropertyId !== property_id) {
+      return NextResponse.redirect(new URL("/admin/channels/email?error=tenant_mismatch", request.url))
     }
 
     const clientId = provider === "gmail" ? process.env.GOOGLE_CLIENT_ID : process.env.MICROSOFT_CLIENT_ID
@@ -87,9 +96,19 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient()
     const service = new EmailChannelService(supabase)
 
-    await service.upsertOAuthChannel(property_id, provider, userEmail, access_token, refresh_token, expires_in)
+    const channel = await service.upsertOAuthChannel(
+      authenticatedPropertyId,
+      provider,
+      userEmail,
+      access_token,
+      refresh_token,
+      expires_in,
+    )
 
-    return NextResponse.redirect(new URL("/admin/channels/email?success=connected", request.url))
+    const destination = new URL("/admin/channels/email", request.url)
+    destination.searchParams.set("success", "connected")
+    if (provider === "gmail") destination.searchParams.set("initial_sync", channel.id)
+    return NextResponse.redirect(destination)
   } catch (error) {
     console.error("OAuth callback error:", error)
     return NextResponse.redirect(new URL("/admin/channels/email?error=callback_failed", request.url))

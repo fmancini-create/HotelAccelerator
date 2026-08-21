@@ -4,7 +4,7 @@ import type React from "react"
 import { createClient } from "@/lib/supabase/client"
 import { AdminHeader } from "@/components/admin/admin-header"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -40,9 +40,14 @@ import {
   Info,
   Bell,
   BellOff,
+  History,
 } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 import { toast } from "@/components/ui/use-toast"
+import {
+  syncHistoricalChannels,
+  type HistoricalSyncProgress,
+} from "@/lib/email/full-sync-client"
 
 const GmailIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className || "w-5 h-5"} fill="none">
@@ -87,6 +92,9 @@ interface EmailChannel {
   gmail_watch_expiration?: string | null
   oauth_reconnect_required?: boolean
   last_sync_error?: string | null
+  full_sync_status?: "idle" | "running" | "completed" | "failed" | null
+  full_sync_processed?: number | null
+  full_sync_imported?: number | null
 }
 
 interface GmailLabel {
@@ -152,6 +160,9 @@ export default function EmailChannelsClient() {
   const [connecting, setConnecting] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [enablingPush, setEnablingPush] = useState<string | null>(null)
+  const [historicalSyncRunning, setHistoricalSyncRunning] = useState(false)
+  const [historicalSyncProgress, setHistoricalSyncProgress] = useState<HistoricalSyncProgress | null>(null)
+  const historicalSyncStartedRef = useRef(false)
   // Admins manage every mailbox of the tenant (and can assign users). A
   // non-admin member only sees/manages their OWN mailbox.
   const [isAdmin, setIsAdmin] = useState(false)
@@ -166,6 +177,7 @@ export default function EmailChannelsClient() {
   const searchParams = useSearchParams()
   const oauthSuccess = searchParams.get("success")
   const oauthError = searchParams.get("error")
+  const requestedInitialSyncId = searchParams.get("initial_sync")
 
   // Form state
   const [formData, setFormData] = useState({
@@ -274,6 +286,57 @@ export default function EmailChannelsClient() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (loading || historicalSyncStartedRef.current || channels.length === 0) return
+
+    const freshCutoff = Date.now() - 24 * 60 * 60 * 1000
+    const candidates = channels
+      .filter((channel) => {
+        if (channel.provider !== "gmail" || !channel.is_active) return false
+        if (channel.full_sync_status === "completed") return false
+        if (channel.id === requestedInitialSyncId) return true
+        if (channel.full_sync_status === "running") return true
+
+        // Copre le caselle appena collegate prima di questa correzione (come le
+        // cinque 4BID) senza avviare a sorpresa import massivi su vecchi tenant.
+        const createdAt = new Date(channel.created_at).getTime()
+        const freshIdle =
+          Number.isFinite(createdAt) &&
+          createdAt >= freshCutoff &&
+          [undefined, null, "idle", "failed"].includes(channel.full_sync_status)
+        return freshIdle
+      })
+      .sort((left, right) => Number(right.id === requestedInitialSyncId) - Number(left.id === requestedInitialSyncId))
+
+    if (candidates.length === 0) return
+    historicalSyncStartedRef.current = true
+
+    const run = async () => {
+      setHistoricalSyncRunning(true)
+      setHistoricalSyncProgress(null)
+      try {
+        const result = await syncHistoricalChannels(
+          candidates.map((channel) => ({ id: channel.id, email: channel.email_address })),
+          { onProgress: setHistoricalSyncProgress },
+        )
+        toast({
+          title: "Importazione storica completata",
+          description: `${result.imported} messaggi importati da ${candidates.length} ${
+            candidates.length === 1 ? "casella" : "caselle"
+          }.`,
+        })
+        await fetchData()
+      } catch (error) {
+        console.error("[v0] Initial historical sync failed:", error)
+        setConnectionError(error instanceof Error ? error.message : "Importazione storica non riuscita")
+      } finally {
+        setHistoricalSyncRunning(false)
+      }
+    }
+
+    void run()
+  }, [channels, loading, requestedInitialSyncId])
 
   const fetchLabels = async (channelId: string) => {
     setLoadingLabels(true)
@@ -707,7 +770,25 @@ export default function EmailChannelsClient() {
             <CheckCircle className="h-5 w-5 text-ha-success-soft-foreground" />
             <AlertTitle className="text-ha-success-soft-foreground">Connessione riuscita!</AlertTitle>
             <AlertDescription className="text-ha-success-soft-foreground">
-              Account email collegato con successo. La sincronizzazione è attiva.
+              Account email collegato con successo. La sincronizzazione è attiva e lo storico viene importato.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {historicalSyncRunning && (
+          <Alert>
+            <History className="h-5 w-5" />
+            <AlertTitle>Importazione dello storico in corso</AlertTitle>
+            <AlertDescription>
+              {historicalSyncProgress ? (
+                <>
+                  Casella {historicalSyncProgress.channelIndex} di {historicalSyncProgress.channelCount}
+                  {historicalSyncProgress.email ? ` — ${historicalSyncProgress.email}` : ""}. Analizzati{" "}
+                  {historicalSyncProgress.processed} messaggi, importati {historicalSyncProgress.imported}.
+                </>
+              ) : (
+                "Preparazione della prima casella. Puoi lasciare aperta questa pagina: l'avanzamento viene salvato a ogni blocco."
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -720,7 +801,8 @@ export default function EmailChannelsClient() {
               {oauthError === "token_exchange_failed" && "Errore durante l'autenticazione. Riprova."}
               {oauthError === "config_missing" && "Configurazione OAuth mancante. Contatta il supporto."}
               {oauthError === "state_expired" && "Sessione scaduta. Riprova."}
-              {!["token_exchange_failed", "config_missing", "state_expired"].includes(oauthError) &&
+              {oauthError === "tenant_mismatch" && "L'azienda attiva è cambiata durante il collegamento. Riprova."}
+              {!["token_exchange_failed", "config_missing", "state_expired", "tenant_mismatch"].includes(oauthError) &&
                 `Errore: ${oauthError}`}
             </AlertDescription>
           </Alert>
@@ -1010,6 +1092,18 @@ export default function EmailChannelsClient() {
                                 <Badge variant="destructive">
                                   <AlertCircle className="w-3 h-3 mr-1" />
                                   Watch scaduto
+                                </Badge>
+                              )}
+                              {channel.provider === "gmail" && channel.full_sync_status === "running" && (
+                                <Badge variant="outline">
+                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  Storico in corso
+                                </Badge>
+                              )}
+                              {channel.provider === "gmail" && channel.full_sync_status === "failed" && (
+                                <Badge variant="destructive">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
+                                  Storico da riprendere
                                 </Badge>
                               )}
                             </div>

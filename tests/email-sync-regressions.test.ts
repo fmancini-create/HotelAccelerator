@@ -7,6 +7,7 @@ import {
   statusFromGmailLabels,
 } from "@/lib/email/email-processor"
 import { listRecentInboxMessageIds } from "@/lib/email/incremental-sync"
+import { syncHistoricalChannels } from "@/lib/email/full-sync-client"
 
 vi.mock("server-only", () => ({}))
 
@@ -140,6 +141,54 @@ describe("email synchronization regressions", () => {
     expect(fullSync).toContain('labels.includes("SENT") || labels.includes("DRAFT")')
     expect(fullSync).toContain("full_sync_start_history_id")
     expect(fullSync).toContain("promoteFullSyncCursor")
+  })
+
+  it("runs historical synchronization for every Gmail mailbox", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ done: true, processed: 10, imported: 8, duplicates: 2, errors: 0 })),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ done: false, processed: 50, imported: 45, duplicates: 5, errors: 0 })),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ done: true, processed: 70, imported: 62, duplicates: 8, errors: 0 })),
+      )
+
+    const result = await syncHistoricalChannels([
+      { id: "channel-a", email: "a@example.com" },
+      { id: "channel-b", email: "b@example.com" },
+    ])
+
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).channel_id)).toEqual([
+      "channel-a",
+      "channel-b",
+      "channel-b",
+    ])
+    expect(result).toMatchObject({
+      channelIndex: 2,
+      channelCount: 2,
+      processed: 80,
+      imported: 70,
+      duplicates: 10,
+      errors: 0,
+    })
+  })
+
+  it("starts a tenant-scoped initial history import after Gmail OAuth", () => {
+    const callback = source("app/api/channels/email/oauth/callback/route.ts")
+    const emailPage = source("app/admin/channels/email/email-channels-client.tsx")
+    const debugRoute = source("app/api/inbox/debug/route.ts")
+
+    expect(callback).toContain("getAuthenticatedPropertyId(request)")
+    expect(callback).toContain("authenticatedPropertyId !== property_id")
+    expect(callback).toContain('destination.searchParams.set("initial_sync", channel.id)')
+    expect(emailPage).toContain("syncHistoricalChannels")
+    expect(emailPage).toContain('channel.full_sync_status === "running"')
+    expect(debugRoute).toContain("channels: serializedChannels")
+    expect(debugRoute).not.toContain('.eq("provider", "gmail")\n      .maybeSingle()')
   })
 
   it("does not let the partial interactive refresh move the durable polling watermark", () => {

@@ -15,16 +15,23 @@ export async function GET(request: NextRequest) {
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
 
-    // Get the active Gmail channel FOR THIS TENANT (multi-tenancy)
-    const { data: channel } = await supabase
+    // Tutti i canali Gmail attivi del tenant. `maybeSingle()` qui rendeva nullo
+    // il risultato appena un'azienda collegava la seconda casella: la pagina
+    // Inbox non sapeva piu' quale canale sincronizzare e lo storico non partiva.
+    const { data: channels, error: channelsError } = await supabase
       .from("email_channels")
       .select(
-        "id, property_id, email_address, provider, gmail_history_id, last_sync_at, gmail_watch_expiration, push_enabled, is_active",
+        "id, property_id, email_address, provider, gmail_history_id, last_sync_at, gmail_watch_expiration, push_enabled, is_active, full_sync_status",
       )
       .eq("property_id", propertyId)
       .eq("is_active", true)
       .eq("provider", "gmail")
-      .maybeSingle()
+      .order("created_at", { ascending: true })
+
+    if (channelsError) {
+      console.error("[v0][inbox-debug] Gmail channels read failed:", channelsError.message)
+      return NextResponse.json({ error: "Impossibile leggere le caselle Gmail" }, { status: 503 })
+    }
 
     // Get messages count for this tenant
     const { count: messagesCount } = await supabase
@@ -55,27 +62,33 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(5)
 
-    const watchExpired = channel?.gmail_watch_expiration
-      ? new Date(channel.gmail_watch_expiration) < new Date()
-      : true
+    const serializeChannel = (channel: NonNullable<typeof channels>[number]) => {
+      const watchExpired = channel.gmail_watch_expiration
+        ? new Date(channel.gmail_watch_expiration) < new Date()
+        : true
+      return {
+        id: channel.id,
+        property_id: channel.property_id,
+        email: channel.email_address,
+        provider: channel.provider,
+        historyId: channel.gmail_history_id,
+        lastSyncAt: channel.last_sync_at,
+        watchExpiration: channel.gmail_watch_expiration,
+        watchActive: !watchExpired,
+        pushEnabled: channel.push_enabled,
+        fullSyncStatus: channel.full_sync_status,
+      }
+    }
+
+    const serializedChannels = (channels || []).map(serializeChannel)
 
     return NextResponse.json({
       timestamp: new Date().toISOString(),
       propertyId,
-      channel: channel
-        ? {
-            id: channel.id,
-            // Expose property_id so the client can trigger /api/channels/email/sync
-            property_id: channel.property_id,
-            email: channel.email_address,
-            provider: channel.provider,
-            historyId: channel.gmail_history_id,
-            lastSyncAt: channel.last_sync_at,
-            watchExpiration: channel.gmail_watch_expiration,
-            watchActive: !watchExpired,
-            pushEnabled: channel.push_enabled,
-          }
-        : null,
+      // `channel` resta per compatibilita' con il pannello diagnostico; le
+      // operazioni multi-casella devono usare sempre `channels`.
+      channel: serializedChannels[0] || null,
+      channels: serializedChannels,
       database: {
         messagesCount,
         conversationsCount,
