@@ -1,6 +1,6 @@
 # HotelAccelerator — Roadmap
 
-Ultimo aggiornamento: 2026-08-20
+Ultimo aggiornamento: 2026-08-21
 
 ## Principio di priorità
 
@@ -69,7 +69,7 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 - [ ] Analisi conversazioni: intenti, richieste, sentiment, qualità, conversione e insight aggregati di mercato.
 - [ ] CMS/sito AI-first, multilingua, SEO/GEO e hosting.
 - [ ] Booking widget con disponibilità, preventivo, pagamento, alternative, extra e integrazione PMS.
-- [ ] Collegare al PMS incorporato una sorgente di osservazione persistente e autenticata. L'iframe tenant e la porta di raccolta sono pronti; Vercel Sandbox e' effimero e non sostituisce un browser remoto sempre attivo.
+- [ ] Collegare al PMS incorporato una sorgente di osservazione persistente e autenticata. Browserbase Marketplace, Context tenant-aware e Live View sono in stato `Codice`; restano migrazione, login Scidoo su tenant reale e raccolta degli eventi verso la porta gia' pronta prima della promozione.
 - [ ] Tracking, attribuzione, consenso e recupero abbandoni.
 
 ## Fase 5 — Marketing Hub

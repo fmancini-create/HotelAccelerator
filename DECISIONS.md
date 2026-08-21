@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-08-20
+Ultimo aggiornamento: 2026-08-21
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -95,6 +95,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata
 - Decisione: 3CX gestisce media, riconoscimento/sintesi vocale, route point e trasferimento; HotelAccelerator espone un contratto HTTP versionato e autenticato che seleziona una sola base nel tenant e genera una risposta fondata.
 - Conseguenza: il modello non riceve un `base_id` arbitrario e non può attraversare prodotti o tenant; assenza, ambiguità, bassa confidenza, richiesta umana ed errore portano all'interno 200. Il codice cliente resta fuori dal contratto finché non esiste una fonte autorevole.
+
+## ADR-016 — Browser remoto per il PMS, un Context per tenant
+
+- Stato: accettata
+- Decisione: il PMS incorporato usa Browserbase Live View; ogni struttura possiede un Context distinto e riutilizzabile. Le sessioni sono brevi e rilasciabili, mentre il login persiste nel Context cifrato dal provider.
+- Conseguenza: nessuna credenziale PMS viene salvata o automatizzata da HotelAccelerator. Le registrazioni Browserbase sono disattivate, gli identificativi restano server-only e una lease impedisce sessioni concorrenti sullo stesso Context. In caso di guasto resta disponibile l'iframe diretto.
 
 ## Decisioni aperte
 

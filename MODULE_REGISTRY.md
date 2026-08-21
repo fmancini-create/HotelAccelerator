@@ -1,6 +1,6 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-08-20
+Ultimo aggiornamento: 2026-08-21
 
 ## Avvertenza
 
@@ -24,6 +24,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | Gestione conversazioni | Assegnazione, stati, priorità, tag, note, SLA, template, allegati, ricerca, traduzione | Specifica | Audit UI, schema, API e permessi |
 | AI inbox | Intenti, estrazione dati, riassunti, risposte, escalation, sentiment, upselling, knowledge base | Specifica | Definire provider, valutazioni, privacy e human-in-the-loop |
 | CRM | Profilo ospite, deduplica, soggiorni, consensi, segmenti, pipeline, follow-up, LTV | Specifica | Definire identity resolution e data ownership |
+| PMS incorporato | Live View Browserbase, Context/login per tenant, sessione interattiva, fallback iframe | Codice | Integrazione Vercel installata e codice tenant-aware presente; applicare migrazione e verificare login/sessione su Villa I Barronci prima di promuovere a `Tenant reale` |
 | KPI operatori | Tempi, volumi, conversione, qualità, chiamate, audit delle azioni | Specifica | Definire eventi e attribuzione operatore |
 | CMS e sito | AI website builder, pagine, camere, offerte, esperienze, blog, media, i18n, SEO/GEO, hosting | Specifica | Separare CMS reale da mock e definire publishing |
 | Tracking e marketing | Script, attribuzione, behavior, segmenti, campagne, recupero abbandoni, lifecycle, upselling | Specifica | Consent, privacy, event schema e attribution model |
