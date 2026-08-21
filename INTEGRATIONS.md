@@ -13,7 +13,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Codice | GitHub | Repository e CI | Presente | Definire branch policy, CI e documenti mancanti |
 | PMS | Scidoo | Camere, disponibilità, tariffe, produzione, push prezzi | Da verificare | Test mapping, retry, idempotenza e tenant reale |
 | Browser remoto | Browserbase | PMS interattivo incorporato e login persistente per tenant | Codice | Configurazione agnostica separata dai connettori API; route, Context tenant-aware, Live View e fallback diretto implementati. Collaudare un login reale e misurare durata/costi prima di `Tenant reale` |
-| Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, watch Pub/Sub, cursor history, poll di fallback e riconciliazione label. Restano da provare recovery con cursor scaduto, verifica autenticità webhook, alert/SLO e modello storico Sent/response KPI prima di `Production-ready` |
+| Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, import storico paginato e riprendibile, supporto multi-casella, watch Pub/Sub, cursor history, poll di fallback e riconciliazione label. Collaudare l'import iniziale sulle cinque caselle 4BID; restano recovery con cursor scaduto, verifica autenticità webhook, alert/SLO e modello storico Sent/response KPI prima di `Production-ready` |
 | Email | Outlook | Inbox email | Specifica | Definire Microsoft Graph adapter |
 | Email | IMAP/SMTP | Caselle generiche | Specifica | Sicurezza credenziali e limiti provider |
 | Messaggistica | WhatsApp | Inbox e automazioni | Da verificare | Provider, template, consenso e webhook |

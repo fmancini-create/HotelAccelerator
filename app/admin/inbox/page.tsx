@@ -84,6 +84,7 @@ import { chiaveBersaglio } from "@/lib/inbox/target"
 import type { Bersaglio } from "@/lib/inbox/target"
 import { useInboxTransfer } from "@/hooks/use-inbox-transfer"
 import { RichiestePassaggio } from "@/components/admin/inbox/richieste-passaggio"
+import { syncHistoricalChannels } from "@/lib/email/full-sync-client"
 
 type InboxMode = "smart" | "gmail"
 
@@ -233,13 +234,26 @@ interface SmartDebugInfo {
   timestamp: string
   channel: {
     id: string
+    property_id: string
     email: string
     historyId: string
     lastSyncAt: string
     watchExpiration: string
     watchActive: boolean
     pushEnabled: boolean
+    fullSyncStatus?: string | null
   } | null
+  channels: Array<{
+    id: string
+    property_id: string
+    email: string
+    historyId: string
+    lastSyncAt: string
+    watchExpiration: string
+    watchActive: boolean
+    pushEnabled: boolean
+    fullSyncStatus?: string | null
+  }>
   database: {
     messagesCount: number
     conversationsCount: number
@@ -1616,69 +1630,50 @@ export default function InboxPage() {
   // ── Full historical sync (Smart mode only) ──
   // Loops over /api/channels/email/sync/full until done === true.
   // Resumable across refreshes (server persists page_token).
-  const startFullHistoricalSync = async (opts?: { reset?: boolean }) => {
+  const startFullHistoricalSync = async () => {
     if (fullSyncRunning) return
     setFullSyncRunning(true)
     fullSyncAbortRef.current = false
     setFullSyncProgress({ processed: 0, imported: 0, duplicates: 0, errors: 0 })
 
     try {
-      // Need channel id + property id. Use the debug endpoint which already returns them.
+      // Il debug endpoint restituisce TUTTE le caselle del tenant. Prima usava
+      // `maybeSingle()` e con piu' account restituiva channel=null: il pulsante
+      // storico non poteva sincronizzare nulla.
       const debugRes = await fetch("/api/inbox/debug")
       if (!debugRes.ok) {
         setLastSyncStatus("Errore: impossibile leggere info canale")
         return
       }
-      const debug = await debugRes.json()
-      const channelId = debug?.channel?.id
-      if (!channelId) {
+      const debug = (await debugRes.json()) as SmartDebugInfo
+      const gmailChannels = debug.channels?.length ? debug.channels : debug.channel ? [debug.channel] : []
+      if (gmailChannels.length === 0) {
         setLastSyncStatus("Nessun canale Gmail attivo")
         return
       }
 
-      let done = false
-      let attempt = 0
-      let firstCall = true
-      while (!done && !fullSyncAbortRef.current && attempt < 2000) {
-        attempt++
-        const res = await fetch("/api/channels/email/sync/full", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            channel_id: channelId,
-            reset: firstCall && !!opts?.reset,
-          }),
-        })
-        firstCall = false
-
-        if (res.status === 429) {
-          // rate limited: wait a bit and retry
-          await new Promise((r) => setTimeout(r, 3000))
-          continue
-        }
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}))
-          setLastSyncStatus(`Errore sync storico: ${err?.error || res.status}`)
-          break
-        }
-        const data = await res.json()
-        setFullSyncProgress({
-          processed: data.processed || 0,
-          imported: data.imported || 0,
-          duplicates: data.duplicates || 0,
-          errors: data.errors || 0,
-        })
-        done = Boolean(data.done)
-        // Refresh conversation list roughly every 5 pages to keep UI warm
-        if (attempt % 5 === 0) {
-          await loadConversations()
-        }
-      }
+      const result = await syncHistoricalChannels(
+        gmailChannels.map((channel) => ({ id: channel.id, email: channel.email })),
+        {
+          shouldStop: () => fullSyncAbortRef.current,
+          onProgress: (progress) =>
+            setFullSyncProgress({
+              processed: progress.processed,
+              imported: progress.imported,
+              duplicates: progress.duplicates,
+              errors: progress.errors,
+            }),
+        },
+      )
       await loadConversations()
-      if (done) {
-        setLastSyncStatus("Sync storico completato")
-      } else if (fullSyncAbortRef.current) {
+      if (fullSyncAbortRef.current) {
         setLastSyncStatus("Sync storico interrotto (potrai riprendere)")
+      } else {
+        setLastSyncStatus(
+          `Sync storico completato su ${gmailChannels.length} ${
+            gmailChannels.length === 1 ? "casella" : "caselle"
+          }: ${result.imported} messaggi importati`,
+        )
       }
     } catch (error) {
       console.error("[v0] Full sync: fatal", error)
