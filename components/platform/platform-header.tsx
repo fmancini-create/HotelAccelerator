@@ -50,6 +50,7 @@ import {
   PLATFORM_ENTRIES,
   type NavEntry,
 } from "@/lib/platform/nav"
+import { isImmersiveAdminPage } from "@/components/platform/platform-chrome-routes"
 
 /*
  * Le voci NON si dichiarano piu' qui.
@@ -133,6 +134,7 @@ function isAuthPage(pathname: string): boolean {
 
 export function PlatformHeader() {
   const pathname = usePathname() || ""
+  const immersive = isImmersiveAdminPage(pathname)
   const [signingOut, setSigningOut] = useState(false)
   const onAuthPage = isAuthPage(pathname)
   const { data: me } = useSWR<PlatformMe>("/api/platform/me", meFetcher, {
@@ -195,6 +197,10 @@ export function PlatformHeader() {
     }
   }
 
+  const hideImmersiveMenu = () => {
+    if (immersive) document.documentElement.dataset.pmsMenuVisible = "false"
+  }
+
   const userInitials = (me?.name || me?.email || "?")
     .split(/[\s@.]+/)
     .filter(Boolean)
@@ -217,7 +223,12 @@ export function PlatformHeader() {
   }
 
   return (
-    <header className="flex-shrink-0 h-14 border-b border-border bg-white z-30">
+    <header
+      data-platform-header
+      data-immersive={immersive ? "true" : undefined}
+      onMouseLeave={hideImmersiveMenu}
+      className="flex-shrink-0 h-14 border-b border-border bg-white z-30"
+    >
       <div className="h-full flex items-center gap-2 px-3 sm:px-4">
         {/* Logo / brand */}
         <Link

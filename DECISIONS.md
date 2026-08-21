@@ -32,6 +32,7 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 
 - Stato: accettata
 - Decisione: PMS, OTA, voli, treni, SDI, banche, email, messaggistica e pagamenti sono integrati tramite adapter.
+- Decisione: il PMS incorporato e' una vista operativa immersiva. La barra globale di HotelAccelerator resta disponibile a scomparsa sul bordo superiore; navigazione CRM, contenuti introduttivi e dettagli tecnici dell'infrastruttura non occupano la schermata di lavoro del tenant.
 - Conseguenza: Scidoo, OpenAPI, Fabrick o altri provider non devono diventare il modello dati universale.
 
 ## ADR-006 — Stati di maturità obbligatori

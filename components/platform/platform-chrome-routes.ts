@@ -20,3 +20,13 @@
 export function isFullHeightAdminPage(pathname: string): boolean {
   return pathname === "/admin/inbox" || pathname.startsWith("/admin/inbox/")
 }
+
+/**
+ * Il gestionale incorporato e' uno spazio di lavoro, non una normale pagina
+ * editoriale: occupa tutta la finestra e lascia la navigazione globale fuori
+ * dal flusso, pronta a ricomparire sopra il PMS quando il puntatore raggiunge
+ * il bordo superiore.
+ */
+export function isImmersiveAdminPage(pathname: string): boolean {
+  return pathname === "/admin/crm/pms-sync/gestionale" || pathname.startsWith("/admin/crm/pms-sync/gestionale/")
+}

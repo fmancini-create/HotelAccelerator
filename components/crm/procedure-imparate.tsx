@@ -8,16 +8,13 @@
  * copie avrebbe garantito che, alla prima modifica, le due schermate avrebbero
  * detto cose diverse sulla stessa cosa.
  *
- * PERCHE' L'ELENCO VUOTO SPIEGA SE STESSO. Nessuna sorgente di osservazione e'
- * ancora collegata: il browser vieta a un sito di leggere dentro la cornice di
- * un altro sito (misurato: SecurityError su una cornice Scidoo, mentre su una
- * nostra pagina lo stesso codice funziona). Quindi zero righe significa
- * "nessuno sta guardando", non "lo staff non ha fatto nulla". Un vuoto senza
- * spiegazione e' la bugia piu' facile da scrivere.
+ * L'eventuale stato tecnico della sorgente non appartiene a questa schermata:
+ * chi lavora per la struttura deve vedere procedure e risultati, non dettagli
+ * d'infrastruttura o istruzioni destinate a chi amministra la piattaforma.
  */
 
 import useSWR from "swr"
-import { Loader2, ShieldAlert, TriangleAlert } from "lucide-react"
+import { ListChecks, Loader2, TriangleAlert } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -86,22 +83,17 @@ export function ProcedureImparate() {
         ) : error ? (
           <p className="flex items-start gap-2 text-sm text-destructive">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            {"Le procedure non sono leggibili in questo momento. Meglio dirlo che mostrare un elenco vuoto."}
+            {"Non è stato possibile aggiornare l’elenco. Riprova tra qualche minuto."}
           </p>
         ) : procedure.length === 0 ? (
           <div className="flex flex-col gap-3 rounded-md border border-dashed p-4">
             <p className="flex items-center gap-2 text-sm font-medium">
-              <ShieldAlert className="size-4 text-muted-foreground" aria-hidden="true" />
-              {"Nessuna sorgente di osservazione collegata"}
+              <ListChecks className="size-4 text-muted-foreground" aria-hidden="true" />
+              {"Ancora nessuna procedura appresa"}
             </p>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {
-                "L'elenco e' vuoto perche' nessuno sta guardando, non perche' lo staff non abbia fatto nulla. La cornice del gestionale non puo' registrare: il browser vieta a un sito di leggere dentro la cornice di un altro sito, e vale anche per noi."
-              }
-            </p>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {
-                "Per imparare serve un browser comandato dal nostro server, che va acceso su una macchina sempre attiva. Le tabelle e la porta d'ingresso sono pronte: appena la sorgente e' collegata, le procedure appaiono qui."
+                "Quando l’agente riconoscerà una procedura ricorrente, comparirà qui. Non è richiesto alcun intervento da questa schermata."
               }
             </p>
           </div>

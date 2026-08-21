@@ -6,9 +6,9 @@ import { CrmWorkspaceNav } from "@/components/crm/crm-workspace-nav"
 export default async function CrmAreaLayout({ children }: { children: React.ReactNode }) {
   await requireAreaPage("crm")
   return (
-    <div className="min-h-full bg-muted/20">
+    <div data-crm-workspace className="min-h-full bg-muted/20">
       <CrmWorkspaceNav />
-      <div className="mx-auto max-w-[1600px] p-4 sm:p-6">{children}</div>
+      <div data-crm-workspace-content className="mx-auto max-w-[1600px] p-4 sm:p-6">{children}</div>
     </div>
   )
 }
