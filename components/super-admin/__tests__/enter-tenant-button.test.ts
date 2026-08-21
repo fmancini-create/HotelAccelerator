@@ -91,10 +91,24 @@ describe("super-admin: entrare in una struttura", () => {
     )
   })
 
-  it("un fallimento si VEDE: nessun Toaster nell'area super-admin, quindi errore in pagina", () => {
-    const layout = leggi("app/super-admin/layout.tsx")
-    expect(layout, "se ora c'e' un Toaster, si puo' usare un toast e questa prova va rivista").not.toMatch(/Toaster/)
-
+  it("un fallimento si VEDE: l'errore compare in pagina, non solo in console", () => {
+    /*
+     * PROVA RIVISTA, e la versione precedente lo aveva previsto.
+     *
+     * Prima qui si pretendeva l'ASSENZA di un Toaster nell'area super-admin, con
+     * scritto: "se ora c'e' un Toaster, questa prova va rivista". E' successo:
+     * unificando la cornice, l'area super-admin ha ereditato il Toaster che
+     * l'area /admin aveva da sempre — quindi quella riga e' diventata rossa su
+     * codice corretto.
+     *
+     * Il requisito vero non era "non esiste un Toaster": era che un fallimento
+     * si VEDA. Quello resta preteso qui sotto, e in forma piu' solida, perche'
+     * un messaggio in pagina con `role="alert"` non scompare da solo dopo pochi
+     * secondi come farebbe un toast.
+     *
+     * Regola: quando una prova arrossisce, chiedersi se misura il requisito o
+     * una circostanza del momento. Qui misurava la circostanza.
+     */
     const s = leggi(BOTTONE)
     const inizio = s.indexOf("if (!res.ok)")
     expect(inizio, "manca il ramo di errore").toBeGreaterThan(-1)
