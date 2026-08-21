@@ -1,7 +1,28 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { generateReply, type ConversationTurn } from "./generate"
-import { contactIsComplete, registerStaffHandoff } from "./handoff"
+import { registerStaffHandoff } from "./handoff"
+import {
+  contactFullName,
+  contactIsComplete,
+  extractContactDetails,
+  handoffCancelledMessage,
+  handoffContactPrompt,
+  isHandoffCancellation,
+  isStaffHandoffFollowup,
+  mergeHandoffContacts,
+  originalQuestionForHandoff,
+  splitFullName,
+  type HandoffContact,
+} from "./handoff-utils"
+import {
+  cancelCollectingStaffHandoff,
+  getCollectingStaffHandoff,
+  markStaffHandoffRegistered,
+  startCollectingStaffHandoff,
+  updateCollectingStaffHandoff,
+  type StaffHandoffState,
+} from "./staff-handoff-state"
 import { getBasesForChannel, type AiMode } from "./knowledge-bases"
 import { eUnaLacuna, registraLacuna } from "./gaps"
 import {
@@ -101,6 +122,68 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     await registraSegnalazione(supabase, propertyId, conversationId, identita.ambiguita)
   }
 
+  const contattoNoto = contattoDaIdentita(identita)
+
+  // Once the guest has accepted a handoff, the next messages are not ordinary
+  // questions for the model. They are fields of a small, durable workflow. A
+  // browser reload, an LLM variation or a terse answer such as "Filippo
+  // Mancini" must not erase that workflow.
+  if (mode === "autopilot" && send) {
+    try {
+      const collecting = await getCollectingStaffHandoff(supabase, propertyId, conversationId)
+      if (collecting) {
+        return proseguiPassaggioStaff({
+          supabase,
+          propertyId,
+          conversationId,
+          channel,
+          send,
+          incomingText,
+          state: collecting,
+          contattoNoto,
+        })
+      }
+
+      // "Come?" and "sì grazie" are an acceptance only when they follow a
+      // real staff offer. This code check takes precedence over an LLM that
+      // might mistake the two-word follow-up for a new booking request.
+      if (isStaffHandoffFollowup(incomingText, history)) {
+        const state = await startCollectingStaffHandoff({
+          supabase,
+          propertyId,
+          conversationId,
+          channel,
+          originalQuestion: originalQuestionForHandoff(history, incomingText),
+          contact: mergeHandoffContacts(contattoNoto, extractContactDetails(incomingText)),
+        })
+        return proseguiPassaggioStaff({
+          supabase,
+          propertyId,
+          conversationId,
+          channel,
+          send,
+          incomingText,
+          state,
+          contattoNoto,
+        })
+      }
+    } catch (err) {
+      // Do not continue with a generated sentence that could claim a handoff.
+      // The caller has already saved the guest message; a clear operational
+      // error is safer than inventing that the staff was alerted.
+      console.log(`[v0] lettura passaggio allo staff fallita: ${err instanceof Error ? err.message : String(err)}`)
+      return inviaRispostaAutopilot({
+        supabase,
+        propertyId,
+        conversationId,
+        channel,
+        send,
+        testo: "Mi dispiace, al momento non riesco ad avviare la richiesta per lo staff. Può riprovare tra poco?",
+        metadata: { ai_handoff_error: "state_unavailable" },
+      })
+    }
+  }
+
   const result = await generateReply(
     {
       baseIds,
@@ -144,19 +227,52 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     console.log(`[v0] registrazione lacuna fallita: ${err instanceof Error ? err.message : String(err)}`)
   }
 
+  // The model is still useful for detecting a direct, explicit request (for
+  // example "preferisco parlare con qualcuno"), but it is not allowed to own
+  // the state transition. From here on the durable record drives every reply.
+  if (mode === "autopilot" && send && result.handoffIntent === "requested") {
+    try {
+      const state = await startCollectingStaffHandoff({
+        supabase,
+        propertyId,
+        conversationId,
+        channel,
+        originalQuestion: originalQuestionForHandoff(history, incomingText),
+        contact: mergeHandoffContacts(contattoNoto, result.contact, extractContactDetails(incomingText)),
+      })
+      return proseguiPassaggioStaff({
+        supabase,
+        propertyId,
+        conversationId,
+        channel,
+        send,
+        incomingText,
+        state,
+        contattoNoto,
+      })
+    } catch (err) {
+      console.log(`[v0] avvio passaggio allo staff fallito: ${err instanceof Error ? err.message : String(err)}`)
+      return inviaRispostaAutopilot({
+        supabase,
+        propertyId,
+        conversationId,
+        channel,
+        send,
+        testo: "Mi dispiace, al momento non riesco a registrare la richiesta per lo staff. Può riprovare tra poco?",
+        metadata: { ai_handoff_error: "start_failed" },
+      })
+    }
+  }
+
   if (!result.answer) {
     // No confident answer from the knowledge base. In autopilot mode we send a
     // brief courtesy/handoff message instead of staying silent, so the guest is
     // never left without a reply. In on_request mode we stay silent because an
     // operator already sees the conversation and will answer.
     if (mode === "autopilot" && send) {
-      // This text must not claim the request was forwarded: in this branch no
-      // handoff has been registered, so "ho inoltrato la richiesta" would be
-      // false. It asks for the details that make a real handoff possible.
-      // Il testo predefinito chiedeva sempre "nome, cognome, email e telefono",
-      // anche a chi scriveva da un numero noto e con l'anagrafica in rubrica.
-      // Si chiedono solo i dati che mancano davvero.
-      const fallback = primary.fallback_message?.trim() || testoRipiego(identita.datiNoti)
+      // This text is only an offer. Asking for personal details here without a
+      // persistent handoff state is what caused the screenshoted context loss.
+      const fallback = testoRipiego()
       let externalId: string | undefined
       try {
         const sendResult = await send(fallback)
@@ -256,7 +372,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   }
 
   let handoffMeta: Record<string, unknown> | undefined
-  if (result.staffRequested && contactIsComplete(contattoCompleto)) {
+  if (mode === "on_request" && result.handoffIntent === "requested" && contactIsComplete(contattoCompleto)) {
     const handoff = await registerStaffHandoff({
       supabase,
       propertyId,
@@ -367,26 +483,174 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
 }
 
 /**
- * Testo di ripiego, con le sole domande necessarie.
- *
- * Non promette mai che la richiesta e' stata inoltrata: in questo ramo nessun
- * passaggio allo staff e' stato registrato.
+ * A fallback may offer the staff, but it must not ask for personal data until
+ * the visitor explicitly accepts. The accepting message creates durable state.
  */
-function testoRipiego(datiNoti: DatiNoti | null): string {
-  const mancano: string[] = []
-  if (!datiNoti?.nome) mancano.push("il suo nome e cognome")
-  if (!datiNoti?.email) mancano.push("un'email")
+function testoRipiego(): string {
+  return "Mi dispiace, non ho questa informazione disponibile qui. Se desidera, posso metterla in contatto con il nostro staff."
+}
 
-  const apertura = "Grazie per il messaggio! Su questa richiesta preferisco farla rispondere direttamente dal nostro staff"
+function contattoDaIdentita(identita: Identita): HandoffContact {
+  return mergeHandoffContacts(splitFullName(identita.datiNoti?.nome), {
+    email: identita.datiNoti?.email ?? null,
+    phone: identita.numero ?? identita.datiNoti?.numero ?? null,
+  })
+}
 
-  if (mancano.length === 0) {
-    // Nome ed email note e numero noto: non c'e' nulla da chiedere.
-    return `${apertura}. Ho tutto quello che serve per farla ricontattare.`
+type AutopilotSender = (text: string) => Promise<{ externalId?: string } | void>
+
+async function inviaRispostaAutopilot(args: {
+  supabase: SupabaseClient
+  propertyId: string
+  conversationId: string
+  channel: AiChannel
+  send: AutopilotSender
+  testo: string
+  metadata: Record<string, unknown>
+}): Promise<RunAutopilotResult> {
+  let externalId: string | undefined
+  try {
+    const sendResult = await args.send(args.testo)
+    externalId = sendResult?.externalId
+  } catch (err) {
+    console.log(`[v0] invio risposta passaggio staff fallito: ${err instanceof Error ? err.message : String(err)}`)
+    return { action: "skipped", reason: "send_failed" }
   }
-  if (datiNoti?.email && datiNoti.daAnagraficaEsistente) {
-    return `${apertura}: mi confermate ${mancano.join(" e ")}? Le risulta l'email ${datiNoti.email}.`
+
+  const { data, error } = await args.supabase
+    .from("messages")
+    .insert({
+      property_id: args.propertyId,
+      conversation_id: args.conversationId,
+      sender_type: "agent",
+      content: args.testo,
+      content_type: "text",
+      status: "sent",
+      external_message_id: externalId ?? null,
+      stored_at: new Date().toISOString(),
+      metadata: {
+        channel: args.channel,
+        ai_generated: true,
+        ai_autopilot: true,
+        ...args.metadata,
+      },
+    })
+    .select("id")
+    .single()
+
+  if (error) {
+    // The guest already received the reply. The state row still protects the
+    // next turn, while the missing log remains visible in runtime logs.
+    console.log(`[v0] log risposta passaggio staff fallito: ${error.message}`)
+  } else {
+    await args.supabase
+      .from("conversations")
+      .update({ last_message_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq("id", args.conversationId)
+      .eq("property_id", args.propertyId)
   }
-  return `${apertura}: può indicarmi ${mancano.join(" e ")} così li faccio ricontattare?`
+
+  return { action: "sent", messageId: data?.id }
+}
+
+async function proseguiPassaggioStaff(args: {
+  supabase: SupabaseClient
+  propertyId: string
+  conversationId: string
+  channel: AiChannel
+  send: AutopilotSender
+  incomingText: string
+  state: StaffHandoffState
+  contattoNoto: HandoffContact
+}): Promise<RunAutopilotResult> {
+  const { supabase, propertyId, conversationId, channel, send, incomingText, state, contattoNoto } = args
+
+  if (isHandoffCancellation(incomingText)) {
+    await cancelCollectingStaffHandoff(supabase, state)
+    return inviaRispostaAutopilot({
+      supabase,
+      propertyId,
+      conversationId,
+      channel,
+      send,
+      testo: handoffCancelledMessage(),
+      metadata: { ai_handoff: true, ai_handoff_status: "cancelled", ai_handoff_id: state.id },
+    })
+  }
+
+  // Persist first, then compose the reply. If delivery fails the collected
+  // fields remain available for a retry and are never entrusted to model memory.
+  const contatto = mergeHandoffContacts(state.contact, contattoNoto, extractContactDetails(incomingText))
+  const aggiornato = await updateCollectingStaffHandoff(supabase, state, contatto)
+
+  if (!contactIsComplete(aggiornato.contact)) {
+    return inviaRispostaAutopilot({
+      supabase,
+      propertyId,
+      conversationId,
+      channel,
+      send,
+      testo: handoffContactPrompt(aggiornato.contact),
+      metadata: { ai_handoff: true, ai_handoff_status: "collecting", ai_handoff_id: aggiornato.id },
+    })
+  }
+
+  const handoff = await registerStaffHandoff({
+    supabase,
+    propertyId,
+    conversationId,
+    channel,
+    contact: aggiornato.contact,
+    question: aggiornato.originalQuestion,
+  })
+
+  if (!handoff.registered) {
+    return inviaRispostaAutopilot({
+      supabase,
+      propertyId,
+      conversationId,
+      channel,
+      send,
+      testo: "Grazie, ho raccolto i dati. Al momento non riesco però a registrare la richiesta per lo staff: può riprovare tra poco?",
+      metadata: {
+        ai_handoff: true,
+        ai_handoff_status: "collecting",
+        ai_handoff_id: aggiornato.id,
+        ai_handoff_registered: false,
+        ai_handoff_errors: handoff.errors.length > 0 ? handoff.errors : null,
+      },
+    })
+  }
+
+  let statoAggiornato = true
+  try {
+    await markStaffHandoffRegistered(supabase, aggiornato, handoff.todoId, handoff.manubotTaskId)
+  } catch (err) {
+    // A durable todo/flag already exists. Keep the promise honest and leave the
+    // row collecting so the next message can reconcile its status safely.
+    statoAggiornato = false
+    console.log(`[v0] conferma stato passaggio staff fallita: ${err instanceof Error ? err.message : String(err)}`)
+  }
+
+  const nome = contactFullName(aggiornato.contact)
+  return inviaRispostaAutopilot({
+    supabase,
+    propertyId,
+    conversationId,
+    channel,
+    send,
+    testo: `Grazie${nome ? ` ${nome}` : ""}. Ho passato la sua richiesta al nostro staff, che la ricontatterà al più presto.`,
+    metadata: {
+      ai_handoff: true,
+      ai_handoff_status: statoAggiornato ? "registered" : "registered_pending_state_sync",
+      ai_handoff_id: aggiornato.id,
+      ai_handoff_registered: true,
+      ai_handoff_already_open: handoff.alreadyOpen,
+      ai_handoff_todo_id: handoff.todoId ?? null,
+      ai_handoff_manubot_task_id: handoff.manubotTaskId ?? null,
+      ai_handoff_errors: handoff.errors.length > 0 ? handoff.errors : null,
+    },
+  })
 }
 
 interface Identita {

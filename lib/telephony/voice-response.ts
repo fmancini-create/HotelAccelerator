@@ -37,7 +37,7 @@ export function buildVoiceResponse(
   fallbackMessage?: string | null,
 ): VoiceResponseDecision {
   let reason: VoiceTransferReason = "none"
-  if (result.staffRequested) reason = "staff_requested"
+  if (result.handoffIntent === "requested") reason = "staff_requested"
   else if (!result.answer) reason = "no_answer"
   else if (!result.grounded && !result.greetingOnly) reason = "not_grounded"
 

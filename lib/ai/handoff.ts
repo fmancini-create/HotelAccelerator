@@ -1,6 +1,10 @@
 import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getManubotClient } from "@/lib/manubot"
+import { contactFullName, type HandoffContact } from "./handoff-utils"
+
+export { contactFullName, contactIsComplete } from "./handoff-utils"
+export type { HandoffContact } from "./handoff-utils"
 
 /**
  * Staff handoff: turning "la metto in contatto con lo staff" into something real.
@@ -14,13 +18,6 @@ import { getManubotClient } from "@/lib/manubot"
  *
  * The caller must only keep the promise when `registered` is true.
  */
-
-export interface HandoffContact {
-  firstName?: string | null
-  lastName?: string | null
-  email?: string | null
-  phone?: string | null
-}
 
 export interface RegisterHandoffArgs {
   supabase: SupabaseClient
@@ -47,24 +44,6 @@ export interface RegisterHandoffResult {
 const clean = (v?: string | null): string | null => {
   const t = v?.trim()
   return t ? t : null
-}
-
-/**
- * A handoff is only worth creating when the staff can actually reach the guest.
- * Name and surname identify the request; email or phone is how they answer.
- * Telegram/WhatsApp handles are not a substitute: they may not be reachable by
- * whoever picks the task up in ManuBot.
- */
-export function contactIsComplete(contact: HandoffContact): boolean {
-  const hasName = Boolean(clean(contact.firstName)) && Boolean(clean(contact.lastName))
-  const hasReplyChannel = Boolean(clean(contact.email)) || Boolean(clean(contact.phone))
-  return hasName && hasReplyChannel
-}
-
-/** Human-readable "Mario Rossi", or null when we have neither part. */
-export function contactFullName(contact: HandoffContact): string | null {
-  const parts = [clean(contact.firstName), clean(contact.lastName)].filter(Boolean)
-  return parts.length > 0 ? parts.join(" ") : null
 }
 
 export async function registerStaffHandoff(args: RegisterHandoffArgs): Promise<RegisterHandoffResult> {

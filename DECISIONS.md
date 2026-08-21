@@ -126,6 +126,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: dopo che un superadmin cambia azienda, HotelAccelerator esegue una navigazione completa del browser. `router.refresh()` non e' sufficiente per questo confine, perche' Next.js conserva lo stato dei Client Component.
 - Conseguenza: nessuna pagina puo' mantenere in memoria righe, selezioni o impostazioni del tenant precedente. Le pagine client leggono inoltre il tenant attivo da `/api/platform/me`; non fanno prevalere associazioni legacy presenti in `admin_users`.
 
+## ADR-021 — Il passaggio IA → staff e' un workflow durevole
+
+- Stato: accettata
+- Decisione: l'offerta di contatto dello staff e l'accettazione dell'ospite sono eventi distinti. Solo un'accettazione esplicita apre un record tenant-scoped in `conversation_staff_handoffs`; nome, recapito, domanda iniziale, annullamento e registrazione della richiesta vivono nel record, non nella memoria del modello.
+- Conseguenza: messaggi brevi come “come?” o un nome inviato in un turno successivo non possono perdere il contesto. L'assistente conferma l'inoltro solo dopo che esiste una traccia operativa durevole (todo o segnalazione inbox); una registrazione fallita resta esplicita e non viene presentata come presa in carico.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.
