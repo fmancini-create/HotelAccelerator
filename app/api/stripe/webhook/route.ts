@@ -114,6 +114,13 @@ async function handleCheckoutCompleted(
         const { error } = await supabase.from("properties").update(fiscalUpdate).eq("id", propertyId)
         if (error) console.error("[Stripe Webhook] Fiscal data update failed:", error)
       }
+
+      const fiscalMetadata: Record<string, string> = {}
+      if (fiscalUpdate.billing_sdi) fiscalMetadata.codice_sdi = fiscalUpdate.billing_sdi
+      if (fiscalUpdate.billing_pec) fiscalMetadata.pec = fiscalUpdate.billing_pec
+      if (Object.keys(fiscalMetadata).length > 0) {
+        await stripe.customers.update(customer.id, { metadata: fiscalMetadata })
+      }
     }
   }
 
