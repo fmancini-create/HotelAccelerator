@@ -35,7 +35,7 @@ const items = [
 export function CrmWorkspaceNav() {
   const pathname = usePathname() || ""
   return (
-    <nav className="border-b bg-white px-4 sm:px-6" aria-label="Sezioni CRM">
+    <nav data-crm-workspace-nav className="border-b bg-white px-4 sm:px-6" aria-label="Sezioni CRM">
       <div className="mx-auto flex max-w-[1600px] gap-1 overflow-x-auto py-2">
         {items.map((item) => {
           const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)

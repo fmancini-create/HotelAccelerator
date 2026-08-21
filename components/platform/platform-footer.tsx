@@ -27,7 +27,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { PlatformFooter as CompanyFooter } from "@/components/platform-footer"
-import { isFullHeightAdminPage } from "@/components/platform/platform-chrome-routes"
+import { isFullHeightAdminPage, isImmersiveAdminPage } from "@/components/platform/platform-chrome-routes"
 
 /**
  * Footer completo con dati societari, mostrato su tutte le pagine interne
@@ -45,7 +45,7 @@ import { isFullHeightAdminPage } from "@/components/platform/platform-chrome-rou
 export function PlatformFooter() {
   const pathname = usePathname() || ""
 
-  if (isFullHeightAdminPage(pathname)) return null
+  if (isFullHeightAdminPage(pathname) || isImmersiveAdminPage(pathname)) return null
 
   return <CompanyFooter />
 }
@@ -60,7 +60,7 @@ export function PlatformFooterBar() {
   const pathname = usePathname() || ""
   const year = new Date().getFullYear()
 
-  if (!isFullHeightAdminPage(pathname)) return null
+  if (!isFullHeightAdminPage(pathname) || isImmersiveAdminPage(pathname)) return null
 
   return (
     <footer

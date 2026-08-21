@@ -69,6 +69,7 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 - [ ] Analisi conversazioni: intenti, richieste, sentiment, qualità, conversione e insight aggregati di mercato.
 - [ ] CMS/sito AI-first, multilingua, SEO/GEO e hosting.
 - [ ] Booking widget con disponibilità, preventivo, pagamento, alternative, extra e integrazione PMS.
+- [ ] Collegare al PMS incorporato una sorgente di osservazione persistente e autenticata. L'iframe tenant e la porta di raccolta sono pronti; Vercel Sandbox e' effimero e non sostituisce un browser remoto sempre attivo.
 - [ ] Tracking, attribuzione, consenso e recupero abbandoni.
 
 ## Fase 5 — Marketing Hub

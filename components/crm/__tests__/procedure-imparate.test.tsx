@@ -65,4 +65,10 @@ describe("procedure imparate: una decisione umana non si conta", () => {
     expect(sorgente).toContain("prima di poter agire da sola")
     expect(sorgente).toContain("Ha raggiunto la soglia")
   })
+
+  it("non espone dettagli tecnici alla struttura", () => {
+    expect(sorgente).toContain("Ancora nessuna procedura appresa")
+    expect(sorgente).not.toContain("Nessuna sorgente di osservazione collegata")
+    expect(sorgente).not.toContain("browser comandato dal nostro server")
+  })
 })

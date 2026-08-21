@@ -22,6 +22,8 @@ export interface CallerIdentity {
   userId: string
   adminUserId: string | null
   email: string
+  /** Nome leggibile, quando esiste una scheda operatore nel tenant. */
+  fullName?: string
   propertyId: string | null
   role: string | null
   isSuperAdmin: boolean
@@ -66,6 +68,7 @@ export async function getCallerIdentity(request?: NextRequest): Promise<CallerId
       userId: "dev-user-id",
       adminUserId: "dev-admin-id",
       email: "dev@hotelaccelerator.local",
+      fullName: "Dev Admin",
       propertyId: DEV_PROPERTY_ID,
       role: "admin",
       isSuperAdmin: true,
@@ -96,6 +99,7 @@ export async function getCallerIdentity(request?: NextRequest): Promise<CallerId
       userId: user.id,
       adminUserId: null,
       email: user.email,
+      fullName: user.email,
       propertyId: override ?? null,
       role: "super_admin",
       isSuperAdmin: true,
@@ -107,7 +111,7 @@ export async function getCallerIdentity(request?: NextRequest): Promise<CallerId
   // 2. Tenant member (admin or not).
   const { data: adminUser } = await supabase
     .from("admin_users")
-    .select("id, property_id, role, is_tenant_admin, can_manage_users")
+    .select("id, property_id, role, name, is_tenant_admin, can_manage_users")
     .eq("email", user.email)
     .maybeSingle()
 
@@ -117,6 +121,7 @@ export async function getCallerIdentity(request?: NextRequest): Promise<CallerId
     userId: user.id,
     adminUserId: adminUser.id,
     email: user.email,
+    fullName: adminUser.name ?? user.email,
     propertyId: adminUser.property_id,
     role: adminUser.role,
     isSuperAdmin: false,

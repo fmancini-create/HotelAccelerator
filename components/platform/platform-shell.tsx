@@ -33,7 +33,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
     // `bg-muted/40` rather than a literal #f9fafb: same near-white page
     // surface as Santaddeo's shell, but expressed as a token so it follows the
     // theme instead of drifting from it.
-    <div className="h-[100dvh] flex flex-col bg-muted/40 overflow-hidden">
+    <div data-platform-shell className="h-[100dvh] flex flex-col bg-muted/40 overflow-hidden">
       <PlatformHeader />
       <main className="flex-1 min-h-0 overflow-auto bg-white">
         {children}
