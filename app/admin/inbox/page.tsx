@@ -698,6 +698,10 @@ export default function InboxPage() {
   const [attachments, setAttachments] = useState<File[]>([])
 
   // ── Refs ──
+  // Lo storico e il compositore devono restare due aree indipendenti: quando
+  // una risposta e' lunga, l'operatore deve poter rileggere il messaggio senza
+  // chiudere o perdere la bozza che sta preparando.
+  const messagesListRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -3197,10 +3201,10 @@ export default function InboxPage() {
             inCorso={passaggioInCorso}
             onRispondi={handleRispondiPassaggio}
           />
-          <div className="relative flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full">
+          <div className="relative flex-1 min-h-0 overflow-hidden w-full max-w-full">
             {(selectedGmailThread || selectedConversation) ? (
               /* ═══════════ DETAIL VIEW (inline, Gmail-style) ═══════════ */
-              <div className="flex flex-col h-full">
+              <div className="flex flex-col h-full min-h-0">
                 {/* Subject header */}
                 <div className="px-6 py-4 border-b border-border overflow-hidden">
                   <div className="flex items-start justify-between gap-3">
@@ -3319,7 +3323,11 @@ export default function InboxPage() {
                 </div>
 
                 {/* Messages list */}
-                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 w-full">
+                <div
+                  ref={messagesListRef}
+                  id="conversation-history"
+                  className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 w-full"
+                >
                   {gmailThreadLoading || (inboxMode === "smart" && isLoading) ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -3381,7 +3389,7 @@ export default function InboxPage() {
 
                 {/* Action buttons (Gmail-style) OR Reply box */}
                 {showReplyBox ? (
-                  <div className="flex-shrink-0 px-6 py-4 border-t bg-card">
+                  <div className="flex-shrink-0 max-h-[50%] overflow-y-auto px-6 py-4 border-t bg-card">
                     <div className="bg-card rounded-lg border border-border overflow-hidden">
                       {/* Recipients header (Gmail-style) */}
                       <div className="border-b border-border">
@@ -3398,6 +3406,15 @@ export default function InboxPage() {
                             className="flex-1 text-sm outline-none bg-transparent placeholder:text-muted-foreground"
                           />
                           <div className="flex items-center gap-1 text-xs">
+                            <button
+                              type="button"
+                              onClick={() => messagesListRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+                              className="mr-2 text-muted-foreground hover:text-foreground px-1"
+                              title="Vai al primo messaggio della conversazione"
+                              aria-controls="conversation-history"
+                            >
+                              Rileggi conversazione
+                            </button>
                             {!showCcField && (
                               <button
                                 type="button"
