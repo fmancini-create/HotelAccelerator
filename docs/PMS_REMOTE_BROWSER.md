@@ -10,9 +10,10 @@ La pagina `/admin/crm/pms-sync/gestionale` apre il PMS in una macchina Browserba
 
 1. La route verifica area CRM e tenant dal server; il client non sceglie `property_id`.
 2. Ogni struttura usa un Browserbase Context distinto, che conserva cookie e login cifrati dal provider.
-3. La prima apertura crea la sessione, raggiunge l'indirizzo HTTPS salvato in `pms_browser_configs.web_url` e restituisce soltanto la Live View firmata.
+3. La prima apertura crea una sessione 1920×1080, collega Puppeteer senza sovrascriverne il viewport, raggiunge l'indirizzo HTTPS salvato in `pms_browser_configs.web_url` e restituisce soltanto la Live View firmata.
 4. Uscendo dalla pagina la sessione viene rilasciata. Il Context resta disponibile per evitare un nuovo login alla sessione successiva.
-5. Se Browserbase non risponde, la pagina usa la cornice diretta gia' disponibile: lo staff puo' continuare a lavorare, mentre l'errore tecnico resta nei log server.
+5. La Live View e' fissata all'intera finestra. Il layout CRM non ne limita larghezza o altezza; soltanto la barra globale puo' sovrapporsi quando il puntatore raggiunge il bordo superiore.
+6. Se Browserbase non risponde, la pagina usa la cornice diretta gia' disponibile: lo staff puo' continuare a lavorare, mentre l'errore tecnico resta nei log server.
 
 ## Piani e durata
 

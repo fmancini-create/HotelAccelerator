@@ -9,6 +9,7 @@ import { Send, MessagesSquare, Mail, Loader2, ArrowUp, ArrowDown, X, Plus, Star 
 
 export interface ChannelRow {
   id: string
+  source: "messaging" | "email"
   channel_type: string
   display_name: string | null
   is_active: boolean
@@ -38,20 +39,29 @@ export function ChannelBasesAssignment({
   description?: ReactNode
 }) {
   const [channels, setChannels] = useState<ChannelRow[]>(initialChannels)
-  const [savingId, setSavingId] = useState<string | null>(null)
+  const [savingKey, setSavingKey] = useState<string | null>(null)
   const baseName = (id: string) => bases.find((b) => b.id === id)?.name ?? "Base rimossa"
 
-  const setChannelBaseIds = (channelId: string, baseIds: string[]) =>
-    setChannels((prev) => prev.map((c) => (c.id === channelId ? { ...c, baseIds } : c)))
+  const setChannelBaseIds = (channel: ChannelRow, baseIds: string[]) =>
+    setChannels((previous) =>
+      previous.map((candidate) =>
+        candidate.id === channel.id && candidate.source === channel.source ? { ...candidate, baseIds } : candidate,
+      ),
+    )
 
   const save = async (channel: ChannelRow) => {
-    setSavingId(channel.id)
+    const channelKey = `${channel.source}:${channel.id}`
+    setSavingKey(channelKey)
     try {
       const res = await fetch("/api/admin/ai/channels", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ channelId: channel.id, baseIds: channel.baseIds }),
+        body: JSON.stringify({
+          channelId: channel.id,
+          channelSource: channel.source,
+          baseIds: channel.baseIds,
+        }),
       })
       if (!res.ok) throw new Error((await res.json()).error || "Errore di salvataggio")
       toast({ title: "Canale aggiornato", description: "Le basi collegate sono state salvate." })
@@ -62,7 +72,7 @@ export function ChannelBasesAssignment({
         variant: "destructive",
       })
     } finally {
-      setSavingId(null)
+      setSavingKey(null)
     }
   }
 
@@ -93,7 +103,10 @@ export function ChannelBasesAssignment({
           const Icon = meta.icon
           const available = bases.filter((b) => !channel.baseIds.includes(b.id))
           return (
-            <div key={channel.id} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+            <div
+              key={`${channel.source}:${channel.id}`}
+              className="flex flex-col gap-3 rounded-lg border border-border p-4"
+            >
               <div className="flex items-center gap-2">
                 <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                   <Icon className="h-5 w-5" />
@@ -143,7 +156,7 @@ export function ChannelBasesAssignment({
                         onClick={() => {
                           const next = [...channel.baseIds]
                           ;[next[index - 1], next[index]] = [next[index], next[index - 1]]
-                          setChannelBaseIds(channel.id, next)
+                          setChannelBaseIds(channel, next)
                         }}
                         title="Sposta su"
                       >
@@ -157,7 +170,7 @@ export function ChannelBasesAssignment({
                         onClick={() => {
                           const next = [...channel.baseIds]
                           ;[next[index + 1], next[index]] = [next[index], next[index + 1]]
-                          setChannelBaseIds(channel.id, next)
+                          setChannelBaseIds(channel, next)
                         }}
                         title="Sposta giù"
                       >
@@ -168,10 +181,7 @@ export function ChannelBasesAssignment({
                         size="icon"
                         className="h-8 w-8 text-ha-danger-soft-foreground"
                         onClick={() =>
-                          setChannelBaseIds(
-                            channel.id,
-                            channel.baseIds.filter((id) => id !== baseId),
-                          )
+                          setChannelBaseIds(channel, channel.baseIds.filter((id) => id !== baseId))
                         }
                         title="Rimuovi"
                       >
@@ -192,7 +202,7 @@ export function ChannelBasesAssignment({
                         variant="outline"
                         size="sm"
                         className="bg-transparent"
-                        onClick={() => setChannelBaseIds(channel.id, [...channel.baseIds, b.id])}
+                        onClick={() => setChannelBaseIds(channel, [...channel.baseIds, b.id])}
                       >
                         <Plus className="mr-1 h-3.5 w-3.5" />
                         {b.name}
@@ -207,10 +217,12 @@ export function ChannelBasesAssignment({
                 <Button
                   size="sm"
                   onClick={() => save(channel)}
-                  disabled={savingId === channel.id}
+                  disabled={savingKey === `${channel.source}:${channel.id}`}
                   className="bg-primary text-primary-foreground hover:bg-primary/90"
                 >
-                  {savingId === channel.id && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {savingKey === `${channel.source}:${channel.id}` && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   Salva canale
                 </Button>
               </div>

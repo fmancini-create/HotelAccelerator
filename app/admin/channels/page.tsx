@@ -567,18 +567,20 @@ export default function ChannelsPage() {
                 )
               })}
             </div>
+
+            {category.id === "messaging" && (
+              <section id="basi-conoscenza" className="mt-6 scroll-mt-24">
+                <div className="mb-4">
+                  <h2 className="text-xl font-medium text-foreground">Assistente IA</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Associa ogni account Email, numero WhatsApp o bot Telegram alla base di conoscenza che deve usare.
+                  </p>
+                </div>
+                <ChannelKnowledgeAssignment />
+              </section>
+            )}
           </div>
         ))}
-
-        <section id="basi-conoscenza" className="mb-8 scroll-mt-24">
-          <div className="mb-4">
-            <h2 className="text-xl font-medium text-foreground">Assistente IA</h2>
-            <p className="text-sm text-muted-foreground">
-              Decidi quali informazioni deve usare l&apos;assistente su ciascun canale.
-            </p>
-          </div>
-          <ChannelKnowledgeAssignment />
-        </section>
 
         {/* Help Section */}
         <Card className="bg-gradient-to-r from-primary to-ha-brand border-0">

@@ -114,6 +114,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: le pagine client leggono ruolo, operatore e tenant attivo da `/api/platform/me`; le pagine server usano `getCallerIdentity`/`getAuthenticatedPropertyId`, che leggono anche il cookie del tenant selezionato quando non ricevono un `NextRequest`.
 - Conseguenza: l'assenza di una riga `admin_users` non disconnette più un superadmin. `platform_collaborators` resta la fonte del ruolo globale, `admin_users` quella dei ruoli tenant e il contesto selezionato resta esplicito.
 
+## ADR-019 — Le basi IA seguono l'identità reale di ciascun canale
+
+- Stato: accettata
+- Decisione: gli account email restano in `email_channels` e usano `email_channel_knowledge_bases`; i canali di messaggistica e i widget restano in `messaging_channels` e usano `channel_knowledge_bases`. La UI presenta un elenco unico ma invia sempre anche il tipo di sorgente.
+- Conseguenza: ogni relazione mantiene una foreign key reale e viene verificata lato server contro il tenant attivo. Non si usano identificativi polimorfici senza vincolo e il motore IA risolve la base dalla tabella proprietaria del canale.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

@@ -132,8 +132,7 @@
 }
 
 html[data-pms-menu-visible="true"] [data-platform-header][data-immersive="true"],
-[data-platform-header][data-immersive="true"]:focus-within,
-[data-platform-header][data-immersive="true"]:hover {
+[data-platform-header][data-immersive="true"]:focus-within {
   transform: translateY(0);
 }
 
