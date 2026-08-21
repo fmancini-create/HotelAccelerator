@@ -4,6 +4,14 @@ import { getChannelAccess, getAccessibleChannelIds } from "@/lib/channel-access"
 import { EmailChannelService } from "@/lib/platform-services"
 import { handleServiceError } from "@/lib/errors"
 
+export const dynamic = "force-dynamic"
+
+function privateJson(body: unknown) {
+  return NextResponse.json(body, {
+    headers: { "Cache-Control": "private, no-store, max-age=0" },
+  })
+}
+
 /**
  * SECURITY: i segreti del canale email (token OAuth, password SMTP) non devono
  * MAI raggiungere il client. Questo serializer rimuove i campi sensibili dalla
@@ -44,15 +52,15 @@ export async function GET(request: NextRequest) {
 
     // A non-admin member only sees the mailboxes assigned to them.
     if (!access.isAdmin) {
-      if (!access.adminUserId) return NextResponse.json({ channels: [] })
+      if (!access.adminUserId) return privateJson({ channels: [] })
       const { emailChannelIds } = await getAccessibleChannelIds(supabase, propertyId, access.adminUserId)
       const allowed = new Set(emailChannelIds)
-      return NextResponse.json({
+      return privateJson({
         channels: (channels || []).filter((c: { id: string }) => allowed.has(c.id)).map(serializeEmailChannel),
       })
     }
 
-    return NextResponse.json({ channels: (channels || []).map(serializeEmailChannel) })
+    return privateJson({ channels: (channels || []).map(serializeEmailChannel) })
   } catch (error) {
     return handleServiceError(error)
   }

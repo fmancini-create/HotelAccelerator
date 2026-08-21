@@ -10,13 +10,14 @@
  *  - role "none": renders nothing (hidden)
  *
  * Source of truth: GET /api/platform/me. Switch action: POST /api/platform/switch-tenant.
- * After a successful switch the whole app is re-rendered (router.refresh + mutate)
- * so every SWR cache (scoped by tenant) reloads against the new property_id.
+ * After a successful switch the browser performs a full reload. This is an
+ * intentional security boundary: Next.js router.refresh() preserves Client
+ * Component state, which can otherwise keep rows from the previous tenant on
+ * screen even after the active-property cookie has changed.
  */
 
 import { useState } from "react"
-import useSWR, { mutate as globalMutate } from "swr"
-import { useRouter } from "next/navigation"
+import useSWR from "swr"
 import { Building2, Check, ChevronsUpDown, Loader2 } from "lucide-react"
 import {
   DropdownMenu,
@@ -46,8 +47,7 @@ const fetcher = async (url: string): Promise<PlatformMe> => {
 }
 
 export function TenantSwitcher() {
-  const router = useRouter()
-  const { data, isLoading, mutate } = useSWR<PlatformMe>("/api/platform/me", fetcher, {
+  const { data, isLoading } = useSWR<PlatformMe>("/api/platform/me", fetcher, {
     revalidateOnFocus: false,
   })
   const [switching, setSwitching] = useState(false)
@@ -95,11 +95,11 @@ export function TenantSwitcher() {
         console.error("[v0] switch-tenant failed", await res.text())
         return
       }
-      await mutate()
-      // Invalidate every SWR cache (most keys are tenant-scoped).
-      await globalMutate(() => true, undefined, { revalidate: true })
-      router.refresh()
       setOpen(false)
+      // `router.refresh()` aggiorna i Server Component ma conserva useState
+      // nei Client Component. Un cambio tenant deve invece eliminare anche
+      // caselle email, contatti e altre righe gia' presenti in memoria.
+      window.location.reload()
     } finally {
       setSwitching(false)
     }

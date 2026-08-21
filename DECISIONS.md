@@ -120,6 +120,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: gli account email restano in `email_channels` e usano `email_channel_knowledge_bases`; i canali di messaggistica e i widget restano in `messaging_channels` e usano `channel_knowledge_bases`. La UI presenta un elenco unico ma invia sempre anche il tipo di sorgente.
 - Conseguenza: ogni relazione mantiene una foreign key reale e viene verificata lato server contro il tenant attivo. Non si usano identificativi polimorfici senza vincolo e il motore IA risolve la base dalla tabella proprietaria del canale.
 
+## ADR-020 — Il cambio tenant elimina tutto lo stato client precedente
+
+- Stato: accettata
+- Decisione: dopo che un superadmin cambia azienda, HotelAccelerator esegue una navigazione completa del browser. `router.refresh()` non e' sufficiente per questo confine, perche' Next.js conserva lo stato dei Client Component.
+- Conseguenza: nessuna pagina puo' mantenere in memoria righe, selezioni o impostazioni del tenant precedente. Le pagine client leggono inoltre il tenant attivo da `/api/platform/me`; non fanno prevalere associazioni legacy presenti in `admin_users`.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

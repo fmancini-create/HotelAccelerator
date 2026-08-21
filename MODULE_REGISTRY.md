@@ -16,7 +16,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 
 | Area | Funzioni incluse | Stato baseline | Evidenza/azione richiesta |
 |---|---|---|---|
-| Core e tenant | Strutture, utenti, ruoli, permessi, catalogo moduli, dashboard, super-admin | Da verificare | Audit auth, RLS, server authorization e tenant isolation |
+| Core e tenant | Strutture, utenti, ruoli, permessi, catalogo moduli, dashboard, super-admin | Da verificare | Cambio tenant del superadmin con reload completo e pagina Email vincolata a `/api/platform/me`; completare audit auth, RLS, server authorization e test di isolamento sulle altre sezioni |
 | Accesso suite | Login unico, SSO, tenant context, accesso per ruolo/modulo/abbonamento | Specifica | Verificare flussi e contratti tra prodotti |
 | Inbox email Gmail | OAuth, lettura diretta, import incrementale, Pub/Sub, poll di fallback, label e riconciliazione stato | Tenant reale | Villa I Barronci verificata; completare test di recovery, autenticazione webhook, osservabilità e modello Sent/KPI prima di promuovere lo stato |
 | Inbox omnicanale | Gmail, Outlook, IMAP/SMTP, WhatsApp, Telegram, Instagram, Facebook, sito, booking, OTA, 3CX | Specifica | Inventariare connettori reali e mock |

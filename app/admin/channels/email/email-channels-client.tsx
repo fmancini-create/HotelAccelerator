@@ -205,80 +205,67 @@ export default function EmailChannelsClient() {
     }
   }, [channels])
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const res = await fetch("/api/platform/me", { credentials: "include" })
-        if (!res.ok) return
-        const me = await res.json()
-        if (!cancelled) setIsAdmin(me?.isAdmin === true)
-      } catch {
-        // default: non-admin (least privilege)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const fetchData = async () => {
+    setLoading(true)
+    // Fail closed before resolving the new tenant. A refetch must never leave
+    // rows, labels or settings from the previous company visible.
+    setChannels([])
+    setUsers([])
+    setSelectedChannel(null)
+    setLabels([])
+    setPropertyId(null)
+    setIsAdmin(false)
+
     try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) {
-        setLoading(false)
+      // Unica fonte client del ruolo e del tenant attivo (ADR-018). Leggere
+      // prima admin_users farebbe prevalere un'associazione legacy sul cookie
+      // scelto dal superadmin.
+      const meRes = await fetch("/api/platform/me", {
+        credentials: "include",
+        cache: "no-store",
+      })
+      if (!meRes.ok) return
+
+      const me = (await meRes.json()) as {
+        activePropertyId?: string | null
+        isAdmin?: boolean
+      }
+      const activePropertyId = me.activePropertyId ?? null
+      const admin = me.isAdmin === true
+      setIsAdmin(admin)
+      setPropertyId(activePropertyId)
+      if (!activePropertyId) return
+
+      const headers = await getAuthHeaders()
+      const channelsRequest = fetch("/api/channels/email", {
+        headers,
+        credentials: "include",
+        cache: "no-store",
+      })
+      // L'elenco operatori serve solo a chi puo' assegnare le caselle. Passa
+      // dalla route tenant-aware invece di interrogare admin_users dal browser.
+      const usersRequest = admin
+        ? fetch("/api/admin/users", { credentials: "include", cache: "no-store" })
+        : Promise.resolve(null)
+      const [channelsRes, usersRes] = await Promise.all([channelsRequest, usersRequest])
+
+      if (!channelsRes.ok) {
+        console.error("[v0] Failed to fetch channels:", channelsRes.status)
         return
       }
 
-      // 1. Primary source: tenant_admin row in admin_users.
-      const { data: adminUser } = await supabase
-        .from("admin_users")
-        .select("property_id")
-        .eq("id", user.id)
-        .maybeSingle()
+      const channelsData = await channelsRes.json()
+      setChannels(channelsData.channels || [])
 
-      // 2. Fallback for platform super_admin: /api/platform/me returns the
-      //    active tenant (cookie-persisted) for cross-tenant identities.
-      let activePropertyId: string | null = adminUser?.property_id ?? null
-      if (!activePropertyId) {
-        try {
-          const meRes = await fetch("/api/platform/me", { credentials: "include" })
-          if (meRes.ok) {
-            const me = await meRes.json()
-            activePropertyId = me?.activePropertyId ?? null
-          }
-        } catch (e) {
-          console.error("[v0] platform/me failed", e)
-        }
-      }
-
-      if (activePropertyId) {
-        setPropertyId(activePropertyId)
-
-        const headers = await getAuthHeaders()
-        const channelsRes = await fetch("/api/channels/email", {
-          headers,
-          credentials: "include",
-        })
-        if (channelsRes.ok) {
-          const channelsData = await channelsRes.json()
-          setChannels(channelsData.channels || [])
-        } else {
-          console.error("[v0] Failed to fetch channels:", channelsRes.status)
-          setChannels([])
-        }
-
-        const { data: adminUsers } = await supabase
-          .from("admin_users")
-          .select("id, name, email")
-          .eq("property_id", activePropertyId)
-
-        if (adminUsers) {
-          setUsers(adminUsers)
-        }
+      if (usersRes?.ok) {
+        const usersData = await usersRes.json()
+        setUsers(
+          (usersData.users || []).map((user: AdminUser) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+          })),
+        )
       }
     } catch (error) {
       console.error("[v0] Error fetching data:", error)
