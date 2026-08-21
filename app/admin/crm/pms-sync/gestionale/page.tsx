@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import useSWR from "swr"
 import { ExternalLink, KeyRound, Loader2 } from "lucide-react"
@@ -10,6 +10,13 @@ import { Button } from "@/components/ui/button"
 type ConfigStato = {
   configurata: boolean
   config: { pmsType: string | null; nome: string | null; webUrl: string | null; isActive: boolean } | null
+}
+
+type SessionePms = {
+  source: "remote_browser"
+  liveViewUrl: string
+  expiresAt: string | null
+  persistent: boolean
 }
 
 const fetcher = async (url: string) => {
@@ -44,6 +51,78 @@ export default function PmsShadowPage() {
 
   const webUrl = cfg?.config?.webUrl ?? null
   const nomePms = cfg?.config?.nome ?? cfg?.config?.pmsType ?? "Gestionale"
+  const [sessione, setSessione] = useState<SessionePms | null>(null)
+  const [avvio, setAvvio] = useState(false)
+  const [erroreMacchina, setErroreMacchina] = useState(false)
+  const avvioInCorso = useRef(false)
+
+  const avviaMacchina = useCallback(async () => {
+    if (!webUrl || avvioInCorso.current) return
+    avvioInCorso.current = true
+    setAvvio(true)
+    setErroreMacchina(false)
+
+    try {
+      for (let tentativo = 0; tentativo < 8; tentativo++) {
+        const response = await fetch("/api/crm/pms-browser-session", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        })
+        const body = (await response.json().catch(() => null)) as
+          | (Partial<SessionePms> & { retryAfterMs?: number })
+          | null
+
+        if (response.ok && body?.liveViewUrl) {
+          setSessione(body as SessionePms)
+          return
+        }
+
+        if (response.status === 409 && body?.retryAfterMs && tentativo < 7) {
+          await new Promise((resolve) => setTimeout(resolve, Math.min(body.retryAfterMs, 3_000)))
+          continue
+        }
+
+        throw new Error("Macchina PMS non disponibile")
+      }
+    } catch {
+      // Continuita' operativa: se il browser remoto e' indisponibile, la
+      // cornice diretta gia' usata in produzione continua a far lavorare lo
+      // staff. Il dettaglio tecnico resta nei log server, non nel tenant.
+      setErroreMacchina(true)
+      setSessione(null)
+    } finally {
+      avvioInCorso.current = false
+      setAvvio(false)
+    }
+  }, [webUrl])
+
+  useEffect(() => {
+    if (webUrl) void avviaMacchina()
+  }, [webUrl, avviaMacchina])
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data !== "browserbase-disconnected") return
+      setSessione(null)
+      window.setTimeout(() => void avviaMacchina(), 3_000)
+    }
+    window.addEventListener("message", handleMessage)
+    return () => window.removeEventListener("message", handleMessage)
+  }, [avviaMacchina])
+
+  useEffect(() => {
+    if (!sessione) return
+    return () => {
+      void fetch("/api/crm/pms-browser-session", {
+        method: "DELETE",
+        credentials: "include",
+        keepalive: true,
+      }).catch(() => undefined)
+    }
+  }, [sessione])
+
+  const iframeSrc = sessione?.liveViewUrl ?? webUrl
 
   return (
     <main data-pms-immersive-page className="relative h-full min-h-[520px] w-full overflow-hidden bg-background">
@@ -60,7 +139,7 @@ export default function PmsShadowPage() {
         </span>
       </button>
 
-      {isLoading ? (
+      {isLoading || (webUrl && avvio && !sessione && !erroreMacchina) ? (
         <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
           Apertura del gestionale...
@@ -83,13 +162,15 @@ export default function PmsShadowPage() {
             <Link href="/admin/crm/pms-sync/config">Apri le impostazioni PMS</Link>
           </Button>
         </div>
-      ) : (
+      ) : iframeSrc ? (
         <>
           <iframe
-            src={webUrl}
+            src={iframeSrc}
             title={`${nomePms} (gestionale esterno)`}
             className="h-full w-full border-0 bg-background"
             referrerPolicy="no-referrer"
+            sandbox={sessione ? "allow-same-origin allow-scripts" : undefined}
+            allow={sessione ? "clipboard-read; clipboard-write" : undefined}
           />
           <Button
             asChild
@@ -102,7 +183,15 @@ export default function PmsShadowPage() {
             </a>
           </Button>
         </>
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <p className="text-sm font-medium">Il gestionale non è disponibile in questo momento.</p>
+          <Button size="sm" variant="secondary" onClick={() => void avviaMacchina()}>
+            Riprova
+          </Button>
+        </div>
       )}
+      {erroreMacchina ? <span className="sr-only">Connessione diretta al gestionale attiva.</span> : null}
     </main>
   )
 }
