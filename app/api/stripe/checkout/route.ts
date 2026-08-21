@@ -74,7 +74,6 @@ export async function POST(request: NextRequest) {
       metadata: {
         propertyId,
         project: "hotelaccelerator",
-        project: "hotelaccelerator",
         planId,
         roomCount: String(rooms),
         propertyName: property.name,
