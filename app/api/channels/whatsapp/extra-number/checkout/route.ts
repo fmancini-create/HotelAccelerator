@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
           key: "codice_sdi",
           label: { type: "custom", custom: "Codice SDI (se disponibile)" },
           type: "text",
-          optional: true,
+          optional: false,
         },
         {
           key: "pec",
