@@ -73,16 +73,45 @@ export async function POST(request: NextRequest) {
       customer_email: property.billing_email || undefined,
       metadata: {
         propertyId,
+        project: "hotelaccelerator",
+        project: "hotelaccelerator",
         planId,
         roomCount: String(rooms),
         propertyName: property.name,
       },
+      ...(mode === "subscription"
+        ? {
+            subscription_data: {
+              metadata: { propertyId, planId, project: "hotelaccelerator" },
+            },
+          }
+        : {
+            invoice_creation: {
+              enabled: true,
+              invoice_data: { metadata: { propertyId, planId, project: "hotelaccelerator" } },
+            },
+          }),
       success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/admin/billing?success=true`,
       cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/admin/billing?canceled=true`,
       // Allow promotion codes
       allow_promotion_codes: true,
       // Collect billing address for invoicing
       billing_address_collection: "required",
+      tax_id_collection: { enabled: true },
+      custom_fields: [
+        {
+          key: "codice_sdi",
+          label: { type: "custom", custom: "Codice SDI (se disponibile)" },
+          type: "text",
+          optional: true,
+        },
+        {
+          key: "pec",
+          label: { type: "custom", custom: "PEC (alternativa al Codice SDI)" },
+          type: "text",
+          optional: true,
+        },
+      ],
       // Italian locale
       locale: "it",
     })
