@@ -65,6 +65,9 @@ export async function POST(request: NextRequest) {
         quantity: "1",
         propertyName: property.name,
       },
+      subscription_data: {
+        metadata: { propertyId, kind: "whatsapp_extra_number", project: "hotelaccelerator" },
+      },
       success_url:
         successUrl || `${appUrl}/admin/channels/whatsapp?extra_number=success`,
       cancel_url: cancelUrl || `${appUrl}/admin/channels/whatsapp?extra_number=canceled`,
