@@ -23,6 +23,7 @@ import Link from "next/link"
 import { ArrowRight, TriangleAlert } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { DashboardCard } from "@/components/admin/dashboard/dashboard-cards"
+import { PlatformOverviewPanel } from "@/components/platform/platform-overview-panel"
 import {
   DASHBOARD_PANELS,
   PANEL_KIND_LABEL,
@@ -32,6 +33,12 @@ import {
 
 interface Risposta {
   isAdmin: boolean
+  /**
+   * Solo per chi amministra la piattaforma. Distinto da `isAdmin`, che comprende
+   * anche l'amministratore di una struttura. Assente nelle risposte piu'
+   * vecchie: `undefined` significa "non mostrare", cioe' fail-closed.
+   */
+  isPlatformAdmin?: boolean
   profilo: string
   /** Id dei pannelli che questa persona puo' vedere, decisi dal server. */
   panels: string[]
@@ -166,6 +173,21 @@ export default function AdminDashboardPage() {
           per errore.
         </p>
       </header>
+
+      {/*
+        Vista d'insieme su tutti i clienti, per chi amministra la piattaforma.
+        Prima era una pagina separata (/super-admin) con una sua intestazione e
+        un suo menu: due cruscotti gemelli da tenere allineati a mano.
+
+        Si guarda `isPlatformAdmin` e NON `isAdmin`, che comprende anche
+        l'amministratore di una singola struttura: confonderli mostrerebbe a un
+        albergatore il fatturato della piattaforma e i suoi concorrenti. Il campo
+        arriva dal server, gia' deciso.
+
+        Sta in cima perche' e' lo sguardo piu' ampio: sotto, gli stessi occhi
+        trovano i numeri della struttura su cui stanno lavorando.
+      */}
+      {risposta.isPlatformAdmin && <PlatformOverviewPanel />}
 
       {pannelli.length === 0 ? (
         <p className="rounded-xl border border-border bg-card p-6 text-sm text-muted-foreground">

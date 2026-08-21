@@ -38,7 +38,10 @@ import {
   BarChart3,
   Gauge,
   Boxes,
+  Building2,
   CalendarClock,
+  Coins,
+  CreditCard,
   Database,
   FileText,
   Globe,
@@ -57,6 +60,7 @@ import {
   Settings,
   Sparkles,
   Tag,
+  UserPlus,
   Users,
 } from "lucide-react"
 
@@ -64,8 +68,14 @@ import {
  * Dove vive la voce:
  *  - "operative": pulsante proprio nel menu (parti operative).
  *  - "settings":  sotto l'unica voce "Impostazioni" (configurazione).
+ *  - "platform":  gruppo a parte, visibile solo a chi amministra la
+ *    piattaforma. Non e' "operative" perche' non riguarda il lavoro di una
+ *    struttura (elenco dei clienti, fatturato complessivo, costi dei moduli), e
+ *    non e' "settings" perche' non si configura la struttura in cui si sta
+ *    lavorando. Tenerlo distinto evita che un albergatore ci finisca dentro
+ *    scorrendo il proprio menu.
  */
-export type NavPlacement = "operative" | "settings"
+export type NavPlacement = "operative" | "settings" | "platform"
 
 export interface NavEntry {
   /** Identificativo stabile della voce (chiave di React, niente DB). */
@@ -99,6 +109,20 @@ export interface NavEntry {
   area?: string
   /** Riservata agli amministratori (super_admin / tenant admin). */
   adminOnly?: boolean
+  /**
+   * Riservata a chi amministra LA PIATTAFORMA (solo super_admin).
+   *
+   * PERCHE' NON BASTA `adminOnly`. Quel flag significa "super_admin OPPURE
+   * amministratore di una struttura": e' giusto per Utenti o Fatturazione, dove
+   * ogni albergatore gestisce i propri. Ma le sezioni di piattaforma mostrano
+   * l'elenco di TUTTI i clienti, il fatturato complessivo e i costi dei moduli:
+   * marcarle `adminOnly` le mostrerebbe a ogni albergatore, cioe' farebbe
+   * vedere a un cliente i dati dei concorrenti.
+   *
+   * Va quindi controllata PRIMA della scorciatoia `if (isAdmin) return true`,
+   * altrimenti un amministratore di struttura la scavalcherebbe.
+   */
+  platformOnly?: boolean
   /** Permesso puntuale richiesto oltre al ruolo. */
   requiresPermission?: "can_manage_users"
   /** Riconoscimento della voce attiva quando l'URL ha sottopagine. */
@@ -439,6 +463,81 @@ export const NAV_ENTRIES: NavEntry[] = [
     placement: "settings",
     icon: Lock,
   },
+
+  // ===================== PIATTAFORMA (solo super admin) =====================
+  // Prima queste voci erano un SECONDO elenco scritto a mano dentro
+  // app/super-admin/layout.tsx. E' lo stesso errore che questo file esisteva
+  // per risolvere: due elenchi separati divergono, e infatti divergevano — il
+  // menu la' ne dichiarava 5 mentre le pagine su disco erano 7, quindi "Costi
+  // moduli" e "Nuovo cliente" erano raggiungibili solo scrivendo l'indirizzo a
+  // mano.
+  //
+  // Tutte `platformOnly`: NON `adminOnly`, che comprenderebbe anche
+  // l'amministratore di una struttura e gli mostrerebbe i dati dei concorrenti.
+  {
+    id: "platform-structures",
+    href: "/super-admin/structures",
+    label: "Strutture",
+    description: "Tutti i clienti della piattaforma, con moduli attivi e stato dell'abbonamento",
+    placement: "platform",
+    icon: Building2,
+    platformOnly: true,
+    match: (p) => p.startsWith("/super-admin/structures"),
+  },
+  {
+    id: "platform-onboarding",
+    href: "/super-admin/onboarding",
+    label: "Nuovo cliente",
+    description: "Crea una nuova struttura e attiva i moduli acquistati",
+    placement: "platform",
+    icon: UserPlus,
+    platformOnly: true,
+  },
+  {
+    id: "platform-collaborators",
+    href: "/super-admin/collaborators",
+    label: "Collaboratori",
+    description: "Chi lavora sulla piattaforma, con i relativi permessi",
+    placement: "platform",
+    icon: Users,
+    platformOnly: true,
+  },
+  {
+    id: "platform-billing",
+    href: "/super-admin/billing",
+    label: "Fatturazione piattaforma",
+    description: "Abbonamenti, ricavi ricorrenti e pagamenti di tutti i clienti",
+    placement: "platform",
+    icon: CreditCard,
+    platformOnly: true,
+  },
+  {
+    id: "platform-module-costs",
+    href: "/super-admin/module-costs",
+    label: "Costi e prezzi dei moduli",
+    description: "Quanto costa e a quanto si vende ogni modulo, per struttura",
+    placement: "platform",
+    icon: Coins,
+    platformOnly: true,
+  },
+  {
+    id: "platform-roadmap",
+    href: "/super-admin/roadmap",
+    label: "Roadmap",
+    description: "Stato di avanzamento dei moduli della suite",
+    placement: "platform",
+    icon: ListTodo,
+    platformOnly: true,
+  },
+  {
+    id: "platform-settings",
+    href: "/super-admin/settings",
+    label: "Impostazioni piattaforma",
+    description: "Configurazione trasversale della piattaforma",
+    placement: "platform",
+    icon: Settings,
+    platformOnly: true,
+  },
 ]
 
 /** Icona della voce "Impostazioni" (tendina nel menu + scorciatoia utente). */
@@ -449,6 +548,12 @@ export const SETTINGS_HUB_HREF = "/admin/settings"
 
 export const OPERATIVE_ENTRIES: NavEntry[] = NAV_ENTRIES.filter((e) => e.placement === "operative")
 export const SETTINGS_ENTRIES: NavEntry[] = NAV_ENTRIES.filter((e) => e.placement === "settings")
+/**
+ * Sezioni di piattaforma. Restano fuori da OPERATIVE_* e SETTINGS_* perche'
+ * quei due filtri confrontano il collocamento in modo esatto: nessuna voce di
+ * piattaforma puo' finire per sbaglio nel menu di una struttura.
+ */
+export const PLATFORM_ENTRIES: NavEntry[] = NAV_ENTRIES.filter((e) => e.placement === "platform")
 
 /** Operative mostrate in chiaro nella barra (desktop). */
 export const OPERATIVE_PRIMARY: NavEntry[] = OPERATIVE_ENTRIES.filter((e) => e.primary)
@@ -462,6 +567,12 @@ export const OPERATIVE_SECONDARY: NavEntry[] = OPERATIVE_ENTRIES.filter((e) => !
  */
 export interface NavViewer {
   isAdmin?: boolean
+  /**
+   * Vero solo per chi amministra la piattaforma (`role === "super_admin"` da
+   * /api/platform/me). Distinto da `isAdmin`, che comprende anche
+   * l'amministratore di una singola struttura.
+   */
+  isPlatformAdmin?: boolean
   areas?: string[]
   activeModules?: string[] | null
   canManageUsers?: boolean
@@ -483,13 +594,26 @@ export interface NavViewer {
  *    dipendente.
  */
 export function visibleEntries(entries: NavEntry[], viewer: NavViewer): NavEntry[] {
-  const { isAdmin, areas, activeModules, canManageUsers } = viewer
+  const { isAdmin, isPlatformAdmin, areas, activeModules, canManageUsers } = viewer
   const active = activeModules ? new Set(activeModules) : null
   const granted = new Set(areas ?? [])
 
   return entries.filter((entry) => {
     // Moduli: fail-open quando il dato non c'e'.
     if (entry.module && active && !active.has(entry.module)) return false
+
+    // Piattaforma: PRIMA della scorciatoia qui sotto, e fail-closed.
+    //
+    // L'ordine e' la sostanza del controllo, non uno stile. `if (isAdmin)`
+    // restituisce `true` e chiude il discorso: un amministratore di struttura
+    // e' `isAdmin`, quindi se questo controllo stesse DOPO vedrebbe l'elenco di
+    // tutti i clienti e il fatturato complessivo della piattaforma.
+    //
+    // Fail-closed anche qui: se il ruolo non e' ancora arrivato,
+    // `isPlatformAdmin` e' `undefined` e la voce resta nascosta. Nel dubbio non
+    // si mostrano i dati di tutti i clienti; al massimo la voce comparira' un
+    // istante dopo, quando /api/platform/me ha risposto.
+    if (entry.platformOnly && !isPlatformAdmin) return false
 
     if (isAdmin) return true
 

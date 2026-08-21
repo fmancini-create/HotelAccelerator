@@ -47,6 +47,7 @@ import {
   SETTINGS_HUB_HREF,
   SETTINGS_ICON,
   visibleEntries,
+  PLATFORM_ENTRIES,
   type NavEntry,
 } from "@/lib/platform/nav"
 
@@ -145,16 +146,26 @@ export function PlatformHeader() {
   const isAdmin = me?.isAdmin
   const areas = me?.areas
   const canManageUsers = me?.canManageUsers
+  /*
+   * Chi amministra la piattaforma. Si legge il RUOLO e non `isAdmin`, che e'
+   * vero anche per l'amministratore di una singola struttura: confonderli
+   * mostrerebbe a un albergatore l'elenco di tutti i clienti.
+   *
+   * Finche' /api/platform/me non ha risposto, `me` e' `undefined` e questo vale
+   * `false`: le voci di piattaforma restano nascoste (fail-closed).
+   */
+  const isPlatformAdmin = me?.role === "super_admin"
 
-  // Un solo contesto, passato allo stesso filtro per tutti e tre gli elenchi.
+  // Un solo contesto, passato allo stesso filtro per tutti gli elenchi.
   const viewer = useMemo(
-    () => ({ isAdmin, areas, activeModules, canManageUsers }),
-    [isAdmin, areas, activeModules, canManageUsers],
+    () => ({ isAdmin, isPlatformAdmin, areas, activeModules, canManageUsers }),
+    [isAdmin, isPlatformAdmin, areas, activeModules, canManageUsers],
   )
 
   const primaryNav = useMemo(() => visibleEntries(OPERATIVE_PRIMARY, viewer), [viewer])
   const moreNav = useMemo(() => visibleEntries(OPERATIVE_SECONDARY, viewer), [viewer])
   const settingsNav = useMemo(() => visibleEntries(SETTINGS_ENTRIES, viewer), [viewer])
+  const platformNav = useMemo(() => visibleEntries(PLATFORM_ENTRIES, viewer), [viewer])
 
   const moreHasActive = useMemo(
     () => moreNav.some((item) => isActive(item, pathname)),
@@ -340,6 +351,44 @@ export function PlatformHeader() {
                 </DropdownMenuItem>
               )
             })}
+            {/*
+              Gruppo PIATTAFORMA. Compare solo per chi amministra la
+              piattaforma: `visibleEntries` ha gia' scartato tutto il resto, per
+              cui qui basta guardare se e' rimasta almeno una voce — un titolo
+              sopra il nulla sembrerebbe un guasto.
+
+              Sta in fondo, dopo un separatore, perche' non e' il lavoro di
+              tutti i giorni: si entra qui per governare i clienti, non per
+              rispondere a un ospite.
+            */}
+            {platformNav.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+                  Piattaforma
+                </DropdownMenuLabel>
+                {platformNav.map((item) => {
+                  const Icon = item.icon
+                  const active = isActive(item, pathname)
+                  return (
+                    <DropdownMenuItem key={item.href} asChild>
+                      <Link
+                        href={item.href}
+                        className={[
+                          "flex items-center gap-2 cursor-pointer",
+                          active && "text-ha-brand-soft-foreground font-medium",
+                        ]
+                          .filter(Boolean)
+                          .join(" ")}
+                      >
+                        <Icon className="h-4 w-4" aria-hidden />
+                        <span>{item.label}</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )
+                })}
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

@@ -1,7 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getCallerIdentity, adminUserIdPerDatabase } from "@/lib/auth/admin-access"
-import { risolviTempoDisconnessione, secondiPreavviso } from "@/lib/auth/auto-logout"
+import {
+  MINUTI_DISCONNESSIONE_PIATTAFORMA,
+  risolviTempoDisconnessione,
+  secondiPreavviso,
+} from "@/lib/auth/auto-logout"
 
 /**
  * Il tempo di disconnessione automatica di CHI CHIAMA.
@@ -24,10 +28,28 @@ export async function GET(request: NextRequest) {
     }
 
     // Un super amministratore di piattaforma non ha scheda operatore
-    // (`adminUserId` nullo) e non appartiene ai gruppi di una struttura: non ha
-    // un tempo da rispettare. `adminUserIdPerDatabase` serve perche' la
-    // scorciatoia di sviluppo restituisce "dev-admin-id", che non e' un uuid e
-    // farebbe rifiutare l'intera query dal database.
+    // (`adminUserId` nullo) e non appartiene ai gruppi di una struttura.
+    //
+    // ATTENZIONE — QUI PRIMA SI RESTITUIVA `minuti: null`, cioe' "non si
+    // disconnette mai". Il commento diceva "non ha un tempo da rispettare", ma
+    // la conseguenza era che il ruolo con PIU' poteri sulla piattaforma era
+    // l'unico mai disconnesso per inattivita', mentre un normale operatore si'.
+    // Non e' che nessuno aveva deciso: e' che nessuno POTEVA decidere, perche'
+    // per il super admin non esiste ne' scheda ne' gruppo su cui impostarlo.
+    // Si applica quindi il tempo di piattaforma.
+    if (identity.role === "super_admin") {
+      return NextResponse.json({
+        minuti: MINUTI_DISCONNESSIONE_PIATTAFORMA,
+        origine: "piattaforma",
+        secondiPreavviso: secondiPreavviso(MINUTI_DISCONNESSIONE_PIATTAFORMA),
+      })
+    }
+
+    // `adminUserIdPerDatabase` serve perche' la scorciatoia di sviluppo
+    // restituisce "dev-admin-id", che non e' un uuid e farebbe rifiutare
+    // l'intera query dal database. Si controlla DOPO il super admin: la
+    // scorciatoia ha `role: "admin"`, quindi non passa dal ramo qui sopra e lo
+    // sviluppo resta senza disconnessione automatica come prima.
     const adminUserId = adminUserIdPerDatabase(identity.adminUserId)
     if (!adminUserId) {
       return NextResponse.json({ minuti: null, origine: "predefinito", secondiPreavviso: null })
