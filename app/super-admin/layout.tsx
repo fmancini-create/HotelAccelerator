@@ -16,6 +16,7 @@ import {
 import { createClient } from "@/lib/supabase/client"
 import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 import { PlatformFooter as CompanyFooter } from "@/components/platform-footer"
+import { AutoLogoutWatchdog } from "@/components/admin/auto-logout-watchdog"
 
 const navigation = [
   { name: "Dashboard", href: "/super-admin", icon: LayoutDashboard },
@@ -154,6 +155,18 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
         </div>
       </header>
       <main className="flex-1">{children}</main>
+      {/*
+       * Disconnessione automatica per inattivita'.
+       *
+       * Mancava: era montata solo in `app/admin/layout.tsx`, e quest'area si e'
+       * costruita un'intestazione tutta sua senza portarsela dietro. Risultato:
+       * il ruolo con piu' poteri sulla piattaforma era l'unico che non veniva
+       * mai disconnesso, mentre un normale operatore si'.
+       *
+       * Sta qui e non nelle singole pagine perche' deve valere su tutte. Non e'
+       * nel ramo della pagina di accesso: la' non c'e' sessione da chiudere.
+       */}
+      <AutoLogoutWatchdog />
       <CompanyFooter />
     </div>
   )

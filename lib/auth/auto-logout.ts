@@ -21,6 +21,27 @@ export const TEMPI_DISCONNESSIONE = [1, 5, 10, 15, 30] as const
 
 export type TempoDisconnessioneAmmesso = (typeof TEMPI_DISCONNESSIONE)[number]
 
+/**
+ * Il tempo di chi amministra la piattaforma (super admin).
+ *
+ * PERCHE' ESISTE, invece di lasciare "nessuna disconnessione" come per gli altri.
+ * Piu' sotto, `risolviTempoDisconnessione` restituisce `null` quando nessuno ha
+ * deciso, e lo fa di proposito: per un operatore l'assenza di un tempo e' una
+ * SCELTA, che il suo amministratore puo' cambiare quando vuole.
+ *
+ * Per un super amministratore non e' cosi'. Non ha scheda operatore
+ * (`getCallerIdentity` restituisce `adminUserId: null`) e non appartiene ai
+ * gruppi di una struttura: non e' che nessuno ha deciso, e' che NESSUNO PUO'
+ * DECIDERE. Lasciarlo scoperto significa che il ruolo con piu' poteri sulla
+ * piattaforma e' l'unico che non si disconnette mai.
+ *
+ * Il valore appartiene a `TEMPI_DISCONNESSIONE` perche' il browser scarta con
+ * `tempoAmmesso` qualunque numero fuori dall'elenco: un valore "ragionevole" ma
+ * non compreso li' dentro verrebbe ignorato in silenzio, e la protezione
+ * sembrerebbe attiva restando spenta.
+ */
+export const MINUTI_DISCONNESSIONE_PIATTAFORMA: TempoDisconnessioneAmmesso = 15
+
 /** Etichette pronte per l'elenco, per non ricomporle in ogni pagina. */
 export function etichettaTempo(minuti: number): string {
   return minuti === 1 ? "1 minuto" : `${minuti} minuti`
