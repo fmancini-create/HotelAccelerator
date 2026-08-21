@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -29,9 +29,13 @@ const CHANNEL_META: Record<string, { label: string; icon: typeof Send }> = {
 export function ChannelBasesAssignment({
   channels: initialChannels,
   bases,
+  title = "Canali",
+  description,
 }: {
   channels: ChannelRow[]
   bases: BaseOption[]
+  title?: string
+  description?: ReactNode
 }) {
   const [channels, setChannels] = useState<ChannelRow[]>(initialChannels)
   const [savingId, setSavingId] = useState<string | null>(null)
@@ -65,10 +69,15 @@ export function ChannelBasesAssignment({
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-foreground">Canali</CardTitle>
+        <CardTitle className="text-foreground">{title}</CardTitle>
         <CardDescription>
-          Collega una o più basi a ogni canale. La <strong>prima</strong> base (contrassegnata come primaria) decide
-          modalità, tono e soglia; l&apos;IA cerca però le risposte in <strong>tutte</strong> le basi collegate.
+          {description ?? (
+            <>
+              Collega una o più basi a ogni canale. La <strong>prima</strong> base (contrassegnata come primaria)
+              decide modalità, tono e soglia; l&apos;IA cerca però le risposte in <strong>tutte</strong> le basi
+              collegate.
+            </>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -190,6 +199,8 @@ export function ChannelBasesAssignment({
                       </Button>
                     ))}
                   </div>
+                ) : bases.length === 0 ? (
+                  <span className="text-xs text-muted-foreground">Prima crea almeno una base di conoscenza.</span>
                 ) : (
                   <span className="text-xs text-muted-foreground">Tutte le basi sono collegate.</span>
                 )}

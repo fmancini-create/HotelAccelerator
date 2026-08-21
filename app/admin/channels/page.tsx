@@ -26,6 +26,7 @@ import {
 import Link from "next/link"
 import { toast } from "sonner"
 import { AdminHeader } from "@/components/admin/admin-header"
+import { ChannelKnowledgeAssignment } from "@/components/admin/channels/channel-knowledge-assignment"
 
 const CHANNEL_CATEGORIES = [
   {
@@ -568,6 +569,16 @@ export default function ChannelsPage() {
             </div>
           </div>
         ))}
+
+        <section id="basi-conoscenza" className="mb-8 scroll-mt-24">
+          <div className="mb-4">
+            <h2 className="text-xl font-medium text-foreground">Assistente IA</h2>
+            <p className="text-sm text-muted-foreground">
+              Decidi quali informazioni deve usare l&apos;assistente su ciascun canale.
+            </p>
+          </div>
+          <ChannelKnowledgeAssignment />
+        </section>
 
         {/* Help Section */}
         <Card className="bg-gradient-to-r from-primary to-ha-brand border-0">
