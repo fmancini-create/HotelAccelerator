@@ -217,10 +217,10 @@ async function PlatformLanding() {
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Button asChild size="lg" className="h-14 gap-2 rounded-full px-8 text-lg font-semibold">
-                <Link href="/request-access">
-                  Richiedi una demo guidata
+                <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1RFQzgy0TK0UScNGWRtIfT9PxQsV9UlXsMB9tszlB6d6Urt0P2oQbDSGsLt4W2PoN7a3YXfO-K" target="_blank" rel="noopener noreferrer">
+                  Prenota una demo
                   <ArrowRight className="h-5 w-5" aria-hidden="true" />
-                </Link>
+                </a>
               </Button>
               <Button asChild size="lg" variant="outline" className="h-14 rounded-full px-8 text-lg font-semibold">
                 <Link href="#moduli">
@@ -354,10 +354,10 @@ async function PlatformLanding() {
               pertinenti e quali integrazioni servono.
             </p>
             <Button asChild size="lg" className="mt-8 h-14 gap-2 rounded-full px-8 text-lg font-semibold">
-              <Link href="/request-access">
-                Parla con il team
+              <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1RFQzgy0TK0UScNGWRtIfT9PxQsV9UlXsMB9tszlB6d6Urt0P2oQbDSGsLt4W2PoN7a3YXfO-K" target="_blank" rel="noopener noreferrer">
+                Prenota una demo
                 <ArrowRight className="h-5 w-5" aria-hidden="true" />
-              </Link>
+              </a>
             </Button>
           </div>
         </section>
