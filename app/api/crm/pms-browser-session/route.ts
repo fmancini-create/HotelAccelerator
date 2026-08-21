@@ -23,7 +23,7 @@ const FREE_CONNECTION_HOLD_MS = 12 * 60 * 1000
 
 type BrowserState = {
   property_id: string
-  integration_id: string
+  browser_config_id: string | null
   context_id: string | null
   active_session_id: string | null
   status: "idle" | "starting" | "running" | "ended" | "error"
@@ -32,11 +32,10 @@ type BrowserState = {
   lease_id: string | null
 }
 
-type PmsIntegration = {
+type BrowserConfig = {
   id: string
-  pms_type: string
+  web_url: string
   is_active: boolean
-  settings: Record<string, unknown> | null
 }
 
 function risposta(body: unknown, status = 200) {
@@ -57,25 +56,22 @@ async function identifica(request: NextRequest) {
   return { propertyId: identity.propertyId }
 }
 
-async function integrazioneAttiva(propertyId: string): Promise<PmsIntegration | null> {
+async function configurazioneBrowserAttiva(propertyId: string): Promise<BrowserConfig | null> {
   const sb = createServiceClient()
   const { data, error } = await sb
-    .from("pms_integrations")
-    .select("id, pms_type, is_active, settings")
+    .from("pms_browser_configs")
+    .select("id, web_url, is_active")
     .eq("property_id", propertyId)
     .eq("is_active", true)
-    .limit(1)
     .maybeSingle()
 
   if (error) throw new Error(`PMS_CONFIG_READ:${error.message}`)
-  return data as PmsIntegration | null
+  return data as BrowserConfig | null
 }
 
-function webUrlDa(integration: PmsIntegration): string | null {
-  const raw = integration.settings?.web_url
-  if (typeof raw !== "string") return null
+function webUrlDa(config: BrowserConfig): string | null {
   try {
-    const url = new URL(raw)
+    const url = new URL(config.web_url)
     return url.protocol === "https:" ? url.toString() : null
   } catch {
     return null
@@ -87,7 +83,7 @@ async function leggiStato(propertyId: string): Promise<BrowserState | null> {
   const { data, error } = await sb
     .from("pms_browser_sessions")
     .select(
-      "property_id, integration_id, context_id, active_session_id, status, persistent, session_expires_at, lease_id",
+      "property_id, browser_config_id, context_id, active_session_id, status, persistent, session_expires_at, lease_id",
     )
     .eq("property_id", propertyId)
     .maybeSingle()
@@ -154,16 +150,16 @@ export async function POST(request: NextRequest) {
   if (who.denied) return who.denied
   const propertyId = who.propertyId!
 
-  let integration: PmsIntegration | null = null
+  let browserConfig: BrowserConfig | null = null
   let leaseId: string | null = null
   let browser: Browser | null = null
   let sessionId: string | null = null
 
   try {
-    integration = await integrazioneAttiva(propertyId)
-    if (!integration) return risposta({ error: "Collegamento al gestionale da completare" }, 409)
+    browserConfig = await configurazioneBrowserAttiva(propertyId)
+    if (!browserConfig) return risposta({ error: "Collegamento al gestionale da completare" }, 409)
 
-    const webUrl = webUrlDa(integration)
+    const webUrl = webUrlDa(browserConfig)
     if (!webUrl) return risposta({ error: "Indirizzo del gestionale da completare" }, 409)
 
     const state = await leggiStato(propertyId)
@@ -174,9 +170,9 @@ export async function POST(request: NextRequest) {
 
     leaseId = randomUUID()
     const sb = createServiceClient()
-    const { data: leased, error: leaseError } = await sb.rpc("acquire_pms_browser_session_lease", {
+    const { data: leased, error: leaseError } = await sb.rpc("acquire_pms_browser_session_lease_v2", {
       p_property_id: propertyId,
-      p_integration_id: integration.id,
+      p_browser_config_id: browserConfig.id,
       p_lease_id: leaseId,
       p_lease_seconds: 90,
     })

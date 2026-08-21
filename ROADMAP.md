@@ -69,7 +69,7 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 - [ ] Analisi conversazioni: intenti, richieste, sentiment, qualità, conversione e insight aggregati di mercato.
 - [ ] CMS/sito AI-first, multilingua, SEO/GEO e hosting.
 - [ ] Booking widget con disponibilità, preventivo, pagamento, alternative, extra e integrazione PMS.
-- [ ] Collegare al PMS incorporato una sorgente di osservazione persistente e autenticata. Browserbase Marketplace, Context tenant-aware e Live View sono in stato `Codice`; restano migrazione, login Scidoo su tenant reale e raccolta degli eventi verso la porta gia' pronta prima della promozione.
+- [ ] Collegare al PMS incorporato una sorgente di osservazione persistente e autenticata. Browserbase Marketplace, configurazione agnostica, Context tenant-aware e Live View sono in stato `Codice`; restano login su tenant reale e raccolta degli eventi verso la porta gia' pronta prima della promozione.
 - [ ] Tracking, attribuzione, consenso e recupero abbandoni.
 
 ## Fase 5 — Marketing Hub

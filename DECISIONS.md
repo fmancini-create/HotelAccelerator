@@ -102,6 +102,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Decisione: il PMS incorporato usa Browserbase Live View; ogni struttura possiede un Context distinto e riutilizzabile. Le sessioni sono brevi e rilasciabili, mentre il login persiste nel Context cifrato dal provider.
 - Conseguenza: nessuna credenziale PMS viene salvata o automatizzata da HotelAccelerator. Le registrazioni Browserbase sono disattivate, gli identificativi restano server-only e una lease impedisce sessioni concorrenti sullo stesso Context. In caso di guasto resta disponibile l'iframe diretto.
 
+## ADR-017 — Browser PMS agnostico e separato dai connettori API
+
+- Stato: accettata
+- Decisione: la macchina browser legge nome e URL da `pms_browser_configs`; non consulta il registro dei connettori, non seleziona fornitori e non richiede endpoint o chiavi API del PMS.
+- Conseguenza: qualunque gestionale web HTTPS può essere incorporato con lo stesso flusso. `pms_integrations` resta riservata alle sincronizzazioni strutturate e facoltative, senza condizionare l'accesso interattivo.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

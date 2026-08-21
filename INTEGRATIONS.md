@@ -12,7 +12,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Dati/auth | Supabase | Database, Auth, RLS, storage | Da verificare | Audit progetti, policy, migrazioni e service role |
 | Codice | GitHub | Repository e CI | Presente | Definire branch policy, CI e documenti mancanti |
 | PMS | Scidoo | Camere, disponibilità, tariffe, produzione, push prezzi | Da verificare | Test mapping, retry, idempotenza e tenant reale |
-| Browser remoto | Browserbase | PMS interattivo incorporato e login persistente per tenant | Codice | Marketplace collegato a Vercel; route, Context tenant-aware, Live View e fallback diretto implementati. Applicare migrazione, collaudare login Scidoo su Villa I Barronci e misurare durata/costi prima di `Tenant reale` |
+| Browser remoto | Browserbase | PMS interattivo incorporato e login persistente per tenant | Codice | Configurazione agnostica separata dai connettori API; route, Context tenant-aware, Live View e fallback diretto implementati. Collaudare un login reale e misurare durata/costi prima di `Tenant reale` |
 | Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, watch Pub/Sub, cursor history, poll di fallback e riconciliazione label. Restano da provare recovery con cursor scaduto, verifica autenticità webhook, alert/SLO e modello storico Sent/response KPI prima di `Production-ready` |
 | Email | Outlook | Inbox email | Specifica | Definire Microsoft Graph adapter |
 | Email | IMAP/SMTP | Caselle generiche | Specifica | Sicurezza credenziali e limiti provider |
