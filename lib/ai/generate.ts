@@ -3,7 +3,7 @@ import { generateObject } from "ai"
 import { z } from "zod"
 import { CHAT_MODEL, DEFAULT_CONFIDENCE_THRESHOLD } from "./config"
 import { attachSourceMeta, retrieveContext, type RetrievedChunk } from "./retrieval"
-import type { HandoffContact } from "./handoff"
+import type { HandoffContact } from "./handoff-utils"
 
 export interface ConversationTurn {
   role: "user" | "assistant"
@@ -15,8 +15,12 @@ export interface GenerateReplyResult {
   confidence: number
   usedChunks: RetrievedChunk[]
   reason?: "no_match" | "low_confidence" | "ok" | "conversational"
-  /** The guest asked to be put in touch with a human. */
-  staffRequested: boolean
+  /**
+   * `requested` is an explicit guest request/acceptance; `offered` means the
+   * assistant merely proposed human help. They must never trigger the same
+   * workflow transition.
+   */
+  handoffIntent: "none" | "offered" | "requested"
   /** Contact details gathered anywhere in the conversation. */
   contact: HandoffContact
   /**
@@ -43,10 +47,10 @@ export interface GenerateReplyResult {
  */
 const replySchema = z.object({
   reply: z.string().describe("Il messaggio da inviare al cliente."),
-  staff_requested: z
-    .boolean()
+  handoff_intent: z
+    .enum(["none", "offered", "requested"])
     .describe(
-      "true se il cliente ha chiesto o accettato di essere messo in contatto con una persona dello staff, oppure se la richiesta richiede per forza un intervento umano. false per semplici domande informative.",
+      "requested SOLO se il cliente ha chiesto esplicitamente o ha accettato di essere messo in contatto con lo staff. offered se sei TU a proporre il contatto ma il cliente non l'ha ancora accettato. none in tutti gli altri casi. Non usare requested solo perché una domanda richiede un umano.",
     ),
   contact: z
     .object({
@@ -262,6 +266,7 @@ export function regolaContattoStaff(datiNoti?: DatiNotiCliente | null): string {
 
   righe.push(
     "  Chiedi in UNA sola frase soltanto i dati che mancano davvero, senza rielencare quelli noti o già ricevuti.",
+    "  Se sei TU a proporre il contatto e il cliente non lo ha ancora accettato, limita la risposta alla sola offerta: NON chiedere dati personali.",
     "  Se non manca nulla, NON fare domande.",
     "  NON dire MAI di aver inoltrato la richiesta, di averla presa in carico o che lo staff risponderà: la conferma viene aggiunta dal sistema solo quando la richiesta è stata registrata davvero.",
     "  Non chiedere un dato e nello stesso messaggio dire che la richiesta è stata passata: sono due cose che si contraddicono.",
@@ -421,7 +426,7 @@ export async function generateReply(
       confidence: topSimilarity,
       usedChunks: contextChunks,
       reason: chunks.length === 0 ? "no_match" : "low_confidence",
-      staffRequested: object.staff_requested,
+      handoffIntent: object.handoff_intent,
       contact,
       grounded,
       greetingOnly,
@@ -433,7 +438,7 @@ export async function generateReply(
     confidence: topSimilarity,
     usedChunks: contextChunks,
     reason: grounded ? "ok" : "conversational",
-    staffRequested: object.staff_requested,
+    handoffIntent: object.handoff_intent,
     contact,
     grounded,
     greetingOnly,

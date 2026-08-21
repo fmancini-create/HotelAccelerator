@@ -8,7 +8,7 @@ function result(overrides: Partial<GenerateReplyResult> = {}): GenerateReplyResu
     confidence: 0.91,
     usedChunks: [],
     reason: "ok",
-    staffRequested: false,
+    handoffIntent: "none",
     contact: { firstName: null, lastName: null, email: null, phone: null },
     grounded: true,
     greetingOnly: false,
@@ -38,9 +38,14 @@ describe("risposta vocale 3CX", () => {
   })
 
   it("rispetta una richiesta esplicita di parlare con una persona", () => {
-    const decision = buildVoiceResponse(result({ staffRequested: true }), "200", "Attenda in linea.")
+    const decision = buildVoiceResponse(result({ handoffIntent: "requested" }), "200", "Attenda in linea.")
     expect(decision.transfer.reason).toBe("staff_requested")
     expect(decision.speech).toBe("Attenda in linea.")
+  })
+
+  it("non trasferisce una chiamata quando il contatto e' solo proposto", () => {
+    const decision = buildVoiceResponse(result({ handoffIntent: "offered" }), "200")
+    expect(decision.transfer).toEqual({ required: false, destination: "200", reason: "none" })
   })
 
   it("non fa pronunciare markdown e URL", () => {
