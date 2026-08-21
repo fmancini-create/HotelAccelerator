@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -109,20 +108,17 @@ function CMSPagesContent() {
     if (isLocalDevBypass) {
       resolvedPropertyId = "c16ad260-2c34-4544-9909-5cd444773986"
     } else {
-      const supabase = createClient()
-      if (!supabase) return
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: adminUser } = await supabase
-        .from("admin_users")
-        .select("property_id, role")
-        .eq("id", user.id)
-        .single()
-
-      if (!adminUser?.property_id) return
-      resolvedPropertyId = adminUser.property_id
+      const meResponse = await fetch("/api/platform/me", { credentials: "include", cache: "no-store" })
+      if (!meResponse.ok) {
+        setIsLoading(false)
+        return
+      }
+      const me = (await meResponse.json()) as { activePropertyId?: string | null }
+      resolvedPropertyId = me.activePropertyId ?? null
+      if (!resolvedPropertyId) {
+        setIsLoading(false)
+        return
+      }
     }
 
     setPropertyId(resolvedPropertyId)

@@ -17,6 +17,7 @@
  */
 
 import type { NextRequest } from "next/server"
+import { cookies } from "next/headers"
 
 export const ACTIVE_PROPERTY_COOKIE = "ha_active_property_id"
 // One year; the cookie is refreshed on every switch.
@@ -32,22 +33,26 @@ export function isValidUuid(value: string | null | undefined): boolean {
  * Read the active property_id override for a super_admin from the request.
  * Priority: explicit ?property_id= query param > cookie. Returns null if none.
  */
-export function readActivePropertyOverride(request: NextRequest | undefined): string | null {
-  if (!request) return null
-  try {
-    const url = new URL(request.url)
-    const fromQuery = url.searchParams.get("property_id")
-    if (isValidUuid(fromQuery)) return fromQuery
-  } catch {
-    // ignore malformed URLs
-  }
-  const cookieHeader = request.headers.get("cookie") || ""
-  const match = cookieHeader.match(
-    new RegExp(`(?:^|; )${ACTIVE_PROPERTY_COOKIE}=([^;]+)`),
-  )
-  if (match) {
+export async function readActivePropertyOverride(request?: NextRequest): Promise<string | null> {
+  if (request) {
+    try {
+      const url = new URL(request.url)
+      const fromQuery = url.searchParams.get("property_id")
+      if (isValidUuid(fromQuery)) return fromQuery
+    } catch {
+      // ignore malformed URLs
+    }
+
+    const cookieHeader = request.headers.get("cookie") || ""
+    const match = cookieHeader.match(new RegExp(`(?:^|; )${ACTIVE_PROPERTY_COOKIE}=([^;]+)`))
+    if (!match) return null
     const value = decodeURIComponent(match[1])
-    if (isValidUuid(value)) return value
+    return isValidUuid(value) ? value : null
   }
-  return null
+
+  // Nei Server Component non esiste un NextRequest da passare. Next.js 16
+  // espone lo stesso cookie attraverso cookies(), che e' asincrono.
+  const cookieStore = await cookies()
+  const value = cookieStore.get(ACTIVE_PROPERTY_COOKIE)?.value ?? null
+  return isValidUuid(value) ? value : null
 }

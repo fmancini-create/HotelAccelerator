@@ -94,7 +94,7 @@ export async function getCallerIdentity(request?: NextRequest): Promise<CallerId
     .maybeSingle()
 
   if (collaborator?.role === "super_admin" && collaborator.is_active) {
-    const override = readActivePropertyOverride(request)
+    const override = await readActivePropertyOverride(request)
     return {
       userId: user.id,
       adminUserId: null,
