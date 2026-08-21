@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { getAuthenticatedUser } from "@/lib/auth-property"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
 
 /**
  * Interno telefonico della singola persona.
@@ -17,25 +17,30 @@ export type ResolvedIdentity = {
 }
 
 /**
- * `getAuthenticatedUser` restituisce DUE forme diverse: in sessione reale
- * `{ userId, adminUserId, propertyId, fullName }`, nella scorciatoia di sviluppo
- * `{ id, property_id, name }`. Leggere solo la prima forma darebbe `undefined`
- * in sviluppo, e la query filtrerebbe su un id inesistente restituendo sempre
- * "nessun interno". Normalizzo qui, una volta.
+ * Traduce l'identità unificata della piattaforma nella forma usata dal modulo
+ * telefonico e dal PMS.
+ *
+ * Un superadmin non deve avere una riga `admin_users` duplicata in ogni
+ * struttura: il tenant corrente arriva dal selettore piattaforma ed è già
+ * validato da `getCallerIdentity`. In quel caso `userId` resta vuoto perché
+ * non esiste una scheda operatore tenant da usare come FK; le letture continuano
+ * a funzionare e il click-to-call usa l'interno predefinito della struttura.
  */
 export async function resolveIdentity(request?: NextRequest): Promise<ResolvedIdentity> {
-  const raw = (await getAuthenticatedUser(request)) as Record<string, unknown>
+  const identity = await getCallerIdentity(request)
 
-  const userId = typeof raw.adminUserId === "string" ? raw.adminUserId : typeof raw.id === "string" ? raw.id : ""
-  const propertyId =
-    typeof raw.propertyId === "string" ? raw.propertyId : typeof raw.property_id === "string" ? raw.property_id : ""
-  const fullName =
-    typeof raw.fullName === "string" ? raw.fullName : typeof raw.name === "string" ? raw.name : "Utente"
-
-  if (!userId || !propertyId) {
+  if (!identity) {
     throw new Error("Non autenticato")
   }
-  return { propertyId, userId, fullName }
+  if (!identity.propertyId) {
+    throw new Error("Struttura non determinata")
+  }
+
+  return {
+    propertyId: identity.propertyId,
+    userId: identity.adminUserId ?? "",
+    fullName: identity.fullName ?? identity.email ?? "Utente",
+  }
 }
 
 export type MyExtension =
@@ -54,6 +59,11 @@ export async function getMyExtension(
   supabase: SupabaseClient,
   identity: ResolvedIdentity,
 ): Promise<MyExtension> {
+  // Il superadmin può operare sul tenant selezionato senza una scheda operatore
+  // duplicata. In quel caso non interroghiamo una colonna UUID con una stringa
+  // vuota: il chiamante userà l'interno predefinito della struttura.
+  if (!identity.userId) return { ok: false, reason: "none", identity }
+
   const { data } = await supabase
     .from("telephony_user_extensions")
     .select("extension, can_call")
