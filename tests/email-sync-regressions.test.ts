@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   deriveInboundConversationState,
+  formatEmailProcessingError,
   isUnreadFromGmailLabels,
   statusFromGmailLabels,
 } from "@/lib/email/email-processor"
@@ -31,6 +32,15 @@ afterEach(() => {
 })
 
 describe("email synchronization regressions", () => {
+  it("formats structured database errors without opaque object strings", () => {
+    expect(
+      formatEmailProcessingError({
+        code: "23505",
+        message: "duplicate key value violates unique constraint",
+      }),
+    ).toBe("23505: duplicate key value violates unique constraint")
+  })
+
   it("derives read and folder state from Gmail labels", () => {
     expect(isUnreadFromGmailLabels(["INBOX", "UNREAD"])).toBe(true)
     expect(isUnreadFromGmailLabels(["INBOX"])).toBe(false)
@@ -236,5 +246,14 @@ describe("email synchronization regressions", () => {
     expect(processor).toContain("byThreadCandidates")
     expect(processor).toContain('.in("conversation_id", candidateIds)')
     expect(processor).toContain("linkedConversation?.conversation_id")
+  })
+
+  it("contains the concurrent Gmail thread creation race", () => {
+    const processor = source("lib/email/email-processor.ts")
+    const webhook = source("app/api/channels/email/webhook/gmail/route.ts")
+
+    expect(processor).toContain('if (error.code === "23505" && email.threadId)')
+    expect(processor).toContain("racedConversation")
+    expect(webhook).toContain("formatEmailProcessingError(error)")
   })
 })
