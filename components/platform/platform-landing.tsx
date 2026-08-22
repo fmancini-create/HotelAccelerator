@@ -17,6 +17,7 @@ import { PlatformFooter } from "@/components/platform-footer"
 import { Button } from "@/components/ui/button"
 
 const PLATFORM_URL = "https://www.hotelaccelerator.com"
+const DEMO_URL = "https://calendar.app.google/hGkuEu5M8P8CzZkd6"
 
 const features = [
   {
@@ -189,7 +190,7 @@ async function PlatformLanding() {
               </Link>
             </Button>
             <Button asChild size="sm">
-              <Link href="/request-access">Richiedi demo</Link>
+              <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">Prenota una demo</a>
             </Button>
           </div>
         </nav>
@@ -217,7 +218,7 @@ async function PlatformLanding() {
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Button asChild size="lg" className="h-14 gap-2 rounded-full px-8 text-lg font-semibold">
-                <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1RFQzgy0TK0UScNGWRtIfT9PxQsV9UlXsMB9tszlB6d6Urt0P2oQbDSGsLt4W2PoN7a3YXfO-K" target="_blank" rel="noopener noreferrer">
+                <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">
                   Prenota una demo
                   <ArrowRight className="h-5 w-5" aria-hidden="true" />
                 </a>
@@ -354,7 +355,7 @@ async function PlatformLanding() {
               pertinenti e quali integrazioni servono.
             </p>
             <Button asChild size="lg" className="mt-8 h-14 gap-2 rounded-full px-8 text-lg font-semibold">
-              <a href="https://calendar.google.com/calendar/appointments/schedules/AcZssZ1RFQzgy0TK0UScNGWRtIfT9PxQsV9UlXsMB9tszlB6d6Urt0P2oQbDSGsLt4W2PoN7a3YXfO-K" target="_blank" rel="noopener noreferrer">
+              <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">
                 Prenota una demo
                 <ArrowRight className="h-5 w-5" aria-hidden="true" />
               </a>
