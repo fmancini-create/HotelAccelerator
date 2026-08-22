@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse, after } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createServiceClient } from "@/lib/supabase/server"
-import { EmailProcessor } from "@/lib/email/email-processor"
+import { EmailProcessor, formatEmailProcessingError } from "@/lib/email/email-processor"
 import { parseGmailMessage } from "@/lib/email/gmail-parse"
 import { getValidGmailToken, gmailFetchWithToken } from "@/lib/gmail-client"
 import { verificaNotificaPubSub } from "@/lib/email/pubsub-verify"
@@ -351,29 +351,33 @@ async function fetchAndProcessMessage(
   messageId: string,
   aiTasks: EmailAiTask[],
 ): Promise<{ success: boolean; duplicate?: boolean; error?: string }> {
-  const { data, error } = await gmailFetchWithToken(token, `messages/${messageId}?format=full`)
-  if (error || !data) return { success: false, error: error || "Messaggio Gmail non disponibile" }
+  try {
+    const { data, error } = await gmailFetchWithToken(token, `messages/${messageId}?format=full`)
+    if (error || !data) return { success: false, error: error || "Messaggio Gmail non disponibile" }
 
-  const parsed = parseGmailMessage(data)
-  const processed = await processor.processInboundEmail(parsed, channel.id, channel.property_id)
-  if (!processed.success) return { success: false, error: processed.error }
+    const parsed = parseGmailMessage(data)
+    const processed = await processor.processInboundEmail(parsed, channel.id, channel.property_id)
+    if (!processed.success) return { success: false, error: processed.error }
 
-  // Enqueue for the AI assistant only genuinely new inbound emails that opened
-  // or continued a conversation. Duplicates (re-seen during idempotent polling)
-  // must never trigger a second reply.
-  if (!processed.isDuplicate && processed.conversationId && parsed.body?.trim()) {
-    aiTasks.push({
-      conversationId: processed.conversationId,
-      fromHeader: parsed.from,
-      subject: parsed.subject,
-      threadId: parsed.threadId,
-      externalId: parsed.externalId,
-      body: parsed.body,
-      contentType: parsed.contentType,
-    })
+    // Enqueue for the AI assistant only genuinely new inbound emails that opened
+    // or continued a conversation. Duplicates (re-seen during idempotent polling)
+    // must never trigger a second reply.
+    if (!processed.isDuplicate && processed.conversationId && parsed.body?.trim()) {
+      aiTasks.push({
+        conversationId: processed.conversationId,
+        fromHeader: parsed.from,
+        subject: parsed.subject,
+        threadId: parsed.threadId,
+        externalId: parsed.externalId,
+        body: parsed.body,
+        contentType: parsed.contentType,
+      })
+    }
+
+    return { success: true, duplicate: Boolean(processed.isDuplicate) }
+  } catch (error) {
+    return { success: false, error: formatEmailProcessingError(error) }
   }
-
-  return { success: true, duplicate: Boolean(processed.isDuplicate) }
 }
 
 async function updateHistoryCursor(

@@ -24,6 +24,22 @@ export interface ProcessingResult {
   isDuplicate?: boolean
 }
 
+export function formatEmailProcessingError(error: unknown): string {
+  if (error instanceof Error) return error.message
+
+  if (error && typeof error === "object") {
+    const candidate = error as { code?: unknown; message?: unknown }
+    const code = typeof candidate.code === "string" ? candidate.code : null
+    const message = typeof candidate.message === "string" ? candidate.message : null
+
+    if (code && message) return `${code}: ${message}`
+    if (message) return message
+    if (code) return `Errore database ${code}`
+  }
+
+  return typeof error === "string" && error ? error : "Errore email non riconosciuto"
+}
+
 export function isUnreadFromGmailLabels(labelIds?: string[]): boolean {
   // Non-Gmail providers may not supply labels; preserve the inbound default.
   return !labelIds || labelIds.includes("UNREAD")
@@ -111,11 +127,13 @@ export class EmailProcessor {
 
     try {
       // TASK 2: Idempotency check - if message exists, ignore
-      const { data: existing } = await this.supabase
+      const { data: existing, error: existingError } = await this.supabase
         .from("messages")
         .select("id, conversation_id")
         .eq("external_message_id", email.externalId)
         .maybeSingle()
+
+      if (existingError) throw existingError
 
       if (existing) {
         // Polling is intentionally idempotent and sees the same recent Gmail
@@ -201,7 +219,12 @@ export class EmailProcessor {
         updated_at: new Date().toISOString(),
       }
 
-      await this.supabase.from("conversations").update(conversationUpdate).eq("id", conversation.id)
+      const { error: conversationUpdateError } = await this.supabase
+        .from("conversations")
+        .update(conversationUpdate)
+        .eq("id", conversation.id)
+
+      if (conversationUpdateError) throw conversationUpdateError
 
       // TASK 7: Log success
       await this.logEvent(propertyId, email.externalId, "email", "processed", {
@@ -218,13 +241,13 @@ export class EmailProcessor {
     } catch (error) {
       // TASK 7: Log error
       await this.logEvent(propertyId, email.externalId, "email", "error", {
-        error: error instanceof Error ? error.message : String(error),
+        error: formatEmailProcessingError(error),
         stack: error instanceof Error ? error.stack : undefined,
       })
 
       return {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: formatEmailProcessingError(error),
       }
     }
   }
@@ -362,7 +385,25 @@ export class EmailProcessor {
       .select("id, unread_count, internal_thread_id, last_message_at, status, contact_name")
       .single()
 
-    if (error) throw error
+    if (error) {
+      // Pub/Sub può consegnare notifiche sovrapposte per lo stesso thread.
+      // Un'altra invocazione può creare la conversazione tra la lettura e
+      // l'insert: rileggerla rende la gara idempotente.
+      if (error.code === "23505" && email.threadId) {
+        const { data: racedConversation, error: racedConversationError } = await this.supabase
+          .from("conversations")
+          .select("id, unread_count, internal_thread_id, last_message_at, status, contact_name")
+          .eq("property_id", propertyId)
+          .eq("gmail_thread_id", email.threadId)
+          .maybeSingle()
+
+        if (racedConversationError) throw racedConversationError
+        if (racedConversation) return racedConversation
+      }
+
+      throw error
+    }
+
     return newConv
   }
 
