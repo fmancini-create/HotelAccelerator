@@ -82,3 +82,7 @@ Se non migliora nessuno dei quattro, resta fuori priorita'.
 ## Definition of Done
 
 Una funzione e' conclusa solo quando requisiti, UI, backend, dati, autorizzazioni, errori, audit, test, monitoraggio, documentazione, migrazione e rollback applicabili sono trattati insieme.
+
+## CTA commerciale delle home
+
+- Nelle home pubbliche la CTA per richiesta commerciale deve essere **“Prenota una demo”** e aprire il calendario di prenotazione; non usare form contatti, link mail o diciture “Parla con un consulente/team”.
