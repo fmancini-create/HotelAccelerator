@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// Il repository dei canali legge segreti esclusivamente lato server. Nei test
+// Node questo marker di Next non e' disponibile, quindi lo neutralizziamo come
+// gia' fanno le altre suite dei repository.
+vi.mock("server-only", () => ({}))
+
 import { EmailChannelService } from "@/lib/platform-services/email-channel.service"
 import { ValidationError, ConflictError, AuthorizationError } from "@/lib/errors"
 
@@ -7,8 +13,14 @@ describe("EmailChannelService - Critical Invariants", () => {
   let mockSupabase: any
 
   beforeEach(() => {
+    const emptyQuery: any = {
+      select: vi.fn(() => emptyQuery),
+      eq: vi.fn(() => emptyQuery),
+      ilike: vi.fn(() => emptyQuery),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }
     mockSupabase = {
-      from: vi.fn(),
+      from: vi.fn(() => emptyQuery),
     }
 
     service = new EmailChannelService(mockSupabase)
@@ -23,6 +35,11 @@ describe("EmailChannelService - Critical Invariants", () => {
       listByProperty: vi.fn(),
       listAssignments: vi.fn(),
       setAssignments: vi.fn(),
+    } as any
+    service["assignments"] = {
+      listAssignments: vi.fn().mockResolvedValue([]),
+      setAssignments: vi.fn().mockResolvedValue(undefined),
+      addAssignment: vi.fn().mockResolvedValue(undefined),
     } as any
   })
 
@@ -104,6 +121,44 @@ describe("EmailChannelService - Critical Invariants", () => {
           is_active: true,
           assigned_users: [],
         }),
+      ).rejects.toThrow(ConflictError)
+    })
+
+    it("refuses an OAuth mailbox already owned by another property without creating or overwriting it", async () => {
+      const mockRepo = service["repository"]
+      vi.mocked(mockRepo.findByEmail)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          id: "other-property-channel",
+          email_address: "shared@example.com",
+          property_id: "prop-other",
+        } as any)
+
+      await expect(
+        service.upsertOAuthChannel(
+          "prop-1",
+          "gmail",
+          "Shared@Example.com",
+          "access-token",
+          "refresh-token",
+          3600,
+        ),
+      ).rejects.toThrow(ConflictError)
+
+      expect(mockRepo.create).not.toHaveBeenCalled()
+      expect(mockRepo.update).not.toHaveBeenCalled()
+    })
+
+    it("turns a concurrent global unique violation into a managed conflict", async () => {
+      const mockRepo = service["repository"]
+      vi.mocked(mockRepo.findByEmail).mockResolvedValue(null)
+      vi.mocked(mockRepo.create).mockRejectedValue({
+        code: "23505",
+        message: 'duplicate key value violates unique constraint "email_channels_email_address_key"',
+      })
+
+      await expect(
+        service.upsertOAuthChannel("prop-1", "gmail", "new@example.com", "access-token", "refresh-token", 3600),
       ).rejects.toThrow(ConflictError)
     })
   })
