@@ -5,6 +5,8 @@ import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
 import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
 import { createVoiceAgentLinks } from "@/lib/telephony/voice-links"
+import { resolveVoiceKnowledgeBase, VOICE_PRODUCTS } from "@/lib/telephony/voice-products"
+import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 
 /**
  * Restituisce gli URL da incollare nel template CRM di 3CX.
@@ -34,13 +36,57 @@ export async function GET(request: NextRequest) {
     const base = forwardedHost ? `${proto}://${forwardedHost}` : (process.env.NEXT_PUBLIC_APP_URL || "")
     const root = base.replace(/\/+$/, "")
     const query = `property=${encodeURIComponent(propertyId)}&token=${encodeURIComponent(secret)}`
+    const voiceQuery = `property=${encodeURIComponent(propertyId)}`
     const knowledgeBases = await getKnowledgeBases(propertyId)
     const voiceAgents = createVoiceAgentLinks({ rootUrl: root, propertyId, knowledgeBases })
+    const makeVoiceAgents = (endpoint: "prospect" | "support") => VOICE_PRODUCTS.map((product) => {
+      const resolution = resolveVoiceKnowledgeBase(product, knowledgeBases)
+      const knowledgeBase = resolution.ok
+        ? {
+            id: resolution.base.id,
+            name: resolution.base.name,
+            source_count: resolution.base.source_count,
+            matched_by: resolution.matchedBy,
+          }
+        : null
+      const status = !resolution.ok
+        ? resolution.reason
+        : resolution.base.source_count < 1
+          ? "empty"
+          : "ready"
+
+      return {
+        key: product.key,
+        dtmf: product.dtmf,
+        label: product.label,
+        suggested_extension: product.suggestedExtension,
+        fallback_extension: "200",
+        status,
+        knowledge_base: knowledgeBase,
+        query_url: `${root}/api/telephony/3cx/voice/v1/${endpoint}?${voiceQuery}&product=${encodeURIComponent(product.key)}`,
+      }
+    })
+    // Le URL per clienti e prospect esistono solo nella property aziendale
+    // 4 BID. Una configurazione 3CX di un singolo cliente non puo' quindi
+    // trasformarsi nell'accesso alla directory centrale per errore.
+    const supportHub = await isVoiceSupportHub(propertyId)
+    const prospectAgents = supportHub ? makeVoiceAgents("prospect") : []
+    const customerSupportAgents = supportHub ? makeVoiceAgents("support") : []
 
     return NextResponse.json({
       lookup_url: `${root}/api/telephony/3cx/lookup?${query}&number=[Number]`,
       journal_url: `${root}/api/telephony/3cx/journal?${query}`,
       voice_agents: voiceAgents,
+      prospect_agents: prospectAgents,
+      customer_support_agents: customerSupportAgents,
+      customer_support_message_urls: supportHub
+        ? Object.fromEntries(
+            VOICE_PRODUCTS.map((product) => [
+              product.key,
+              `${root}/api/telephony/3cx/voice/v1/support/message?${voiceQuery}&product=${encodeURIComponent(product.key)}`,
+            ]),
+          )
+        : {},
     })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)

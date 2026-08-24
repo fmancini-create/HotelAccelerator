@@ -47,6 +47,9 @@ export default function PhoneChannelPage() {
   const [preparing, setPreparing] = useState(false)
   const [voicePreparing, setVoicePreparing] = useState(false)
   const [voiceAgents, setVoiceAgents] = useState<VoiceAgentLink[] | null>(null)
+  const [prospectAgents, setProspectAgents] = useState<VoiceAgentLink[]>([])
+  const [customerSupportAgents, setCustomerSupportAgents] = useState<VoiceAgentLink[]>([])
+  const [supportMessageUrls, setSupportMessageUrls] = useState<Record<string, string>>({})
   const [copied, setCopied] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -161,6 +164,15 @@ export default function PhoneChannelPage() {
       }
 
       setVoiceAgents(data.voice_agents as VoiceAgentLink[])
+      setProspectAgents(Array.isArray(data.prospect_agents) ? (data.prospect_agents as VoiceAgentLink[]) : [])
+      setCustomerSupportAgents(
+        Array.isArray(data.customer_support_agents) ? (data.customer_support_agents as VoiceAgentLink[]) : [],
+      )
+      setSupportMessageUrls(
+        data.customer_support_message_urls && typeof data.customer_support_message_urls === "object"
+          ? (data.customer_support_message_urls as Record<string, string>)
+          : {},
+      )
       setApiKey(String(secretData.api_key))
       await load()
     } catch {
@@ -509,6 +521,64 @@ export default function PhoneChannelPage() {
                       </div>
                     )
                   })}
+
+                  {customerSupportAgents.length > 0 && (
+                    <div className="rounded-lg border border-ha-brand/30 bg-ha-brand-soft/20 p-4">
+                      <p className="font-medium">1 · Assistenza tecnica clienti</p>
+                      <p className="mt-1 text-xs text-muted-foreground text-pretty">
+                        Prima 3CX raccoglie le sette cifre del codice cliente, poi usa l&apos;URL del prodotto scelto. Se
+                        l&apos;AI non risolve, la risposta indica se trasferire il chiamante o registrare un messaggio.
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {customerSupportAgents.map((agent) => {
+                          const messageUrl = supportMessageUrls[agent.key]
+                          return (
+                            <div key={`support-${agent.key}`} className="grid gap-2 rounded-md bg-background/70 p-2">
+                              <p className="text-xs font-medium">{agent.label}</p>
+                              <div className="flex items-start gap-2">
+                                <code className="min-w-0 flex-1 break-all rounded border bg-muted/50 px-2 py-1 text-[10px] leading-relaxed">
+                                  {agent.query_url}
+                                </code>
+                                <Button variant="outline" size="icon" onClick={() => copy(`Supporto-${agent.key}`, agent.query_url)} aria-label={`Copia URL supporto ${agent.label}`}>
+                                  <Copy className="h-4 w-4" aria-hidden="true" />
+                                </Button>
+                              </div>
+                              {messageUrl && (
+                                <div className="flex items-start gap-2">
+                                  <code className="min-w-0 flex-1 break-all rounded border bg-muted/50 px-2 py-1 text-[10px] leading-relaxed">
+                                    {messageUrl}
+                                  </code>
+                                  <Button variant="outline" size="icon" onClick={() => copy(`Messaggio-${agent.key}`, messageUrl)} aria-label={`Copia callback messaggio ${agent.label}`}>
+                                    <Copy className="h-4 w-4" aria-hidden="true" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {prospectAgents.length > 0 && (
+                    <div className="rounded-lg border p-4">
+                      <p className="font-medium">2 · Informazioni per non clienti</p>
+                      <p className="mt-1 text-xs text-muted-foreground text-pretty">
+                        Risposte su funzioni, caratteristiche e prezzi dalle sole basi commerciali 4 BID: non viene
+                        richiesto né usato alcun codice cliente.
+                      </p>
+                      <div className="mt-3 space-y-2">
+                        {prospectAgents.map((agent) => (
+                          <div key={`prospect-${agent.key}`} className="flex items-start gap-2 rounded-md bg-muted/30 p-2">
+                            <code className="min-w-0 flex-1 break-all text-[10px] leading-relaxed">{agent.query_url}</code>
+                            <Button variant="outline" size="icon" onClick={() => copy(`Prospect-${agent.key}`, agent.query_url)} aria-label={`Copia URL informazioni ${agent.label}`}>
+                              <Copy className="h-4 w-4" aria-hidden="true" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -522,8 +592,8 @@ export default function PhoneChannelPage() {
                 Gli URL non contengono la chiave segreta. Lo script 3CX deve inviare la chiave di collegamento mostrata
                 sopra nell&apos;intestazione X-HotelAccelerator-Key. Il testo della chiamata non viene salvato nel
                 database da questo collegamento; il provider AI lo elabora secondo le proprie condizioni. Il codice
-                cliente non viene ancora verificato: non esiste oggi un campo anagrafico affidabile da usare senza
-                modificare il database.
+                cliente identifica il tenant ma non autorizza operazioni sensibili: per modifiche a dati, contratti o
+                credenziali il flow 3CX deve richiedere una verifica aggiuntiva dell&apos;identita'.
               </p>
             </CardContent>
           </Card>

@@ -92,7 +92,7 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 
 ## ADR-015 — 3CX possiede la chiamata, il Core possiede conoscenza e tenant
 
-- Stato: accettata
+- Stato: sostituita in parte da ADR-016
 - Decisione: 3CX gestisce media, riconoscimento/sintesi vocale, route point e trasferimento; HotelAccelerator espone un contratto HTTP versionato e autenticato che seleziona una sola base nel tenant e genera una risposta fondata.
 - Conseguenza: il modello non riceve un `base_id` arbitrario e non può attraversare prodotti o tenant; assenza, ambiguità, bassa confidenza, richiesta umana ed errore portano all'interno 200. Il codice cliente resta fuori dal contratto finché non esiste una fonte autorevole.
 
@@ -137,6 +137,17 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata
 - Decisione: al termine dell'OAuth Gmail la pagina Canali avvia automaticamente la sincronizzazione storica del canale appena collegato. L'import procede per pagine salvando l'avanzamento nel database e riprende dopo ricaricamenti o interruzioni. Per le aziende con piu' caselle, la Inbox sincronizza l'elenco tenant-aware completo e non presume piu' l'esistenza di un solo canale Gmail.
 - Conseguenza: la lettura diretta delle cartelle non viene piu' confusa con l'import dei messaggi; il poll dei nuovi arrivi resta indipendente dallo storico e nessun `property_id` inviato dal browser autorizza l'OAuth o la sincronizzazione.
+## ADR-023 — Registro centrale dei codici cliente e centralino 4 BID
+
+- Stato: accettata
+- Decisione: il Core assegna lo stesso numero a sette cifre alla property in ciascun prodotto della suite e lo presenta con il prefisso del prodotto (`HA`, `SNT`, `HPA`, `MB`). Il centralino 4 BID risolve il tenant soltanto dopo aver ricevuto prodotto e codice; l'assistenza usa la base del tenant risolto, mentre le informazioni commerciali usano esclusivamente la base del tenant aziendale 4 BID.
+- Conseguenza: il codice identifica il tenant ma non è una credenziale. Il PBX applica l'orario; il Core restituisce `transfer` o `record_message` in base a piano e deroga del tenant. I messaggi fuori orario entrano in una coda supporto centrale idempotente.
+
+## ADR-017 — Numero cliente di suite con prefisso del prodotto
+
+- Stato: accettata; sostituisce il formato di ADR-016, non i relativi vincoli di sicurezza.
+- Decisione: il Core assegna a ogni account cliente un numero unico di sette cifre. I codici stampati derivano da quel numero e dal prodotto: `HA-`, `SNT-`, `HPA-` e `MB-`.
+- Conseguenza: lo stesso cliente riconosce subito il prodotto e il centralino verifica coerenza fra menu e prefisso. Santaddeo, HotelProfitAI e ManuBot risolvono il proprio codice solo tramite contratto HTTP v1 autenticato con una chiave per prodotto e un link tenant esplicito; nessun database satellite legge quello del Core.
 
 ## Decisioni aperte
 

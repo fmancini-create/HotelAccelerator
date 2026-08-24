@@ -3,15 +3,25 @@ import { generateReply, type ConversationTurn } from "@/lib/ai/generate"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
 import { trovaAnagraficaPerNumero } from "@/lib/crm/contact-identity"
 import { createServiceClient } from "@/lib/supabase/server"
-import { VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
+import {
+  getVoiceProduct,
+  resolveVoiceKnowledgeBase,
+  VOICE_FALLBACK_EXTENSION,
+  type VoiceProductKey,
+} from "@/lib/telephony/voice-products"
 import { buildVoiceResponse, serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
 
 export interface VoiceQuestionInput {
   propertyId: string
-  knowledgeBaseId: string
+  /** Agente generico: base gia' scelta nell'URL configurato in 3CX. */
+  knowledgeBaseId?: string
+  /** Hub 4 BID: prodotto scelto dal chiamante, risolto solo nel tenant autorizzato. */
+  productKey?: VoiceProductKey
   question: string
   history: ConversationTurn[]
   callerNumber?: string
+  /** Interno scelto dal flusso chiamante quando serve una persona. */
+  fallbackDestination?: string
 }
 
 const VOICE_PERSONA_RULES = [
@@ -26,49 +36,56 @@ function digits(value: string | undefined): string | null {
 }
 
 export async function answerVoiceQuestion(input: VoiceQuestionInput) {
+  const fallbackDestination = input.fallbackDestination?.trim() || VOICE_FALLBACK_EXTENSION
   const bases = await getKnowledgeBases(input.propertyId)
-  const base = bases.find((candidate) => candidate.id === input.knowledgeBaseId)
-  const agent = { key: input.knowledgeBaseId, label: base?.name ?? "Assistente telefonico" }
 
-  if (!base) {
-    return serviceErrorVoiceResponse(agent, VOICE_FALLBACK_EXTENSION, "knowledge_base_not_found")
+  let base = input.knowledgeBaseId ? bases.find((candidate) => candidate.id === input.knowledgeBaseId) : undefined
+  let product = null as ReturnType<typeof getVoiceProduct>
+  let matchedBy: "marker" | "name" | null = null
+  let agent = { key: input.knowledgeBaseId ?? "", label: "Assistente telefonico" }
+
+  if (input.productKey) {
+    product = getVoiceProduct(input.productKey)
+    if (!product) throw new Error("Prodotto vocale non valido")
+    const resolution = resolveVoiceKnowledgeBase(product, bases)
+    if (!resolution.ok) {
+      return serviceErrorVoiceResponse(
+        { key: product.key, label: product.label },
+        fallbackDestination,
+        resolution.reason === "ambiguous" ? "knowledge_base_ambiguous" : "knowledge_base_not_found",
+      )
+    }
+    base = resolution.base
+    matchedBy = resolution.matchedBy
+    agent = { key: product.key, label: product.label }
   }
 
-  if (base.source_count < 1) {
-    return serviceErrorVoiceResponse(agent, VOICE_FALLBACK_EXTENSION, "knowledge_base_empty")
-  }
+  if (!base) return serviceErrorVoiceResponse(agent, fallbackDestination, "knowledge_base_not_found")
+  if (!input.productKey) agent = { key: input.knowledgeBaseId ?? base.id, label: base.name ?? "Assistente telefonico" }
+  if (base.source_count < 1) return serviceErrorVoiceResponse(agent, fallbackDestination, "knowledge_base_empty")
 
   const callerNumber = digits(input.callerNumber)
   const contact = callerNumber
     ? await trovaAnagraficaPerNumero(createServiceClient(), input.propertyId, callerNumber)
     : null
-
   const result = await generateReply(
     {
       baseIds: [base.id],
       persona: [base.persona?.trim(), VOICE_PERSONA_RULES].filter(Boolean).join("\n"),
       language: base.language,
       confidenceThreshold: base.confidence_threshold,
-      datiNoti: {
-        // Il numero viene confrontato col CRM soltanto dentro HotelAccelerator.
-        // Nome, email e telefono non devono uscire verso il provider AI: per
-        // il flusso vocale basta sapere se il chiamante e' gia' in anagrafica.
-        nome: null,
-        email: null,
-        numero: null,
-        daAnagraficaEsistente: Boolean(contact),
-      },
+      datiNoti: { nome: null, email: null, numero: null, daAnagraficaEsistente: Boolean(contact) },
     },
     input.question,
     input.history,
   )
-
-  const decision = buildVoiceResponse(result, VOICE_FALLBACK_EXTENSION, base.fallback_message)
+  const decision = buildVoiceResponse(result, fallbackDestination, base.fallback_message)
 
   return {
     ok: true as const,
     agent,
-    knowledge_base: { id: base.id, name: base.name },
+    ...(product ? { product: { key: product.key, label: product.label } } : {}),
+    knowledge_base: { id: base.id, name: base.name, ...(matchedBy ? { matched_by: matchedBy } : {}) },
     speech: decision.speech,
     confidence: decision.confidence,
     grounded: decision.grounded,
