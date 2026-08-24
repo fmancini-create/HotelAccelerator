@@ -1,0 +1,81 @@
+import { randomUUID } from "node:crypto"
+import { type NextRequest, NextResponse } from "next/server"
+import { z } from "zod"
+import { authenticateInbound } from "@/lib/telephony/inbound-auth"
+import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
+import { getVoiceProduct, VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
+import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
+import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
+import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
+
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
+const requestSchema = z.object({
+  question: z.string().trim().min(1).max(1_500),
+  caller_number: z.string().trim().max(40).optional(),
+  history: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(1_000) })).max(8).default([]),
+})
+
+const NO_STORE = { "Cache-Control": "no-store, max-age=0" }
+
+async function readVoiceBody(request: NextRequest): Promise<unknown | null> {
+  const text = await request.text()
+  if (text.length > 16_000) return null
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Informazioni commerciali per chi non e' ancora cliente. L'endpoint usa
+ * soltanto le basi di conoscenza pubbliche del tenant aziendale 4 BID, mai la
+ * base operativa di un cliente.
+ */
+export async function POST(request: NextRequest) {
+  const requestId = request.headers.get("x-request-id")?.slice(0, 100) || randomUUID()
+  const auth = await authenticateInbound(request)
+  if (!auth.ok) return NextResponse.json({ error: "Non autorizzato" }, { status: auth.status, headers: NO_STORE })
+
+  try {
+    if (!(await isVoiceSupportHub(auth.propertyId))) {
+      return NextResponse.json({ error: "Canale telefono non disponibile" }, { status: 403, headers: NO_STORE })
+    }
+  } catch {
+    return NextResponse.json({ error: "Errore interno" }, { status: 500, headers: NO_STORE })
+  }
+
+  const product = getVoiceProduct(request.nextUrl.searchParams.get("product"))
+  if (!product) return NextResponse.json({ error: "Prodotto vocale non valido", request_id: requestId }, { status: 400, headers: NO_STORE })
+
+  const rate = takeVoiceRequest(`${auth.propertyId}:prospect`)
+  if (!rate.allowed) {
+    return NextResponse.json(
+      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "rate_limited"), request_id: requestId },
+      { status: 429, headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterSeconds) } },
+    )
+  }
+
+  const raw = await readVoiceBody(request)
+  const parsed = requestSchema.safeParse(raw)
+  if (!parsed.success) return NextResponse.json({ error: "Richiesta vocale non valida", request_id: requestId }, { status: 400, headers: NO_STORE })
+
+  try {
+    const response = await answerVoiceQuestion({
+      propertyId: auth.propertyId,
+      productKey: product.key,
+      question: parsed.data.question,
+      history: parsed.data.history,
+      callerNumber: parsed.data.caller_number,
+    })
+    return NextResponse.json({ ...response, audience: "prospect", request_id: requestId }, { headers: NO_STORE })
+  } catch (error) {
+    console.error("[3cx-prospect] query failed", { requestId, product: product.key, error: error instanceof Error ? error.message : "unknown" })
+    return NextResponse.json(
+      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "provider_error"), audience: "prospect", request_id: requestId },
+      { status: 502, headers: NO_STORE },
+    )
+  }
+}

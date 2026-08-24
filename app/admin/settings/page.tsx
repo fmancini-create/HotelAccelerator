@@ -38,9 +38,17 @@ const meFetcher = async (url: string): Promise<PlatformMe> => {
 
 type ActiveModules = { activeModules: string[] | null }
 
+type CustomerCode = { customer_code: string; telephone_digits: string; product: { label: string; prefix: string } }
+
 const modulesFetcher = async (url: string): Promise<ActiveModules> => {
   const res = await fetch(url, { credentials: "include" })
   if (!res.ok) return { activeModules: null }
+  return res.json()
+}
+
+const customerCodeFetcher = async (url: string): Promise<CustomerCode | null> => {
+  const res = await fetch(url, { credentials: "include" })
+  if (!res.ok) return null
   return res.json()
 }
 
@@ -50,6 +58,9 @@ export default function AdminSettingsPage() {
     revalidateOnFocus: false,
   })
   const { data: modulesData } = useSWR<ActiveModules>("/api/platform/modules", modulesFetcher, {
+    revalidateOnFocus: false,
+  })
+  const { data: customerCode } = useSWR<CustomerCode | null>("/api/platform/customer-code", customerCodeFetcher, {
     revalidateOnFocus: false,
   })
 
@@ -80,6 +91,21 @@ export default function AdminSettingsPage() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {customerCode?.customer_code && (
+          <Card className="mb-6 border-ha-brand/30 bg-ha-brand-soft/20">
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+              <div>
+                <p className="font-medium">Codice cliente — {customerCode.product.label}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Comunicalo al centralino per ricevere assistenza tecnica. Al telefono scegli prima il prodotto, poi digita le sette cifre.
+                </p>
+              </div>
+              <code className="rounded-md border bg-background px-3 py-2 text-base font-semibold tracking-wide">
+                {customerCode.customer_code}
+              </code>
+            </CardContent>
+          </Card>
+        )}
         {items.length === 0 ? (
           /*
            * Un membro senza alcuna impostazione concessa vedeva una griglia

@@ -1,12 +1,22 @@
 # 3CX Voice AI ↔ HotelAccelerator
 
-Stato al 2026-08-20: **Codice** nel Core; collegamento e prova sul PBX ancora da eseguire.
+Stato al 2026-08-24: **Codice** nel Core; configurazione e prova sul PBX ancora da eseguire.
 
 ## Scopo
 
-Ogni tenant puo' creare i propri agenti telefonici: ciascun agente e' collegato a una base di conoscenza dello stesso
-tenant. La lista non usa prodotti o basi predefiniti: Villa I Barronci, 4BID e ogni altro cliente vedono solo le
-proprie basi. Il collegamento CRM telefonico generico resta disponibile per ciascun tenant.
+Ogni tenant puo' creare i propri agenti telefonici, ciascuno collegato a una propria base di conoscenza. Il
+collegamento CRM telefonico generico resta disponibile per ciascun tenant.
+
+Il primo menu del centralino separa due percorsi:
+
+| Tasto | Percorso | Base interrogata | Escalation |
+|---:|---|---|---|
+| 1 | Assistenza tecnica clienti | Codice cliente → tenant → base del prodotto | Operatore, reperibile o messaggio |
+| 2 | Informazioni per non clienti | Solo base commerciale 4 BID del prodotto | Operatore commerciale |
+| 0 | Operatore | — | Interno/ring group 3CX |
+
+Il secondo menu seleziona il prodotto: 1 Hotel Accelerator, 2 Santaddeo RMS, 3 Hotel Profit AI, 4 ManuBot. Il
+fallback resta l'interno 200.
 
 Il tenant decide nel proprio 3CX quali tasti, route point o numeri assegnare agli agenti. HotelAccelerator genera un
 URL per ciascuna base di conoscenza; il fallback corrente e' l'interno 200.
@@ -27,11 +37,11 @@ tenant e sulle basi di conoscenza.
 
 La selezione avviene solo dentro le basi già filtrate per `property_id`.
 
-1. L'amministratore crea o sceglie una base nel tenant corrente.
-2. La pagina Telefono genera un collegamento univoco per quella base.
-3. Una base senza fonti non viene usata.
+1. L'amministratore crea o sceglie una base nel tenant corrente; la pagina Telefono genera un collegamento univoco.
+2. Per gli agenti del centralino 4 BID, la descrizione della base usa il marker del prodotto: `[voice:hotel-accelerator]`, `[voice:santaddeo-rms]`, `[voice:hotel-profit-ai]` o `[voice:manubot]`. In assenza del marker è accettato solo un alias esatto.
+3. Zero, più di una o nessuna fonte portano al fallback: il sistema non indovina per sottostringa.
 
-Nessuna nuova tabella o colonna è richiesta.
+Il contratto di assistenza usa il registro centrale dei codici cliente e la politica fuori orario della struttura.
 
 ## Endpoint v1
 
@@ -80,6 +90,34 @@ Lo script 3CX deve pronunciare `speech` e, quando `transfer.required` è `true`,
 `transfer.destination`. Anche una risposta HTTP 429/502 contiene il blocco `transfer`, ma lo script deve mantenere
 un proprio fallback al 200 se la chiamata HTTP non produce JSON.
 
+### Prospect
+
+`POST /api/telephony/3cx/voice/v1/prospect?property=<4bid>&product=<chiave>` usa esclusivamente la base commerciale
+del tenant aziendale 4 BID. Non richiede né legge un codice cliente.
+
+### Supporto clienti
+
+`POST /api/telephony/3cx/voice/v1/support?property=<4bid>&product=<chiave>` richiede un codice cliente:
+
+```json
+{
+  "customer_code": "3493840",
+  "question": "Come riconnetto Gmail?",
+  "after_hours": false,
+  "history": []
+}
+```
+
+Il codice identifica il tenant e il retrieval riparte dalla sua base del prodotto. La risposta include sempre
+`customer.recognized` e `handoff.action`: `none`, `transfer` oppure `record_message`. Con quest'ultima azione 3CX
+registra il messaggio invece di trasferire.
+
+### Callback messaggio fuori orario
+
+`POST /api/telephony/3cx/voice/v1/support/message?property=<4bid>&product=<chiave>` riceve `customer_code`,
+`call_id`, `recording_reference` o `transcript` e `caller_number` facoltativo. `call_id` rende i retry idempotenti.
+Il Core apre un'attività ad alta priorità nella coda centrale 4 BID, con il tenant cliente nei metadati.
+
 ## Configurazione operativa
 
 1. In HotelAccelerator aprire **Canali → Telefono IP**.
@@ -87,11 +125,10 @@ un proprio fallback al 200 se la chiamata HTTP non produce JSON.
 3. Tutte le righe devono risultare `Pronto`; altrimenti aggiungere fonti alla rispettiva base.
 4. In 3CX installare da **Integrazioni → Script di chiamata → Aggiungi dallo store** lo script OpenAI Voice Agent
    previsto dalla versione del PBX.
-5. Creare in 3CX un route point per ogni agente desiderato e configurare nel custom tool l'URL mostrato da
-   HotelAccelerator.
-6. Collegare i tasti dell'IVR agli interni/route point corrispondenti.
-7. Impostare 200 come `FallbackDestination`.
-8. Provare una domanda presente e una assente da ogni base. La seconda deve trasferire al 200.
+5. Per un tenant normale, creare un route point per ogni agente desiderato e configurare l'URL mostrato da HotelAccelerator.
+6. Per l'IVR 4 BID, raccogliere il codice cliente nel percorso supporto e creare i quattro route point supporto e prospect; collegare il menu prodotto alle rispettive URL.
+7. Per il supporto rispettare `handoff.action` e inviare la callback dopo una registrazione; impostare 200 come fallback locale.
+8. Provare domanda presente/assente per un agente tenant e, sull'IVR 4 BID, codice valido/errato, escalation in orario, reperibilità enterprise e messaggio fuori orario.
 
 La versione dello script distribuito dallo store 3CX può cambiare. Il codice del custom tool va aggiunto alla copia
 effettivamente installata sul PBX, non ricostruito a memoria contro un'API potenzialmente diversa.
@@ -108,19 +145,35 @@ effettivamente installata sul PBX, non ricostruito a memoria contro un'API poten
   esistente. Al provider AI viene passato soltanto il valore cliente
   riconosciuto/non riconosciuto: nome, email e numero non lasciano il Core.
 
-### Codice cliente
+### Codice cliente e orario
 
-La verifica del codice cliente **non è implementata**: nello schema attuale dei contatti non esiste un campo
-autorevole `customer_code`. Inventare una verifica o riusare un campo diverso collegherebbe persone sbagliate.
-Prima di aggiungerla servono proprietario del dato, formato, sorgente e regole di privacy; solo dopo si potrà
-versionare un contratto di verifica.
+Il Core assegna un numero cliente unico nella suite e lo stampa con il prefisso del prodotto: `HA-3493840`,
+`SNT-3493840`, `HPA-3493840` oppure `MB-3493840`. Il cliente vede il formato completo nella piattaforma; al
+centralino sceglie prima il prodotto e digita le sette cifre. Il prefisso ricevuto e' controllato rispetto al
+prodotto scelto. È un identificatore di tenant, **non una password**: modifiche sensibili richiedono sempre una
+verifica ulteriore dell'identità.
+
+La property aziendale `4bid` è l'unica autorizzata a consultare la directory centrale. Un centralino configurato da
+un singolo tenant non può quindi risolvere codici altrui. Fuori orario, 3CX invia `after_hours`: il piano `enterprise`
+va al reperibile, gli altri alla registrazione, salvo una deroga `on_call`/`voicemail` salvata sul tenant.
 
 ## File di evidenza
 
 - `app/api/telephony/3cx/voice/v1/query/route.ts`
+- `app/api/telephony/3cx/voice/v1/prospect/route.ts`
+- `app/api/telephony/3cx/voice/v1/support/route.ts`
+- `app/api/telephony/3cx/voice/v1/support/message/route.ts`
 - `lib/telephony/voice-agent.ts`
+- `lib/telephony/customer-code.ts`
+- `lib/telephony/voice-support.ts`
+- `lib/telephony/voice-support-customer.ts`
 - `lib/telephony/voice-products.ts`
 - `lib/telephony/voice-response.ts`
 - `app/api/telephony/3cx/inbound-urls/route.ts`
 - `app/admin/channels/phone/page.tsx`
 - `lib/telephony/__tests__/voice-*.test.ts`
+- `supabase/migrations/20260824153000_add_universal_customer_code_and_voice_support_policy.sql`
+- `supabase/migrations/20260824172000_add_prefixed_suite_customer_code_registry.sql`
+- `supabase/migrations/20260824173500_deny_direct_client_access_to_customer_code_registry.sql`
+- `supabase/migrations/20260824174000_preallocate_suite_product_customer_codes.sql`
+- `docs/CUSTOMER_CODE_REGISTRY.md`

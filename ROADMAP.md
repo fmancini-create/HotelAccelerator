@@ -30,6 +30,7 @@ Uscita: registro attendibile, rischi P0/P1 e architettura as-is documentata.
 - [ ] Identity/SSO e tenant context definiti.
 - [ ] Entitlement per modulo, ruolo e abbonamento.
 - [ ] Contratti API/eventi versionati tra Core e satelliti.
+- [ ] Collegare i tenant Santaddeo, HotelProfitAI e ManuBot al registro codice cliente del Core e configurare le chiavi server-to-server per ciascun deploy.
 - [ ] Audit trail, logging, error model e correlation ID condivisi.
 - [ ] Monitoraggio di cron, webhook e connettori.
 - [ ] Test automatici minimi multi-tenant e recovery.
