@@ -66,6 +66,20 @@ export async function POST(request: NextRequest) {
   const startedAt = Date.now()
 
   try {
+    // Pub/Sub now sends a verified OIDC token. Authenticate before parsing a
+    // potentially untrusted body or touching the database.
+    const origine = await verificaNotificaPubSub(request)
+    if (origine.stato !== "valida") {
+      console.warn("[gmail-webhook][origine-rifiutata]", {
+        stato: origine.stato,
+        motivo: "motivo" in origine ? origine.motivo : undefined,
+        aud: "aud" in origine ? origine.aud : undefined,
+        iss: "iss" in origine ? origine.iss : undefined,
+        bloccante: true,
+      })
+      return NextResponse.json({ error: "Notifica Pub/Sub non autorizzata" }, { status: 401 })
+    }
+
     const body = await request.json()
     const message = body?.message
     if (!message?.data) {
@@ -85,22 +99,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Notifica Gmail incompleta" }, { status: 400 })
     }
 
-    // ORIGINE DELLA NOTIFICA — SOLO OSSERVAZIONE, NON BLOCCA NULLA.
-    // Questo webhook accetta oggi richieste da chiunque (gli altri del progetto
-    // — WhatsApp, Meta, Stripe — verificano tutti il mittente). Prima di
-    // attivare il blocco dobbiamo sapere se le notifiche legittime portano
-    // davvero un token OIDC: la sottoscrizione push si configura nella console
-    // Google, non qui. Si registra e basta; quando i dati diranno che i
-    // legittimi passano tutti, il blocco sara' una riga sola.
-    const origine = await verificaNotificaPubSub(request)
-    console.info("[gmail-webhook][origine-osservata]", {
+    console.info("[gmail-webhook][origine-verificata]", {
       stato: origine.stato,
-      motivo: "motivo" in origine ? origine.motivo : undefined,
-      email: "email" in origine ? origine.email : undefined,
-      aud: "aud" in origine ? origine.aud : undefined,
-      iss: "iss" in origine ? origine.iss : undefined,
+      email: origine.email,
+      aud: origine.aud,
+      iss: origine.iss,
       casella: emailAddress,
-      bloccante: false,
+      bloccante: true,
     })
 
     // Google Pub/Sub has no HotelAccelerator user cookie. A request-scoped SSR

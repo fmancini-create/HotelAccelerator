@@ -1,32 +1,30 @@
 import { createPublicKey, createVerify } from "node:crypto"
 
 /**
- * Verifica dell'origine delle notifiche Google Pub/Sub — MODALITA' OSSERVAZIONE.
+ * Verifica dell'origine delle notifiche Google Pub/Sub.
  *
- * Il webhook Gmail accetta oggi qualunque richiesta: chi conosce l'indirizzo di
- * una casella collegata puo' far partire sincronizzazioni a piacere. Gli altri
- * webhook del progetto (WhatsApp, Meta, Stripe) verificano tutti il mittente;
- * questo era l'unico che non lo faceva.
+ * La subscription push di produzione usa l'account di servizio indicato sotto
+ * e invia un JWT OIDC firmato da Google. Il webhook deve accettare soltanto
+ * quel mittente, per l'audience pubblica esatta: conoscere l'indirizzo del
+ * webhook o di una casella non deve bastare per avviare una sincronizzazione.
  *
- * Qui NON si blocca nulla. Si osserva soltanto, e si registra l'esito, perche':
- *  - la sottoscrizione push si configura nella console Google, non nel codice:
- *    dal repository non e' possibile sapere se le notifiche portino davvero un
- *    token OIDC;
- *  - attivare subito il blocco, se la sottoscrizione non fosse configurata con
- *    OIDC, fermerebbe la posta in arrivo di tutti i clienti.
- *
- * Quando i dati raccolti mostreranno che le notifiche legittime portano tutte
- * un token valido, il blocco potra' essere attivato con una riga sola.
- *
+ * Le variabili permettono di sostituire l'identita' in un ambiente separato;
+ * i fallback sono la configurazione di produzione verificata il 24/08/2026.
  * Nessuna dipendenza aggiunta: la firma RS256 viene verificata con `node:crypto`
  * contro le chiavi pubbliche di Google.
  */
 
 const JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs"
 const EMITTENTI_LECITI = new Set(["accounts.google.com", "https://accounts.google.com"])
+const AUDIENCE_ATTESA =
+  process.env.GOOGLE_PUBSUB_AUDIENCE ??
+  "https://www.hotelaccelerator.com/api/channels/email/webhook/gmail"
+const SERVICE_ACCOUNT_ATTESO =
+  process.env.GOOGLE_PUBSUB_SERVICE_ACCOUNT ??
+  "hotelaccelerator-pubsub@hotelaccelerator.iam.gserviceaccount.com"
 
 export type EsitoVerifica =
-  | { stato: "valida"; email?: string; aud?: string; iss?: string }
+  | { stato: "valida"; email: string; aud: string; iss: string }
   | { stato: "assente"; motivo: string }
   | { stato: "non_valida"; motivo: string; aud?: string; iss?: string }
 
@@ -98,19 +96,17 @@ export async function verificaNotificaPubSub(request: Request): Promise<EsitoVer
     }
 
     const adesso = Math.floor(Date.now() / 1000)
-    if (typeof corpo.exp === "number" && corpo.exp < adesso) {
+    if (typeof corpo.exp !== "number" || corpo.exp <= adesso) {
       return { stato: "non_valida", motivo: "token scaduto", aud: corpo.aud, iss: corpo.iss }
     }
     if (!EMITTENTI_LECITI.has(String(corpo.iss))) {
       return { stato: "non_valida", motivo: `emittente inatteso: ${corpo.iss}`, aud: corpo.aud, iss: corpo.iss }
     }
-
-    // L'`aud` atteso dipende da come e' configurata la sottoscrizione push.
-    // Finche' non lo conosciamo con certezza lo REGISTRIAMO soltanto: sara' la
-    // base per attivare il blocco senza rompere nulla.
-    const audAtteso = process.env.GOOGLE_PUBSUB_AUDIENCE
-    if (audAtteso && corpo.aud !== audAtteso) {
+    if (corpo.aud !== AUDIENCE_ATTESA) {
       return { stato: "non_valida", motivo: "audience diversa da quella attesa", aud: corpo.aud, iss: corpo.iss }
+    }
+    if (corpo.email !== SERVICE_ACCOUNT_ATTESO || corpo.email_verified !== true) {
+      return { stato: "non_valida", motivo: "account di servizio inatteso", aud: corpo.aud, iss: corpo.iss }
     }
 
     return { stato: "valida", email: corpo.email, aud: corpo.aud, iss: corpo.iss }
