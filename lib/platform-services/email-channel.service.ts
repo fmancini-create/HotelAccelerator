@@ -25,6 +25,16 @@ export interface UpdateChannelRequest {
   color?: string | null
 }
 
+function normalizeEmailAddress(emailAddress: string): string {
+  return emailAddress.trim().toLowerCase()
+}
+
+function isValidEmailAddress(emailAddress: string): boolean {
+  // Non e' una validazione RFC completa: rifiuta gli indirizzi palesemente
+  // incompleti senza impedire domini o suffissi internazionali validi.
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)
+}
+
 export class EmailChannelService {
   private repository: EmailChannelRepository
   private assignments: ChannelAssignmentService
@@ -63,21 +73,22 @@ export class EmailChannelService {
   }
 
   async createChannel(propertyId: string, data: CreateChannelRequest): Promise<ChannelWithAssignments> {
-    if (!data.email_address || !data.email_address.includes("@")) {
+    const emailAddress = normalizeEmailAddress(data.email_address)
+    if (!isValidEmailAddress(emailAddress)) {
       throw new ValidationError("Indirizzo email non valido")
     }
 
     // Limitato alla struttura: senza filtro, una casella collegata da un altro
     // albergo bloccava questo con un messaggio fuorviante.
-    const existing = await this.repository.findByEmail(data.email_address, propertyId)
+    const existing = await this.repository.findByEmail(emailAddress, propertyId)
     if (existing) {
       throw new ConflictError("Questo indirizzo email è già configurato")
     }
 
     const channel = await this.repository.create({
       property_id: propertyId,
-      name: data.display_name || data.email_address,
-      email_address: data.email_address,
+      name: data.display_name?.trim() || emailAddress.split("@")[0],
+      email_address: emailAddress,
       display_name: data.display_name,
       is_active: data.is_active,
       provider: "manual",
@@ -99,7 +110,7 @@ export class EmailChannelService {
         .from("admin_users")
         .select("id")
         .eq("property_id", propertyId)
-        .ilike("email", data.email_address)
+        .ilike("email", emailAddress)
         .maybeSingle()
       if (ownUser?.id) {
         await this.assignments.addAssignment(propertyId, "email", channel.id, ownUser.id, "owner")
@@ -128,19 +139,20 @@ export class EmailChannelService {
       throw new AuthorizationError("Non autorizzato a modificare questo canale")
     }
 
-    if (!data.email_address || !data.email_address.includes("@")) {
+    const emailAddress = normalizeEmailAddress(data.email_address)
+    if (!isValidEmailAddress(emailAddress)) {
       throw new ValidationError("Indirizzo email non valido")
     }
 
-    if (data.email_address !== channel.email_address) {
-      const existing = await this.repository.findByEmail(data.email_address, propertyId)
+    if (emailAddress !== normalizeEmailAddress(channel.email_address)) {
+      const existing = await this.repository.findByEmail(emailAddress, propertyId)
       if (existing && existing.id !== channelId) {
         throw new ConflictError("Questo indirizzo email è già configurato")
       }
     }
 
     const updated = await this.repository.update(channelId, {
-      email_address: data.email_address,
+      email_address: emailAddress,
       display_name: data.display_name,
       is_active: data.is_active,
       ...(data.color !== undefined ? { color: data.color } : {}),
@@ -149,7 +161,7 @@ export class EmailChannelService {
     await this.assignments.setAssignments(propertyId, "email", channelId, data.assigned_users)
 
     await CommandLogger.logIntent("system", propertyId, "channel.email.update", "email_channel", channelId, {
-      email: data.email_address,
+      email: emailAddress,
     })
 
     const assignments = await this.assignments.listAssignments("email", channelId)
@@ -198,9 +210,14 @@ export class EmailChannelService {
     refreshToken: string,
     expiresIn: number,
   ): Promise<EmailChannel> {
+    const normalizedEmail = normalizeEmailAddress(email)
+    if (!isValidEmailAddress(normalizedEmail)) {
+      throw new ValidationError("Indirizzo email non valido")
+    }
+
     // Limitato alla struttura: senza filtro, riconnettere una casella condivisa
     // avrebbe scritto i token di questo albergo nel canale di un altro.
-    const existing = await this.repository.findByEmail(email, propertyId)
+    const existing = await this.repository.findByEmail(normalizedEmail, propertyId)
     if (existing) {
       return await this.repository.update(existing.id, {
         provider,
@@ -217,24 +234,48 @@ export class EmailChannelService {
       })
     }
 
-    return await this.repository.create({
-      property_id: propertyId,
-      name: email,
-      email_address: email,
-      display_name: email,
-      is_active: true,
-      provider,
-      oauth_access_token: accessToken,
-      oauth_refresh_token: refreshToken,
-      oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
-      // Chi collega una casella la collega PER sincronizzarla: il valore
-      // predefinito del repository e' `false`, e non passandolo qui ogni
-      // casella appena collegata nasceva con la sincronizzazione automatica
-      // SPENTA. Sommato al fatto che la pagina seleziona da sola il canale
-      // piu' recente, l'utente tornava da Google e trovava l'interruttore
-      // spento: sembrava che l'attivazione non venisse salvata.
-      sync_enabled: true,
-    })
+    // Lo schema in produzione impone ancora l'unicita' globale di
+    // `email_address`. Prima controllavamo solo il tenant attivo e poi
+    // lasciavamo che l'insert fallisse con il tecnico `23505`. Non e' lecito
+    // fare un upsert globale: ricollegare una casella dal tenant B
+    // sovrascriverebbe i token del tenant A. Quindi rendiamo il conflitto
+    // esplicito senza rivelare a quale azienda appartenga la casella.
+    const existingElsewhere = await this.repository.findByEmail(normalizedEmail)
+    if (existingElsewhere) {
+      throw new ConflictError(
+        "Questa casella email è già collegata a un'altra azienda. Ricollegala dall'azienda corretta oppure chiedi a un superadmin di spostarla.",
+      )
+    }
+
+    try {
+      return await this.repository.create({
+        property_id: propertyId,
+        name: normalizedEmail,
+        email_address: normalizedEmail,
+        display_name: normalizedEmail,
+        is_active: true,
+        provider,
+        oauth_access_token: accessToken,
+        oauth_refresh_token: refreshToken,
+        oauth_expiry: new Date(Date.now() + expiresIn * 1000).toISOString(),
+        // Chi collega una casella la collega PER sincronizzarla: il valore
+        // predefinito del repository e' `false`, e non passandolo qui ogni
+        // casella appena collegata nasceva con la sincronizzazione automatica
+        // SPENTA. Sommato al fatto che la pagina seleziona da sola il canale
+        // piu' recente, l'utente tornava da Google e trovava l'interruttore
+        // spento: sembrava che l'attivazione non venisse salvata.
+        sync_enabled: true,
+      })
+    } catch (error) {
+      // Due tab possono concludere OAuth nello stesso istante. Anche in quella
+      // finestra la UI deve ricevere un conflitto gestibile, non un errore DB.
+      if (isEmailAddressUniqueViolation(error)) {
+        throw new ConflictError(
+          "Questa casella email è già collegata a un'altra azienda. Ricollegala dall'azienda corretta oppure chiedi a un superadmin di spostarla.",
+        )
+      }
+      throw error
+    }
   }
 
   async toggleChannelStatus(channelId: string, propertyId: string): Promise<ChannelWithAssignments> {
@@ -256,4 +297,14 @@ export class EmailChannelService {
       assignments: assignments.map((a) => ({ user_id: a.user_id })),
     }
   }
+}
+
+function isEmailAddressUniqueViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const candidate = error as { code?: unknown; message?: unknown }
+  return (
+    candidate.code === "23505" &&
+    typeof candidate.message === "string" &&
+    candidate.message.includes("email_channels_email_address_key")
+  )
 }

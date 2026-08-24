@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { OAUTH_PROVIDERS, type OAuthProvider, getOAuthRedirectUri } from "@/lib/oauth-config"
 import { EmailChannelService } from "@/lib/platform-services"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { ConflictError } from "@/lib/errors"
 
 function fromBase64Url(str: string): string {
   const base64 = str.replace(/-/g, "+").replace(/_/g, "/")
@@ -110,6 +111,11 @@ export async function GET(request: NextRequest) {
     if (provider === "gmail") destination.searchParams.set("initial_sync", channel.id)
     return NextResponse.redirect(destination)
   } catch (error) {
+    if (error instanceof ConflictError) {
+      // Il dettaglio viene mostrato nella pagina Canali, non nel log: il
+      // conflitto e' gestito e non deve rivelare il tenant proprietario.
+      return NextResponse.redirect(new URL("/admin/channels/email?error=email_already_connected", request.url))
+    }
     console.error("OAuth callback error:", error)
     return NextResponse.redirect(new URL("/admin/channels/email?error=callback_failed", request.url))
   }

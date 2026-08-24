@@ -802,7 +802,9 @@ export default function EmailChannelsClient() {
               {oauthError === "config_missing" && "Configurazione OAuth mancante. Contatta il supporto."}
               {oauthError === "state_expired" && "Sessione scaduta. Riprova."}
               {oauthError === "tenant_mismatch" && "L'azienda attiva è cambiata durante il collegamento. Riprova."}
-              {!["token_exchange_failed", "config_missing", "state_expired", "tenant_mismatch"].includes(oauthError) &&
+              {oauthError === "email_already_connected" &&
+                "Questa casella è già collegata a un'altra azienda. Per sicurezza non è stata spostata. Se deve appartenere a questa azienda, rimuovila prima da quella attuale."}
+              {!["token_exchange_failed", "config_missing", "state_expired", "tenant_mismatch", "email_already_connected"].includes(oauthError) &&
                 `Errore: ${oauthError}`}
             </AlertDescription>
           </Alert>
