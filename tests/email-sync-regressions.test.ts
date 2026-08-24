@@ -137,6 +137,16 @@ describe("email synchronization regressions", () => {
     expect(webhook).not.toContain("Always return 200 to prevent Pub/Sub retries")
   })
 
+  it("rejects unauthenticated Pub/Sub calls before reading their body", () => {
+    const webhook = source("app/api/channels/email/webhook/gmail/route.ts")
+
+    expect(webhook).toContain('if (origine.stato !== "valida")')
+    expect(webhook).toContain('status: 401')
+    expect(webhook.indexOf('if (origine.stato !== "valida")')).toBeLessThan(
+      webhook.indexOf("const body = await request.json()"),
+    )
+  })
+
   it("never serializes NextResponse.json as a JSON value", () => {
     const apiSource = typescriptFiles("app/api").map(source).join("\n")
 
