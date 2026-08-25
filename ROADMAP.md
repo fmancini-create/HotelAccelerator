@@ -48,6 +48,7 @@ Uscita: fondazioni almeno `Multi-tenant` per i flussi prioritari.
    - [ ] Recovery drill con cursor Gmail scaduto e outage Supabase/Google.
    - [ ] Verifica autenticità Pub/Sub, alert, SLO e runbook.
    - [ ] Modellare Sent/risposte prima di riattivare KPI di risposta storici.
+   - [x] Rendere i KPI operatore attivabili dal tenant per singolo utente, con decorrenza dall'opt-in e senza recupero dello storico inaffidabile.
 
 Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 
