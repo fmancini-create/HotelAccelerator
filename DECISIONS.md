@@ -169,6 +169,15 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
   di audit. I satelliti adottano lo stesso contratto dal proprio repository, senza accedere ai database o alle KB di
   altri prodotti; una KB non pronta non abilita una route IVR.
 
+## ADR-027 — Verifiche Platform e Santaddeo con runner separati
+
+- Stato: accettata
+- Decisione: il runner Vitest della Platform esclude Santaddeo e le sue suite E2E; Santaddeo viene verificato tramite
+  la propria configurazione e il comando dedicato `test:santaddeo`.
+- Conseguenza: gli alias, l'ambiente e i contratti di test di un satellite non vengono interpretati come quelli del
+  Core. Le verifiche verdi non nascondono il debito esistente e ogni correzione incrementale resta attribuibile al
+  modulo proprietario.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

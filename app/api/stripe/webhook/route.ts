@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import { getStripe } from "@/lib/stripe"
 import { createServiceClient } from "@/lib/supabase/server"
 import { registraAcquistoWidget } from "@/lib/chat-widgets/quota"
 import { getFattureInCloudClient } from "@/lib/fattureincloud"
@@ -26,7 +26,9 @@ export async function POST(request: NextRequest) {
   }
 
   let event: Stripe.Event
+  let stripe: Stripe
   try {
+    stripe = getStripe()
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
   } catch (err) {
     console.error("[Stripe Webhook] Signature verification failed:", err)
@@ -39,14 +41,14 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
-        await handleCheckoutCompleted(supabase, session)
+        await handleCheckoutCompleted(supabase, session, stripe)
         break
       }
 
       case "invoice.paid": {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const invoice = event.data.object as any
-        await handleInvoicePaid(supabase, invoice)
+        await handleInvoicePaid(supabase, invoice, stripe)
         break
       }
 
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
 async function handleCheckoutCompleted(
   supabase: ReturnType<typeof createServiceClient>,
   session: Stripe.Checkout.Session,
+  stripe: Stripe,
 ) {
   const { propertyId, planId, roomCount, propertyName, kind, quantity } = session.metadata || {}
 
@@ -312,7 +315,7 @@ async function handleCheckoutCompleted(
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function handleInvoicePaid(supabase: ReturnType<typeof createServiceClient>, invoice: any) {
+async function handleInvoicePaid(supabase: ReturnType<typeof createServiceClient>, invoice: any, stripe: Stripe) {
   // Find subscription by Stripe customer
   if (!invoice.subscription || !invoice.customer) return
 

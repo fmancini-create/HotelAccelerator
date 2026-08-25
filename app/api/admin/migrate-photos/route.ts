@@ -1,12 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { list } from "@vercel/blob"
-import { createClient } from "@supabase/supabase-js"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireTenantAdmin, accessErrorStatus, isAccessError } from "@/lib/auth/admin-access"
 import { requireAreaApi } from "@/lib/auth/area-access"
-
-// Usa service role key per bypassare RLS
-const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+import { createServiceClient } from "@/lib/supabase/server"
 
 // Mappa delle foto reali dalle cartelle public/images/
 const HARDCODED_PHOTOS = [
@@ -365,13 +362,14 @@ export async function POST(request: NextRequest) {
     // (misurato: HTTP 200 da un estraneo). Migrazione una-tantum: riservata
     // agli amministratori.
     await requireTenantAdmin(request)
+    const supabase = createServiceClient()
 
     console.log("[v0] Starting photo migration...")
 
     // Verifica categorie esistenti
     const { data: categories } = await supabase.from("photo_categories").select("id, name, slug")
 
-    const categoryMap = new Map(categories?.map((c) => [c.name.toLowerCase(), c.id]) || [])
+    const categoryMap = new Map(categories?.map((c: { id: string; name: string }) => [c.name.toLowerCase(), c.id]) || [])
 
     let migrated = 0
     let skipped = 0

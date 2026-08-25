@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import { getStripe } from "@/lib/stripe"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { PREZZO_WIDGET_EXTRA_CENTESIMI, getQuotaWidget } from "@/lib/chat-widgets/quota"
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     const quota = await getQuotaWidget(propertyId)
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [

@@ -112,6 +112,9 @@ export class InboxWriteService {
     if (!command.content || command.content.trim() === "") {
       throw new ValidationError("Message content cannot be empty")
     }
+    if (command.senderType !== "agent") {
+      throw new ValidationError("Only agent messages can be sent through the inbox reply service")
+    }
 
     if (conversation.channel === "email") {
       const emailSendResult = await this.sendEmailViaGmail(

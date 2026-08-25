@@ -18,22 +18,6 @@ export function ImageGallery({ images, heroIndex = 0, className }: ImageGalleryP
   const [isOpen, setIsOpen] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
 
-  if (!images || images.length === 0) {
-    return (
-      <div className={cn("relative", className)}>
-        <Image
-          src="/placeholder.svg?height=600&width=800"
-          alt="Nessuna immagine disponibile"
-          fill
-          className="object-cover"
-        />
-        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-          <p className="text-white text-lg font-medium">Nessuna foto disponibile</p>
-        </div>
-      </div>
-    )
-  }
-
   const openGallery = useCallback((index: number) => {
     setCurrentIndex(index)
     setIsOpen(true)
@@ -65,6 +49,22 @@ export function ImageGallery({ images, heroIndex = 0, className }: ImageGalleryP
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [isOpen, closeGallery, goToPrevious, goToNext])
+
+  if (images.length === 0) {
+    return (
+      <div className={cn("relative", className)}>
+        <Image
+          src="/placeholder.svg?height=600&width=800"
+          alt="Nessuna immagine disponibile"
+          fill
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+          <p className="text-white text-lg font-medium">Nessuna foto disponibile</p>
+        </div>
+      </div>
+    )
+  }
 
   const validHeroIndex = Math.min(heroIndex, images.length - 1)
   const heroImage = images[validHeroIndex]

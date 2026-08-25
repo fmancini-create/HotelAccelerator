@@ -10,6 +10,7 @@
     "start": "next start",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:santaddeo": "vitest run --config apps/santaddeo/vitest.config.ts",
     "check:area-guard": "tsx scripts/check-area-guard.mjs",
     "check:inbox-collaboration": "tsx scripts/check-inbox-collaboration.mjs",
     "test:area-guard": "tsx scripts/test-area-guard.mjs",
