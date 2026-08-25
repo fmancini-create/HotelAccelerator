@@ -23,7 +23,16 @@ jobs:
         with:
           node-version: 22
       - name: Sync approved internal documentation
-        run: node scripts/sync-4bid-internal-knowledge.mjs
+        run: |
+          for attempt in {1..24}; do
+            if node scripts/sync-4bid-internal-knowledge.mjs; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 24 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SHA: ${{ github.sha }}

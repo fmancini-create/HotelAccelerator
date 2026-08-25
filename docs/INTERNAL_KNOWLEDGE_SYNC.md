@@ -30,6 +30,11 @@ link pubblici e non vengono passati al retrieval dell'agente.
 6. L'indicizzatore esistente e il cron di recovery aggiornano chunk, stato e
    diagnostica. Il sync non gestisce un secondo indice o un secondo retry.
 
+Il workflow ritenta per un massimo di sei minuti: evita un falso fallimento se
+Vercel sta ancora promuovendo il deployment nato dallo stesso merge. Un errore
+persistente di migrazione o configurazione resta invece visibile come fallimento
+del workflow.
+
 Una modifica a file non incluso non entra automaticamente nella base: è una
 scelta di sicurezza, non una perdita di funzionalità. Ogni modifica sostanziale
 deve aggiornare la documentazione di prodotto approvata nello stesso PR.
