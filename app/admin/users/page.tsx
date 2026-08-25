@@ -21,6 +21,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
 import { useAdminAuth, getRoleLabel, type AdminUser } from "@/lib/admin-hooks"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { SignatureEditor } from "@/components/admin/signature-editor"
@@ -49,6 +50,8 @@ interface ExtendedAdminUser extends AdminUser {
   signature_html?: string
   is_tenant_admin?: boolean
   groups?: string[]
+  kpi_enabled?: boolean
+  kpi_tracking_started_at?: string | null
 }
 
 export default function AdminUsersPage() {
@@ -74,6 +77,7 @@ export default function AdminUsersPage() {
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [activeTab, setActiveTab] = useState("users")
+  const [updatingKpiUserId, setUpdatingKpiUserId] = useState<string | null>(null)
 
   // Carica utenti e gruppi dal database
   useEffect(() => {
@@ -93,6 +97,43 @@ export default function AdminUsersPage() {
       }
     } catch (e) {
       console.error("Error loading data:", e)
+    }
+  }
+
+  async function handleKpiToggle(user: ExtendedAdminUser, enabled: boolean) {
+    if (!user.id) return
+    setError("")
+    setSuccess("")
+    setUpdatingKpiUserId(user.id)
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}/kpi`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(result.error || "Aggiornamento KPI non riuscito")
+
+      setUsers((current) =>
+        current.map((item) =>
+          item.id === user.id
+            ? {
+                ...item,
+                kpi_enabled: result.kpi_enabled,
+                kpi_tracking_started_at: result.kpi_tracking_started_at,
+              }
+            : item,
+        ),
+      )
+      setSuccess(
+        enabled
+          ? `KPI attivati per ${user.name}. La misurazione parte da adesso.`
+          : `KPI disattivati per ${user.name}.`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Aggiornamento KPI non riuscito")
+    } finally {
+      setUpdatingKpiUserId(null)
     }
   }
 
@@ -368,8 +409,8 @@ export default function AdminUsersPage() {
               <div className="divide-y">
                 {users.map((user) => (
                   <div key={user.id} className="p-4 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="flex flex-wrap items-center gap-4">
                         <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                           {getRoleIcon(user.role)}
                         </div>
@@ -402,7 +443,24 @@ export default function AdminUsersPage() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4">
+                      <div className="flex flex-wrap items-center gap-4">
+                        {user.role !== "super_admin" && user.id && (
+                          <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                            <div className="text-right">
+                              <p className="text-xs font-medium">KPI operatore</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {user.kpi_enabled ? "Misurazione attiva" : "Non misurato"}
+                              </p>
+                            </div>
+                            <Switch
+                              checked={user.kpi_enabled === true}
+                              disabled={updatingKpiUserId === user.id}
+                              onCheckedChange={(enabled) => handleKpiToggle(user, enabled)}
+                              aria-label={`${user.kpi_enabled ? "Disattiva" : "Attiva"} KPI per ${user.name}`}
+                            />
+                          </div>
+                        )}
+
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}
                         >
