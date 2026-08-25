@@ -62,8 +62,8 @@ Parametri query:
 
 Intestazione obbligatoria:
 
-- `X-HotelAccelerator-Key`: segreto in ingresso già mostrato come **Chiave di collegamento**. Il segreto non viene
-  inserito nell'URL, così non finisce nei normali log di accesso.
+- `X-HotelAccelerator-Key`: **credenziale vocale dedicata**, distinta dalla chiave del template CRM. Il segreto non
+  viene inserito nell'URL, così non finisce nei normali log di accesso.
 
 Corpo JSON:
 
@@ -138,21 +138,24 @@ Il Core apre un'attività ad alta priorità nella coda centrale 4 BID, con il te
 3. Se si configura il centralino 4 BID, entrare come superadmin, selezionare il tenant aziendale `4bid` e completare
    le otto righe in **Mappa IVR 4 BID**. Le route prospect richiedono una base primaria; le basi condivise sono
    facoltative. Le route supporto mostrano i marker cercati nei tenant cliente.
-4. In **Agenti telefonici AI** premere **Genera gli agenti dalle basi di conoscenza** e verificare che tutte le righe
-   necessarie risultino `Pronto` o `Tenant cliente`.
-4. In 3CX installare da **Integrazioni → Script di chiamata → Aggiungi dallo store** lo script OpenAI Voice Agent
+4. In **Agenti telefonici AI** premere **Genera gli agenti dalle basi di conoscenza**. Alla prima esecuzione la
+   pagina mostra una sola volta la credenziale vocale: copiarla nel parametro 3CX `HOTELACCELERATOR_VOICE_KEY`.
+   Non usare la chiave CRM, non inserirla nello script e non includerla in screenshot o chat. Se serve recuperarla,
+   usare **Ruota credenziale** e aggiornare subito il parametro nel PBX: la chiave precedente viene revocata.
+5. In 3CX installare da **Integrazioni → Script di chiamata → Aggiungi dallo store** lo script OpenAI Voice Agent
    previsto dalla versione del PBX.
-5. Per un tenant normale, creare un route point per ogni agente desiderato e configurare l'URL mostrato da HotelAccelerator.
-6. Per l'IVR 4 BID, raccogliere il codice cliente nel percorso supporto e creare i quattro route point supporto e prospect; collegare il menu prodotto alle rispettive URL.
-7. Per il supporto rispettare `handoff.action` e inviare la callback dopo una registrazione; impostare 200 come fallback locale.
-8. Provare domanda presente/assente per un agente tenant e, sull'IVR 4 BID, codice valido/errato, escalation in orario, reperibilità enterprise e messaggio fuori orario.
+6. Per un tenant normale, creare un route point per ogni agente desiderato e configurare l'URL mostrato da HotelAccelerator.
+7. Per l'IVR 4 BID, raccogliere il codice cliente nel percorso supporto e creare i quattro route point supporto e prospect; collegare il menu prodotto alle rispettive URL.
+8. Per il supporto rispettare `handoff.action` e inviare la callback dopo una registrazione; impostare 200 come fallback locale.
+9. Provare domanda presente/assente per un agente tenant e, sull'IVR 4 BID, codice valido/errato, escalation in orario, reperibilità enterprise e messaggio fuori orario.
 
 La versione dello script distribuito dallo store 3CX può cambiare. Il codice del custom tool va aggiunto alla copia
 effettivamente installata sul PBX, non ricostruito a memoria contro un'API potenzialmente diversa.
 
 ## Sicurezza e limiti
 
-- Autenticazione a tempo costante con il segreto 3CX già cifrato a riposo.
+- Autenticazione a tempo costante con due credenziali cifrate a riposo e con scope non sovrapposti: CRM e agenti
+  vocali. Gli endpoint vocali falliscono chiusi se manca la credenziale dedicata; non ripiegano mai su quella CRM.
 - Segreto trasmesso nell'intestazione `X-HotelAccelerator-Key`, non nell'URL vocale.
 - Tenant ricavato dal segreto e riapplicato alle query delle basi e dei contatti.
 - La modifica della mappa IVR richiede sessione superadmin, area Impostazioni e tenant attivo `4bid`; le tabelle
@@ -195,6 +198,7 @@ va al reperibile, gli altri alla registrazione, salvo una deroga `on_call`/`voic
 - `lib/telephony/voice-response.ts`
 - `lib/telephony/voice-routing.ts`
 - `app/api/telephony/3cx/inbound-urls/route.ts`
+- `app/api/telephony/3cx/voice-link/route.ts`
 - `app/api/telephony/3cx/voice/routes/route.ts`
 - `app/admin/channels/phone/page.tsx`
 - `components/admin/voice-ivr-routing-card.tsx`
@@ -205,6 +209,7 @@ va al reperibile, gli altri alla registrazione, salvo una deroga `on_call`/`voic
 - `supabase/migrations/20260824174000_preallocate_suite_product_customer_codes.sql`
 - `supabase/migrations/20260824170540_add_4bid_voice_ivr_routes.sql`
 - `supabase/migrations/20260825093220_add_internal_4bid_knowledge_sync.sql`
+- `supabase/migrations/20260825112908_add_3cx_voice_inbound_credential.sql`
 - `app/api/external/knowledge-sync/route.ts`
 - `lib/ai/internal-knowledge-sync.ts`
 - `scripts/sync-4bid-internal-knowledge.mjs`
@@ -213,7 +218,9 @@ va al reperibile, gli altri alla registrazione, salvo una deroga `on_call`/`voic
 
 ## Migrazione e rollback
 
-Applicare `20260824170540_add_4bid_voice_ivr_routes.sql` prima del codice che rende la mappa persistente autoritativa.
+Applicare `20260824170540_add_4bid_voice_ivr_routes.sql` prima del codice che rende la mappa persistente autoritativa
+e `20260825112908_add_3cx_voice_inbound_credential.sql` prima di predisporre gli agenti vocali. La seconda aggiunge
+una sola colonna alla tabella backend-only esistente: non crea una Data API surface e non modifica RLS o grant.
 Durante un deploy sfalsato, gli endpoint mantengono il resolver legacy soltanto quando la tabella non esiste; se la
 tabella esiste ma una route manca, il flusso fallisce chiuso con `route_not_configured`.
 

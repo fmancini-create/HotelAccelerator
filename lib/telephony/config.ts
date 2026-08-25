@@ -20,6 +20,8 @@ export type TelephonyRow = {
   client_secret_encrypted: string | null
   default_extension: string | null
   inbound_secret_encrypted: string | null
+  /** Credenziale dedicata agli strumenti vocali 3CX, distinta dal CRM. */
+  voice_inbound_secret_encrypted: string | null
   is_active: boolean
   last_check_at: string | null
   last_check_status: string | null
@@ -68,6 +70,17 @@ export function toThreeCxConfig(row: TelephonyRow | null): ThreeCxConfig | null 
 export function inboundSecretOf(row: TelephonyRow | null): string | null {
   if (!row) return null
   return decryptSecretIfNeeded(row.inbound_secret_encrypted)
+}
+
+/**
+ * Segreto che 3CX presenta esclusivamente agli endpoint degli agenti vocali.
+ *
+ * Non deve avere fallback sul segreto CRM: una chiave rubata dal template CRM
+ * non deve poter interrogare basi di conoscenza o risolvere codici cliente.
+ */
+export function voiceInboundSecretOf(row: TelephonyRow | null): string | null {
+  if (!row) return null
+  return decryptSecretIfNeeded(row.voice_inbound_secret_encrypted)
 }
 
 export function encryptForWrite(value: string | null | undefined): string | null {

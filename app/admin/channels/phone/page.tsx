@@ -16,7 +16,7 @@ type Integration = {
   client_id: string
   default_extension: string
   credentials_preview: { client_secret: string }
-  has_credentials: { client_secret: boolean; inbound_secret: boolean }
+  has_credentials: { client_secret: boolean; inbound_secret: boolean; voice_inbound_secret: boolean }
   last_check_at: string | null
   last_check_status: string | null
   last_check_error: string | null
@@ -45,8 +45,11 @@ export default function PhoneChannelPage() {
   const [extension, setExtension] = useState("")
   const [result, setResult] = useState<{ ok: boolean; message: string; extensions?: string[] } | null>(null)
   const [apiKey, setApiKey] = useState("")
+  const [voiceApiKey, setVoiceApiKey] = useState("")
+  const [voiceCredentialMessage, setVoiceCredentialMessage] = useState<string | null>(null)
   const [preparing, setPreparing] = useState(false)
   const [voicePreparing, setVoicePreparing] = useState(false)
+  const [voiceRotating, setVoiceRotating] = useState(false)
   const [voiceAgents, setVoiceAgents] = useState<VoiceAgentLink[] | null>(null)
   const [prospectAgents, setProspectAgents] = useState<VoiceAgentLink[]>([])
   const [customerSupportAgents, setCustomerSupportAgents] = useState<VoiceAgentLink[]>([])
@@ -144,42 +147,75 @@ export default function PhoneChannelPage() {
     }
   }
 
+  async function loadVoiceAgents() {
+    const res = await fetch("/api/telephony/3cx/inbound-urls", { cache: "no-store" })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !Array.isArray(data?.voice_agents)) {
+      setResult({ ok: false, message: data?.error || "Non è stato possibile generare i collegamenti vocali." })
+      return false
+    }
+
+    setVoiceAgents(data.voice_agents as VoiceAgentLink[])
+    setProspectAgents(Array.isArray(data.prospect_agents) ? (data.prospect_agents as VoiceAgentLink[]) : [])
+    setCustomerSupportAgents(
+      Array.isArray(data.customer_support_agents) ? (data.customer_support_agents as VoiceAgentLink[]) : [],
+    )
+    setSupportMessageUrls(
+      data.customer_support_message_urls && typeof data.customer_support_message_urls === "object"
+        ? (data.customer_support_message_urls as Record<string, string>)
+        : {},
+    )
+    return true
+  }
+
   async function prepareVoiceAgents() {
     setVoicePreparing(true)
     setResult(null)
     try {
-      // La stessa chiave in ingresso autentica CRM e voce. La rotta e'
-      // idempotente: se esiste gia', non la ruota e non invalida 3CX.
-      const secretRes = await fetch("/api/telephony/3cx/crm-link", { method: "POST" })
+      const secretRes = await fetch("/api/telephony/3cx/voice-link", { method: "POST" })
       const secretData = await secretRes.json().catch(() => null)
-      if (!secretRes.ok || !secretData?.api_key) {
-        setResult({ ok: false, message: secretData?.error || "Non è stato possibile preparare gli assistenti vocali." })
+      if (!secretRes.ok) {
+        setResult({ ok: false, message: secretData?.error || "Non è stato possibile predisporre la credenziale vocale." })
         return
       }
+      if (!(await loadVoiceAgents())) return
 
-      const res = await fetch("/api/telephony/3cx/inbound-urls", { cache: "no-store" })
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !Array.isArray(data?.voice_agents)) {
-        setResult({ ok: false, message: data?.error || "Non è stato possibile generare i collegamenti vocali." })
-        return
+      if (typeof secretData?.api_key === "string" && secretData.api_key) {
+        setVoiceApiKey(secretData.api_key)
+        setVoiceCredentialMessage("Nuova credenziale vocale generata: copiala ora in 3CX. Non verrà mostrata di nuovo.")
+      } else {
+        setVoiceCredentialMessage(
+          "La credenziale vocale è già configurata e non viene ristampata. Se ti serve copiarla di nuovo, ruotala esplicitamente.",
+        )
       }
-
-      setVoiceAgents(data.voice_agents as VoiceAgentLink[])
-      setProspectAgents(Array.isArray(data.prospect_agents) ? (data.prospect_agents as VoiceAgentLink[]) : [])
-      setCustomerSupportAgents(
-        Array.isArray(data.customer_support_agents) ? (data.customer_support_agents as VoiceAgentLink[]) : [],
-      )
-      setSupportMessageUrls(
-        data.customer_support_message_urls && typeof data.customer_support_message_urls === "object"
-          ? (data.customer_support_message_urls as Record<string, string>)
-          : {},
-      )
-      setApiKey(String(secretData.api_key))
       await load()
     } catch {
       setResult({ ok: false, message: "Impossibile contattare il servizio." })
     } finally {
       setVoicePreparing(false)
+    }
+  }
+
+  async function rotateVoiceCredential() {
+    if (!window.confirm("La chiave precedente smetterà subito di funzionare. Hai modo di aggiornarla ora in 3CX?")) return
+
+    setVoiceRotating(true)
+    setResult(null)
+    try {
+      const res = await fetch("/api/telephony/3cx/voice-link", { method: "PUT" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || typeof data?.api_key !== "string" || !data.api_key) {
+        setResult({ ok: false, message: data?.error || "Non è stato possibile ruotare la credenziale vocale." })
+        return
+      }
+      setVoiceApiKey(data.api_key)
+      setVoiceCredentialMessage("Credenziale vocale ruotata: aggiorna subito il parametro 3CX e conserva solo questa nuova chiave.")
+      await loadVoiceAgents()
+      await load()
+    } catch {
+      setResult({ ok: false, message: "Impossibile contattare il servizio." })
+    } finally {
+      setVoiceRotating(false)
     }
   }
 
@@ -479,6 +515,41 @@ export default function PhoneChannelPage() {
                 </Button>
               ) : (
                 <div className="space-y-3">
+                  <div className="rounded-lg border border-ha-brand/30 bg-ha-brand-soft/20 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium">Credenziale vocale 3CX</p>
+                        <p className="mt-1 text-xs text-muted-foreground text-pretty">
+                          È distinta dalla chiave CRM e autorizza solo gli endpoint vocali di questo tenant.
+                        </p>
+                      </div>
+                      <Button variant="outline" onClick={rotateVoiceCredential} disabled={voiceRotating}>
+                        {voiceRotating ? "Rotazione…" : "Ruota credenziale"}
+                      </Button>
+                    </div>
+
+                    {voiceApiKey ? (
+                      <div className="mt-3 grid gap-2">
+                        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Chiave vocale — mostrata solo ora</Label>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 overflow-x-auto rounded-md border bg-background px-3 py-2 text-xs">{voiceApiKey}</code>
+                          <Button variant="outline" size="icon" onClick={() => copy("Chiave vocale", voiceApiKey)} aria-label="Copia la chiave vocale">
+                            <Copy className="h-4 w-4" aria-hidden="true" />
+                          </Button>
+                        </div>
+                        {copied === "Chiave vocale" && <p className="text-xs text-ha-success">Copiata.</p>}
+                        <p className="text-xs text-muted-foreground text-pretty">
+                          Copiala nel parametro 3CX <code>HOTELACCELERATOR_VOICE_KEY</code>. Non inserirla nel template CRM,
+                          non salvarla nello script e non inviarla in chat o negli screenshot.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-muted-foreground text-pretty">
+                        {voiceCredentialMessage || "Genera gli agenti per predisporre una credenziale vocale separata."}
+                      </p>
+                    )}
+                  </div>
+
                   {voiceAgents.map((agent) => {
                     const ready = agent.status === "ready"
                     const statusText = agent.status === "ready" ? "Pronto" : "Senza fonti"

@@ -177,6 +177,15 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Conseguenza: gli alias, l'ambiente e i contratti di test di un satellite non vengono interpretati come quelli del
   Core. Le verifiche verdi non nascondono il debito esistente e ogni correzione incrementale resta attribuibile al
   modulo proprietario.
+## ADR-028 — Credenziale 3CX separata per gli agenti vocali
+
+- Stato: accettata
+- Decisione: il template CRM e gli strumenti vocali 3CX usano segreti distinti, entrambi cifrati a riposo. La
+  credenziale vocale si mostra soltanto alla creazione o a una rotazione esplicita; le URL vocali non contengono
+  token e gli endpoint IA non accettano mai la chiave CRM.
+- Conseguenza: la compromissione o la rotazione del collegamento CRM non concede accesso a basi di conoscenza,
+  codici cliente o callback vocali. La configurazione PBX deve aggiornare il solo parametro
+  `HOTELACCELERATOR_VOICE_KEY`; in assenza della credenziale dedicata il flusso fallisce chiuso verso il fallback.
 
 ## Decisioni aperte
 

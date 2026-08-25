@@ -29,6 +29,7 @@ function serialize(row: TelephonyRow | null) {
     has_credentials: {
       client_secret: Boolean(row.client_secret_encrypted),
       inbound_secret: Boolean(row.inbound_secret_encrypted),
+      voice_inbound_secret: Boolean(row.voice_inbound_secret_encrypted),
     },
     is_active: row.is_active,
     last_check_at: row.last_check_at,

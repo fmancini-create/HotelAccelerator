@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { authenticateInbound } from "@/lib/telephony/inbound-auth"
+import { authenticateVoiceInbound } from "@/lib/telephony/inbound-auth"
 import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
 import { VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
@@ -43,7 +43,7 @@ function authError(status: 401 | 403 | 500) {
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.slice(0, 100) || randomUUID()
-  const auth = await authenticateInbound(request)
+  const auth = await authenticateVoiceInbound(request)
   if (!auth.ok) return authError(auth.status)
 
   const knowledgeBaseId = request.nextUrl.searchParams.get("knowledge_base")?.trim() || ""
