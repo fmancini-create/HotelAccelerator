@@ -187,6 +187,15 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
   codici cliente o callback vocali. La configurazione PBX deve aggiornare il solo parametro
   `HOTELACCELERATOR_VOICE_KEY`; in assenza della credenziale dedicata il flusso fallisce chiuso verso il fallback.
 
+## ADR-029 — KPI operatore su opt-in e senza storico retroattivo
+
+- Stato: accettata
+- Decisione: un tenant admin abilita la misurazione per singolo utente da Team & Permessi. Il database registra la
+  decorrenza e il calcolo include una risposta umana solo se successiva all'attivazione di quell'operatore.
+- Conseguenza: importazioni Gmail storiche e attribuzioni precedenti non diventano valutazioni del personale. La
+  disattivazione interrompe la misurazione e una successiva riattivazione parte da una nuova decorrenza; IA e risposte
+  senza autore restano dichiarate separatamente. Conversione, qualità e chiamate non vengono stimate senza eventi reali.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.
