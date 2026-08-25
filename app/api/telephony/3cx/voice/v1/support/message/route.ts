@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { VOICE_PRODUCT_TO_SUITE_PRODUCT } from "@/lib/customer-codes/product"
 import { normalizeCustomerCode } from "@/lib/telephony/customer-code"
-import { authenticateInbound } from "@/lib/telephony/inbound-auth"
+import { authenticateVoiceInbound } from "@/lib/telephony/inbound-auth"
 import { getVoiceProduct } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
 import { createVoiceSupportMessage, findVoiceSupportCustomer, isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
@@ -41,7 +41,7 @@ async function readVoiceBody(request: NextRequest): Promise<unknown | null> {
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.slice(0, 100) || randomUUID()
-  const auth = await authenticateInbound(request)
+  const auth = await authenticateVoiceInbound(request)
   if (!auth.ok) return NextResponse.json({ error: "Non autorizzato" }, { status: auth.status, headers: NO_STORE })
 
   try {

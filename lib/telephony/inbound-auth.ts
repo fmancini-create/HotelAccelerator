@@ -1,7 +1,7 @@
 import "server-only"
 import { timingSafeEqual, createHash } from "crypto"
 import type { NextRequest } from "next/server"
-import { loadTelephonyRow, inboundSecretOf, type TelephonyRow } from "@/lib/telephony/config"
+import { loadTelephonyRow, inboundSecretOf, voiceInboundSecretOf, type TelephonyRow } from "@/lib/telephony/config"
 
 /**
  * Controllo d'accesso per gli endpoint chiamati DA 3CX (ricerca contatto e
@@ -57,6 +57,21 @@ function presentedToken(request: NextRequest): string {
 }
 
 export async function authenticateInbound(request: NextRequest): Promise<InboundAuthResult> {
+  return authenticateForPurpose(request, "crm")
+}
+
+/**
+ * Autenticazione separata per gli strumenti degli agenti vocali.
+ *
+ * Non eredita né accetta la chiave CRM. Se la migrazione o la predisposizione
+ * non sono state completate, fallisce chiusa e lo script 3CX trasferisce alla
+ * destinazione di fallback invece di usare una credenziale con scope più ampio.
+ */
+export async function authenticateVoiceInbound(request: NextRequest): Promise<InboundAuthResult> {
+  return authenticateForPurpose(request, "voice")
+}
+
+async function authenticateForPurpose(request: NextRequest, purpose: "crm" | "voice"): Promise<InboundAuthResult> {
   const propertyId = new URL(request.url).searchParams.get("property")?.trim() || ""
   const token = presentedToken(request)
   if (!propertyId || !token) return { ok: false, status: 401 }
@@ -68,7 +83,7 @@ export async function authenticateInbound(request: NextRequest): Promise<Inbound
     return { ok: false, status: 500 }
   }
 
-  const expected = inboundSecretOf(row)
+  const expected = purpose === "voice" ? voiceInboundSecretOf(row) : inboundSecretOf(row)
   if (!row || !expected || !constantTimeEquals(token, expected)) return { ok: false, status: 401 }
 
   // Canale spento dalla scheda /admin/channels. Il controllo sta DOPO la

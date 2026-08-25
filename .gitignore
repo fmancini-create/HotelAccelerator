@@ -35,3 +35,6 @@ next-env.d.ts
 # Servono quindi DUE righe: una per i file, una per le cartelle.
 .v0-tmp*
 .v0-tmp*/
+
+# Metadati locali del CLI Supabase; non sono migrazioni né configurazione condivisa.
+supabase/.temp/

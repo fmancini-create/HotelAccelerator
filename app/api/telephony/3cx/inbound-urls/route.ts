@@ -3,29 +3,29 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
-import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
+import { loadTelephonyRow, voiceInboundSecretOf } from "@/lib/telephony/config"
 import { createVoiceAgentLinks } from "@/lib/telephony/voice-links"
 import { getVoiceProduct, resolveVoiceKnowledgeBase, VOICE_PRODUCTS } from "@/lib/telephony/voice-products"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { getVoiceIvrRoutes, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
 
 /**
- * Restituisce gli URL da incollare nel template CRM di 3CX.
+ * Restituisce gli URL degli strumenti degli agenti vocali 3CX.
  *
- * Contengono il segreto in chiaro, quindi stanno in una rotta SEPARATA e non
- * nella GET di configurazione: la lettura normale della pagina non deve
- * trasportare un segreto utilizzabile. Serve una richiesta esplicita, con
- * permesso d'area verificato.
+ * Le URL non contengono mai il segreto: lo script lo legge dalla configurazione
+ * protetta del PBX e lo invia nell'header. La rotta resta separata dalla GET
+ * della configurazione per non esporre la topologia vocale a utenti senza
+ * permesso impostazioni.
  */
 export async function GET(request: NextRequest) {
   try {
     await requireAreaApi("settings", request)
     const propertyId = await getAuthenticatedPropertyId(request)
     const row = await loadTelephonyRow(propertyId)
-    const secret = inboundSecretOf(row)
+    const secret = voiceInboundSecretOf(row)
 
     if (!row || !secret) {
-      return NextResponse.json({ error: "Centralino non ancora configurato." }, { status: 404 })
+      return NextResponse.json({ error: "Credenziale vocale non ancora predisposta." }, { status: 404 })
     }
 
     // Uso l'host della richiesta: su un dominio con redirect verso www, l'URL
@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
     const proto = request.headers.get("x-forwarded-proto") || "https"
     const base = forwardedHost ? `${proto}://${forwardedHost}` : (process.env.NEXT_PUBLIC_APP_URL || "")
     const root = base.replace(/\/+$/, "")
-    const query = `property=${encodeURIComponent(propertyId)}&token=${encodeURIComponent(secret)}`
     const voiceQuery = `property=${encodeURIComponent(propertyId)}`
     const knowledgeBases = await getKnowledgeBases(propertyId)
     const voiceAgents = createVoiceAgentLinks({ rootUrl: root, propertyId, knowledgeBases })
@@ -123,8 +122,6 @@ export async function GET(request: NextRequest) {
           : []
 
     return NextResponse.json({
-      lookup_url: `${root}/api/telephony/3cx/lookup?${query}&number=[Number]`,
-      journal_url: `${root}/api/telephony/3cx/journal?${query}`,
       voice_agents: voiceAgents,
       prospect_agents: prospectAgents,
       customer_support_agents: customerSupportAgents,

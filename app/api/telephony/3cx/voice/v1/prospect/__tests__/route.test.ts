@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 
 const mocks = vi.hoisted(() => ({
-  authenticateInbound: vi.fn(),
+  authenticateVoiceInbound: vi.fn(),
   answerVoiceQuestion: vi.fn(),
   takeVoiceRequest: vi.fn(),
   serviceErrorVoiceResponse: vi.fn(),
@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/ai/internal-knowledge-sync-status", () => ({
   getInternalKnowledgeSyncDiagnostics: mocks.getInternalKnowledgeSyncDiagnostics,
 }))
-vi.mock("@/lib/telephony/inbound-auth", () => ({ authenticateInbound: mocks.authenticateInbound }))
+vi.mock("@/lib/telephony/inbound-auth", () => ({ authenticateVoiceInbound: mocks.authenticateVoiceInbound }))
 vi.mock("@/lib/telephony/voice-agent", () => ({ answerVoiceQuestion: mocks.answerVoiceQuestion }))
 vi.mock("@/lib/telephony/voice-products", () => ({
   VOICE_FALLBACK_EXTENSION: "200",
@@ -41,7 +41,7 @@ async function loadRoute() {
 
 describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
   it("usa il fallback quando la fonte interna non è pronta", async () => {
-    mocks.authenticateInbound.mockResolvedValue({ ok: true, propertyId: HUB })
+    mocks.authenticateVoiceInbound.mockResolvedValue({ ok: true, propertyId: HUB })
     mocks.isVoiceSupportHub.mockResolvedValue(true)
     mocks.getVoiceIvrRoute.mockResolvedValue({
       id: "115a9ff2-7b49-4ba6-8b12-c5b93a9523a5",
