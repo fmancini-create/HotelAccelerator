@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import useSWR from "swr"
 import { AlertTriangle, Bot, Gauge, HelpCircle, Users } from "lucide-react"
 
@@ -33,6 +34,8 @@ type Risposta = {
   graduatoriaNonDisponibile: boolean
   soglia: number
   sorgentiEscluse: number
+  operatoriAbilitati: number
+  risposteOperatoriNonMisurati: number
   conversione: { disponibile: false; motivo: string }
 }
 
@@ -135,6 +138,36 @@ export function OperatorPerformanceClient() {
           </div>
         ) : !data ? null : (
           <div className="space-y-6">
+            {data.operatoriAbilitati === 0 ? (
+              <Card className="border-ha-brand/30 bg-ha-brand-soft/20">
+                <CardContent className="pt-6">
+                  <p className="font-medium text-foreground">Nessun operatore ha i KPI attivi</p>
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    Attivali per singola persona in{" "}
+                    <Link href="/admin/users" className="font-medium text-ha-brand-soft-foreground underline underline-offset-2">
+                      Team &amp; Permessi
+                    </Link>
+                    . La misurazione parte dall&apos;attivazione: lo storico precedente non viene usato.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                <p>
+                  {data.operatoriAbilitati}{" "}
+                  {data.operatoriAbilitati === 1 ? "operatore misurato" : "operatori misurati"} · dati raccolti solo
+                  dalla rispettiva attivazione
+                </p>
+                {data.risposteOperatoriNonMisurati > 0 ? (
+                  <p className="mt-1">
+                    {data.risposteOperatoriNonMisurati}{" "}
+                    {data.risposteOperatoriNonMisurati === 1 ? "risposta umana esclusa" : "risposte umane escluse"}
+                    {" "}perché precedenti all&apos;attivazione o attribuite a operatori non abilitati.
+                  </p>
+                ) : null}
+              </div>
+            )}
+
             {/*
               La graduatoria si nasconde quando i dati non la reggono, e si dice
               quanto manca. Misurato: con 3 risposte umane in tutto, un podio
