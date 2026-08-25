@@ -200,7 +200,7 @@ export class MessageRuleService {
         if (!conditions.min_days || (conditions.min_days as number) < 1) {
           throw new InvariantViolationError("return_visitor requires min_days >= 1")
         }
-        if (!conditions.max_days || (conditions.max_days as number) < (conditions.min_days as number)) {
+        if (!conditions.max_days || (conditions.max_days as number) <= (conditions.min_days as number)) {
           throw new InvariantViolationError("return_visitor requires max_days > min_days")
         }
         break

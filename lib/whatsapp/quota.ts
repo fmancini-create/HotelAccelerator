@@ -15,6 +15,9 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 export const DEFAULT_INCLUDED_NUMBERS = 1
 
+/** Price for one additional WhatsApp number, in cents (EUR). */
+export const EXTRA_WHATSAPP_NUMBER_PRICE_CENTS = 1500
+
 /**
  * Meta assegna a ogni app un numero di PROVA gratuito nell'intervallo
  * statunitense fittizio +1 555, usato per i collaudi: puo' ricevere solo dai

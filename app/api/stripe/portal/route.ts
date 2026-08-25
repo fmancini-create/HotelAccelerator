@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import { getStripe } from "@/lib/stripe"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const returnUrl = body?.returnUrl || `${appUrl}/admin/billing`
 
-    const portalSession = await stripe.billingPortal.sessions.create({
+    const portalSession = await getStripe().billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
       return_url: returnUrl,
       locale: "it",

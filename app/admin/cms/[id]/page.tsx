@@ -48,7 +48,7 @@ function normalizeSlug(value: string): string {
   return value.toLowerCase().trim().replace(/\s+/g, "-")
 }
 
-export default function CMSPageEditor({ params }: { params: { id: string } | Promise<{ id: string }> }) {
+export default function CMSPageEditor({ params }: { params: Promise<{ id: string }> }) {
   const [pageId, setPageId] = useState<string | null>(null)
   const [page, setPage] = useState<CMSPageState | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -58,10 +58,10 @@ export default function CMSPageEditor({ params }: { params: { id: string } | Pro
 
   useEffect(() => {
     async function resolveParams() {
-      const resolved = params instanceof Promise ? await params : params
+      const resolved = await params
       setPageId(resolved.id)
     }
-    resolveParams()
+    void resolveParams()
   }, [params])
 
   useEffect(() => {

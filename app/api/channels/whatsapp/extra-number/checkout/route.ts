@@ -1,13 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import { getStripe } from "@/lib/stripe"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
-
-/**
- * Price for one additional WhatsApp number, in cents (EUR), excl. the base
- * package which already includes 1 number. Server-side source of truth.
- */
-export const EXTRA_WHATSAPP_NUMBER_PRICE_CENTS = 1500 // €15/mese per numero aggiuntivo
+import { EXTRA_WHATSAPP_NUMBER_PRICE_CENTS } from "@/lib/whatsapp/quota"
 
 /**
  * POST /api/channels/whatsapp/checkout
@@ -40,7 +35,7 @@ export async function POST(request: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       mode: "subscription",
       payment_method_types: ["card"],
       line_items: [

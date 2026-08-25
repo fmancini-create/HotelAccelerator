@@ -293,7 +293,7 @@ const GMAIL_SYSTEM_FOLDERS = [
   { id: "TRASH", label: "Cestino", icon: Trash2 },
 ]
 
-const GmailMessageBody = memo(({ content, contentType }: { content: string; contentType?: string }) => {
+const GmailMessageBody = memo(function GmailMessageBody({ content, contentType }: { content: string; contentType?: string }) {
   const iframeRef = React.useRef<HTMLIFrameElement>(null)
   const [iframeHeight, setIframeHeight] = React.useState(300)
 

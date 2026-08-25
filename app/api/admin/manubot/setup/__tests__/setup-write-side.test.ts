@@ -14,23 +14,23 @@ vi.mock("server-only", () => ({}))
 const updateCapture: { payload: Record<string, unknown> | null } = { payload: null }
 
 vi.mock("@/lib/auth/admin-access", () => ({
-  requireTenantAdmin: vi.fn().mockResolvedValue({ id: "admin-1" }),
+  requireTenantAdmin: vi.fn().mockResolvedValue({ id: "admin-1", propertyId: "prop-1", isSuperAdmin: false }),
   isAccessError: () => false,
   accessErrorStatus: () => 403,
 }))
 
 vi.mock("@/lib/supabase/server", () => {
-  const eq = vi.fn().mockResolvedValue({ error: null })
+  const updateEq = vi.fn().mockResolvedValue({ error: null })
   const update = vi.fn((payload: Record<string, unknown>) => {
     updateCapture.payload = payload
-    return { eq }
+    return { eq: updateEq }
   })
-  // select(...).or(...).limit(...) -> property trovata
+  // select(...).eq(...).limit(...) -> property trovata
   const limit = vi.fn().mockResolvedValue({
     data: [{ id: "prop-1", name: "Villa I Barronci", slug: "villa-i-barronci" }],
   })
-  const or = vi.fn(() => ({ limit }))
-  const select = vi.fn(() => ({ or }))
+  const selectEq = vi.fn(() => ({ limit }))
+  const select = vi.fn(() => ({ eq: selectEq }))
   const from = vi.fn(() => ({ select, update }))
   return { createServiceClient: () => ({ from }) }
 })

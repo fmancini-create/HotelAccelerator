@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef } from "react"
+import Link from "next/link"
 import { ChevronDown } from "lucide-react"
 import { Facebook, Instagram } from "lucide-react"
 import { useAdminAuth } from "@/lib/admin-hooks"
@@ -87,7 +88,7 @@ export function Navigation() {
       <header className="fixed top-8 left-0 right-0 z-40 bg-[#3a3a3a]/95 backdrop-blur-sm transition-all duration-400">
         <div className="container mx-auto px-6">
           <div className="flex items-center justify-between py-4">
-            <a href="/">
+            <Link href="/">
               <img
                 src="/images/design-mode/villaibarronci-logo-orizzontale-700.png"
                 alt="Villa I Barronci Resort & Spa"
@@ -95,7 +96,7 @@ export function Navigation() {
                 width="700"
                 height="143"
               />
-            </a>
+            </Link>
 
             <nav className="hidden lg:block">
               <ul className="flex items-center gap-6 text-white text-sm">
@@ -276,9 +277,9 @@ export function Navigation() {
                             Nuova Galleria
                           </a>
                           <div className="border-t border-gray-600 my-2"></div>
-                          <a href="/" className="block px-4 py-2 hover:bg-[#3a3a3a] transition-colors text-amber-400">
+                          <Link href="/" className="block px-4 py-2 hover:bg-[#3a3a3a] transition-colors text-amber-400">
                             ← Torna al sito
-                          </a>
+                          </Link>
                         </div>
                       </div>
                     )}

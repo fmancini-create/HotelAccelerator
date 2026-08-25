@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+
+vi.mock("server-only", () => ({}))
+
 import { InboxWriteService } from "@/lib/platform-services/inbox-write.service"
 import type { InboxWriteRepository } from "@/lib/platform-repositories/inbox-write.repository"
 import { ValidationError, NotFoundError } from "@/lib/errors"
@@ -15,6 +18,7 @@ describe("InboxWriteService - Critical Invariants", () => {
       insertMessage: vi.fn(),
       updateLastMessageAt: vi.fn(),
       markConversationAsRead: vi.fn(),
+      markMessagesAsReplied: vi.fn(),
       toggleStar: vi.fn(),
     } as any
 
@@ -25,8 +29,8 @@ describe("InboxWriteService - Critical Invariants", () => {
     service["repository"] = mockRepository as any
   })
 
-  describe("INVARIANT: Outcome → Status Mapping", () => {
-    it('should map outcome "confirmed" to status "closed"', async () => {
+  describe("INVARIANT: Supported outcomes", () => {
+    it('should accept outcome "converted"', async () => {
       const mockConversation = {
         id: "conv-1",
         property_id: "prop-1",
@@ -34,20 +38,15 @@ describe("InboxWriteService - Critical Invariants", () => {
       }
 
       vi.mocked(mockRepository.getConversation).mockResolvedValue(mockConversation as any)
-      vi.mocked(mockRepository.updateBookingData).mockResolvedValue(undefined)
-      vi.mocked(mockRepository.updateStatus).mockResolvedValue({ status: "closed" } as any)
 
-      await service.updateOutcome({
+      await expect(service.updateOutcome({
         conversationId: "conv-1",
         propertyId: "prop-1",
-        outcome: "confirmed",
-      })
-
-      // CRITICAL: Verify status was set to "closed"
-      expect(mockRepository.updateStatus).toHaveBeenCalledWith("conv-1", "prop-1", "closed")
+        outcome: "converted",
+      })).resolves.toEqual({ outcome: "converted" })
     })
 
-    it('should map outcome "cancelled" to status "archived"', async () => {
+    it('should accept outcome "lost"', async () => {
       const mockConversation = {
         id: "conv-1",
         property_id: "prop-1",
@@ -55,19 +54,15 @@ describe("InboxWriteService - Critical Invariants", () => {
       }
 
       vi.mocked(mockRepository.getConversation).mockResolvedValue(mockConversation as any)
-      vi.mocked(mockRepository.updateBookingData).mockResolvedValue(undefined)
-      vi.mocked(mockRepository.updateStatus).mockResolvedValue({ status: "archived" } as any)
 
-      await service.updateOutcome({
+      await expect(service.updateOutcome({
         conversationId: "conv-1",
         propertyId: "prop-1",
-        outcome: "cancelled",
-      })
-
-      expect(mockRepository.updateStatus).toHaveBeenCalledWith("conv-1", "prop-1", "archived")
+        outcome: "lost",
+      })).resolves.toEqual({ outcome: "lost" })
     })
 
-    it('should map outcome "pending" to status "open"', async () => {
+    it('should accept outcome "pending"', async () => {
       const mockConversation = {
         id: "conv-1",
         property_id: "prop-1",
@@ -75,16 +70,12 @@ describe("InboxWriteService - Critical Invariants", () => {
       }
 
       vi.mocked(mockRepository.getConversation).mockResolvedValue(mockConversation as any)
-      vi.mocked(mockRepository.updateBookingData).mockResolvedValue(undefined)
-      vi.mocked(mockRepository.updateStatus).mockResolvedValue({ status: "open" } as any)
 
-      await service.updateOutcome({
+      await expect(service.updateOutcome({
         conversationId: "conv-1",
         propertyId: "prop-1",
         outcome: "pending",
-      })
-
-      expect(mockRepository.updateStatus).toHaveBeenCalledWith("conv-1", "prop-1", "open")
+      })).resolves.toEqual({ outcome: "pending" })
     })
   })
 
@@ -163,7 +154,7 @@ describe("InboxWriteService - Critical Invariants", () => {
         service.updateOutcome({
           conversationId: "nonexistent",
           propertyId: "prop-1",
-          outcome: "confirmed",
+          outcome: "converted",
         }),
       ).rejects.toThrow(NotFoundError)
 

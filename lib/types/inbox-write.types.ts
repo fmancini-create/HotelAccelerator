@@ -27,7 +27,9 @@ export interface SendMessageCommand {
   conversationId: string
   propertyId: string
   content: string
-  senderType: "agent" | "contact"
+  // This command powers the authenticated operator reply endpoint. Incoming
+  // contact messages are recorded by channel webhooks, never by this command.
+  senderType: "agent"
   // Nessun `senderId` qui: l'autore non si dichiara nel comando (nessun
   // chiamante lo faceva, e permetterlo significherebbe poter firmare una
   // risposta col nome di un collega). Si passa a `sendMessage` come `actorId`,
