@@ -5,8 +5,9 @@ import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
 import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
 import { createVoiceAgentLinks } from "@/lib/telephony/voice-links"
-import { resolveVoiceKnowledgeBase, VOICE_PRODUCTS } from "@/lib/telephony/voice-products"
+import { getVoiceProduct, resolveVoiceKnowledgeBase, VOICE_PRODUCTS } from "@/lib/telephony/voice-products"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
+import { getVoiceIvrRoutes, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
 
 /**
  * Restituisce gli URL da incollare nel template CRM di 3CX.
@@ -70,8 +71,56 @@ export async function GET(request: NextRequest) {
     // 4 BID. Una configurazione 3CX di un singolo cliente non puo' quindi
     // trasformarsi nell'accesso alla directory centrale per errore.
     const supportHub = await isVoiceSupportHub(propertyId)
-    const prospectAgents = supportHub ? makeVoiceAgents("prospect") : []
-    const customerSupportAgents = supportHub ? makeVoiceAgents("support") : []
+    let configuredRoutes: Awaited<ReturnType<typeof getVoiceIvrRoutes>> = []
+    let routingDiagnostic: string | null = null
+    if (supportHub) {
+      try {
+        configuredRoutes = await getVoiceIvrRoutes(propertyId, knowledgeBases)
+        if (configuredRoutes.length === 0) routingDiagnostic = "voice_routes_not_configured"
+      } catch (error) {
+        if (!isMissingVoiceRoutingSchema(error)) throw error
+        routingDiagnostic = "voice_routing_schema_missing"
+      }
+    }
+
+    const configuredAgents = configuredRoutes.flatMap((route) => {
+      const product = getVoiceProduct(route.product_key)
+      if (!product) return []
+      const endpoint = route.intent_key === "customer_support" ? "support" : "prospect"
+      return [{
+        key: route.product_key,
+        dtmf: product.dtmf,
+        ivr_path: route.ivr_path,
+        intent: route.intent_key,
+        label: route.agent_label,
+        suggested_extension: product.suggestedExtension,
+        fallback_extension: route.fallback_destination,
+        fallback_mode: route.fallback_mode,
+        crm_tool: route.crm_tool_key,
+        knowledge_scope: route.knowledge_scope,
+        status: route.is_active ? route.status : "disabled",
+        knowledge_base: route.primary_knowledge_base,
+        shared_knowledge_bases: route.shared_knowledge_bases,
+        query_url: `${root}/api/telephony/3cx/voice/v1/${endpoint}?${voiceQuery}&product=${encodeURIComponent(product.key)}`,
+      }]
+    })
+
+    // Il fallback legacy mantiene operativo il deploy tra codice e migrazione.
+    // Appena esistono route persistenti, sono l'unica autorita' usata dalla UI.
+    const prospectAgents = !supportHub
+      ? []
+      : configuredAgents.length > 0
+        ? configuredAgents.filter((agent) => agent.intent === "prospect_information")
+        : routingDiagnostic === "voice_routing_schema_missing"
+          ? makeVoiceAgents("prospect")
+          : []
+    const customerSupportAgents = !supportHub
+      ? []
+      : configuredAgents.length > 0
+        ? configuredAgents.filter((agent) => agent.intent === "customer_support")
+        : routingDiagnostic === "voice_routing_schema_missing"
+          ? makeVoiceAgents("support")
+          : []
 
     return NextResponse.json({
       lookup_url: `${root}/api/telephony/3cx/lookup?${query}&number=[Number]`,
@@ -79,6 +128,7 @@ export async function GET(request: NextRequest) {
       voice_agents: voiceAgents,
       prospect_agents: prospectAgents,
       customer_support_agents: customerSupportAgents,
+      voice_routing_diagnostic: routingDiagnostic,
       customer_support_message_urls: supportHub
         ? Object.fromEntries(
             VOICE_PRODUCTS.map((product) => [

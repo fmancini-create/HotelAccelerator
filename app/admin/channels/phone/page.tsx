@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { AlertCircle, Bot, CheckCircle2, Copy, Loader2, Phone, PhoneOutgoing, Save } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { TelephonyExtensionsCard } from "@/components/admin/telephony-extensions-card"
+import { VoiceIvrRoutingCard } from "@/components/admin/voice-ivr-routing-card"
 
 type Integration = {
   base_url: string
@@ -332,6 +333,8 @@ export default function PhoneChannelPage() {
               )}
             </CardContent>
           </Card>
+
+          <VoiceIvrRoutingCard />
 
           <Card>
             <CardHeader>

@@ -91,3 +91,16 @@ export function resolveVoiceKnowledgeBase<T extends VoiceKnowledgeBaseCandidate>
 
   return { ok: false, reason: "not_found", candidates: [] }
 }
+
+/**
+ * Basi aggiuntive del prodotto, sempre cercate nell'elenco gia' tenant-scoped.
+ * Il marker e' distinto da quello della primaria per impedire che una base
+ * condivisa diventi accidentalmente l'autorita' principale dell'agente.
+ */
+export function resolveSharedVoiceKnowledgeBases<T extends VoiceKnowledgeBaseCandidate>(
+  product: VoiceProduct,
+  bases: T[],
+): T[] {
+  const marker = `[voice-shared:${product.key}]`
+  return bases.filter((base) => base.description?.toLowerCase().includes(marker))
+}

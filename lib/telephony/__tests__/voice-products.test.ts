@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   getVoiceProduct,
   normalizeVoiceLabel,
+  resolveSharedVoiceKnowledgeBases,
   resolveVoiceKnowledgeBase,
   type VoiceKnowledgeBaseCandidate,
 } from "@/lib/telephony/voice-products"
@@ -60,5 +61,14 @@ describe("prodotti dell'assistente vocale 3CX", () => {
     const result = resolveVoiceKnowledgeBase(product, [base({ name: "Hotel Accelerator prova vecchia" })])
 
     expect(result).toEqual({ ok: false, reason: "not_found", candidates: [] })
+  })
+
+  it("seleziona come condivise solo le basi con il marker esatto del prodotto", () => {
+    const product = getVoiceProduct("santaddeo-rms")!
+    const shared = base({ name: "Policy comuni", description: "[voice-shared:santaddeo-rms]" })
+    const otherTenantProduct = base({ name: "Altro prodotto", description: "[voice-shared:manubot]" })
+    const primary = base({ name: "Santaddeo RMS", description: "[voice:santaddeo-rms]" })
+
+    expect(resolveSharedVoiceKnowledgeBases(product, [primary, shared, otherTenantProduct])).toEqual([shared])
   })
 })

@@ -6,6 +6,10 @@ import {
   type KnowledgeBaseSummary,
 } from "@/components/admin/knowledge/knowledge-bases-manager"
 import { KnowledgeGaps } from "@/components/admin/knowledge/knowledge-gaps"
+import { InternalKnowledgeSyncStatusCard } from "@/components/admin/knowledge/internal-knowledge-sync-status"
+import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
+import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { Sparkles } from "lucide-react"
 
 export const dynamic = "force-dynamic"
@@ -43,6 +47,21 @@ export default async function KnowledgePage() {
   }))
 
   const initialChannels = await getKnowledgeChannels(propertyId)
+  const identity = await getCallerIdentity()
+  let internalSyncDiagnostics: Awaited<ReturnType<typeof getInternalKnowledgeSyncDiagnostics>> | null = null
+  if (identity?.isSuperAdmin && identity.propertyId) {
+    try {
+      if (await isVoiceSupportHub(identity.propertyId)) {
+        internalSyncDiagnostics = await getInternalKnowledgeSyncDiagnostics(identity.propertyId)
+      }
+    } catch {
+      internalSyncDiagnostics = {
+        schemaAvailable: true,
+        sources: [],
+        error: "Impossibile leggere lo stato della sincronizzazione. Riprova più tardi.",
+      }
+    }
+  }
 
   return (
     <div className="min-h-full bg-muted">
@@ -61,6 +80,8 @@ export default async function KnowledgePage() {
         </div>
 
         <KnowledgeBasesManager initialBases={initialBases} initialChannels={initialChannels} />
+
+        {internalSyncDiagnostics ? <InternalKnowledgeSyncStatusCard diagnostics={internalSyncDiagnostics} /> : null}
 
         {/*
           L'anello: le basi si impostano qui sopra, poi l'esperienza delle

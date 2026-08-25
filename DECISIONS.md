@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-08-21
+Ultimo aggiornamento: 2026-08-25
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -148,6 +148,26 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata; sostituisce il formato di ADR-016, non i relativi vincoli di sicurezza.
 - Decisione: il Core assegna a ogni account cliente un numero unico di sette cifre. I codici stampati derivano da quel numero e dal prodotto: `HA-`, `SNT-`, `HPA-` e `MB-`.
 - Conseguenza: lo stesso cliente riconosce subito il prodotto e il centralino verifica coerenza fra menu e prefisso. Santaddeo, HotelProfitAI e ManuBot risolvono il proprio codice solo tramite contratto HTTP v1 autenticato con una chiave per prodotto e un link tenant esplicito; nessun database satellite legge quello del Core.
+
+## ADR-025 — Mappa IVR 4 BID persistente e scope delle basi esplicito
+
+- Stato: accettata
+- Decisione: gli otto percorsi del centralino 4 BID sono configurazione backend-only modificabile soltanto da un
+  superadmin sul tenant aziendale `4bid`. I prospect selezionano primaria e basi condivise solo nell'hub; il supporto
+  risolve prima il tenant dal codice cliente e poi cerca primaria e condivise esclusivamente in quel tenant.
+- Conseguenza: nessun ID di base cliente viene salvato nella mappa aziendale. Tool CRM e fallback sono dichiarati
+  per route; vincoli applicativi e database rifiutano riferimenti cross-tenant e una route mancante fallisce chiusa.
+
+## ADR-026 — Knowledge base 4BID dal repository, senza crawl pubblico
+
+- Stato: accettata
+- Decisione: la documentazione commerciale degli agenti vocali 4BID deriva da una allowlist di file Markdown nel
+  repository. Dopo un merge su `main`, GitHub Actions invia il testo compilato a un endpoint backend firmato; il Core
+  lo salva come fonte `text` interna e riusa il suo indicizzatore/retry esistente. URL pubblici e storage pubblico non
+  sono fonti di questo flusso.
+- Conseguenza: ogni prodotto conserva una propria base e fonte nel solo tenant hub, con revisione, impronta e percorsi
+  di audit. I satelliti adottano lo stesso contratto dal proprio repository, senza accedere ai database o alle KB di
+  altri prodotti; una KB non pronta non abilita una route IVR.
 
 ## Decisioni aperte
 

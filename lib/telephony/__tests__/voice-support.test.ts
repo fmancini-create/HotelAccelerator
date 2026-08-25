@@ -26,6 +26,19 @@ describe("instradamento del supporto vocale", () => {
     ).toMatchObject({ action: "transfer", destination: "200" })
   })
 
+  it("usa l'interno configurato dalla route IVR durante l'orario", () => {
+    expect(
+      resolveSupportHandoff({
+        humanHelpRequired: true,
+        afterHours: false,
+        plan: "free",
+        configuredMode: "plan_default",
+        configuredExtension: null,
+        operatorExtension: "245",
+      }),
+    ).toMatchObject({ action: "transfer", destination: "245" })
+  })
+
   it("porta enterprise alla reperibilita e gli altri piani alla registrazione", () => {
     expect(resolveAfterHoursMode("enterprise", "plan_default")).toBe("on_call")
     expect(resolveAfterHoursMode("professional", "plan_default")).toBe("voicemail")

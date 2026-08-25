@@ -1,6 +1,6 @@
 # HotelAccelerator — Integrations Registry
 
-Ultimo aggiornamento: 2026-08-24
+Ultimo aggiornamento: 2026-08-25
 
 ## Regola
 
@@ -19,7 +19,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Messaggistica | WhatsApp | Inbox e automazioni | Da verificare | Provider, template, consenso e webhook |
 | Messaggistica | Telegram | Inbox/ManuBot | Da verificare | Separare bot manutenzioni e canale ospiti |
 | Social | Instagram/Facebook | Messaggi | Specifica | API Meta, permessi e review app |
-| VoIP | 3CX | Chiamate, attribuzione e assistenti vocali tenant-aware | Codice | CRM/call control presenti; bridge vocale v1 e fallback 200 implementati. Mancano deploy PBX, prova tenant reale, limite distribuito e osservabilità; vedere `docs/3CX_VOICE_AI.md` |
+| VoIP | 3CX | Chiamate, attribuzione e assistenti vocali tenant-aware | Codice | CRM/call control presenti; bridge v1 e mappa IVR 4 BID persistente con scope KB e fallback espliciti. Mancano migrazione/deploy PBX, configurazione delle basi, prova tenant reale, limite distribuito e osservabilità; vedere `docs/3CX_VOICE_AI.md` |
 | OTA | Booking.com | Recensioni, messaggi, risposte, analytics | Specifica | Subordinato a Connectivity/partnership e scope API |
 | OTA | Altri portali | Messaggi, recensioni, prezzi | Idea/Specifica | Definire priorità e adapter |
 | Pagamenti | Stripe | Pagamenti, abbonamenti, extra | Da verificare | Account model, Connect, webhook owner e PCI scope |
@@ -29,6 +29,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Demand data | Provider voli | Storico/futuro e origine mercati | Specifica | Selezione provider tramite adapter |
 | Demand data | Provider treni | Storico/futuro per stazioni | Specifica | Disponibilità e licenze dati |
 | Market pricing | Rate shopper/PriceGuard | Competitor e parity | Da verificare | Origine dati, termini e qualità |
+| AI | Knowledge sync interno 4BID | Fonti vocali commerciali da documenti Markdown versionati | Codice | Endpoint HMAC, allowlist e recovery dell'indicizzatore presenti; applicare migrazione, impostare segreti GitHub/Vercel, sincronizzare HotelAccelerator e collaudare 3CX. I satelliti richiedono workflow separati, senza accesso DB cross-prodotto |
 | AI | Provider da definire | Classificazione, generazione, OCR, forecast | Specifica | Privacy, costi, eval, fallback e data retention |
 
 ## Checklist obbligatoria per ogni integrazione

@@ -1,0 +1,40 @@
+name: Sync 4BID internal knowledge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 4bid-internal-knowledge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sync approved internal documentation
+        run: |
+          for attempt in {1..24}; do
+            if node scripts/sync-4bid-internal-knowledge.mjs; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 24 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          INTERNAL_KNOWLEDGE_SYNC_URL: ${{ secrets.INTERNAL_KNOWLEDGE_SYNC_URL }}
+          INTERNAL_KNOWLEDGE_SYNC_SECRET: ${{ secrets.INTERNAL_KNOWLEDGE_SYNC_SECRET }}
