@@ -33,7 +33,18 @@ type VoiceRoute = {
   shared_knowledge_bases: KnowledgeBase[]
 }
 
-type Payload = { routes: VoiceRoute[]; knowledge_bases: KnowledgeBase[] }
+type InternalKnowledgeSource = {
+  product_key: string
+  knowledge_base_id: string
+  status: "pending" | "processing" | "ready" | "error"
+}
+
+type Payload = {
+  routes: VoiceRoute[]
+  knowledge_bases: KnowledgeBase[]
+  internal_sync_available: boolean
+  internal_sources: InternalKnowledgeSource[]
+}
 
 const STATUS_LABELS: Record<VoiceRoute["status"], string> = {
   ready: "Pronto",
@@ -41,6 +52,13 @@ const STATUS_LABELS: Record<VoiceRoute["status"], string> = {
   empty_primary: "Base primaria senza fonti",
   invalid_reference: "Riferimento non valido",
   dynamic_tenant: "Tenant cliente",
+}
+
+const SYNC_STATUS_LABELS: Record<InternalKnowledgeSource["status"], string> = {
+  pending: "In attesa di indicizzazione",
+  processing: "Indicizzazione in corso",
+  ready: "Pronta",
+  error: "Errore di indicizzazione",
 }
 
 export function VoiceIvrRoutingCard() {
@@ -175,9 +193,25 @@ export function VoiceIvrRoutingCard() {
 
         {payload?.routes.map((route) => {
           const isProspect = route.knowledge_scope === "hub_selected"
-          const availableShared = payload.knowledge_bases.filter(
-            (base) => base.id !== route.primary_knowledge_base_id,
-          )
+          const internalPrimary = payload.internal_sources.find((source) => source.product_key === route.product_key)
+          const internalPrimaryBase = internalPrimary
+            ? payload.knowledge_bases.find((base) => base.id === internalPrimary.knowledge_base_id) ?? null
+            : null
+          const readyInternalBases = payload.internal_sources
+            .filter((source) => source.status === "ready" && source.knowledge_base_id !== route.primary_knowledge_base_id)
+            .flatMap((source) => {
+              const base = payload.knowledge_bases.find((candidate) => candidate.id === source.knowledge_base_id)
+              return base ? [base] : []
+            })
+          const readyInternalBaseIds = new Set(readyInternalBases.map((base) => base.id))
+          const invalidSelectedShared = route.shared_knowledge_bases.filter((base) => !readyInternalBaseIds.has(base.id))
+          const availableShared = [
+            ...readyInternalBases,
+            ...invalidSelectedShared.filter((base) => !readyInternalBaseIds.has(base.id)),
+          ]
+          const prospectReady =
+            !isProspect
+            || (internalPrimary?.status === "ready" && route.primary_knowledge_base_id === internalPrimary.knowledge_base_id)
           const ready = route.status === "ready" || route.status === "dynamic_tenant"
           return (
             <section key={route.id} className="space-y-4 rounded-lg border p-4" aria-labelledby={`route-${route.id}`}>
@@ -224,47 +258,74 @@ export function VoiceIvrRoutingCard() {
 
               {isProspect ? (
                 <div className="space-y-3 rounded-md bg-muted/40 p-3">
-                  <div className="grid gap-2">
-                    <Label>Knowledge base primaria 4 BID</Label>
-                    <Select
-                      value={route.primary_knowledge_base_id ?? "none"}
-                      onValueChange={(value) =>
-                        patchRoute(route.id, {
-                          primary_knowledge_base_id: value === "none" ? null : value,
-                          shared_knowledge_bases: route.shared_knowledge_bases.filter((base) => base.id !== value),
-                        })
-                      }
-                    >
-                      <SelectTrigger className="w-full" aria-label={`Base primaria per ${route.agent_label}`}>
-                        <SelectValue placeholder="Scegli la base primaria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Nessuna base selezionata</SelectItem>
-                        {payload.knowledge_bases.map((base) => (
-                          <SelectItem key={base.id} value={base.id}>
-                            {base.name} · {base.source_count} fonti
+                  {!payload.internal_sync_available ? (
+                    <Alert variant="destructive">
+                      <AlertCircle aria-hidden="true" />
+                      <AlertTitle>Sincronizzazione interna non disponibile</AlertTitle>
+                      <AlertDescription>Applica prima la migrazione delle fonti interne 4BID.</AlertDescription>
+                    </Alert>
+                  ) : !internalPrimary || !internalPrimaryBase ? (
+                    <Alert variant="destructive">
+                      <AlertCircle aria-hidden="true" />
+                      <AlertTitle>Fonte interna del prodotto assente</AlertTitle>
+                      <AlertDescription>
+                        Esegui il workflow di sincronizzazione su <code>main</code> per questo prodotto prima di configurare
+                        il percorso.
+                      </AlertDescription>
+                    </Alert>
+                  ) : internalPrimary.status !== "ready" ? (
+                    <Alert>
+                      <Loader2 className="h-4 w-4" aria-hidden="true" />
+                      <AlertTitle>Fonte interna: {SYNC_STATUS_LABELS[internalPrimary.status]}</AlertTitle>
+                      <AlertDescription>
+                        Attendi una fonte pronta prima di assegnarla al centralino. Il percorso continuerà a usare il fallback.
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <div className="grid gap-2">
+                      <Label>Knowledge base primaria 4 BID</Label>
+                      <Select
+                        value={route.primary_knowledge_base_id ?? "none"}
+                        onValueChange={(value) =>
+                          patchRoute(route.id, {
+                            primary_knowledge_base_id: value === "none" ? null : value,
+                            shared_knowledge_bases: route.shared_knowledge_bases.filter((base) => base.id !== value),
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full" aria-label={`Base primaria per ${route.agent_label}`}>
+                          <SelectValue placeholder="Scegli la base primaria" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nessuna base selezionata</SelectItem>
+                          <SelectItem value={internalPrimaryBase.id}>
+                            {internalPrimaryBase.name} · fonte interna pronta
                           </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <fieldset className="space-y-2">
-                    <legend className="text-sm font-medium">Knowledge base condivise 4 BID</legend>
+                    <legend className="text-sm font-medium">Knowledge base condivise interne 4 BID</legend>
                     {availableShared.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Non ci sono altre basi disponibili.</p>
+                      <p className="text-xs text-muted-foreground">Non ci sono altre fonti interne pronte disponibili.</p>
                     ) : (
                       availableShared.map((base) => {
                         const checked = route.shared_knowledge_bases.some((candidate) => candidate.id === base.id)
+                        const eligible = readyInternalBaseIds.has(base.id)
                         return (
                           <div key={base.id} className="flex items-center gap-2">
                             <Checkbox
                               id={`shared-${route.id}-${base.id}`}
                               checked={checked}
-                              onCheckedChange={(value) => toggleShared(route, base, value === true)}
+                              disabled={!eligible && !checked}
+                              onCheckedChange={(value) => {
+                                if (eligible || checked) toggleShared(route, base, value === true)
+                              }}
                             />
                             <Label htmlFor={`shared-${route.id}-${base.id}`} className="font-normal">
-                              {base.name} · {base.source_count} fonti
+                              {base.name} · {eligible ? "fonte interna pronta" : "riferimento da rimuovere"}
                             </Label>
                           </div>
                         )
@@ -301,7 +362,13 @@ export function VoiceIvrRoutingCard() {
                   <Button
                     size="sm"
                     onClick={() => save(route)}
-                    disabled={savingId !== null || !route.agent_label.trim() || !route.fallback_destination.trim()}
+                    disabled={
+                      savingId !== null
+                      || !route.agent_label.trim()
+                      || !route.fallback_destination.trim()
+                      || !prospectReady
+                      || invalidSelectedShared.length > 0
+                    }
                   >
                     {savingId === route.id ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />

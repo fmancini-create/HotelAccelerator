@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "products": [
+    {
+      "product_key": "hotel-accelerator",
+      "source_paths": [
+        "PROJECT_OVERVIEW.md",
+        "ARCHITECTURE.md",
+        "MODULE_REGISTRY.md",
+        "INTEGRATIONS.md",
+        "docs/3CX_VOICE_AI.md",
+        "docs/CHANNEL_KNOWLEDGE_BASES.md"
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
+import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
 import { authenticateInbound } from "@/lib/telephony/inbound-auth"
 import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
 import { getVoiceProduct, VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
@@ -36,8 +37,8 @@ async function readVoiceBody(request: NextRequest): Promise<unknown | null> {
 
 /**
  * Informazioni commerciali per chi non e' ancora cliente. L'endpoint usa
- * soltanto le basi di conoscenza pubbliche del tenant aziendale 4 BID, mai la
- * base operativa di un cliente.
+ * soltanto le fonti interne sincronizzate del tenant aziendale 4 BID, mai la
+ * base operativa di un cliente o una fonte pubblica.
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.slice(0, 100) || randomUUID()
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
   const product = getVoiceProduct(request.nextUrl.searchParams.get("product"))
   if (!product) return NextResponse.json({ error: "Prodotto vocale non valido", request_id: requestId }, { status: 400, headers: NO_STORE })
 
-  let route = null
+  let route: Awaited<ReturnType<typeof getVoiceIvrRoute>> = null
   let routingSchemaAvailable = true
   try {
     route = await getVoiceIvrRoute(auth.propertyId, "prospect_information", product.key)
@@ -91,6 +92,37 @@ export async function POST(request: NextRequest) {
       { ...serviceErrorVoiceResponse({ key: product.key, label: route.agent_label }, route.fallback_destination, "knowledge_base_not_configured"), request_id: requestId },
       { status: 503, headers: NO_STORE },
     )
+  }
+
+  if (route) {
+    const configuredRoute = route
+    try {
+      const sync = await getInternalKnowledgeSyncDiagnostics(auth.propertyId)
+      const source = sync.schemaAvailable
+        ? sync.sources.find(
+            (candidate) => candidate.productKey === product.key && candidate.knowledgeBaseId === configuredRoute.primary_knowledge_base_id,
+          )
+        : null
+      if (!source || source.status !== "ready") {
+        return NextResponse.json(
+          {
+            ...serviceErrorVoiceResponse(
+              { key: product.key, label: configuredRoute.agent_label },
+              configuredRoute.fallback_destination,
+              "internal_knowledge_not_ready",
+            ),
+            request_id: requestId,
+          },
+          { status: 503, headers: NO_STORE },
+        )
+      }
+    } catch {
+      console.error("[3cx-prospect] internal source lookup failed", { requestId, product: product.key })
+      return NextResponse.json(
+        { ...serviceErrorVoiceResponse({ key: product.key, label: configuredRoute.agent_label }, configuredRoute.fallback_destination, "route_lookup_failed"), request_id: requestId },
+        { status: 502, headers: NO_STORE },
+      )
+    }
   }
 
   const rate = takeVoiceRequest(`${auth.propertyId}:prospect`)

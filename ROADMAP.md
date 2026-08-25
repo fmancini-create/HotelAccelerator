@@ -67,7 +67,7 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 
 - [ ] Inbox multicanale progressiva: Outlook/IMAP, WhatsApp, Telegram, Instagram, Facebook, sito, booking engine, OTA e VoIP secondo API disponibili.
 - [x] Handoff da assistente a staff: stato persistente tenant-scoped, raccolta contatto su più turni e conferma solo dopo registrazione della richiesta; da collaudare su tenant reale prima di qualunque promozione.
-- [ ] Assistente vocale AI per telefonate e messaggi vocali con handoff umano e contesto preservato. Bridge 3CX → basi tenant-aware, mappa persistente degli otto percorsi 4 BID e fallback espliciti in stato `Codice`; restano applicazione migrazione, configurazione basi, script sul PBX, prova tenant reale, persistenza controllata del contesto e osservabilità.
+- [ ] Assistente vocale AI per telefonate e messaggi vocali con handoff umano e contesto preservato. Bridge 3CX → basi tenant-aware, mappa persistente degli otto percorsi 4 BID, fallback espliciti e sync firmato da documenti interni per HotelAccelerator in stato `Codice`; restano applicazione migrazioni, segreti, fonti dei satelliti, configurazione basi/PBX, prova tenant reale, persistenza controllata del contesto e osservabilità.
 - [ ] Analisi conversazioni: intenti, richieste, sentiment, qualità, conversione e insight aggregati di mercato.
 - [ ] CMS/sito AI-first, multilingua, SEO/GEO e hosting.
 - [ ] Booking widget con disponibilità, preventivo, pagamento, alternative, extra e integrazione PMS.

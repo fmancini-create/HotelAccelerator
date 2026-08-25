@@ -29,6 +29,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Demand data | Provider voli | Storico/futuro e origine mercati | Specifica | Selezione provider tramite adapter |
 | Demand data | Provider treni | Storico/futuro per stazioni | Specifica | Disponibilità e licenze dati |
 | Market pricing | Rate shopper/PriceGuard | Competitor e parity | Da verificare | Origine dati, termini e qualità |
+| AI | Knowledge sync interno 4BID | Fonti vocali commerciali da documenti Markdown versionati | Codice | Endpoint HMAC, allowlist e recovery dell'indicizzatore presenti; applicare migrazione, impostare segreti GitHub/Vercel, sincronizzare HotelAccelerator e collaudare 3CX. I satelliti richiedono workflow separati, senza accesso DB cross-prodotto |
 | AI | Provider da definire | Classificazione, generazione, OCR, forecast | Specifica | Privacy, costi, eval, fallback e data retention |
 
 ## Checklist obbligatoria per ogni integrazione

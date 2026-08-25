@@ -158,6 +158,17 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Conseguenza: nessun ID di base cliente viene salvato nella mappa aziendale. Tool CRM e fallback sono dichiarati
   per route; vincoli applicativi e database rifiutano riferimenti cross-tenant e una route mancante fallisce chiusa.
 
+## ADR-026 — Knowledge base 4BID dal repository, senza crawl pubblico
+
+- Stato: accettata
+- Decisione: la documentazione commerciale degli agenti vocali 4BID deriva da una allowlist di file Markdown nel
+  repository. Dopo un merge su `main`, GitHub Actions invia il testo compilato a un endpoint backend firmato; il Core
+  lo salva come fonte `text` interna e riusa il suo indicizzatore/retry esistente. URL pubblici e storage pubblico non
+  sono fonti di questo flusso.
+- Conseguenza: ogni prodotto conserva una propria base e fonte nel solo tenant hub, con revisione, impronta e percorsi
+  di audit. I satelliti adottano lo stesso contratto dal proprio repository, senza accedere ai database o alle KB di
+  altri prodotti; una KB non pronta non abilita una route IVR.
+
 ## Decisioni aperte
 
 - Strategia SSO e autorità identità definitiva.

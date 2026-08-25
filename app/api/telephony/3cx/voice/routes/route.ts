@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
+import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
 import { accessErrorStatus, requireTenantAdmin } from "@/lib/auth/admin-access"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
@@ -43,9 +44,23 @@ async function requireVoiceRoutingAdmin(request: NextRequest) {
 }
 
 async function payload(propertyId: string) {
-  const bases = await getKnowledgeBases(propertyId)
+  const [bases, syncDiagnostics] = await Promise.all([
+    getKnowledgeBases(propertyId),
+    getInternalKnowledgeSyncDiagnostics(propertyId),
+  ])
   const routes = await getVoiceIvrRoutes(propertyId, bases)
-  return { routes, knowledge_bases: bases }
+  return {
+    routes,
+    knowledge_bases: bases,
+    internal_sync_available: syncDiagnostics.schemaAvailable,
+    internal_sources: syncDiagnostics.schemaAvailable
+      ? syncDiagnostics.sources.map((source) => ({
+          product_key: source.productKey,
+          knowledge_base_id: source.knowledgeBaseId,
+          status: source.status,
+        }))
+      : [],
+  }
 }
 
 function errorResponse(error: unknown) {
@@ -85,6 +100,47 @@ export async function PUT(request: NextRequest) {
     }
     if (new Set(parsed.data.shared_knowledge_base_ids).size !== parsed.data.shared_knowledge_base_ids.length) {
       return NextResponse.json({ error: "Una base condivisa è presente più volte" }, { status: 400, headers: NO_STORE })
+    }
+
+    const current = await payload(propertyId)
+    const route = current.routes.find((candidate) => candidate.id === parsed.data.route_id)
+    if (!route) {
+      return NextResponse.json({ error: "Percorso IVR non trovato" }, { status: 404, headers: NO_STORE })
+    }
+
+    if (route.knowledge_scope === "hub_selected") {
+      const primaryKnowledgeBaseId = parsed.data.primary_knowledge_base_id
+      if (!current.internal_sync_available) {
+        return NextResponse.json(
+          { error: "La migrazione delle fonti interne non è ancora applicata." },
+          { status: 503, headers: NO_STORE },
+        )
+      }
+
+      const primarySource = current.internal_sources.find(
+        (source) => source.product_key === route.product_key && source.knowledge_base_id === primaryKnowledgeBaseId,
+      )
+      if (!primaryKnowledgeBaseId || !primarySource || primarySource.status !== "ready") {
+        return NextResponse.json(
+          { error: "La base primaria deve essere la fonte interna pronta del prodotto selezionato." },
+          { status: 409, headers: NO_STORE },
+        )
+      }
+
+      const readyInternalBaseIds = new Set(
+        current.internal_sources
+          .filter((source) => source.status === "ready")
+          .map((source) => source.knowledge_base_id),
+      )
+      if (
+        parsed.data.shared_knowledge_base_ids.includes(primaryKnowledgeBaseId)
+        || parsed.data.shared_knowledge_base_ids.some((baseId) => !readyInternalBaseIds.has(baseId))
+      ) {
+        return NextResponse.json(
+          { error: "Le basi condivise devono essere fonti interne pronte e diverse dalla primaria." },
+          { status: 409, headers: NO_STORE },
+        )
+      }
     }
 
     await updateVoiceIvrRoute({

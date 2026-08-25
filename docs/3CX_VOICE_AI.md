@@ -44,7 +44,9 @@ La selezione avviene solo dentro le basi già filtrate per `property_id`.
 1. L'amministratore crea o sceglie una base nel tenant corrente; la pagina Telefono genera un collegamento univoco.
 2. Per il supporto 4 BID la base primaria del tenant cliente usa il marker del prodotto: `[voice:hotel-accelerator]`, `[voice:santaddeo-rms]`, `[voice:hotel-profit-ai]` o `[voice:manubot]`. In assenza del marker è accettato solo un alias esatto.
 3. Le basi aggiuntive del medesimo tenant usano `[voice-shared:<prodotto>]`. Non possono diventare primarie per errore e non possono provenire da un tenant diverso.
-4. Per i prospect, primaria e condivise vengono scelte esplicitamente solo fra le basi del tenant aziendale 4 BID.
+4. Per i prospect, la primaria è obbligatoriamente la fonte interna `ready` del prodotto; le condivise, facoltative,
+   possono essere soltanto altre fonti interne `ready` dello stesso hub 4 BID. URL, PDF pubblici e basi di tenant
+   non sono selezionabili né tramite interfaccia né tramite API.
 5. Zero o più primarie, una primaria senza fonti o un riferimento non valido portano al fallback: il sistema non indovina per sottostringa.
 
 Il contratto di assistenza usa il registro centrale dei codici cliente e la politica fuori orario della struttura.
@@ -130,10 +132,13 @@ Il Core apre un'attività ad alta priorità nella coda centrale 4 BID, con il te
 ## Configurazione operativa
 
 1. In HotelAccelerator aprire **Canali → Telefono IP**.
-2. Se si configura il centralino 4 BID, entrare come superadmin, selezionare il tenant aziendale `4bid` e completare
+2. Per HotelAccelerator, configurare prima il sync firmato dei documenti interni descritto in
+   `docs/INTERNAL_KNOWLEDGE_SYNC.md`, eseguire il workflow su `main` e attendere che la fonte sia `ready`. Non usare
+   URL pubblici o upload pubblici come fonte commerciale del centralino.
+3. Se si configura il centralino 4 BID, entrare come superadmin, selezionare il tenant aziendale `4bid` e completare
    le otto righe in **Mappa IVR 4 BID**. Le route prospect richiedono una base primaria; le basi condivise sono
    facoltative. Le route supporto mostrano i marker cercati nei tenant cliente.
-3. In **Agenti telefonici AI** premere **Genera gli agenti dalle basi di conoscenza** e verificare che tutte le righe
+4. In **Agenti telefonici AI** premere **Genera gli agenti dalle basi di conoscenza** e verificare che tutte le righe
    necessarie risultino `Pronto` o `Tenant cliente`.
 4. In 3CX installare da **Integrazioni → Script di chiamata → Aggiungi dallo store** lo script OpenAI Voice Agent
    previsto dalla versione del PBX.
@@ -155,6 +160,8 @@ effettivamente installata sul PBX, non ricostruito a memoria contro un'API poten
 - Trigger database rifiutano basi prospect appartenenti a tenant diversi dall'hub. Nel supporto non vengono mai
   memorizzati ID di basi cliente nella configurazione 4 BID: il codice cliente risolve prima il tenant, poi il
   retrieval filtra nuovamente per quel `property_id`.
+- Il runtime prospect richiede inoltre che la primaria corrisponda alla fonte interna del prodotto e sia `ready`;
+  in caso contrario risponde solo con il fallback, senza interrogare fonti precedenti o pubbliche.
 - Limiti di lunghezza su domanda e storia; massimo otto turni.
 - Salvaguardia locale di 90 richieste/minuto per tenant; in produzione va affiancata da un limite distribuito/WAF.
 - Risposte `no-store`; testo e token non vengono inseriti nei log applicativi.
@@ -197,6 +204,11 @@ va al reperibile, gli altri alla registrazione, salvo una deroga `on_call`/`voic
 - `supabase/migrations/20260824173500_deny_direct_client_access_to_customer_code_registry.sql`
 - `supabase/migrations/20260824174000_preallocate_suite_product_customer_codes.sql`
 - `supabase/migrations/20260824170540_add_4bid_voice_ivr_routes.sql`
+- `supabase/migrations/20260825093220_add_internal_4bid_knowledge_sync.sql`
+- `app/api/external/knowledge-sync/route.ts`
+- `lib/ai/internal-knowledge-sync.ts`
+- `scripts/sync-4bid-internal-knowledge.mjs`
+- `docs/INTERNAL_KNOWLEDGE_SYNC.md`
 - `docs/CUSTOMER_CODE_REGISTRY.md`
 
 ## Migrazione e rollback
