@@ -66,9 +66,9 @@ export async function POST(request: NextRequest) {
     if (!code) {
       return NextResponse.json({ error: "Codice di autorizzazione mancante" }, { status: 400 })
     }
-    if (!phoneNumberId || !wabaId) {
+    if (!wabaId) {
       return NextResponse.json(
-        { error: "Numero non selezionato. Riprova il collegamento e scegli un numero WhatsApp." },
+        { error: "Account WhatsApp non selezionato. Riprova il collegamento." },
         { status: 400 },
       )
     }
@@ -105,47 +105,72 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 400 })
     }
 
-    // 3) Register the phone number on Cloud API (idempotent). A 2-step PIN is
-    //    only required if the number had 2FA enabled; we send a default PIN.
-    //    Failures here are non-fatal: the number may already be registered.
-    try {
-      await fetch(`https://graph.facebook.com/${v}/${phoneNumberId}/register`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${platform.systemUserToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ messaging_product: "whatsapp", pin: "000000" }),
-      })
-    } catch {
-      // ignore — registration is best-effort
+    // 3) Coexistence deliberately does NOT call /register. Registering a
+    // Business App number through the standard Cloud API endpoint can take it
+    // out of the phone app instead of keeping the two surfaces in sync.
+    //
+    // Meta's Business App completion event supplies the WABA; it may omit the
+    // phone_number_id. Resolve the sole selected number from that WABA, while
+    // still accepting a phone ID when Meta includes it in the session payload.
+    let resolvedPhoneNumberId = phoneNumberId
+    let resolvedNumber: any = null
+    const phoneNumbers = await graphGet(
+      v,
+      `${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,is_on_biz_app,platform_type`,
+      businessToken,
+    )
+    const candidates = Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : []
+
+    if (resolvedPhoneNumberId) {
+      resolvedNumber = candidates.find((candidate: any) => String(candidate?.id) === String(resolvedPhoneNumberId)) ?? null
     }
 
-    // 4) Fetch human-readable number + verified business name for display.
-    let displayPhone = ""
-    let verifiedName = ""
+    if (!resolvedNumber) {
+      if (candidates.length === 1) {
+        resolvedNumber = candidates[0]
+        resolvedPhoneNumberId = String(resolvedNumber.id)
+      } else if (candidates.length === 0) {
+        return NextResponse.json(
+          { error: "Meta non ha restituito alcun numero WhatsApp per l'account selezionato." },
+          { status: 400 },
+        )
+      } else {
+        return NextResponse.json(
+          {
+            error:
+              "Meta ha restituito più numeri WhatsApp. Riapri il collegamento e seleziona un solo numero da collegare.",
+          },
+          { status: 400 },
+        )
+      }
+    }
+
+    // 4) Fetch a current number snapshot. The business token is the token that
+    // just authorized this WABA, so it is valid even before the platform token
+    // has been granted access to the newly shared asset.
     const info = await graphGet(
       v,
-      `${phoneNumberId}?fields=display_phone_number,verified_name`,
-      platform.systemUserToken,
+      `${resolvedPhoneNumberId}?fields=display_phone_number,verified_name,is_on_biz_app,platform_type`,
+      businessToken,
     )
-    if (info && !info.error) {
-      displayPhone = info.display_phone_number ?? ""
-      verifiedName = info.verified_name ?? ""
-    }
-
+    const numberInfo = info && !info.error ? info : resolvedNumber
+    const displayPhone = numberInfo?.display_phone_number ?? ""
+    const verifiedName = numberInfo?.verified_name ?? ""
     // 5) Persist the channel. Secrets stay in env; the row holds routing config
     //    only. We DO store verify_token/app_secret references so the existing
     //    per-tenant webhook + client paths keep working unchanged.
     const supabase = createServiceClient()
 
     const config = {
-      phone_number_id: String(phoneNumberId),
+      phone_number_id: String(resolvedPhoneNumberId),
       waba_id: String(wabaId),
       display_phone_number: displayPhone,
       verified_name: verifiedName,
       graph_version: v,
-      provisioned_via: "embedded_signup",
+      provisioned_via: "business_app_coexistence",
+      coexistence: true,
+      is_on_biz_app: numberInfo?.is_on_biz_app === true,
+      platform_type: numberInfo?.platform_type ?? "CLOUD_API",
     }
     // WRITE-ENCRYPT: i segreti gestiti dalla piattaforma (singola app Meta)
     // vengono salvati cifrati `enc:v1:` at-rest. Il dual-read dei reader li
@@ -164,7 +189,7 @@ export async function POST(request: NextRequest) {
       .select("id")
       .eq("property_id", propertyId)
       .eq("channel_type", "whatsapp")
-      .eq("config->>phone_number_id", String(phoneNumberId))
+      .eq("config->>phone_number_id", String(resolvedPhoneNumberId))
       .maybeSingle()
 
     let row: MessagingChannelRow
