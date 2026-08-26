@@ -6,6 +6,8 @@ import { trovaAnagraficaPerNumero } from "@/lib/crm/contact-identity"
  * Normalized inbound WhatsApp message extracted from the Meta webhook payload.
  */
 export interface InboundWhatsAppMessage {
+  /** Originating Meta business phone_number_id; required for tenant-safe routing. */
+  phoneNumberId: string
   externalId: string // WhatsApp message id (wamid....) — idempotency key
   fromPhone: string // sender phone (digits only)
   fromName?: string // WhatsApp profile name, if present
@@ -17,6 +19,8 @@ export interface InboundWhatsAppMessage {
 
 /** A message sent from the WhatsApp Business app and mirrored by coexistence. */
 export interface OutboundWhatsAppMessage {
+  /** Originating Meta business phone_number_id; required for tenant-safe routing. */
+  phoneNumberId: string
   externalId: string
   toPhone: string
   body: string
@@ -79,7 +83,7 @@ export class WhatsAppProcessor {
       // dove il nome l'ha messo il canale, mai un nome scritto da una persona.
       // Se l'anagrafica e' curata, in elenco va il SUO nome; se e' nata dal canale,
       // vale il nome che WhatsApp dichiara adesso.
-      const nomeMostrato = await this.aggiornaNomeDaProfilo(propertyId, contact, name)
+      const nomeMostrato = await this.aggiornaNomeDaProfilo(propertyId, contact, name, channelId)
       const conversation = await this.findOrCreateConversation(
         propertyId,
         channelId,
@@ -317,6 +321,7 @@ export class WhatsAppProcessor {
     propertyId: string,
     contact: { id: string; name?: string | null; source?: string | null },
     nomeProfilo: string,
+    channelId: string,
   ): Promise<string> {
     const attuale = contact.name?.trim() || ""
     const nuovo = nomeProfilo.trim()
@@ -350,13 +355,14 @@ export class WhatsAppProcessor {
       .eq("property_id", propertyId)
       .eq("channel", "whatsapp")
       .eq("contact_id", contact.id)
+      .eq("metadata->>messaging_channel_id", channelId)
 
     return nuovo
   }
 
   /**
-   * One conversation per (property, channel='whatsapp', contact). Reuse the
-   * most recent one; create a new one only if none exists.
+   * One conversation per (property, WhatsApp channel ID, contact). Reuse the
+   * most recent one for that exact number; create a new one only if none exists.
    */
   private async findOrCreateConversation(
     propertyId: string,
@@ -371,6 +377,7 @@ export class WhatsAppProcessor {
       .eq("property_id", propertyId)
       .eq("channel", "whatsapp")
       .eq("contact_id", contactId)
+      .eq("metadata->>messaging_channel_id", channelId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()
