@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
     const code: string | undefined = body?.code
     const phoneNumberId: string | undefined = body?.phone_number_id
     const wabaId: string | undefined = body?.waba_id
+    const signupEvent: string | undefined = body?.signup_event
 
     if (!code) {
       return NextResponse.json({ error: "Codice di autorizzazione mancante" }, { status: 400 })
@@ -69,6 +70,15 @@ export async function POST(request: NextRequest) {
     if (!wabaId) {
       return NextResponse.json(
         { error: "Account WhatsApp non selezionato. Riprova il collegamento." },
+        { status: 400 },
+      )
+    }
+    if (signupEvent !== "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
+      return NextResponse.json(
+        {
+          error:
+            "Meta non ha confermato il collegamento in modalità WhatsApp Business App Coexistence. Verifica la configurazione Meta dedicata e riprova.",
+        },
         { status: 400 },
       )
     }
@@ -154,6 +164,15 @@ export async function POST(request: NextRequest) {
       businessToken,
     )
     const numberInfo = info && !info.error ? info : resolvedNumber
+    if (numberInfo?.is_on_biz_app !== true) {
+      return NextResponse.json(
+        {
+          error:
+            "Meta non ha confermato che il numero selezionato è attivo nell'app WhatsApp Business. Non è stato collegato: ripeti il flusso Coexistence selezionando il numero dell'app.",
+        },
+        { status: 400 },
+      )
+    }
     const displayPhone = numberInfo?.display_phone_number ?? ""
     const verifiedName = numberInfo?.verified_name ?? ""
     // 5) Persist the channel. Secrets stay in env; the row holds routing config
@@ -169,7 +188,7 @@ export async function POST(request: NextRequest) {
       graph_version: v,
       provisioned_via: "business_app_coexistence",
       coexistence: true,
-      is_on_biz_app: numberInfo?.is_on_biz_app === true,
+      is_on_biz_app: true,
       platform_type: numberInfo?.platform_type ?? "CLOUD_API",
     }
     // WRITE-ENCRYPT: i segreti gestiti dalla piattaforma (singola app Meta)
