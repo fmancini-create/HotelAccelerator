@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
     let resolvedNumber: any = null
     const phoneNumbers = await graphGet(
       v,
-      `${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name,is_on_biz_app,platform_type`,
+      `${wabaId}/phone_numbers?fields=id,display_phone_number,verified_name`,
       businessToken,
     )
     const candidates = Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : []
