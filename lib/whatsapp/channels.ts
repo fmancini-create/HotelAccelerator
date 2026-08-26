@@ -137,6 +137,9 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
       const value = change.value ?? {}
       const phoneNumberId: string | undefined = value.metadata?.phone_number_id
       if (phoneNumberId) result.phoneNumberId = phoneNumberId
+      // A payload without its originating number cannot be routed safely in a
+      // multi-tenant webhook, so leave it unacknowledged as an event to process.
+      if (!phoneNumberId) continue
 
       // Map contact wa_id -> profile name for enrichment.
       const nameByWaId = new Map<string, string>()
@@ -148,6 +151,7 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
         const fromPhone: string = m.from ?? ""
         const tsSeconds = Number(m.timestamp ?? 0)
         result.messages.push({
+          phoneNumberId,
           externalId: m.id,
           fromPhone,
           fromName: nameByWaId.get(fromPhone) || undefined,
@@ -165,6 +169,7 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
         const toPhone: string = m.to ?? ""
         const tsSeconds = Number(m.timestamp ?? 0)
         result.echoes.push({
+          phoneNumberId,
           externalId: m.id,
           toPhone,
           body: extractBody(m),
