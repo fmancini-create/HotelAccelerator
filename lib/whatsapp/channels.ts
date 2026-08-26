@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { InboundWhatsAppMessage } from "./processor"
+import type { InboundWhatsAppMessage, OutboundWhatsAppMessage } from "./processor"
 import type { MessagingChannelRow } from "./types"
 import { decryptWhatsAppCredentials } from "./channel-secrets"
 
@@ -118,6 +118,8 @@ export async function listWhatsAppChannelsForProperty(
 interface ParsedWebhook {
   phoneNumberId: string | null
   messages: InboundWhatsAppMessage[]
+  /** Messages sent from the WhatsApp Business app and mirrored by coexistence. */
+  echoes: OutboundWhatsAppMessage[]
   statuses: Array<{ id: string; status: string; recipientId?: string }>
 }
 
@@ -127,7 +129,7 @@ interface ParsedWebhook {
  * non-text message types (mapped to a readable placeholder).
  */
 export function parseWhatsAppWebhook(body: any): ParsedWebhook {
-  const result: ParsedWebhook = { phoneNumberId: null, messages: [], statuses: [] }
+  const result: ParsedWebhook = { phoneNumberId: null, messages: [], echoes: [], statuses: [] }
   if (!body || body.object !== "whatsapp_business_account") return result
 
   for (const entry of body.entry ?? []) {
@@ -156,6 +158,21 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
         })
       }
 
+      // In coexistence, messages sent from the Business App are delivered as
+      // smb_message_echoes. They are outbound operator messages, not customer
+      // inbound messages, so they must follow a separate timeline path.
+      for (const m of value.message_echoes ?? []) {
+        const toPhone: string = m.to ?? ""
+        const tsSeconds = Number(m.timestamp ?? 0)
+        result.echoes.push({
+          externalId: m.id,
+          toPhone,
+          body: extractBody(m),
+          messageType: m.type ?? "unknown",
+          timestamp: tsSeconds ? new Date(tsSeconds * 1000) : new Date(),
+          raw: m,
+        })
+      }
       for (const s of value.statuses ?? []) {
         result.statuses.push({ id: s.id, status: s.status, recipientId: s.recipient_id })
       }
