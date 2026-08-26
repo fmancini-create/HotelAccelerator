@@ -55,11 +55,24 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    // Get group memberships for each user
-    const { data: memberships } = await supabase
-      .from("user_group_members")
-      .select("user_id, group_id")
-      .in("user_id", users?.map((u: { id: string }) => u.id) || [])
+    // Memberships and KPI settings are independent once the tenant's user IDs
+    // are known: start both reads together instead of adding a waterfall.
+    const [{ data: memberships, error: membershipsError }, { data: kpiSettings, error: kpiError }] =
+      await Promise.all([
+        supabase
+          .from("user_group_members")
+          .select("user_id, group_id")
+          .in("user_id", users?.map((u: { id: string }) => u.id) || []),
+        supabase
+          .from("operator_kpi_settings")
+          .select("user_id, enabled, tracking_started_at")
+          .eq("property_id", propertyId),
+      ])
+
+    if (membershipsError) throw membershipsError
+    if (kpiError) throw kpiError
+
+    const kpiByUser = new Map((kpiSettings || []).map((setting) => [setting.user_id, setting]))
 
     const usersWithGroups = users?.map((user: { id: string }) => ({
       ...user,
@@ -67,6 +80,8 @@ export async function GET(request: NextRequest) {
         memberships
           ?.filter((m: { user_id: string; group_id: string }) => m.user_id === user.id)
           .map((m: { user_id: string; group_id: string }) => m.group_id) || [],
+      kpi_enabled: kpiByUser.get(user.id)?.enabled === true,
+      kpi_tracking_started_at: kpiByUser.get(user.id)?.tracking_started_at ?? null,
     }))
 
     return NextResponse.json({ users: usersWithGroups || [] })

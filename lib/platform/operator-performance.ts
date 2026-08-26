@@ -69,6 +69,10 @@ export type PerformanceResult = {
   soglia: number
   /** Sorgenti escluse dalle statistiche, da dichiarare a schermo. */
   sorgentiEscluse: number
+  /** Persone per cui il tenant ha esplicitamente avviato la misurazione. */
+  operatoriAbilitati: number
+  /** Risposte umane fuori KPI perche' autore non abilitato o periodo precedente. */
+  risposteOperatoriNonMisurati: number
   /**
    * La conversione non e' calcolabile: nessuna fonte la registra. Il motivo viaggia
    * col dato, cosi' la pagina non deve indovinare cosa scrivere.
@@ -94,6 +98,20 @@ export async function computeOperatorPerformance(
   giorni: number = GIORNI_PREDEFINITI,
 ): Promise<PerformanceResult> {
   const da = new Date(Date.now() - giorni * 24 * 60 * 60 * 1000).toISOString()
+
+  const { data: impostazioni, error: impostazioniErrore } = await sb
+    .from("operator_kpi_settings")
+    .select("user_id, tracking_started_at")
+    .eq("property_id", propertyId)
+    .eq("enabled", true)
+
+  if (impostazioniErrore) throw impostazioniErrore
+
+  const decorrenzaPerOperatore = new Map<string, number>()
+  for (const impostazione of impostazioni ?? []) {
+    if (!impostazione.tracking_started_at) continue
+    decorrenzaPerOperatore.set(impostazione.user_id, new Date(impostazione.tracking_started_at).getTime())
+  }
 
   // Le performance rispettano la scelta delle sorgenti: se una casella non conta
   // nelle statistiche, non deve contare nemmeno nei meriti di chi risponde.
@@ -165,9 +183,21 @@ export async function computeOperatorPerformance(
   const persone = new Map<string, Accumulo>()
   const ia: Accumulo = { risposte: 0, conv: new Set(), attese: [] }
   const senzaAutore: Accumulo = { risposte: 0, conv: new Set(), attese: [] }
+  let risposteOperatoriNonMisurati = 0
 
   for (const m of valide as any[]) {
     const dove = eIa(m.metadata) ? ia : m.sender_id ? undefined : senzaAutore
+    if (!dove) {
+      const decorrenza = decorrenzaPerOperatore.get(String(m.sender_id))
+      const creata = new Date(m.created_at).getTime()
+      // Le persone entrano nei KPI solo dopo l'opt-in del tenant. Non si
+      // recupera lo storico: le vecchie importazioni Gmail non sono una base
+      // affidabile per valutare un dipendente.
+      if (decorrenza === undefined || creata < decorrenza) {
+        risposteOperatoriNonMisurati += 1
+        continue
+      }
+    }
     const acc =
       dove ??
       (() => {
@@ -260,6 +290,8 @@ export async function computeOperatorPerformance(
     graduatoriaNonDisponibile: !umane.some((r) => r.inGraduatoria),
     soglia: SOGLIA_GRADUATORIA,
     sorgentiEscluse: sorgenti.escluse,
+    operatoriAbilitati: decorrenzaPerOperatore.size,
+    risposteOperatoriNonMisurati,
     conversione: {
       disponibile: false,
       motivo:

@@ -169,7 +169,7 @@ export function EmailKpiBar() {
                     ? ` (ultimo ${formatRitardo(kpi.reconcile_age_minutes)})`
                     : ""
                 }`
-              : "KPI di risposta temporaneamente non pubblicati"}
+              : "KPI operatori configurabili in Team & Permessi"}
         </span>
       </div>
     </div>
