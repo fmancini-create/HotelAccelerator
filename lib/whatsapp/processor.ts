@@ -15,6 +15,16 @@ export interface InboundWhatsAppMessage {
   raw?: unknown // original message object for metadata/debugging
 }
 
+/** A message sent from the WhatsApp Business app and mirrored by coexistence. */
+export interface OutboundWhatsAppMessage {
+  externalId: string
+  toPhone: string
+  body: string
+  messageType: string
+  timestamp: Date
+  raw?: unknown
+}
+
 export interface ProcessingResult {
   success: boolean
   messageId?: string
@@ -149,6 +159,109 @@ export class WhatsAppProcessor {
    * qui: il numero viene salvato solo quando il cliente dichiara un'email che
    * corrisponde a una scheda in rubrica, cioe' con una conferma.
    */
+  /**
+   * Store an outbound message written in the WhatsApp Business app. Coexistence
+   * delivers these through smb_message_echoes; recording them as customer
+   * messages would invert the conversation and trigger automations incorrectly.
+   */
+  async processOutgoingEcho(
+    msg: OutboundWhatsAppMessage,
+    channelId: string,
+    propertyId: string,
+  ): Promise<ProcessingResult> {
+    const startTime = Date.now()
+    try {
+      const { data: existing } = await this.supabase
+        .from("messages")
+        .select("id, conversation_id")
+        .eq("external_message_id", msg.externalId)
+        .maybeSingle()
+
+      if (existing) {
+        await this.logEvent(propertyId, msg.externalId, "app_echo_duplicate_ignored", {
+          existing_message_id: existing.id,
+        })
+        return {
+          success: true,
+          isDuplicate: true,
+          messageId: existing.id,
+          conversationId: existing.conversation_id,
+        }
+      }
+
+      const phone = normalizeWhatsAppNumber(msg.toPhone)
+      if (!phone) throw new Error("Destinatario mancante nel messaggio inviato dall'app WhatsApp Business")
+
+      const contact = await this.findOrCreateContact(propertyId, phone, `+${phone}`)
+      const name = contact.name?.trim() || `+${phone}`
+      const conversation = await this.findOrCreateConversation(
+        propertyId,
+        channelId,
+        contact.id,
+        phone,
+        name,
+      )
+
+      const { data: message, error: msgError } = await this.supabase
+        .from("messages")
+        .insert({
+          property_id: propertyId,
+          conversation_id: conversation.id,
+          sender_type: "agent",
+          sender_id: null,
+          content: msg.body,
+          content_type: "text",
+          external_message_id: msg.externalId,
+          received_at: msg.timestamp.toISOString(),
+          stored_at: new Date().toISOString(),
+          status: "sent",
+          metadata: {
+            channel: "whatsapp",
+            to_phone: phone,
+            wa_message_type: msg.messageType,
+            source: "whatsapp_business_app",
+          },
+        })
+        .select("id")
+        .single()
+
+      if (msgError) {
+        if (msgError.code === "23505") {
+          await this.logEvent(propertyId, msg.externalId, "app_echo_duplicate_ignored", {
+            error: "UNIQUE constraint violation",
+          })
+          return { success: true, isDuplicate: true }
+        }
+        throw msgError
+      }
+
+      await this.supabase
+        .from("conversations")
+        .update({
+          last_message_at: msg.timestamp.toISOString(),
+          status: "open",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", conversation.id)
+
+      await this.logEvent(propertyId, msg.externalId, "app_echo_processed", {
+        message_id: message.id,
+        conversation_id: conversation.id,
+        processing_time_ms: Date.now() - startTime,
+      })
+      return { success: true, messageId: message.id, conversationId: conversation.id }
+    } catch (error) {
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" && error !== null
+            ? JSON.stringify(error)
+            : String(error)
+      console.error("[v0] WhatsApp Business App echo processor error:", errMsg)
+      await this.logEvent(propertyId, msg.externalId, "app_echo_error", { error: errMsg })
+      return { success: false, error: errMsg }
+    }
+  }
   private async findOrCreateContact(
     propertyId: string,
     phone: string,
