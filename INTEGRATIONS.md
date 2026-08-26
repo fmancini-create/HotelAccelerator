@@ -16,7 +16,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, import storico paginato e riprendibile, supporto multi-casella, watch Pub/Sub, cursor history, poll di fallback e riconciliazione label. La riconnessione aggiorna solo la casella già presente nel tenant attivo; una casella di un altro tenant viene rifiutata senza esporne il proprietario. Collaudare l'import iniziale sulle cinque caselle 4BID; restano recovery con cursor scaduto, verifica autenticità webhook, alert/SLO e modello storico Sent/response KPI prima di `Production-ready` |
 | Email | Outlook | Inbox email | Specifica | Definire Microsoft Graph adapter |
 | Email | IMAP/SMTP | Caselle generiche | Specifica | Sicurezza credenziali e limiti provider |
-| Messaggistica | WhatsApp | Inbox e automazioni | Da verificare | Provider, template, consenso e webhook |
+| Messaggistica | WhatsApp | Inbox e automazioni | Codice | Coexistence Business App implementata nel codice per app 4BID; richiede configurazione Meta dedicata, verifica su numero reale e runbook/retry prima di promozione |
 | Messaggistica | Telegram | Inbox/ManuBot | Da verificare | Separare bot manutenzioni e canale ospiti |
 | Social | Instagram/Facebook | Messaggi | Specifica | API Meta, permessi e review app |
 | VoIP | 3CX | Chiamate, attribuzione e assistenti vocali tenant-aware | Codice | CRM/call control presenti; bridge v1 e mappa IVR 4 BID persistente con scope KB e fallback espliciti. CRM e voce usano ora credenziali cifrate e revocabili distinte. Mancano applicazione della migrazione, deploy PBX, configurazione delle basi, prova tenant reale, limite distribuito e osservabilità; vedere `docs/3CX_VOICE_AI.md` |
@@ -31,6 +31,16 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Market pricing | Rate shopper/PriceGuard | Competitor e parity | Da verificare | Origine dati, termini e qualità |
 | AI | Knowledge sync interno 4BID | Fonti vocali commerciali da documenti Markdown versionati | Codice | Endpoint HMAC, allowlist e recovery dell'indicizzatore presenti; applicare migrazione, impostare segreti GitHub/Vercel, sincronizzare HotelAccelerator e collaudare 3CX. I satelliti richiedono workflow separati, senza accesso DB cross-prodotto |
 | AI | Provider da definire | Classificazione, generazione, OCR, forecast | Specifica | Privacy, costi, eval, fallback e data retention |
+
+## WhatsApp Business App Coexistence (4BID)
+
+- Proprietario: HotelAccelerator; il webhook condiviso è l'unico owner degli eventi Meta.
+- Configurazione Meta richiesta: nell'app 4BID Live, creare una configurazione **Facebook Login for Business → WhatsApp Embedded Signup** con la variante **WhatsApp Business App onboarding / Coexistence**. `META_CONFIG_ID` deve essere l'ID di questa configurazione, non una configurazione “General”.
+- Configurazione Vercel: `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `META_SYSTEM_USER_TOKEN` e `META_WEBHOOK_VERIFY_TOKEN` devono appartenere alla stessa app Meta. I segreti non vanno mai inseriti nel browser o nel repository.
+- Garanzia implementata: il backend rifiuta un completamento non marcato come Business App onboarding o un numero che Meta non conferma attivo nell'app; non chiama `/{phone-number-id}/register`, perché quel percorso è quello Cloud API standard e può disconnettere l'app sul telefono.
+- Messaggi: i messaggi ricevuti sono salvati come inbound; quelli scritti dal telefono arrivano come `smb_message_echoes` e sono salvati come outbound. Ogni evento è instradato dal proprio `phone_number_id`; conversazioni e risposte restano fissate al canale originario.
+- Recovery: se una scrittura Inbox fallisce, il webhook risponde 5xx per far ritentare Meta. Le inserzioni sono idempotenti sull'ID esterno del messaggio.
+- Limite attuale: stato `Codice`; non è ancora verificato con il numero reale 0558290741 né dichiarabile `Tenant reale`.
 
 ## Checklist obbligatoria per ogni integrazione
 

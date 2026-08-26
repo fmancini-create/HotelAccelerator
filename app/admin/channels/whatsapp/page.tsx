@@ -64,6 +64,7 @@ interface PublicConfig {
 interface SessionInfo {
   phone_number_id?: string
   waba_id?: string
+  signup_event?: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
 }
 
 declare global {
@@ -184,10 +185,11 @@ export default function WhatsAppChannelPage() {
       if (!event.origin.endsWith("facebook.com")) return
       try {
         const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data
-        if (data?.type === "WA_EMBEDDED_SIGNUP" && data?.event === "FINISH") {
+        if (data?.type === "WA_EMBEDDED_SIGNUP" && data?.event === "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
           sessionInfoRef.current = {
             phone_number_id: data.data?.phone_number_id,
             waba_id: data.data?.waba_id,
+            signup_event: data.event,
           }
         }
       } catch {
@@ -216,7 +218,13 @@ export default function WhatsAppChannelPage() {
         config_id: publicConfig.configId,
         response_type: "code",
         override_default_response_type: true,
-        extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+        extras: {
+          setup: {},
+          // Meta's dedicated flow for a number that must remain active in the
+          // WhatsApp Business app as well as in Cloud API.
+          featureType: "whatsapp_business_app_onboarding",
+          sessionInfoVersion: "3",
+        },
       },
     )
   }
@@ -232,6 +240,7 @@ export default function WhatsAppChannelPage() {
           code,
           phone_number_id: sessionInfoRef.current.phone_number_id,
           waba_id: sessionInfoRef.current.waba_id,
+          signup_event: sessionInfoRef.current.signup_event,
         }),
       })
       const data = await res.json()

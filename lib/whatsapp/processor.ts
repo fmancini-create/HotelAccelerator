@@ -6,6 +6,8 @@ import { trovaAnagraficaPerNumero } from "@/lib/crm/contact-identity"
  * Normalized inbound WhatsApp message extracted from the Meta webhook payload.
  */
 export interface InboundWhatsAppMessage {
+  /** Originating Meta business phone_number_id; required for tenant-safe routing. */
+  phoneNumberId: string
   externalId: string // WhatsApp message id (wamid....) — idempotency key
   fromPhone: string // sender phone (digits only)
   fromName?: string // WhatsApp profile name, if present
@@ -13,6 +15,18 @@ export interface InboundWhatsAppMessage {
   messageType: string // text | image | audio | document | ...
   timestamp: Date
   raw?: unknown // original message object for metadata/debugging
+}
+
+/** A message sent from the WhatsApp Business app and mirrored by coexistence. */
+export interface OutboundWhatsAppMessage {
+  /** Originating Meta business phone_number_id; required for tenant-safe routing. */
+  phoneNumberId: string
+  externalId: string
+  toPhone: string
+  body: string
+  messageType: string
+  timestamp: Date
+  raw?: unknown
 }
 
 export interface ProcessingResult {
@@ -69,7 +83,7 @@ export class WhatsAppProcessor {
       // dove il nome l'ha messo il canale, mai un nome scritto da una persona.
       // Se l'anagrafica e' curata, in elenco va il SUO nome; se e' nata dal canale,
       // vale il nome che WhatsApp dichiara adesso.
-      const nomeMostrato = await this.aggiornaNomeDaProfilo(propertyId, contact, name)
+      const nomeMostrato = await this.aggiornaNomeDaProfilo(propertyId, contact, name, channelId)
       const conversation = await this.findOrCreateConversation(
         propertyId,
         channelId,
@@ -149,6 +163,109 @@ export class WhatsAppProcessor {
    * qui: il numero viene salvato solo quando il cliente dichiara un'email che
    * corrisponde a una scheda in rubrica, cioe' con una conferma.
    */
+  /**
+   * Store an outbound message written in the WhatsApp Business app. Coexistence
+   * delivers these through smb_message_echoes; recording them as customer
+   * messages would invert the conversation and trigger automations incorrectly.
+   */
+  async processOutgoingEcho(
+    msg: OutboundWhatsAppMessage,
+    channelId: string,
+    propertyId: string,
+  ): Promise<ProcessingResult> {
+    const startTime = Date.now()
+    try {
+      const { data: existing } = await this.supabase
+        .from("messages")
+        .select("id, conversation_id")
+        .eq("external_message_id", msg.externalId)
+        .maybeSingle()
+
+      if (existing) {
+        await this.logEvent(propertyId, msg.externalId, "app_echo_duplicate_ignored", {
+          existing_message_id: existing.id,
+        })
+        return {
+          success: true,
+          isDuplicate: true,
+          messageId: existing.id,
+          conversationId: existing.conversation_id,
+        }
+      }
+
+      const phone = normalizeWhatsAppNumber(msg.toPhone)
+      if (!phone) throw new Error("Destinatario mancante nel messaggio inviato dall'app WhatsApp Business")
+
+      const contact = await this.findOrCreateContact(propertyId, phone, `+${phone}`)
+      const name = contact.name?.trim() || `+${phone}`
+      const conversation = await this.findOrCreateConversation(
+        propertyId,
+        channelId,
+        contact.id,
+        phone,
+        name,
+      )
+
+      const { data: message, error: msgError } = await this.supabase
+        .from("messages")
+        .insert({
+          property_id: propertyId,
+          conversation_id: conversation.id,
+          sender_type: "agent",
+          sender_id: null,
+          content: msg.body,
+          content_type: "text",
+          external_message_id: msg.externalId,
+          received_at: msg.timestamp.toISOString(),
+          stored_at: new Date().toISOString(),
+          status: "sent",
+          metadata: {
+            channel: "whatsapp",
+            to_phone: phone,
+            wa_message_type: msg.messageType,
+            source: "whatsapp_business_app",
+          },
+        })
+        .select("id")
+        .single()
+
+      if (msgError) {
+        if (msgError.code === "23505") {
+          await this.logEvent(propertyId, msg.externalId, "app_echo_duplicate_ignored", {
+            error: "UNIQUE constraint violation",
+          })
+          return { success: true, isDuplicate: true }
+        }
+        throw msgError
+      }
+
+      await this.supabase
+        .from("conversations")
+        .update({
+          last_message_at: msg.timestamp.toISOString(),
+          status: "open",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", conversation.id)
+
+      await this.logEvent(propertyId, msg.externalId, "app_echo_processed", {
+        message_id: message.id,
+        conversation_id: conversation.id,
+        processing_time_ms: Date.now() - startTime,
+      })
+      return { success: true, messageId: message.id, conversationId: conversation.id }
+    } catch (error) {
+      const errMsg =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" && error !== null
+            ? JSON.stringify(error)
+            : String(error)
+      console.error("[v0] WhatsApp Business App echo processor error:", errMsg)
+      await this.logEvent(propertyId, msg.externalId, "app_echo_error", { error: errMsg })
+      return { success: false, error: errMsg }
+    }
+  }
   private async findOrCreateContact(
     propertyId: string,
     phone: string,
@@ -204,6 +321,7 @@ export class WhatsAppProcessor {
     propertyId: string,
     contact: { id: string; name?: string | null; source?: string | null },
     nomeProfilo: string,
+    channelId: string,
   ): Promise<string> {
     const attuale = contact.name?.trim() || ""
     const nuovo = nomeProfilo.trim()
@@ -237,13 +355,14 @@ export class WhatsAppProcessor {
       .eq("property_id", propertyId)
       .eq("channel", "whatsapp")
       .eq("contact_id", contact.id)
+      .eq("metadata->>messaging_channel_id", channelId)
 
     return nuovo
   }
 
   /**
-   * One conversation per (property, channel='whatsapp', contact). Reuse the
-   * most recent one; create a new one only if none exists.
+   * One conversation per (property, WhatsApp channel ID, contact). Reuse the
+   * most recent one for that exact number; create a new one only if none exists.
    */
   private async findOrCreateConversation(
     propertyId: string,
@@ -258,6 +377,7 @@ export class WhatsAppProcessor {
       .eq("property_id", propertyId)
       .eq("channel", "whatsapp")
       .eq("contact_id", contactId)
+      .eq("metadata->>messaging_channel_id", channelId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle()

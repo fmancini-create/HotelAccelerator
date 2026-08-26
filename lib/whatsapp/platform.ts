@@ -12,7 +12,9 @@
  * Provider onboarding):
  *  - META_APP_ID                 : Meta App ID (also fine as NEXT_PUBLIC_META_APP_ID)
  *  - META_APP_SECRET             : App secret (code exchange + webhook signature)
- *  - META_CONFIG_ID              : Embedded Signup configuration ID
+ *  - META_CONFIG_ID              : Configuration ID created in Facebook Login for Business
+ *                                  for “WhatsApp Embedded Signup” / Business App Coexistence
+ *                                  (do not use a generic “General” login configuration)
  *  - META_SYSTEM_USER_TOKEN      : permanent system-user token (send + admin)
  *  - META_WEBHOOK_VERIFY_TOKEN   : single verify token for the shared webhook
  *  - META_GRAPH_VERSION          : optional, defaults to v21.0

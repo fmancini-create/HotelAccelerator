@@ -88,50 +88,79 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = parseWhatsAppWebhook(body)
 
-    if (!parsed.phoneNumberId) {
+    // A status-only callback has no Inbox record to write. Echo-only callbacks
+    // must pass this guard: they carry messages written in the phone app.
+    if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
       return NextResponse.json({ received: true }, { status: 200 })
     }
 
-    const channel = await getWhatsAppChannelByPhoneNumberId(supabase, parsed.phoneNumberId)
-    if (!channel) {
-      // Unknown phone number id -> not one of our tenants (or inactive).
-      return NextResponse.json({ received: true }, { status: 200 })
+    const platform = getPlatformWhatsAppConfig()
+    // All coexistence numbers use the same 4BID Meta app. Verify once before
+    // inspecting any event; legacy per-tenant secrets are verified below.
+    if (platform.appSecret && !verifyWhatsAppSignature(rawBody, signature, platform.appSecret)) {
+      console.warn("[WhatsApp webhook] invalid platform signature")
+      return NextResponse.json({ received: false }, { status: 401 })
     }
 
-    const typedChannel = channel as MessagingChannelRow
-    // Prefer the platform app secret (single shared Meta app); fall back to the
-    // per-tenant secret for legacy manual setups.
-    const appSecret = getPlatformWhatsAppConfig().appSecret || typedChannel.credentials?.app_secret || null
-
-    // Verify the HMAC signature using the tenant's app secret.
-    const signatureValid = verifyWhatsAppSignature(rawBody, signature, appSecret)
-    if (!signatureValid) {
-      await supabase.from("message_processing_logs").insert({
-        property_id: typedChannel.property_id,
-        channel: "whatsapp",
-        event_type: "signature_invalid",
-        event_data: { phone_number_id: parsed.phoneNumberId },
-      })
-      return NextResponse.json({ received: true }, { status: 200 })
+    const eventsByPhone = new Map<
+      string,
+      { messages: typeof parsed.messages; echoes: typeof parsed.echoes }
+    >()
+    const eventsFor = (phoneNumberId: string) => {
+      let events = eventsByPhone.get(phoneNumberId)
+      if (!events) {
+        events = { messages: [], echoes: [] }
+        eventsByPhone.set(phoneNumberId, events)
+      }
+      return events
     }
 
-    if (parsed.messages.length === 0 && parsed.statuses.length === 0) {
-      return NextResponse.json({ received: true }, { status: 200 })
-    }
+    for (const message of parsed.messages) eventsFor(message.phoneNumberId).messages.push(message)
+    for (const echo of parsed.echoes) eventsFor(echo.phoneNumberId).echoes.push(echo)
 
     const processor = new WhatsAppProcessor(supabase)
-    let anyInbound = false
+    let requiresRetry = false
 
-    for (const msg of parsed.messages) {
-      const result = await processor.processInbound(msg, typedChannel.id, typedChannel.property_id)
-      if (result.success && !result.isDuplicate) {
+    for (const [phoneNumberId, events] of eventsByPhone) {
+      const channel = await getWhatsAppChannelByPhoneNumberId(supabase, phoneNumberId)
+      if (!channel) {
+        // Unknown number: authenticated but not connected to this platform.
+        continue
+      }
+
+      const typedChannel = channel as MessagingChannelRow
+      // Legacy channels can have different apps, while coexistence uses the
+      // already verified platform secret above.
+      if (!platform.appSecret) {
+        const signatureValid = verifyWhatsAppSignature(rawBody, signature, typedChannel.credentials?.app_secret || null)
+        if (!signatureValid) {
+          await supabase.from("message_processing_logs").insert({
+            property_id: typedChannel.property_id,
+            channel: "whatsapp",
+            event_type: "signature_invalid",
+            event_data: { phone_number_id: phoneNumberId },
+          })
+          continue
+        }
+      }
+
+      let anyInbound = false
+      let anyAppEcho = false
+
+      for (const msg of events.messages) {
+        const result = await processor.processInbound(msg, typedChannel.id, typedChannel.property_id)
+        if (!result.success) {
+          requiresRetry = true
+          console.error("[WhatsApp webhook] inbound persistence failed:", result.error)
+          continue
+        }
+        if (result.isDuplicate) continue
+
         anyInbound = true
-        // Best-effort read receipt.
         await markWhatsAppRead(typedChannel.config, typedChannel.credentials, msg.externalId)
 
-        // AI knowledge assistant (gated per-channel via the knowledge bases
-        // linked to this channel). The inbound message opens WhatsApp's 24h
-        // window, so a free-form reply is deliverable here.
+        // The inbound message opens WhatsApp's 24h window, so a free-form
+        // assistant response remains deliverable here.
         if (result.conversationId) {
           try {
             const outcome = await runAutopilot({
@@ -158,24 +187,48 @@ export async function POST(request: NextRequest) {
                 .update({ last_outbound_at: new Date().toISOString() })
                 .eq("id", typedChannel.id)
             }
-          } catch (e) {
-            console.error("[WhatsApp autopilot] error:", e)
+          } catch (error) {
+            console.error("[WhatsApp autopilot] error:", error)
           }
         }
       }
+
+      for (const echo of events.echoes) {
+        const result = await processor.processOutgoingEcho(echo, typedChannel.id, typedChannel.property_id)
+        if (!result.success) {
+          // Returning 5xx keeps the raw Meta delivery retryable. The message
+          // external ID is the idempotency key, so successfully stored events
+          // are safe when the mixed batch is delivered again.
+          requiresRetry = true
+          console.error("[WhatsApp webhook] app echo persistence failed:", result.error)
+          continue
+        }
+        if (!result.isDuplicate) anyAppEcho = true
+      }
+
+      if (anyInbound) {
+        await supabase
+          .from("messaging_channels")
+          .update({ last_inbound_at: new Date().toISOString(), last_error: null })
+          .eq("id", typedChannel.id)
+      }
+
+      if (anyAppEcho) {
+        await supabase
+          .from("messaging_channels")
+          .update({ last_outbound_at: new Date().toISOString(), last_error: null })
+          .eq("id", typedChannel.id)
+      }
     }
 
-    if (anyInbound) {
-      await supabase
-        .from("messaging_channels")
-        .update({ last_inbound_at: new Date().toISOString(), last_error: null })
-        .eq("id", typedChannel.id)
+    if (requiresRetry) {
+      return NextResponse.json({ received: false, retry: true }, { status: 500 })
     }
-
     return NextResponse.json({ received: true }, { status: 200 })
   } catch (error) {
-    console.error("[WhatsApp webhook] error:", error)
-    // Still 200 to avoid Meta retries hammering us; error is logged above where possible.
-    return NextResponse.json({ received: true }, { status: 200 })
+    console.error("[WhatsApp webhook] unexpected error:", error)
+    // A transient processing failure must remain retryable. Inbound and echo
+    // inserts are idempotent on Meta's external message ID.
+    return NextResponse.json({ received: false, retry: true }, { status: 500 })
   }
 }
