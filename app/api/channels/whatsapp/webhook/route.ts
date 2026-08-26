@@ -121,6 +121,7 @@ export async function POST(request: NextRequest) {
 
     const processor = new WhatsAppProcessor(supabase)
     let anyInbound = false
+    let anyAppEcho = false
 
     for (const msg of parsed.messages) {
       const result = await processor.processInbound(msg, typedChannel.id, typedChannel.property_id)
@@ -165,10 +166,22 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    for (const echo of parsed.echoes) {
+      const result = await processor.processOutgoingEcho(echo, typedChannel.id, typedChannel.property_id)
+      if (result.success && !result.isDuplicate) anyAppEcho = true
+    }
+
     if (anyInbound) {
       await supabase
         .from("messaging_channels")
         .update({ last_inbound_at: new Date().toISOString(), last_error: null })
+        .eq("id", typedChannel.id)
+    }
+
+    if (anyAppEcho) {
+      await supabase
+        .from("messaging_channels")
+        .update({ last_outbound_at: new Date().toISOString(), last_error: null })
         .eq("id", typedChannel.id)
     }
 
