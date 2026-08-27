@@ -29,7 +29,7 @@ async function requireVoiceRoutingAdmin(request: NextRequest) {
   await requireAreaApi("settings", request)
   const identity = await requireTenantAdmin(request)
   if (!identity.isSuperAdmin) {
-    const error = new Error("Accesso negato: la mappa IVR 4 BID è riservata al superadmin")
+    const error = new Error("Accesso negato: la configurazione vocale avanzata 4 BID è riservata al superadmin")
     ;(error as Error & { status: number }).status = 403
     error.name = "AccessError"
     throw error
@@ -66,13 +66,13 @@ async function payload(propertyId: string) {
 function errorResponse(error: unknown) {
   if (isMissingVoiceRoutingSchema(error)) {
     return NextResponse.json(
-      { error: "La migrazione della mappa IVR non è ancora applicata.", diagnostic_code: "voice_routing_schema_missing" },
+      { error: "La migrazione della configurazione vocale non è ancora applicata.", diagnostic_code: "voice_routing_schema_missing" },
       { status: 503, headers: NO_STORE },
     )
   }
   const explicitStatus = (error as { status?: number } | null)?.status
   const status = explicitStatus ?? accessErrorStatus(error)
-  const message = status >= 500 ? "Errore durante la configurazione IVR." : error instanceof Error ? error.message : "Accesso negato"
+  const message = status >= 500 ? "Errore durante la configurazione vocale." : error instanceof Error ? error.message : "Accesso negato"
   return NextResponse.json({ error: message }, { status, headers: NO_STORE })
 }
 
@@ -96,7 +96,7 @@ export async function PUT(request: NextRequest) {
     }
     const parsed = requestSchema.safeParse(raw)
     if (!parsed.success) {
-      return NextResponse.json({ error: "Configurazione IVR non valida" }, { status: 400, headers: NO_STORE })
+      return NextResponse.json({ error: "Configurazione vocale non valida" }, { status: 400, headers: NO_STORE })
     }
     if (new Set(parsed.data.shared_knowledge_base_ids).size !== parsed.data.shared_knowledge_base_ids.length) {
       return NextResponse.json({ error: "Una base condivisa è presente più volte" }, { status: 400, headers: NO_STORE })
@@ -105,39 +105,35 @@ export async function PUT(request: NextRequest) {
     const current = await payload(propertyId)
     const route = current.routes.find((candidate) => candidate.id === parsed.data.route_id)
     if (!route) {
-      return NextResponse.json({ error: "Percorso IVR non trovato" }, { status: 404, headers: NO_STORE })
+      return NextResponse.json({ error: "Percorso vocale non trovato" }, { status: 404, headers: NO_STORE })
     }
 
     if (route.knowledge_scope === "hub_selected") {
       const primaryKnowledgeBaseId = parsed.data.primary_knowledge_base_id
-      if (!current.internal_sync_available) {
-        return NextResponse.json(
-          { error: "La migrazione delle fonti interne non è ancora applicata." },
-          { status: 503, headers: NO_STORE },
-        )
-      }
+      const primaryBase = primaryKnowledgeBaseId
+        ? current.knowledge_bases.find((base) => base.id === primaryKnowledgeBaseId)
+        : null
 
-      const primarySource = current.internal_sources.find(
-        (source) => source.product_key === route.product_key && source.knowledge_base_id === primaryKnowledgeBaseId,
-      )
-      if (!primaryKnowledgeBaseId || !primarySource || primarySource.status !== "ready") {
+      if (!primaryBase || primaryBase.source_count < 1) {
         return NextResponse.json(
-          { error: "La base primaria deve essere la fonte interna pronta del prodotto selezionato." },
+          { error: "Scegli una knowledge base 4 BID con almeno una fonte pronta." },
           { status: 409, headers: NO_STORE },
         )
       }
 
-      const readyInternalBaseIds = new Set(
-        current.internal_sources
-          .filter((source) => source.status === "ready")
-          .map((source) => source.knowledge_base_id),
-      )
-      if (
-        parsed.data.shared_knowledge_base_ids.includes(primaryKnowledgeBaseId)
-        || parsed.data.shared_knowledge_base_ids.some((baseId) => !readyInternalBaseIds.has(baseId))
-      ) {
+      if (parsed.data.shared_knowledge_base_ids.includes(primaryKnowledgeBaseId)) {
         return NextResponse.json(
-          { error: "Le basi condivise devono essere fonti interne pronte e diverse dalla primaria." },
+          { error: "La base primaria non può essere anche una base condivisa." },
+          { status: 409, headers: NO_STORE },
+        )
+      }
+
+      const sharedBases = parsed.data.shared_knowledge_base_ids.map((baseId) =>
+        current.knowledge_bases.find((base) => base.id === baseId),
+      )
+      if (sharedBases.some((base) => !base || base.source_count < 1)) {
+        return NextResponse.json(
+          { error: "Le basi condivise devono appartenere al tenant 4 BID e contenere almeno una fonte pronta." },
           { status: 409, headers: NO_STORE },
         )
       }
@@ -147,8 +143,8 @@ export async function PUT(request: NextRequest) {
       hubPropertyId: propertyId,
       routeId: parsed.data.route_id,
       agentLabel: parsed.data.agent_label,
-      primaryKnowledgeBaseId: parsed.data.primary_knowledge_base_id,
-      sharedKnowledgeBaseIds: parsed.data.shared_knowledge_base_ids,
+      primaryKnowledgeBaseId: route.knowledge_scope === "hub_selected" ? parsed.data.primary_knowledge_base_id : null,
+      sharedKnowledgeBaseIds: route.knowledge_scope === "hub_selected" ? parsed.data.shared_knowledge_base_ids : [],
       fallbackDestination: parsed.data.fallback_destination,
       isActive: parsed.data.is_active,
     })

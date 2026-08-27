@@ -9,14 +9,7 @@ import { getVoiceProduct, resolveVoiceKnowledgeBase, VOICE_PRODUCTS } from "@/li
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { getVoiceIvrRoutes, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
 
-/**
- * Restituisce gli URL degli strumenti degli agenti vocali 3CX.
- *
- * Le URL non contengono mai il segreto: lo script lo legge dalla configurazione
- * protetta del PBX e lo invia nell'header. La rotta resta separata dalla GET
- * della configurazione per non esporre la topologia vocale a utenti senza
- * permesso impostazioni.
- */
+/** Restituisce gli URL degli strumenti degli agenti vocali 3CX senza mai includere il segreto. */
 export async function GET(request: NextRequest) {
   try {
     await requireAreaApi("settings", request)
@@ -28,10 +21,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Credenziale vocale non ancora predisposta." }, { status: 404 })
     }
 
-    // Uso l'host della richiesta: su un dominio con redirect verso www, l'URL
-    // salvato sull'host sbagliato porterebbe 3CX a seguire un 307 che non
-    // gestisce, e le chiamate non arriverebbero mai. Stessa insidia gia' vista
-    // con il webhook di Telegram.
     const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host")
     const proto = request.headers.get("x-forwarded-proto") || "https"
     const base = forwardedHost ? `${proto}://${forwardedHost}` : (process.env.NEXT_PUBLIC_APP_URL || "")
@@ -39,6 +28,8 @@ export async function GET(request: NextRequest) {
     const voiceQuery = `property=${encodeURIComponent(propertyId)}`
     const knowledgeBases = await getKnowledgeBases(propertyId)
     const voiceAgents = createVoiceAgentLinks({ rootUrl: root, propertyId, knowledgeBases })
+    const supportHub = await isVoiceSupportHub(propertyId)
+
     const makeVoiceAgents = (endpoint: "prospect" | "support") => VOICE_PRODUCTS.map((product) => {
       const resolution = resolveVoiceKnowledgeBase(product, knowledgeBases)
       const knowledgeBase = resolution.ok
@@ -66,10 +57,7 @@ export async function GET(request: NextRequest) {
         query_url: `${root}/api/telephony/3cx/voice/v1/${endpoint}?${voiceQuery}&product=${encodeURIComponent(product.key)}`,
       }
     })
-    // Le URL per clienti e prospect esistono solo nella property aziendale
-    // 4 BID. Una configurazione 3CX di un singolo cliente non puo' quindi
-    // trasformarsi nell'accesso alla directory centrale per errore.
-    const supportHub = await isVoiceSupportHub(propertyId)
+
     let configuredRoutes: Awaited<ReturnType<typeof getVoiceIvrRoutes>> = []
     let routingDiagnostic: string | null = null
     if (supportHub) {
@@ -104,8 +92,6 @@ export async function GET(request: NextRequest) {
       }]
     })
 
-    // Il fallback legacy mantiene operativo il deploy tra codice e migrazione.
-    // Appena esistono route persistenti, sono l'unica autorita' usata dalla UI.
     const prospectAgents = !supportHub
       ? []
       : configuredAgents.length > 0
@@ -122,6 +108,8 @@ export async function GET(request: NextRequest) {
           : []
 
     return NextResponse.json({
+      support_hub: supportHub,
+      configuration_mode: supportHub ? "4bid_advanced" : "tenant_easy",
       voice_agents: voiceAgents,
       prospect_agents: prospectAgents,
       customer_support_agents: customerSupportAgents,

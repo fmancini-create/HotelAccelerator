@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
-import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
 import { authenticateVoiceInbound } from "@/lib/telephony/inbound-auth"
 import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
 import { getVoiceProduct, VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
@@ -36,9 +35,10 @@ async function readVoiceBody(request: NextRequest): Promise<unknown | null> {
 }
 
 /**
- * Informazioni commerciali per chi non e' ancora cliente. L'endpoint usa
- * soltanto le fonti interne sincronizzate del tenant aziendale 4 BID, mai la
- * base operativa di un cliente o una fonte pubblica.
+ * Informazioni commerciali 4BID. La route viene configurata esclusivamente
+ * dal superadmin sul tenant hub 4BID e puo' puntare a qualunque knowledge base
+ * non vuota dello stesso hub. Le fonti sincronizzate da repository restano una
+ * modalita' gestita e diagnosticabile, ma non sono l'unica fonte ammessa.
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.slice(0, 100) || randomUUID()
@@ -54,15 +54,15 @@ export async function POST(request: NextRequest) {
   }
 
   const product = getVoiceProduct(request.nextUrl.searchParams.get("product"))
-  if (!product) return NextResponse.json({ error: "Prodotto vocale non valido", request_id: requestId }, { status: 400, headers: NO_STORE })
+  if (!product) {
+    return NextResponse.json({ error: "Prodotto vocale non valido", request_id: requestId }, { status: 400, headers: NO_STORE })
+  }
 
   let route: Awaited<ReturnType<typeof getVoiceIvrRoute>> = null
   let routingSchemaAvailable = true
   try {
     route = await getVoiceIvrRoute(auth.propertyId, "prospect_information", product.key)
   } catch (error) {
-    // Compatibilita' durante il deploy: finche' la migrazione non e' stata
-    // applicata resta attivo il resolver legacy tenant-scoped.
     if (!isMissingVoiceRoutingSchema(error)) {
       console.error("[3cx-prospect] route lookup failed", { requestId, product: product.key })
       return NextResponse.json(
@@ -94,37 +94,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (route) {
-    const configuredRoute = route
-    try {
-      const sync = await getInternalKnowledgeSyncDiagnostics(auth.propertyId)
-      const source = sync.schemaAvailable
-        ? sync.sources.find(
-            (candidate) => candidate.productKey === product.key && candidate.knowledgeBaseId === configuredRoute.primary_knowledge_base_id,
-          )
-        : null
-      if (!source || source.status !== "ready") {
-        return NextResponse.json(
-          {
-            ...serviceErrorVoiceResponse(
-              { key: product.key, label: configuredRoute.agent_label },
-              configuredRoute.fallback_destination,
-              "internal_knowledge_not_ready",
-            ),
-            request_id: requestId,
-          },
-          { status: 503, headers: NO_STORE },
-        )
-      }
-    } catch {
-      console.error("[3cx-prospect] internal source lookup failed", { requestId, product: product.key })
-      return NextResponse.json(
-        { ...serviceErrorVoiceResponse({ key: product.key, label: configuredRoute.agent_label }, configuredRoute.fallback_destination, "route_lookup_failed"), request_id: requestId },
-        { status: 502, headers: NO_STORE },
-      )
-    }
-  }
-
   const rate = takeVoiceRequest(`${auth.propertyId}:prospect`)
   if (!rate.allowed) {
     return NextResponse.json(
@@ -135,7 +104,9 @@ export async function POST(request: NextRequest) {
 
   const raw = await readVoiceBody(request)
   const parsed = requestSchema.safeParse(raw)
-  if (!parsed.success) return NextResponse.json({ error: "Richiesta vocale non valida", request_id: requestId }, { status: 400, headers: NO_STORE })
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Richiesta vocale non valida", request_id: requestId }, { status: 400, headers: NO_STORE })
+  }
 
   try {
     const sharedBaseIds = route ? await getVoiceIvrSharedBaseIds(route.id) : []
@@ -153,9 +124,30 @@ export async function POST(request: NextRequest) {
       agentLabel: route?.agent_label,
       crmToolKey: route?.crm_tool_key,
     })
+
+    // Il centralino conversazionale deve prima parlare. Se il motore non ha
+    // trovato una risposta sufficientemente fondata, proponiamo l'operatore
+    // senza trasferire automaticamente; il trasferimento verra' confermato
+    // esplicitamente dal chiamante nel call script 3CX.
+    if (response.transfer.required) {
+      return NextResponse.json(
+        {
+          ...response,
+          transfer: { ...response.transfer, required: false },
+          audience: "prospect",
+          request_id: requestId,
+        },
+        { headers: NO_STORE },
+      )
+    }
+
     return NextResponse.json({ ...response, audience: "prospect", request_id: requestId }, { headers: NO_STORE })
   } catch (error) {
-    console.error("[3cx-prospect] query failed", { requestId, product: product.key, error: error instanceof Error ? error.message : "unknown" })
+    console.error("[3cx-prospect] query failed", {
+      requestId,
+      product: product.key,
+      error: error instanceof Error ? error.message : "unknown",
+    })
     return NextResponse.json(
       { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "provider_error"), audience: "prospect", request_id: requestId },
       { status: 502, headers: NO_STORE },
