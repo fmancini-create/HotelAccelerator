@@ -14,7 +14,9 @@ export interface VoiceResponseDecision {
   }
 }
 
-const DEFAULT_HANDOFF_SPEECH = "Non ho una risposta sufficientemente sicura. La metto in contatto con un operatore."
+const DEFAULT_HANDOFF_SPEECH = "Non ho una risposta sufficientemente sicura. Se preferisce, posso metterla in contatto con un operatore."
+const DEFAULT_SERVICE_ERROR_SPEECH =
+  "In questo momento non riesco ad accedere alle informazioni necessarie. Posso continuare ad aiutarla oppure, se preferisce, posso metterla in contatto con un operatore."
 
 /** Toglie sintassi e URL che, letti da una voce sintetica, diventano incomprensibili. */
 export function sanitizeVoiceSpeech(value: string): string {
@@ -62,15 +64,20 @@ export function buildVoiceResponse(
   }
 }
 
+/**
+ * Gli errori tecnici non devono mai produrre silenzio o un trasferimento
+ * immediato: la voce informa il chiamante e gli lascia la scelta di chiedere
+ * esplicitamente un operatore. Il diagnostic_code resta disponibile ai log.
+ */
 export function serviceErrorVoiceResponse(agent: { key: string; label: string }, destination: string, diagnosticCode: string) {
   return {
     ok: false as const,
     agent,
-    speech: DEFAULT_HANDOFF_SPEECH,
+    speech: DEFAULT_SERVICE_ERROR_SPEECH,
     confidence: 0,
     grounded: false,
     sources: [] as Array<{ id: string; title: string }>,
-    transfer: { required: true as const, destination, reason: "service_error" as const },
+    transfer: { required: false as const, destination, reason: "service_error" as const },
     diagnostic_code: diagnosticCode,
   }
 }
