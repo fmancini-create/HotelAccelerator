@@ -32,6 +32,7 @@ export interface VoiceQuestionInput {
 
 const VOICE_PERSONA_RULES = [
   "Sei al telefono: usa frasi brevi, naturali e facilmente comprensibili all'ascolto.",
+  "Rispondi di norma in 1-2 frasi e vai subito al punto: evita preamboli, riepiloghi e ripetizioni.",
   "Non leggere URL, simboli, elenchi in markdown o riferimenti alle fonti.",
   "Non inventare dati. Quando una risposta non e' sicura, lascia intervenire l'operatore.",
 ].join(" ")
@@ -104,7 +105,7 @@ export async function answerVoiceQuestion(input: VoiceQuestionInput) {
       datiNoti: { nome: null, email: null, numero: null, daAnagraficaEsistente: Boolean(contact) },
     },
     input.question,
-    input.history,
+    input.history.slice(-4),
   )
   const decision = buildVoiceResponse(result, fallbackDestination, primaryBase.fallback_message)
 
