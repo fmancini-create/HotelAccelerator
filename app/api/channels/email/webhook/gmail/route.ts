@@ -11,7 +11,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
-const API_VERSION = "v790-durable-history-cursor"
+const API_VERSION = "v791-gmail-404-recovery"
 const PROCESSING_BUDGET_MS = 42_000
 
 type GmailChannel = {
@@ -31,6 +31,7 @@ type HistorySyncResult = {
   cursor: string
   messagesFound: number
   messagesInserted: number
+  messagesSkipped: number
   duplicates: number
   errors: string[]
   failureCode?: "GMAIL_RECONNECT_REQUIRED" | "HISTORY_CURSOR_EXPIRED" | "GMAIL_TEMPORARILY_UNAVAILABLE"
@@ -172,6 +173,11 @@ export async function POST(request: NextRequest) {
 
     if (!syncResult.complete) {
       if (syncResult.failureCode === "HISTORY_CURSOR_EXPIRED") {
+        // Gmail history cursors can expire. Retrying the exact same Pub/Sub
+        // notification can never repair that condition and creates an infinite
+        // 404 -> 503 delivery storm. Keep the durable cursor untouched so a
+        // historical sync can recover the gap, acknowledge this notification,
+        // and let the independent polling safety net continue in the meantime.
         await supabase
           .from("email_channels")
           .update({
@@ -180,6 +186,18 @@ export async function POST(request: NextRequest) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", channel.id)
+
+        console.warn("[gmail-webhook] history cursor expired; notification acknowledged", {
+          channelId: channel.id,
+          cursor: syncResult.cursor,
+          notifiedHistoryId: historyId,
+          errors: syncResult.errors.slice(0, 3),
+        })
+        return NextResponse.json({
+          status: "history_cursor_expired",
+          recovery: "full_sync_required",
+          version: API_VERSION,
+        })
       }
 
       console.warn("[gmail-webhook] sync incomplete; Pub/Sub retry requested", {
@@ -197,6 +215,7 @@ export async function POST(request: NextRequest) {
       cursor: syncResult.cursor,
       found: syncResult.messagesFound,
       inserted: syncResult.messagesInserted,
+      skipped: syncResult.messagesSkipped,
       duplicates: syncResult.duplicates,
       durationMs: Date.now() - startedAt,
     })
@@ -205,6 +224,7 @@ export async function POST(request: NextRequest) {
       status: "ok",
       version: API_VERSION,
       imported: syncResult.messagesInserted,
+      skipped: syncResult.messagesSkipped,
       duplicates: syncResult.duplicates,
     })
   } catch (error) {
@@ -229,6 +249,7 @@ async function syncNewEmails(
     cursor: startHistoryId,
     messagesFound: 0,
     messagesInserted: 0,
+    messagesSkipped: 0,
     duplicates: 0,
     errors: [],
   }
@@ -260,7 +281,10 @@ async function syncNewEmails(
 
     const { data, error, status } = await gmailFetchWithToken(token, `history?${params}`)
     if (error || !data) {
-      result.retryable = status !== 401
+      // 401 requires a reconnect. A stale history cursor (404) is also
+      // non-retryable for this exact notification: the only safe recovery is a
+      // historical sync, while the independent poll remains the live fallback.
+      result.retryable = status !== 401 && status !== 404
       result.failureCode =
         status === 401
           ? "GMAIL_RECONNECT_REQUIRED"
@@ -301,7 +325,8 @@ async function syncNewEmails(
         result.errors.push(`${messageId}: ${processed.error || "processing failed"}`)
         return result
       }
-      if (processed.duplicate) result.duplicates++
+      if (processed.skipped) result.messagesSkipped++
+      else if (processed.duplicate) result.duplicates++
       else result.messagesInserted++
     }
 
@@ -355,9 +380,22 @@ async function fetchAndProcessMessage(
   token: string,
   messageId: string,
   aiTasks: EmailAiTask[],
-): Promise<{ success: boolean; duplicate?: boolean; error?: string }> {
+): Promise<{ success: boolean; duplicate?: boolean; skipped?: boolean; error?: string }> {
   try {
-    const { data, error } = await gmailFetchWithToken(token, `messages/${messageId}?format=full`)
+    const { data, error, status } = await gmailFetchWithToken(token, `messages/${messageId}?format=full`)
+
+    // A history entry can legitimately reference a message that disappeared
+    // before we fetched it (deleted, moved out of scope, or expunged). Retrying
+    // the same Pub/Sub delivery will only reproduce the same 404 forever. Treat
+    // this tombstone as durably consumed so the history cursor can advance.
+    if (status === 404) {
+      console.info("[gmail-webhook] message disappeared before fetch; skipping", {
+        channelId: channel.id,
+        messageId,
+      })
+      return { success: true, skipped: true }
+    }
+
     if (error || !data) return { success: false, error: error || "Messaggio Gmail non disponibile" }
 
     const parsed = parseGmailMessage(data)
