@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, CheckCircle2, Loader2, Route, Save } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { AlertCircle, CheckCircle2, Loader2, Save, Settings2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,12 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
-type KnowledgeBase = {
-  id: string
-  name: string
-  source_count: number
-}
-
+type KnowledgeBase = { id: string; name: string; source_count: number }
 type VoiceRoute = {
   id: string
   ivr_path: string
@@ -32,13 +27,11 @@ type VoiceRoute = {
   status: "ready" | "missing_primary" | "empty_primary" | "invalid_reference" | "dynamic_tenant"
   shared_knowledge_bases: KnowledgeBase[]
 }
-
 type InternalKnowledgeSource = {
   product_key: string
   knowledge_base_id: string
   status: "pending" | "processing" | "ready" | "error"
 }
-
 type Payload = {
   routes: VoiceRoute[]
   knowledge_bases: KnowledgeBase[]
@@ -46,19 +39,18 @@ type Payload = {
   internal_sources: InternalKnowledgeSource[]
 }
 
-const STATUS_LABELS: Record<VoiceRoute["status"], string> = {
-  ready: "Pronto",
-  missing_primary: "Scegli la base primaria",
-  empty_primary: "Base primaria senza fonti",
-  invalid_reference: "Riferimento non valido",
-  dynamic_tenant: "Tenant cliente",
-}
+const PRODUCTS = [
+  { key: "hotel-accelerator", label: "Hotel Accelerator" },
+  { key: "santaddeo-rms", label: "Santaddeo RMS" },
+  { key: "hotel-profit-ai", label: "Hotel Profit AI" },
+  { key: "manubot", label: "ManuBot" },
+] as const
 
-const SYNC_STATUS_LABELS: Record<InternalKnowledgeSource["status"], string> = {
-  pending: "In attesa di indicizzazione",
-  processing: "Indicizzazione in corso",
-  ready: "Pronta",
-  error: "Errore di indicizzazione",
+function routeReady(route: VoiceRoute | undefined, bases: KnowledgeBase[]) {
+  if (!route || !route.is_active) return false
+  if (route.intent_key === "customer_support") return true
+  const base = bases.find((candidate) => candidate.id === route.primary_knowledge_base_id)
+  return Boolean(base && base.source_count > 0)
 }
 
 export function VoiceIvrRoutingCard() {
@@ -66,12 +58,12 @@ export function VoiceIvrRoutingCard() {
   const [hidden, setHidden] = useState(false)
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    setError(null)
     setLoading(true)
+    setError(null)
     try {
       const response = await fetch("/api/telephony/3cx/voice/routes", { cache: "no-store" })
       if (response.status === 403 || response.status === 409) {
@@ -80,12 +72,12 @@ export function VoiceIvrRoutingCard() {
       }
       const data = await response.json().catch(() => null)
       if (!response.ok) {
-        setError(data?.error || "Impossibile leggere la mappa IVR.")
+        setError(data?.error || "Impossibile leggere la configurazione vocale 4BID.")
         return
       }
       setPayload(data as Payload)
     } catch {
-      setError("Impossibile contattare il servizio di configurazione IVR.")
+      setError("Impossibile contattare il servizio di configurazione vocale.")
     } finally {
       setLoading(false)
     }
@@ -94,6 +86,11 @@ export function VoiceIvrRoutingCard() {
   useEffect(() => {
     void load()
   }, [load])
+
+  const usableBases = useMemo(
+    () => (payload?.knowledge_bases ?? []).filter((base) => base.source_count > 0),
+    [payload?.knowledge_bases],
+  )
 
   function patchRoute(routeId: string, patch: Partial<VoiceRoute>) {
     setPayload((current) =>
@@ -104,17 +101,10 @@ export function VoiceIvrRoutingCard() {
     setSavedId(null)
   }
 
-  function toggleShared(route: VoiceRoute, base: KnowledgeBase, checked: boolean) {
-    const shared = checked
-      ? [...route.shared_knowledge_bases, base]
-      : route.shared_knowledge_bases.filter((candidate) => candidate.id !== base.id)
-    patchRoute(route.id, { shared_knowledge_bases: shared })
-  }
-
   async function save(route: VoiceRoute) {
     setSavingId(route.id)
-    setError(null)
     setSavedId(null)
+    setError(null)
     try {
       const response = await fetch("/api/telephony/3cx/voice/routes", {
         method: "PUT",
@@ -122,8 +112,7 @@ export function VoiceIvrRoutingCard() {
         body: JSON.stringify({
           route_id: route.id,
           agent_label: route.agent_label,
-          primary_knowledge_base_id:
-            route.knowledge_scope === "hub_selected" ? route.primary_knowledge_base_id : null,
+          primary_knowledge_base_id: route.knowledge_scope === "hub_selected" ? route.primary_knowledge_base_id : null,
           shared_knowledge_base_ids:
             route.knowledge_scope === "hub_selected" ? route.shared_knowledge_bases.map((base) => base.id) : [],
           fallback_destination: route.fallback_destination,
@@ -132,13 +121,13 @@ export function VoiceIvrRoutingCard() {
       })
       const data = await response.json().catch(() => null)
       if (!response.ok) {
-        setError(data?.error || "Salvataggio della route non riuscito.")
+        setError(data?.error || "Salvataggio non riuscito.")
         return
       }
       setPayload(data as Payload)
       setSavedId(route.id)
     } catch {
-      setError("Impossibile contattare il servizio di configurazione IVR.")
+      setError("Impossibile salvare la configurazione vocale.")
     } finally {
       setSavingId(null)
     }
@@ -151,13 +140,13 @@ export function VoiceIvrRoutingCard() {
       <CardHeader>
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ha-brand-soft">
-            <Route className="h-5 w-5 text-ha-brand-soft-foreground" aria-hidden="true" />
+            <Settings2 className="h-5 w-5 text-ha-brand-soft-foreground" aria-hidden="true" />
           </div>
           <div>
-            <CardTitle className="text-lg">Mappa IVR 4 BID</CardTitle>
+            <CardTitle className="text-lg">Assistente vocale 4BID · configurazione avanzata</CardTitle>
             <CardDescription className="text-pretty">
-              Configurazione superadmin dei due menu: intento, agente, basi autorizzate, tool CRM e destinazione di
-              fallback.
+              Area riservata al superadmin 4BID. Il chiamante parla liberamente: il sistema distingue supporto e
+              informazioni e instrada il prodotto corretto senza menu a tasti.
             </CardDescription>
           </div>
         </div>
@@ -166,7 +155,7 @@ export function VoiceIvrRoutingCard() {
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-            Caricamento della mappa IVR…
+            Caricamento configurazione…
           </div>
         ) : null}
 
@@ -174,11 +163,9 @@ export function VoiceIvrRoutingCard() {
           <Alert variant="destructive">
             <AlertCircle aria-hidden="true" />
             <AlertTitle>Configurazione non disponibile</AlertTitle>
-            <AlertDescription>
+            <AlertDescription className="space-y-2">
               <p>{error}</p>
-              <Button variant="outline" size="sm" onClick={() => void load()}>
-                Riprova
-              </Button>
+              <Button variant="outline" size="sm" onClick={() => void load()}>Riprova</Button>
             </AlertDescription>
           </Alert>
         ) : null}
@@ -186,199 +173,149 @@ export function VoiceIvrRoutingCard() {
         {!loading && payload?.routes.length === 0 ? (
           <Alert>
             <AlertCircle aria-hidden="true" />
-            <AlertTitle>Nessun percorso configurato</AlertTitle>
-            <AlertDescription>Applica la migrazione IVR e ricarica questa pagina.</AlertDescription>
+            <AlertTitle>Nessun prodotto vocale configurato</AlertTitle>
+            <AlertDescription>La configurazione avanzata 4BID non contiene ancora percorsi vocali.</AlertDescription>
           </Alert>
         ) : null}
 
-        {payload?.routes.map((route) => {
-          const isProspect = route.knowledge_scope === "hub_selected"
-          const internalPrimary = payload.internal_sources.find((source) => source.product_key === route.product_key)
-          const internalPrimaryBase = internalPrimary
-            ? payload.knowledge_bases.find((base) => base.id === internalPrimary.knowledge_base_id) ?? null
-            : null
-          const readyInternalBases = payload.internal_sources
-            .filter((source) => source.status === "ready" && source.knowledge_base_id !== route.primary_knowledge_base_id)
-            .flatMap((source) => {
-              const base = payload.knowledge_bases.find((candidate) => candidate.id === source.knowledge_base_id)
-              return base ? [base] : []
-            })
-          const readyInternalBaseIds = new Set(readyInternalBases.map((base) => base.id))
-          const invalidSelectedShared = route.shared_knowledge_bases.filter((base) => !readyInternalBaseIds.has(base.id))
-          const availableShared = [
-            ...readyInternalBases,
-            ...invalidSelectedShared.filter((base) => !readyInternalBaseIds.has(base.id)),
-          ]
-          const prospectReady =
-            !isProspect
-            || (internalPrimary?.status === "ready" && route.primary_knowledge_base_id === internalPrimary.knowledge_base_id)
-          const ready = route.status === "ready" || route.status === "dynamic_tenant"
+        {payload && PRODUCTS.map((product) => {
+          const support = payload.routes.find(
+            (route) => route.product_key === product.key && route.intent_key === "customer_support",
+          )
+          const prospect = payload.routes.find(
+            (route) => route.product_key === product.key && route.intent_key === "prospect_information",
+          )
+          const supportReady = routeReady(support, payload.knowledge_bases)
+          const prospectReady = routeReady(prospect, payload.knowledge_bases)
+          const sync = prospect?.primary_knowledge_base_id
+            ? payload.internal_sources.find(
+                (source) =>
+                  source.product_key === product.key && source.knowledge_base_id === prospect.primary_knowledge_base_id,
+              )
+            : undefined
+
           return (
-            <section key={route.id} className="space-y-4 rounded-lg border p-4" aria-labelledby={`route-${route.id}`}>
+            <section key={product.key} className="space-y-4 rounded-lg border p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p id={`route-${route.id}`} className="font-medium">
-                    {route.ivr_path} · {route.agent_label}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {route.intent_key === "customer_support" ? "Assistenza clienti" : "Informazioni commerciali"}
-                    {" · "}tool CRM: {route.crm_tool_key === "customer_code_lookup" ? "codice cliente" : "riconoscimento chiamante"}
-                  </p>
+                  <h3 className="font-semibold">{product.label}</h3>
+                  <p className="text-xs text-muted-foreground">Supporto clienti + informazioni commerciali</p>
                 </div>
-                <Badge variant={ready && route.is_active ? "default" : "secondary"}>
-                  {route.is_active ? STATUS_LABELS[route.status] : "Disattivato"}
-                </Badge>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor={`agent-${route.id}`}>Nome agente vocale</Label>
-                  <Input
-                    id={`agent-${route.id}`}
-                    value={route.agent_label}
-                    maxLength={120}
-                    onChange={(event) => patchRoute(route.id, { agent_label: event.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor={`fallback-${route.id}`}>Interno di fallback</Label>
-                  <Input
-                    id={`fallback-${route.id}`}
-                    value={route.fallback_destination}
-                    maxLength={30}
-                    onChange={(event) => patchRoute(route.id, { fallback_destination: event.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {route.fallback_mode === "tenant_policy"
-                      ? "Fuori orario prevale la politica del tenant cliente."
-                      : "Usato quando la risposta non è fondata o viene chiesto un operatore."}
-                  </p>
+                <div className="flex gap-2">
+                  <Badge variant={supportReady ? "default" : "secondary"}>Supporto {supportReady ? "pronto" : "off"}</Badge>
+                  <Badge variant={prospectReady ? "default" : "secondary"}>Info {prospectReady ? "pronte" : "da configurare"}</Badge>
                 </div>
               </div>
 
-              {isProspect ? (
+              {support ? (
+                <div className="rounded-md bg-muted/40 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">Assistenza clienti</p>
+                      <p className="text-xs text-muted-foreground">
+                        Il numero di licenza identifica il tenant; la risposta usa le basi del cliente, non quelle 4BID.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`support-active-${support.id}`}
+                        checked={support.is_active}
+                        onCheckedChange={(value) => patchRoute(support.id, { is_active: value === true })}
+                      />
+                      <Label htmlFor={`support-active-${support.id}`} className="font-normal">Attivo</Label>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_140px_auto]">
+                    <Input
+                      aria-label={`Nome agente supporto ${product.label}`}
+                      value={support.agent_label}
+                      onChange={(event) => patchRoute(support.id, { agent_label: event.target.value })}
+                    />
+                    <Input
+                      aria-label={`Fallback supporto ${product.label}`}
+                      value={support.fallback_destination}
+                      onChange={(event) => patchRoute(support.id, { fallback_destination: event.target.value })}
+                    />
+                    <Button size="sm" onClick={() => void save(support)} disabled={savingId !== null}>
+                      {savingId === support.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      Salva
+                    </Button>
+                  </div>
+                  {savedId === support.id ? <p className="mt-2 flex items-center gap-1 text-xs text-ha-success"><CheckCircle2 className="h-4 w-4" /> Salvato</p> : null}
+                </div>
+              ) : null}
+
+              {prospect ? (
                 <div className="space-y-3 rounded-md bg-muted/40 p-3">
-                  {!payload.internal_sync_available ? (
-                    <Alert variant="destructive">
-                      <AlertCircle aria-hidden="true" />
-                      <AlertTitle>Sincronizzazione interna non disponibile</AlertTitle>
-                      <AlertDescription>Applica prima la migrazione delle fonti interne 4BID.</AlertDescription>
-                    </Alert>
-                  ) : !internalPrimary || !internalPrimaryBase ? (
-                    <Alert variant="destructive">
-                      <AlertCircle aria-hidden="true" />
-                      <AlertTitle>Fonte interna del prodotto assente</AlertTitle>
-                      <AlertDescription>
-                        Esegui il workflow di sincronizzazione su <code>main</code> per questo prodotto prima di configurare
-                        il percorso.
-                      </AlertDescription>
-                    </Alert>
-                  ) : internalPrimary.status !== "ready" ? (
-                    <Alert>
-                      <Loader2 className="h-4 w-4" aria-hidden="true" />
-                      <AlertTitle>Fonte interna: {SYNC_STATUS_LABELS[internalPrimary.status]}</AlertTitle>
-                      <AlertDescription>
-                        Attendi una fonte pronta prima di assegnarla al centralino. Il percorso continuerà a usare il fallback.
-                      </AlertDescription>
-                    </Alert>
-                  ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium">Informazioni commerciali</p>
+                      <p className="text-xs text-muted-foreground">
+                        Scegli una base 4BID già popolata. La sincronizzazione da repository è opzionale e viene mostrata solo come diagnostica.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={`prospect-active-${prospect.id}`}
+                        checked={prospect.is_active}
+                        onCheckedChange={(value) => patchRoute(prospect.id, { is_active: value === true })}
+                      />
+                      <Label htmlFor={`prospect-active-${prospect.id}`} className="font-normal">Attivo</Label>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-2">
-                      <Label>Knowledge base primaria 4 BID</Label>
+                      <Label>Knowledge base</Label>
                       <Select
-                        value={route.primary_knowledge_base_id ?? "none"}
+                        value={prospect.primary_knowledge_base_id ?? "none"}
                         onValueChange={(value) =>
-                          patchRoute(route.id, {
+                          patchRoute(prospect.id, {
                             primary_knowledge_base_id: value === "none" ? null : value,
-                            shared_knowledge_bases: route.shared_knowledge_bases.filter((base) => base.id !== value),
+                            shared_knowledge_bases: prospect.shared_knowledge_bases.filter((base) => base.id !== value),
                           })
                         }
                       >
-                        <SelectTrigger className="w-full" aria-label={`Base primaria per ${route.agent_label}`}>
-                          <SelectValue placeholder="Scegli la base primaria" />
-                        </SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Scegli una base" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Nessuna base selezionata</SelectItem>
-                          <SelectItem value={internalPrimaryBase.id}>
-                            {internalPrimaryBase.name} · fonte interna pronta
-                          </SelectItem>
+                          <SelectItem value="none">Nessuna base</SelectItem>
+                          {usableBases.map((base) => (
+                            <SelectItem key={base.id} value={base.id}>{base.name} · {base.source_count} fonti</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
+                      {sync ? (
+                        <p className="text-xs text-muted-foreground">Fonte repository: {sync.status === "ready" ? "sincronizzata" : sync.status}</p>
+                      ) : null}
                     </div>
-                  )}
+                    <div className="grid gap-2">
+                      <Label>Interno operatore</Label>
+                      <Input
+                        value={prospect.fallback_destination}
+                        onChange={(event) => patchRoute(prospect.id, { fallback_destination: event.target.value })}
+                      />
+                    </div>
+                  </div>
 
-                  <fieldset className="space-y-2">
-                    <legend className="text-sm font-medium">Knowledge base condivise interne 4 BID</legend>
-                    {availableShared.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">Non ci sono altre fonti interne pronte disponibili.</p>
-                    ) : (
-                      availableShared.map((base) => {
-                        const checked = route.shared_knowledge_bases.some((candidate) => candidate.id === base.id)
-                        const eligible = readyInternalBaseIds.has(base.id)
-                        return (
-                          <div key={base.id} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`shared-${route.id}-${base.id}`}
-                              checked={checked}
-                              disabled={!eligible && !checked}
-                              onCheckedChange={(value) => {
-                                if (eligible || checked) toggleShared(route, base, value === true)
-                              }}
-                            />
-                            <Label htmlFor={`shared-${route.id}-${base.id}`} className="font-normal">
-                              {base.name} · {eligible ? "fonte interna pronta" : "riferimento da rimuovere"}
-                            </Label>
-                          </div>
-                        )
-                      })
-                    )}
-                  </fieldset>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <Input
+                      className="max-w-md"
+                      aria-label={`Nome agente informazioni ${product.label}`}
+                      value={prospect.agent_label}
+                      onChange={(event) => patchRoute(prospect.id, { agent_label: event.target.value })}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => void save(prospect)}
+                      disabled={savingId !== null || !prospect.primary_knowledge_base_id}
+                    >
+                      {savingId === prospect.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                      Salva informazioni
+                    </Button>
+                  </div>
+                  {savedId === prospect.id ? <p className="flex items-center gap-1 text-xs text-ha-success"><CheckCircle2 className="h-4 w-4" /> Salvato</p> : null}
                 </div>
-              ) : (
-                <Alert>
-                  <AlertCircle aria-hidden="true" />
-                  <AlertTitle>Basi del tenant cliente, mai basi 4 BID</AlertTitle>
-                  <AlertDescription>
-                    Dopo la verifica del codice cliente, la primaria usa il marker <code>[voice:{route.product_key}]</code>
-                    {" "}e le condivise <code>[voice-shared:{route.product_key}]</code>, cercati soltanto nel tenant risolto.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id={`active-${route.id}`}
-                    checked={route.is_active}
-                    onCheckedChange={(value) => patchRoute(route.id, { is_active: value === true })}
-                  />
-                  <Label htmlFor={`active-${route.id}`} className="font-normal">Percorso attivo</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  {savedId === route.id ? (
-                    <span className="flex items-center gap-1 text-xs text-ha-success" role="status">
-                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Salvato
-                    </span>
-                  ) : null}
-                  <Button
-                    size="sm"
-                    onClick={() => save(route)}
-                    disabled={
-                      savingId !== null
-                      || !route.agent_label.trim()
-                      || !route.fallback_destination.trim()
-                      || !prospectReady
-                      || invalidSelectedShared.length > 0
-                    }
-                  >
-                    {savingId === route.id ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" aria-hidden="true" />
-                    )}
-                    Salva percorso
-                  </Button>
-                </div>
-              </div>
+              ) : null}
             </section>
           )
         })}
