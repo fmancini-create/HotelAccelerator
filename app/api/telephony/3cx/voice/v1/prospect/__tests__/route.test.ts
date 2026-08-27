@@ -7,26 +7,21 @@ const mocks = vi.hoisted(() => ({
   takeVoiceRequest: vi.fn(),
   serviceErrorVoiceResponse: vi.fn(),
   getVoiceIvrRoute: vi.fn(),
-  getInternalKnowledgeSyncDiagnostics: vi.fn(),
+  getVoiceIvrSharedBaseIds: vi.fn(),
   isVoiceSupportHub: vi.fn(),
 }))
 
-vi.mock("@/lib/ai/internal-knowledge-sync-status", () => ({
-  getInternalKnowledgeSyncDiagnostics: mocks.getInternalKnowledgeSyncDiagnostics,
-}))
 vi.mock("@/lib/telephony/inbound-auth", () => ({ authenticateVoiceInbound: mocks.authenticateVoiceInbound }))
 vi.mock("@/lib/telephony/voice-agent", () => ({ answerVoiceQuestion: mocks.answerVoiceQuestion }))
 vi.mock("@/lib/telephony/voice-products", () => ({
   VOICE_FALLBACK_EXTENSION: "200",
-  getVoiceProduct: () => ({ key: "hotel-accelerator", label: "Hotel Accelerator" }),
+  getVoiceProduct: () => ({ key: "santaddeo-rms", label: "Santaddeo RMS" }),
 }))
 vi.mock("@/lib/telephony/voice-rate-limit", () => ({ takeVoiceRequest: mocks.takeVoiceRequest }))
-vi.mock("@/lib/telephony/voice-response", () => ({
-  serviceErrorVoiceResponse: mocks.serviceErrorVoiceResponse,
-}))
+vi.mock("@/lib/telephony/voice-response", () => ({ serviceErrorVoiceResponse: mocks.serviceErrorVoiceResponse }))
 vi.mock("@/lib/telephony/voice-routing", () => ({
   getVoiceIvrRoute: mocks.getVoiceIvrRoute,
-  getVoiceIvrSharedBaseIds: vi.fn(),
+  getVoiceIvrSharedBaseIds: mocks.getVoiceIvrSharedBaseIds,
   isMissingVoiceRoutingSchema: () => false,
 }))
 vi.mock("@/lib/telephony/voice-support-customer", () => ({ isVoiceSupportHub: mocks.isVoiceSupportHub }))
@@ -39,31 +34,63 @@ async function loadRoute() {
   return import("../route")
 }
 
+function setupRoute() {
+  mocks.authenticateVoiceInbound.mockResolvedValue({ ok: true, propertyId: HUB })
+  mocks.isVoiceSupportHub.mockResolvedValue(true)
+  mocks.takeVoiceRequest.mockReturnValue({ allowed: true })
+  mocks.getVoiceIvrSharedBaseIds.mockResolvedValue([])
+  mocks.getVoiceIvrRoute.mockResolvedValue({
+    id: "115a9ff2-7b49-4ba6-8b12-c5b93a9523a5",
+    primary_knowledge_base_id: BASE,
+    agent_label: "Informazioni Santaddeo RMS",
+    fallback_destination: "200",
+    is_active: true,
+    product_key: "santaddeo-rms",
+    crm_tool_key: "caller_lookup",
+  })
+}
+
 describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
-  it("usa il fallback quando la fonte interna non è pronta", async () => {
-    mocks.authenticateVoiceInbound.mockResolvedValue({ ok: true, propertyId: HUB })
-    mocks.isVoiceSupportHub.mockResolvedValue(true)
-    mocks.getVoiceIvrRoute.mockResolvedValue({
-      id: "115a9ff2-7b49-4ba6-8b12-c5b93a9523a5",
-      primary_knowledge_base_id: BASE,
-      agent_label: "Informazioni Hotel Accelerator",
-      fallback_destination: "200",
-      is_active: true,
-      product_key: "hotel-accelerator",
+  it("interroga la knowledge base configurata senza richiedere una fonte repo sincronizzata", async () => {
+    setupRoute()
+    mocks.answerVoiceQuestion.mockResolvedValue({
+      ok: true,
+      speech: "Santaddeo RMS è il sistema di revenue management di 4BID.",
+      transfer: { required: false, destination: "200", reason: "none" },
     })
-    mocks.getInternalKnowledgeSyncDiagnostics.mockResolvedValue({
-      schemaAvailable: true,
-      sources: [{ productKey: "hotel-accelerator", knowledgeBaseId: BASE, status: "pending" }],
-    })
-    mocks.serviceErrorVoiceResponse.mockReturnValue({ ok: false, transfer: { required: true, destination: "200" } })
 
     const { POST } = await loadRoute()
-    const response = await POST(new NextRequest("https://example.test/api/telephony/3cx/voice/v1/prospect?product=hotel-accelerator", {
+    const response = await POST(new NextRequest("https://example.test/api/telephony/3cx/voice/v1/prospect?product=santaddeo-rms", {
       method: "POST",
-      body: JSON.stringify({ question: "Vorrei informazioni" }),
+      body: JSON.stringify({ question: "Cos'è Santaddeo?" }),
     }))
 
-    expect(response.status).toBe(503)
-    expect(mocks.answerVoiceQuestion).not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(mocks.answerVoiceQuestion).toHaveBeenCalledWith(expect.objectContaining({
+      propertyId: HUB,
+      productKey: "santaddeo-rms",
+      primaryKnowledgeBaseId: BASE,
+      question: "Cos'è Santaddeo?",
+    }))
+  })
+
+  it("non trasferisce automaticamente se la risposta propone un operatore", async () => {
+    setupRoute()
+    mocks.answerVoiceQuestion.mockResolvedValue({
+      ok: true,
+      speech: "Non ho una risposta sufficientemente sicura. Se preferisce, posso metterla in contatto con un operatore.",
+      transfer: { required: true, destination: "200", reason: "not_grounded" },
+    })
+
+    const { POST } = await loadRoute()
+    const response = await POST(new NextRequest("https://example.test/api/telephony/3cx/voice/v1/prospect?product=santaddeo-rms", {
+      method: "POST",
+      body: JSON.stringify({ question: "Una domanda molto specifica" }),
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.speech).toContain("operatore")
+    expect(body.transfer.required).toBe(false)
   })
 })
