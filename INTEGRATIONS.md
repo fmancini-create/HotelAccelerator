@@ -1,6 +1,6 @@
 # HotelAccelerator — Integrations Registry
 
-Ultimo aggiornamento: 2026-08-25
+Ultimo aggiornamento: 2026-08-27
 
 ## Regola
 
@@ -13,10 +13,10 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Codice | GitHub | Repository e CI | Presente | Definire branch policy, CI e documenti mancanti |
 | PMS | Scidoo | Camere, disponibilità, tariffe, produzione, push prezzi | Da verificare | Test mapping, retry, idempotenza e tenant reale |
 | Browser remoto | Browserbase | PMS interattivo incorporato e login persistente per tenant | Codice | Configurazione agnostica separata dai connettori API; route, Context tenant-aware, Live View e fallback diretto implementati. Collaudare un login reale e misurare durata/costi prima di `Tenant reale` |
-| Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, import storico paginato e riprendibile, supporto multi-casella, watch Pub/Sub, cursor history, poll di fallback e riconciliazione label. La riconnessione aggiorna solo la casella già presente nel tenant attivo; una casella di un altro tenant viene rifiutata senza esporne il proprietario. Collaudare l'import iniziale sulle cinque caselle 4BID; restano recovery con cursor scaduto, verifica autenticità webhook, alert/SLO e modello storico Sent/response KPI prima di `Production-ready` |
+| Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, import storico paginato e riprendibile, supporto multi-casella, watch Pub/Sub autenticata, cursor history, poll di fallback e riconciliazione label. Il webhook ora tratta i messaggi Gmail scomparsi come tombstone durevoli e riconosce il cursor history scaduto come condizione non ritentabile, evitando loop Pub/Sub 404→503; il cursor durevole resta invariato finché una sincronizzazione storica ristabilisce il gap. Restano recovery drill completo, alert/SLO e modello storico Sent/response KPI prima di `Production-ready` |
 | Email | Outlook | Inbox email | Specifica | Definire Microsoft Graph adapter |
 | Email | IMAP/SMTP | Caselle generiche | Specifica | Sicurezza credenziali e limiti provider |
-| Messaggistica | WhatsApp | Inbox e automazioni | Codice | Coexistence Business App implementata nel codice per app 4BID; richiede configurazione Meta dedicata, verifica su numero reale e runbook/retry prima di promozione |
+| Messaggistica | WhatsApp | Inbox e automazioni | Tenant reale | Coexistence Business App verificata in produzione sul tenant Villa I Barronci: numero reale collegato, inbound in Inbox e outbound riuscito; webhook Meta configurato con `messages`, `smb_message_echoes`, `smb_app_state_sync` e `history`. Restano monitoraggio, retry drill e runbook prima di `Production-ready` |
 | Messaggistica | Telegram | Inbox/ManuBot | Da verificare | Separare bot manutenzioni e canale ospiti |
 | Social | Instagram/Facebook | Messaggi | Specifica | API Meta, permessi e review app |
 | VoIP | 3CX | Chiamate, attribuzione e assistenti vocali tenant-aware | Codice | CRM/call control presenti; bridge v1 e mappa IVR 4 BID persistente con scope KB e fallback espliciti. CRM e voce usano ora credenziali cifrate e revocabili distinte. Mancano applicazione della migrazione, deploy PBX, configurazione delle basi, prova tenant reale, limite distribuito e osservabilità; vedere `docs/3CX_VOICE_AI.md` |
@@ -40,7 +40,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 - Garanzia implementata: il backend rifiuta un completamento non marcato come Business App onboarding o un numero che Meta non conferma attivo nell'app; non chiama `/{phone-number-id}/register`, perché quel percorso è quello Cloud API standard e può disconnettere l'app sul telefono.
 - Messaggi: i messaggi ricevuti sono salvati come inbound; quelli scritti dal telefono arrivano come `smb_message_echoes` e sono salvati come outbound. Ogni evento è instradato dal proprio `phone_number_id`; conversazioni e risposte restano fissate al canale originario.
 - Recovery: se una scrittura Inbox fallisce, il webhook risponde 5xx per far ritentare Meta. Le inserzioni sono idempotenti sull'ID esterno del messaggio.
-- Limite attuale: stato `Codice`; non è ancora verificato con il numero reale 0558290741 né dichiarabile `Tenant reale`.
+- Evidenza produzione 2026-08-27: configurazione webhook completata nell'app Meta 4BID; `messages`, `smb_message_echoes`, `smb_app_state_sync` e `history` sottoscritti. Sul tenant Villa I Barronci un numero reale riceve messaggi in Inbox e invia correttamente. Stato: `Tenant reale`.
 
 ## Checklist obbligatoria per ogni integrazione
 
