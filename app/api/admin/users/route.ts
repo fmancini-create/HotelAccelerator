@@ -5,6 +5,12 @@ import { getDevBypass } from "@/lib/auth-property"
 import { ChannelAssignmentService } from "@/lib/platform-services/channel-assignment.service"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
+type KpiSetting = {
+  user_id: string
+  enabled: boolean
+  tracking_started_at: string | null
+}
+
 export async function GET(request: NextRequest) {
   try {
     // DEV BYPASS: dati fittizi solo in sviluppo locale (regola centralizzata in getDevBypass).
@@ -72,7 +78,9 @@ export async function GET(request: NextRequest) {
     if (membershipsError) throw membershipsError
     if (kpiError) throw kpiError
 
-    const kpiByUser = new Map((kpiSettings || []).map((setting) => [setting.user_id, setting]))
+    const kpiByUser = new Map<string, KpiSetting>(
+      ((kpiSettings || []) as KpiSetting[]).map((setting) => [setting.user_id, setting]),
+    )
 
     const usersWithGroups = users?.map((user: { id: string }) => ({
       ...user,
