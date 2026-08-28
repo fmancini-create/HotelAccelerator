@@ -12,6 +12,31 @@ import type { ConversationListOptions } from "@/lib/types/inbox-read.types"
 
 export const dynamic = "force-dynamic"
 
+type RawPhoneCall = {
+  id: string
+  direction: string | null
+  status: string | null
+  counterpart_number: string | null
+  started_at: string | null
+  duration_seconds: number | null
+  contact_id: string | null
+  user_id: string | null
+}
+
+type DashboardPhoneCall = {
+  id: string
+  direction: string | null
+  status: string | null
+  number: string | null
+  started_at: string | null
+  duration_seconds: number | null
+  contact_id: string | null
+  user_id: string | null
+}
+
+type ContactLabel = { id: string; name: string | null; company: string | null }
+type UserLabel = { id: string; name: string | null }
+
 function callbackState(calls: Array<{ number: string | null; status: string | null; started_at: string | null }>) {
   const completedAt = new Map<string, number>()
   const callbacks: string[] = []
@@ -177,15 +202,15 @@ export async function GET(request: NextRequest) {
         .limit(60)
       if (error) throw error
 
-      const rows = (data ?? []).map((call) => ({
-        id: call.id as string,
-        direction: call.direction as string | null,
-        status: call.status as string | null,
-        number: call.counterpart_number as string | null,
-        started_at: call.started_at as string | null,
-        duration_seconds: call.duration_seconds as number | null,
-        contact_id: call.contact_id as string | null,
-        user_id: call.user_id as string | null,
+      const rows: DashboardPhoneCall[] = ((data ?? []) as RawPhoneCall[]).map((call) => ({
+        id: call.id,
+        direction: call.direction,
+        status: call.status,
+        number: call.counterpart_number,
+        started_at: call.started_at,
+        duration_seconds: call.duration_seconds,
+        contact_id: call.contact_id,
+        user_id: call.user_id,
       }))
 
       const contactIds = [...new Set(rows.map((call) => call.contact_id).filter(Boolean))] as string[]
@@ -198,8 +223,12 @@ export async function GET(request: NextRequest) {
           ? sb.from("admin_users").select("id,name").eq("property_id", propertyId).in("id", userIds)
           : Promise.resolve({ data: [] }),
       ])
-      const contactById = new Map((contacts.data ?? []).map((c: any) => [c.id, c]))
-      const userById = new Map((users.data ?? []).map((u: any) => [u.id, u.name]))
+      const contactById = new Map<string, ContactLabel>(
+        ((contacts.data ?? []) as ContactLabel[]).map((contact) => [contact.id, contact]),
+      )
+      const userById = new Map<string, string | null>(
+        ((users.data ?? []) as UserLabel[]).map((user) => [user.id, user.name]),
+      )
       const callbackNumbers = callbackState(rows)
 
       const mapped = rows.map((call) => {
