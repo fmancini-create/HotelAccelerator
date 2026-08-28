@@ -15,7 +15,7 @@ export function CustomerLicenseBadge() {
 
   return (
     <div
-      className="pointer-events-none fixed right-14 top-2.5 z-[60] hidden h-9 items-center rounded-md border border-border bg-background/95 px-2.5 shadow-sm sm:flex"
+      className="hidden h-9 items-center rounded-md border border-border bg-background px-2.5 sm:flex"
       title="Numero di licenza per assistenza 4BID"
       aria-label={`Numero di licenza ${code}`}
     >
