@@ -1,8 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
-import { requireAreaApi } from "@/lib/auth/area-access"
-import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
-import { resolveIdentity } from "@/lib/telephony/user-extension"
+import { accessErrorStatus, isAccessError, requireTenantAdmin } from "@/lib/auth/admin-access"
 import { caricaProvider, sincronizzaDalPms } from "@/lib/pms/sync"
 import { NESSUNA_CAPACITA, type PmsCapability, type PmsProvider } from "@/lib/pms/provider"
 import { isValidUuid } from "@/lib/platform-context"
@@ -10,23 +8,36 @@ import { isValidUuid } from "@/lib/platform-context"
 /**
  * Governo della sincronizzazione anagrafiche col PMS.
  *
- * GET   = stato: connessione, interruttori, ultime passate, conflitti aperti.
- * POST  = esegue una passata. Per difetto in **prova a vuoto**: legge, confronta e
- *         dice cosa farebbe, senza scrivere niente da nessuna parte. Scrivere
- *         richiede `dryRun: false` esplicito.
- * PUT   = accende o spegne un interruttore della scrittura verso il PMS.
- * PATCH = registra la decisione su un valore in conflitto.
+ * Questa rotta e' AMMINISTRATIVA: leggere stato/coda/conflitti, avviare una
+ * sincronizzazione, cambiare gli interruttori di scrittura o risolvere un
+ * conflitto modifica o espone la configurazione operativa del tenant.
+ *
+ * Gli utenti CRM normali usano il PMS da `/admin/crm/pms-sync/gestionale` e non
+ * devono poter governare la sincronizzazione, neppure chiamando questa API a
+ * mano. La separazione e' server-side: nascondere un pulsante non e' un
+ * controllo di autorizzazione.
  */
+async function requirePmsAdmin(request: NextRequest) {
+  try {
+    return { identity: await requireTenantAdmin(request) } as const
+  } catch (error) {
+    if (isAccessError(error)) {
+      return {
+        denied: NextResponse.json(
+          { error: error instanceof Error ? error.message : "Accesso negato" },
+          { status: accessErrorStatus(error) },
+        ),
+      } as const
+    }
+    throw error
+  }
+}
 
 export async function GET(request: NextRequest) {
-  const decision = await requireAreaApi("crm", request)
-  if (isAreaDenied(decision)) return areaDeniedResponse(decision)
+  const who = await requirePmsAdmin(request)
+  if ("denied" in who) return who.denied
 
-  const identity = await resolveIdentity(request)
-  if (!identity?.propertyId) {
-    return NextResponse.json({ error: "Struttura non determinata" }, { status: 400 })
-  }
-  const propertyId = identity.propertyId
+  const propertyId = who.identity.propertyId
   const sb = createServiceClient()
 
   // Un tipo di PMS non riconosciuto fa fallire la costruzione del connettore, di
@@ -43,8 +54,6 @@ export async function GET(request: NextRequest) {
     provider = caricato.provider
     interruttori = caricato.interruttori
     cursor = caricato.cursor
-    // La verifica chiama il PMS: credenziali sbagliate o servizio fermo devono
-    // diventare "connessione non riuscita" con il motivo, non un 500.
     try {
       prova = await provider.testConnection()
     } catch (e) {
@@ -88,13 +97,9 @@ export async function GET(request: NextRequest) {
       .select("kind, status")
       .eq("property_id", propertyId)
       .in("status", ["preview", "pending", "failed"]),
-    // La misura che spiega perche' l'integrazione serve: quanti contatti hanno
-    // un telefono. Senza numeri a schermo, "non funziona" resta un'opinione.
     sb.from("contacts").select("id, phone", { count: "exact", head: false }).eq("property_id", propertyId).limit(2000),
   ])
 
-  // Un errore di lettura non deve diventare "zero conflitti": chi guarda
-  // penserebbe che non c'e' nulla da rivedere.
   for (const [nome, res] of [
     ["passate", passate],
     ["conflitti", conflitti],
@@ -109,9 +114,6 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Tipo dichiarato: il client non e' tipizzato sullo schema, quindi senza
-  // questo `c.phone` sarebbe `any` e un nome di colonna sbagliato passerebbe il
-  // controllo dei tipi per restituire `undefined` a runtime.
   const righeContatti = (contatti.data ?? []) as Array<{ id: string; phone: string | null }>
   const conTelefono = righeContatti.filter((c) => String(c.phone ?? "").trim()).length
 
@@ -124,9 +126,6 @@ export async function GET(request: NextRequest) {
       name: provider.name,
       fake: provider.isFake,
       connessione: prova,
-      // Consegnate al client perche' la pagina possa disabilitare gli
-      // interruttori impossibili E dire perche': un interruttore spento senza
-      // spiegazione sembra una scelta nostra, non un limite del PMS.
       capacita: provider.capabilities,
       limiti: provider.limitations,
     },
@@ -144,13 +143,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const decision = await requireAreaApi("crm", request)
-  if (isAreaDenied(decision)) return areaDeniedResponse(decision)
-
-  const identity = await resolveIdentity(request)
-  if (!identity?.propertyId) {
-    return NextResponse.json({ error: "Struttura non determinata" }, { status: 400 })
-  }
+  const who = await requirePmsAdmin(request)
+  if ("denied" in who) return who.denied
 
   let corpo: { dryRun?: unknown; limit?: unknown } = {}
   try {
@@ -159,26 +153,21 @@ export async function POST(request: NextRequest) {
     corpo = {}
   }
 
-  // Si scrive SOLO con `dryRun: false` esplicito. Qualunque altro valore, incluso
-  // un corpo assente o malformato, resta una prova a vuoto: il difetto peggiore
-  // sarebbe scrivere in rubrica per una richiesta scritta male.
   const dryRun = corpo.dryRun !== false
   const limit = typeof corpo.limit === "number" && Number.isFinite(corpo.limit) ? corpo.limit : 100
 
   try {
-    const esito = await sincronizzaDalPms(identity.propertyId, { dryRun, limit })
+    const esito = await sincronizzaDalPms(who.identity.propertyId, { dryRun, limit })
     return NextResponse.json({ ok: true, dryRun, esito })
   } catch (e) {
     const messaggio = e instanceof Error ? e.message : String(e)
-    console.log(`[v0] pms-sync errore property=${identity.propertyId} dryRun=${dryRun}: ${messaggio}`)
+    console.log(`[v0] pms-sync errore property=${who.identity.propertyId} dryRun=${dryRun}: ${messaggio}`)
     return NextResponse.json({ error: messaggio }, { status: 502 })
   }
 }
 
-/** I quattro interruttori della scrittura verso il PMS. */
 const INTERRUTTORI = ["write_contacts", "write_tags", "write_notes", "write_consents"] as const
 
-/** Quale capacita' del connettore serve per ciascun interruttore. */
 const CAPACITA_INTERRUTTORE: Record<(typeof INTERRUTTORI)[number], PmsCapability> = {
   write_contacts: "writeContact",
   write_tags: "writeTags",
@@ -187,13 +176,8 @@ const CAPACITA_INTERRUTTORE: Record<(typeof INTERRUTTORI)[number], PmsCapability
 }
 
 export async function PUT(request: NextRequest) {
-  const decision = await requireAreaApi("crm", request)
-  if (isAreaDenied(decision)) return areaDeniedResponse(decision)
-
-  const identity = await resolveIdentity(request)
-  if (!identity?.propertyId) {
-    return NextResponse.json({ error: "Struttura non determinata" }, { status: 400 })
-  }
+  const who = await requirePmsAdmin(request)
+  if ("denied" in who) return who.denied
 
   let corpo: Record<string, unknown> = {}
   try {
@@ -202,10 +186,6 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Corpo della richiesta illeggibile" }, { status: 400 })
   }
 
-  // Si accetta SOLO un vero booleano. Un valore assente non viene interpretato
-  // come "spegni": si tocca solo cio' che e' stato dichiarato, altrimenti una
-  // richiesta parziale spegnerebbe interruttori che nessuno ha chiesto di
-  // spegnere.
   const modifiche: Record<string, boolean> = {}
   for (const chiave of INTERRUTTORI) {
     if (typeof corpo[chiave] === "boolean") modifiche[chiave] = corpo[chiave] as boolean
@@ -214,16 +194,10 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "Nessun interruttore valido nella richiesta" }, { status: 400 })
   }
 
-  // Accendere una scrittura che il connettore non sa fare non si salva: sarebbe
-  // una promessa che nessun codice puo' mantenere, e chi l'ha accesa crederebbe
-  // che da quel momento i dati finiscano nel PMS. Si rifiuta dicendo perche'.
   let provider: PmsProvider
   try {
-    provider = (await caricaProvider(identity.propertyId)).provider
+    provider = (await caricaProvider(who.identity.propertyId)).provider
   } catch (e) {
-    // Se non sappiamo nemmeno quale PMS sia, non possiamo sapere se la
-    // scrittura sia possibile: si rifiuta spiegando, invece di salvare un
-    // interruttore la cui promessa nessuno potra' mantenere.
     return NextResponse.json(
       { error: e instanceof Error ? e.message : String(e), interruttoriRifiutati: Object.keys(modifiche) },
       { status: 422 },
@@ -247,15 +221,12 @@ export async function PUT(request: NextRequest) {
   const { data, error } = await sb
     .from("pms_integrations")
     .update(modifiche)
-    .eq("property_id", identity.propertyId)
+    .eq("property_id", who.identity.propertyId)
     .select(INTERRUTTORI.join(", "))
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  // Zero righe aggiornate NON e' un successo: significa che per questa struttura
-  // non esiste alcuna configurazione PMS, quindi l'interruttore non e' stato
-  // salvato da nessuna parte. Dirlo, invece di rispondere "ok".
   if (!data || data.length === 0) {
     return NextResponse.json(
       { error: "Nessuna configurazione PMS per questa struttura: l'interruttore non e' stato salvato" },
@@ -267,13 +238,8 @@ export async function PUT(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const decision = await requireAreaApi("crm", request)
-  if (isAreaDenied(decision)) return areaDeniedResponse(decision)
-
-  const identity = await resolveIdentity(request)
-  if (!identity?.propertyId) {
-    return NextResponse.json({ error: "Struttura non determinata" }, { status: 400 })
-  }
+  const who = await requirePmsAdmin(request)
+  if ("denied" in who) return who.denied
 
   let corpo: { id?: unknown; resolution?: unknown } = {}
   try {
@@ -293,15 +259,11 @@ export async function PATCH(request: NextRequest) {
 
   const sb = createServiceClient()
 
-  // Se la decisione e' "il valore del PMS era quello giusto", va scritto nel
-  // contatto: senza questo passaggio il responsabile premerebbe un pulsante che
-  // sposta la riga dall'elenco e non cambia il dato. Il filtro su property_id
-  // impedisce di agganciare un conflitto di un'altra struttura.
   const { data: riga, error: erroreLettura } = await sb
     .from("contact_field_alternates")
     .select("id, contact_id, field, value")
     .eq("id", id)
-    .eq("property_id", identity.propertyId)
+    .eq("property_id", who.identity.propertyId)
     .maybeSingle()
 
   if (erroreLettura) return NextResponse.json({ error: erroreLettura.message }, { status: 500 })
@@ -314,9 +276,7 @@ export async function PATCH(request: NextRequest) {
       .from("contacts")
       .update({ [r.field]: r.value })
       .eq("id", r.contact_id)
-      .eq("property_id", identity.propertyId)
-    // L'errore NON va ingoiato: altrimenti la riga risulterebbe risolta mentre
-    // il dato del contatto e' rimasto quello vecchio.
+      .eq("property_id", who.identity.propertyId)
     if (erroreScrittura) {
       return NextResponse.json({ error: `Contatto non aggiornato: ${erroreScrittura.message}` }, { status: 500 })
     }
@@ -327,14 +287,10 @@ export async function PATCH(request: NextRequest) {
     .update({
       resolution,
       resolved_at: new Date().toISOString(),
-      // `resolved_by` e' un uuid, ma nella scorciatoia di sviluppo l'identita'
-      // vale `dev-admin-id`: passandolo cosi' Postgres rifiuterebbe l'INTERA
-      // riga e la decisione andrebbe persa. Meglio non sapere chi ha deciso che
-      // perdere la decisione.
-      resolved_by: isValidUuid(identity.userId) ? identity.userId : null,
+      resolved_by: isValidUuid(who.identity.userId) ? who.identity.userId : null,
     })
     .eq("id", r.id)
-    .eq("property_id", identity.propertyId)
+    .eq("property_id", who.identity.propertyId)
 
   if (erroreChiusura) return NextResponse.json({ error: erroreChiusura.message }, { status: 500 })
 
