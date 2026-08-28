@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { secondiPreavviso, tempoAmmesso } from "@/lib/auth/auto-logout"
@@ -20,34 +21,25 @@ import { secondiPreavviso, tempoAmmesso } from "@/lib/auth/auto-logout"
  * proprio nel caso piu' rischioso, cioe' quando nessuno sta guardando.
  *
  * COSA CONTA COME ATTIVITA'
- * Movimenti, tasti, clic, tocchi e rotelle. NON il semplice passare del tempo
- * con la pagina aperta: una pagina aperta su un monitor del ricevimento e'
- * esattamente la situazione da cui questa funzione protegge.
+ * Movimenti, tasti, clic, tocchi, rotelle e navigazione interna. La navigazione
+ * e' esplicita attivita' dell'utente e va contata anche se, per qualunque motivo,
+ * l'evento del mouse non viene osservato prima del cambio route.
  */
 
 /** Ogni quanto controlliamo se il tempo e' scaduto. */
 const PASSO_MS = 5_000
 
-/**
- * Ogni quanto si rilegge il tempo dal server. Serve perche' un amministratore
- * puo' cambiarlo mentre la persona sta lavorando: senza questo, la modifica
- * avrebbe effetto solo al prossimo accesso.
- */
+/** Ogni quanto si rilegge il tempo dal server. */
 const RILETTURA_MS = 10 * 60_000
 
 export function AutoLogoutWatchdog() {
+  const pathname = usePathname()
   const [minuti, setMinuti] = useState<number | null>(null)
   const [secondiRimasti, setSecondiRimasti] = useState<number | null>(null)
-
-  // L'ultima attivita' sta in un ref e non in uno stato: cambia a ogni
-  // movimento del mouse, e uno stato farebbe ridisegnare la pagina centinaia di
-  // volte al minuto.
   const ultimaAttivita = useRef<number>(Date.now())
   const uscendo = useRef(false)
 
   const esci = useCallback(async () => {
-    // Una sola volta: senza questa guardia, due scadenze ravvicinate
-    // lancerebbero due uscite e la seconda troverebbe la sessione gia' chiusa.
     if (uscendo.current) return
     uscendo.current = true
     try {
@@ -57,9 +49,6 @@ export function AutoLogoutWatchdog() {
       // Anche se la chiusura lato server non riesce, portiamo via la persona
       // dalle pagine con i dati: restare qui sarebbe il peggiore dei due esiti.
     }
-    // Stessa uscita del menu utente: ricarica piena, cosi' non resta in memoria
-    // nessun dato della sessione. Il parametro serve solo a spiegare perche'
-    // si e' tornati all'accesso, invece di farlo sembrare un guasto.
     window.location.href = "/admin?disconnesso=inattivita"
   }, [])
 
@@ -73,9 +62,6 @@ export function AutoLogoutWatchdog() {
         if (!r.ok || !vivo) return
         const dati = await r.json()
         const m = dati?.minuti
-        // `tempoAmmesso` e non un semplice controllo di numero: se un giorno il
-        // valore nel database uscisse dall'elenco, meglio non attivare nulla
-        // che disconnettere con un tempo che nessuno ha scelto.
         setMinuti(tempoAmmesso(m) ? m : null)
       } catch {
         // Rete assente: non attiviamo nulla. Buttare fuori una persona perche'
@@ -91,16 +77,21 @@ export function AutoLogoutWatchdog() {
     }
   }, [])
 
-  // 2) Registra l'attivita'.
+  // Quando la policy di timeout viene caricata o cambia, il conteggio parte da
+  // quel momento. Non deve usare retroattivamente il tempo trascorso mentre il
+  // browser ancora non conosceva la policy.
+  useEffect(() => {
+    if (minuti === null) return
+    ultimaAttivita.current = Date.now()
+    setSecondiRimasti(null)
+  }, [minuti])
+
+  // 2) Registra l'attivita' fisica.
   useEffect(() => {
     if (minuti === null) return
 
     const segna = () => {
       ultimaAttivita.current = Date.now()
-      // Se l'avviso era comparso, un movimento lo fa sparire: e' il modo piu'
-      // naturale di dire "sono qui", senza obbligare a cercare un pulsante.
-      // React non ridisegna se il valore e' gia' null, quindi questa chiamata
-      // e' innocua anche col mouse in movimento continuo.
       setSecondiRimasti(null)
     }
 
@@ -113,7 +104,16 @@ export function AutoLogoutWatchdog() {
     }
   }, [minuti])
 
-  // 3) Controlla la scadenza.
+  // 3) Anche un cambio pagina interno e' attivita' certa dell'utente. Questo
+  // evita che una navigazione (es. click su "Impostazioni") coincida con lo
+  // scadere del timer e venga interpretata come inattivita'.
+  useEffect(() => {
+    if (minuti === null) return
+    ultimaAttivita.current = Date.now()
+    setSecondiRimasti(null)
+  }, [pathname, minuti])
+
+  // 4) Controlla la scadenza.
   useEffect(() => {
     if (minuti === null) return
 
@@ -128,7 +128,6 @@ export function AutoLogoutWatchdog() {
         void esci()
         return
       }
-      // L'avviso compare solo dentro la finestra di preavviso.
       setSecondiRimasti(mancano <= preavvisoMs ? Math.ceil(mancano / 1000) : null)
     }
 
@@ -140,8 +139,6 @@ export function AutoLogoutWatchdog() {
   if (secondiRimasti === null) return null
 
   return (
-    // `role="alertdialog"` e non un riquadro qualsiasi: chi usa un lettore di
-    // schermo deve sentire l'avviso appena compare, non scoprirlo dopo.
     <div
       role="alertdialog"
       aria-modal="false"
