@@ -1,6 +1,6 @@
 # HotelAccelerator — Roadmap
 
-Ultimo aggiornamento: 2026-08-25
+Ultimo aggiornamento: 2026-08-28
 
 ## Principio di priorità
 
@@ -55,6 +55,9 @@ Uscita: almeno un tenant reale per verticale, con evidenze e limiti dichiarati.
 ## Fase 3 — Esperienza unificata e lavoro quotidiano
 
 - [ ] Dashboard aggregata affidabile.
+  - [x] Dashboard utente personalizzata in stato `Codice`: performance personali con obiettivi reali, card configurabili dal tenant, estratti Inbox channel-aware, task assegnati e telefonate con richiamo deduplicato; vedere `docs/PERSONALIZED_USER_DASHBOARD.md`.
+  - [ ] Applicare migrazione, completare typecheck/build e collaudo tenant reale prima di promuovere la dashboard oltre `Codice`.
+  - [ ] Aggiungere progressivamente read model affidabili dei satelliti senza accessi diretti cross-database.
 - [ ] Navigazione e accesso ai satelliti senza nuovo login.
 - [ ] Centro notifiche e attività.
 - [ ] CRM ospite e identity resolution.

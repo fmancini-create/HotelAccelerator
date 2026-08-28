@@ -110,10 +110,14 @@ export async function PUT(request: NextRequest) {
 
     if (route.knowledge_scope === "hub_selected") {
       const primaryKnowledgeBaseId = parsed.data.primary_knowledge_base_id
-      const primaryBase = primaryKnowledgeBaseId
-        ? current.knowledge_bases.find((base) => base.id === primaryKnowledgeBaseId)
-        : null
+      if (!primaryKnowledgeBaseId) {
+        return NextResponse.json(
+          { error: "Scegli una knowledge base 4 BID con almeno una fonte pronta." },
+          { status: 409, headers: NO_STORE },
+        )
+      }
 
+      const primaryBase = current.knowledge_bases.find((base) => base.id === primaryKnowledgeBaseId)
       if (!primaryBase || primaryBase.source_count < 1) {
         return NextResponse.json(
           { error: "Scegli una knowledge base 4 BID con almeno una fonte pronta." },

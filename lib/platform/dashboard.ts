@@ -1,71 +1,28 @@
-/**
- * Quale dashboard vede chi.
- *
- * Il committente ha chiesto che ogni gruppo veda la dashboard piu' utile al suo
- * lavoro. I gruppi hanno pero' nomi liberi, scelti struttura per struttura
- * ("Front Office" qui, "Ricevimento" altrove), quindi NON si accoppia un nome a
- * una dashboard: si deduce tutto dai PERMESSI che il gruppo ha davvero (aree
- * concesse + moduli attivi + ruolo). Funziona con qualunque nome e su ogni
- * struttura, senza manutenzione.
- *
- * Il contesto di chi guarda (`NavViewer`) e' lo stesso del menu: un'unica
- * definizione di "cosa puo' vedere questa persona", non una copia che col tempo
- * divergerebbe.
- */
-
 import type { NavViewer } from "@/lib/platform/nav"
-// Le aree valide per tutti si leggono dal catalogo: riscriverle a mano qui
-// avrebbe fatto divergere dashboard e menu, che e' il difetto appena chiuso.
 import { BASELINE_AREA_KEYS } from "@/lib/platform/areas"
 
-/** A cosa serve il pannello: decide anche l'ordine in pagina. */
-export type PanelKind =
-  /** Chiede un intervento adesso (arretrato, assenze da approvare). */
-  | "attention"
-  /** Il lavoro personale di chi guarda. */
-  | "personal"
-  /** Misura l'andamento: volumi, metriche, ricavi. */
-  | "metrics"
-  /** Sorveglianza: chi lavora, salute del sistema. */
-  | "oversight"
+export type PanelKind = "attention" | "personal" | "metrics" | "oversight"
 
 export interface DashboardPanel {
   id: string
   title: string
-  /** Riga di spiegazione: dice cosa sta guardando, non e' decorazione. */
   hint: string
   kind: PanelKind
-  /** Riservato agli amministratori (super admin o tenant admin). */
   adminOnly?: boolean
-  /**
-   * Area richiesta (lib/platform/areas.ts). Un membro vede il pannello solo se
-   * l'area gli e' concessa. Le aree baseline valgono per tutti.
-   */
   area?: string
-  /**
-   * Modulo richiesto. Se il modulo NON e' attivo per la struttura il pannello
-   * non si mostra affatto: il committente ha scelto "nascondere se il modulo e'
-   * spento, dire nessun dato se e' attivo".
-   */
   module?: string
-  /**
-   * Il pannello porta a una pagina: da un cruscotto ci si aspetta di poter
-   * approfondire. Verificato che ogni indirizzo esista (check:dashboard).
-   */
   href?: string
 }
 
 /**
- * I pannelli, in ordine di utilita': prima cio' che chiede attenzione, poi il
- * lavoro personale, poi le misure, infine la sorveglianza. Un operatore vede
- * quasi solo le prime due famiglie, la direzione vede tutto.
+ * Single dashboard manifest. Permissions/modules decide what a user MAY see;
+ * per-user tenant settings may subsequently hide a subset, never grant more.
  */
 export const DASHBOARD_PANELS: DashboardPanel[] = [
-  // --- Chiede attenzione ---
   {
     id: "backlog",
-    title: "Da gestire in casella",
-    hint: "Non lette degli ultimi 7 giorni: la casella è condivisa, quindi il conto è di tutti. Il pregresso importato è contato a parte.",
+    title: "Messaggi da gestire",
+    hint: "Conversazioni recenti da leggere o riprendere, rispettando i canali assegnati all'utente.",
     kind: "attention",
     module: "inbox",
     area: "inbox",
@@ -74,7 +31,7 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "stale",
     title: "Ferme da oltre 24 ore",
-    hint: "Aperte negli ultimi 7 giorni senza risposta da più di un giorno: sono quelle che scivolano.",
+    hint: "Conversazioni aperte negli ultimi 7 giorni senza risposta da più di un giorno.",
     kind: "attention",
     module: "inbox",
     area: "inbox",
@@ -93,19 +50,22 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "knowledge-gaps",
     title: "Domande senza risposta",
-    hint: "Domande degli ospiti che l'assistente non ha saputo coprire: da chiudere nelle basi.",
+    hint: "Domande degli ospiti che l'assistente non ha saputo coprire nelle basi di conoscenza.",
     kind: "attention",
     module: "ai",
     adminOnly: true,
     href: "/admin/knowledge",
   },
-
-  // --- Il lavoro personale ---
+  {
+    id: "my-performance",
+    title: "Le tue performance",
+    hint: "Risposte, conversazioni e tempo mediano di risposta misurati dal momento in cui il tenant ha attivato i KPI.",
+    kind: "personal",
+    module: "inbox",
+    area: "inbox",
+  },
   {
     id: "my-shifts",
-    // NON "I miei turni": il turno e' legato alla scheda dipendente, che non
-    // coincide con l'utente amministrativo. Contare i turni della struttura e
-    // chiamarli "miei" sarebbe un numero giusto con l'etichetta sbagliata.
     title: "Turni in arrivo",
     hint: "Turni pubblicati non ancora iniziati. La tua agenda personale è in Le mie attività.",
     kind: "personal",
@@ -114,8 +74,8 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   },
   {
     id: "my-todos",
-    title: "Attività aperte",
-    hint: "Cose da fare non ancora chiuse.",
+    title: "Attività da fare",
+    hint: "Attività assegnate a te che non sono ancora concluse.",
     kind: "personal",
     area: "todos",
     href: "/admin/todos",
@@ -123,27 +83,16 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "calls",
     title: "Telefonate",
-    hint: "Chiamate degli ultimi 7 giorni, con quelle perse in evidenza.",
+    hint: "Ultime chiamate e chiamate perse che non risultano ancora recuperate da un contatto successivo.",
     kind: "personal",
     module: "inbox",
     area: "calls",
     href: "/admin/calls",
   },
-
-  // --- Misure ---
   {
     id: "volumes",
     title: "Volumi per canale",
-    // Il testo prometteva "nelle 24 ore", ma i conteggi non hanno alcuna
-    // finestra: sono i totali per canale dall'inizio (misurato a schermo: email
-    // 7678, cioe' tutto lo storico importato). Promettere 24 ore su un totale
-    // storico e' lo stesso difetto dell'arretrato, quindi il testo viene
-    // allineato a cio' che il codice calcola davvero.
-    //
-    // Ora il conteggio dipende dalle sorgenti scelte in Impostazioni: il testo non
-    // puo' piu' dire "tutti i canali", perche' direbbe il falso appena qualcuno
-    // esclude una casella. Quante sono escluse lo dichiara la card.
-    hint: "Da dove arrivano le conversazioni: totali su tutto lo storico, per le sorgenti scelte per le statistiche.",
+    hint: "Da dove arrivano le conversazioni: totali sulle sorgenti scelte per le statistiche.",
     kind: "metrics",
     adminOnly: true,
     href: "/admin/inbox",
@@ -151,7 +100,7 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "per-person",
     title: "Attività per persona",
-    hint: "Risposte scritte da ciascuno. Dichiara quante risposte hanno un autore: senza quel dato il confronto ingannerebbe.",
+    hint: "Risposte attribuite a ciascun operatore, con denominatori dichiarati.",
     kind: "metrics",
     adminOnly: true,
   },
@@ -167,8 +116,6 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   {
     id: "campaigns",
     title: "Campagne email",
-    // "Invii recenti" era falso: conta("email_campaigns") non ha filtro sul
-    // tempo, quindi il numero e' il totale storico delle campagne.
     hint: "Campagne create finora, in tutto lo storico.",
     kind: "metrics",
     area: "marketing",
@@ -181,12 +128,10 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
     kind: "metrics",
     adminOnly: true,
   },
-
-  // --- Sorveglianza ---
   {
     id: "presence",
     title: "Chi è al lavoro adesso",
-    hint: "Operatori con un segnale recente. Chi non si collega da tempo non compare come presente.",
+    hint: "Operatori con un segnale recente.",
     kind: "oversight",
     adminOnly: true,
     href: "/admin/users",
@@ -201,7 +146,6 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   },
 ]
 
-/** Ordine in cui le famiglie compaiono in pagina. */
 export const PANEL_ORDER: PanelKind[] = ["attention", "personal", "metrics", "oversight"]
 
 export const PANEL_KIND_LABEL: Record<PanelKind, string> = {
@@ -211,16 +155,6 @@ export const PANEL_KIND_LABEL: Record<PanelKind, string> = {
   oversight: "Sorveglianza",
 }
 
-/**
- * I pannelli che questa persona puo' vedere.
- *
- * Fail-closed su ruolo e aree: finche' non sappiamo se chi guarda e'
- * amministratore, i pannelli riservati restano nascosti (meglio un cruscotto
- * povero che mostrare a un dipendente i ricavi).
- *
- * Fail-open sui moduli: se l'elenco dei moduli attivi non e' ancora arrivato non
- * si svuota la pagina, altrimenti un ritardo di rete sembrerebbe un guasto.
- */
 export function visiblePanels(viewer: NavViewer): DashboardPanel[] {
   const { isAdmin, areas, activeModules } = viewer
   const active = activeModules ? new Set(activeModules) : null
@@ -235,20 +169,15 @@ export function visiblePanels(viewer: NavViewer): DashboardPanel[] {
   })
 }
 
-/**
- * Come si chiama, in parole, il cruscotto che questa persona sta vedendo.
- * Serve solo a spiegarglielo in testata: NON governa cosa vede (quello lo
- * decidono i permessi), quindi non puo' andare fuori sincrono con il contenuto.
- */
 export function dashboardProfileLabel(viewer: NavViewer): string {
   if (viewer.isAdmin) return "Direzione"
 
   const granted = new Set(viewer.areas ?? [])
-  const haCasella = granted.has("inbox") || BASELINE_AREA_KEYS.includes("inbox")
-  const haTelefono = granted.has("calls")
+  const hasInbox = granted.has("inbox") || BASELINE_AREA_KEYS.includes("inbox")
+  const hasCalls = granted.has("calls")
 
-  if (haCasella && haTelefono) return "Ricevimento"
+  if (hasInbox && hasCalls) return "Ricevimento"
   if (granted.has("hr")) return "Personale"
-  if (haCasella) return "Operativo"
+  if (hasInbox) return "Operativo"
   return "Il tuo lavoro"
 }
