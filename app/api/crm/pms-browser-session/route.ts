@@ -9,6 +9,7 @@ import {
   BrowserbaseApiError,
   creaBrowserbaseContext,
   creaBrowserbaseSessione,
+  isBrowserbaseCapacityError,
   leggiBrowserbaseLiveView,
   leggiBrowserbaseSessione,
   sessioneBrowserbaseAttiva,
@@ -195,10 +196,6 @@ export async function POST(request: NextRequest) {
     sessionId = created.session.id
 
     const puppeteer = (await import("puppeteer-core")).default
-    // Puppeteer imposta 800x600 per default anche quando Browserbase ha creato
-    // la sessione a 1920x1080. `null` conserva il viewport remoto: senza questo
-    // il PMS passa al layout compatto e la Live View mostra solo una parte
-    // dell'area di lavoro.
     browser = await puppeteer.connect({
       browserWSEndpoint: created.session.connectUrl,
       defaultViewport: null,
@@ -232,8 +229,6 @@ export async function POST(request: NextRequest) {
       await browser.disconnect()
       browser = null
     } else {
-      // Sul Free keepAlive non e' disponibile. `after` mantiene la connessione
-      // CDP dopo che la risposta e' gia' arrivata al client, entro maxDuration.
       if (!browser) throw new Error("PMS_BROWSER_CONNECTION_MISSING")
       const heldBrowser: Browser = browser
       const heldSessionId = created.session.id
@@ -274,6 +269,18 @@ export async function POST(request: NextRequest) {
     const detail = error instanceof Error ? error.message : "Errore sconosciuto"
     console.error("[pms-browser] apertura non riuscita", { correlationId, propertyId, detail })
     if (leaseId) await salvaErrore(propertyId, leaseId, detail)
+
+    if (isBrowserbaseCapacityError(error)) {
+      return risposta(
+        {
+          error: "Il browser del gestionale ha raggiunto temporaneamente il limite di capacità",
+          code: "PMS_BROWSER_CAPACITY_EXHAUSTED",
+          retryable: true,
+          correlationId,
+        },
+        503,
+      )
+    }
 
     const status = error instanceof BrowserbaseApiError && error.status === 503 ? 503 : 502
     return risposta({ error: "Il gestionale non è disponibile in questo momento", correlationId }, status)
