@@ -37,6 +37,8 @@ export interface RunOptions {
   limit?: number
   /** Non chiama il modello: utile per provare il perimetro senza spendere. */
   dryRun?: boolean
+  /** Timestamp assoluto oltre il quale la passata deve restituire il controllo. */
+  deadlineAt?: number
 }
 
 export interface RunReport {
@@ -54,6 +56,18 @@ export interface RunReport {
   tokensOut: number
   costMicroUsd: number
   errors: string[]
+  stoppedForDeadline: boolean
+}
+
+const MIN_MODEL_BUDGET_MS = 8_000
+
+function deadlineReached(opts: RunOptions, reserveMs = 0): boolean {
+  return typeof opts.deadlineAt === "number" && Date.now() + reserveMs >= opts.deadlineAt
+}
+
+function modelAbortSignal(opts: RunOptions): AbortSignal | undefined {
+  if (typeof opts.deadlineAt !== "number") return undefined
+  return AbortSignal.timeout(Math.max(1, opts.deadlineAt - Date.now()))
 }
 
 function parseFields(raw: unknown): TrackingField[] {
@@ -190,12 +204,23 @@ export async function runTrackingForGroup(
     tokensOut: 0,
     costMicroUsd: 0,
     errors: [],
+    stoppedForDeadline: false,
+  }
+
+  if (deadlineReached(opts)) {
+    report.stoppedForDeadline = true
+    return report
   }
 
   // Le già fatte si leggono PRIMA di scegliere le conversazioni, così il tetto
   // per giro viene speso su lavoro nuovo: l'ordinamento parte dalle più
   // recenti, che sono anche le prime a essere state analizzate.
   const done = await loadAlreadyDone(supabase, config.group_id, config.version)
+
+  if (deadlineReached(opts)) {
+    report.stoppedForDeadline = true
+    return report
+  }
 
   const conversations = await listScopedConversations(supabase, config.property_id, sources, {
     since: opts.since,
@@ -206,6 +231,11 @@ export async function runTrackingForGroup(
   report.alreadyDone = done.conversations.size + done.calls.size
 
   for (const conv of conversations) {
+    if (deadlineReached(opts)) {
+      report.stoppedForDeadline = true
+      break
+    }
+
     try {
       // Difesa residua: il selettore le ha già escluse, ma tra la lettura delle
       // già fatte e questo punto un'altra passata può averne aggiunte.
@@ -300,6 +330,12 @@ export async function runTrackingForGroup(
         report.byModel++
         continue
       }
+      // Non iniziare una chiamata AI se non resta abbastanza margine per
+      // ricevere la risposta, salvarla e rilasciare il claim.
+      if (deadlineReached(opts, MIN_MODEL_BUDGET_MS)) {
+        report.stoppedForDeadline = true
+        break
+      }
 
       const { data: msgs } = await supabase
         .from("messages")
@@ -321,6 +357,11 @@ export async function runTrackingForGroup(
         continue
       }
 
+      if (deadlineReached(opts, MIN_MODEL_BUDGET_MS)) {
+        report.stoppedForDeadline = true
+        break
+      }
+
       const claimed = await claimModelExtraction(supabase, config.group_id, conv.id, config.version)
       if (!claimed) {
         report.alreadyDone++
@@ -334,6 +375,7 @@ export async function runTrackingForGroup(
           groupName,
           presetLabel,
           today,
+          abortSignal: modelAbortSignal(opts),
         })
 
         const cost = costMicroUsd(out.tokensIn, out.tokensOut)
@@ -363,6 +405,10 @@ export async function runTrackingForGroup(
         await releaseModelExtraction(supabase, config.group_id, conv.id, config.version)
       }
     } catch (e) {
+      if (deadlineReached(opts) || (e instanceof Error && e.name === "TimeoutError")) {
+        report.stoppedForDeadline = true
+        break
+      }
       report.failed++
       const msg = e instanceof Error ? e.message : String(e)
       // Un solo messaggio per tipo: 3.000 volte lo stesso errore non informa.
@@ -371,54 +417,63 @@ export async function runTrackingForGroup(
   }
 
   // --- Chiamate: solo metadati, nessun contenuto ---
-  const calls = await listScopedCalls(supabase, config.property_id, sources, {
-    since: opts.since,
-    limit: opts.limit ?? 500,
-  })
-  for (const call of calls) {
-    try {
-      if (done.calls.has(call.id)) {
-        report.alreadyDone++
-        continue
+  if (!report.stoppedForDeadline && !deadlineReached(opts)) {
+    const calls = await listScopedCalls(supabase, config.property_id, sources, {
+      since: opts.since,
+      limit: opts.limit ?? 500,
+    })
+    for (const call of calls) {
+      if (deadlineReached(opts)) {
+        report.stoppedForDeadline = true
+        break
       }
-      // Una "passata a vuoto" che scrive nel database non è a vuoto. Prima
-      // questo ciclo ignorava dryRun e inseriva 40 righe di chiamate: la prova
-      // successiva le trovava già fatte e sembrava tutto normale.
-      if (opts.dryRun) {
-        report.calls++
-        continue
+      try {
+        if (done.calls.has(call.id)) {
+          report.alreadyDone++
+          continue
+        }
+        // Una "passata a vuoto" che scrive nel database non è a vuoto. Prima
+        // questo ciclo ignorava dryRun e inseriva 40 righe di chiamate: la prova
+        // successiva le trovava già fatte e sembrava tutto normale.
+        if (opts.dryRun) {
+          report.calls++
+          continue
+        }
+        const day = call.started_at ? String(call.started_at).slice(0, 10) : null
+        const res = await saveExtraction(supabase, {
+          property_id: config.property_id,
+          group_id: config.group_id,
+          phone_call_id: call.id,
+          config_version: config.version,
+          channel: "phone",
+          kind: "chiamata",
+          reference_date: day,
+          payload: {
+            direzione: call.direction,
+            stato: call.status,
+            durata_secondi: call.duration_seconds,
+            // Dichiarato, non simulato: 3CX non ci passa l'audio, quindi non
+            // esiste trascrizione da analizzare.
+            contenuto: "non_disponibile",
+          },
+          confidence: 1,
+          method: "metadati",
+        })
+        if (res === "already") report.alreadyDone++
+        else report.calls++
+      } catch (e) {
+        report.failed++
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!report.errors.includes(msg)) report.errors.push(msg)
       }
-      const day = call.started_at ? String(call.started_at).slice(0, 10) : null
-      const res = await saveExtraction(supabase, {
-        property_id: config.property_id,
-        group_id: config.group_id,
-        phone_call_id: call.id,
-        config_version: config.version,
-        channel: "phone",
-        kind: "chiamata",
-        reference_date: day,
-        payload: {
-          direzione: call.direction,
-          stato: call.status,
-          durata_secondi: call.duration_seconds,
-          // Dichiarato, non simulato: 3CX non ci passa l'audio, quindi non
-          // esiste trascrizione da analizzare.
-          contenuto: "non_disponibile",
-        },
-        confidence: 1,
-        method: "metadati",
-      })
-      if (res === "already") report.alreadyDone++
-      else report.calls++
-    } catch (e) {
-      report.failed++
-      const msg = e instanceof Error ? e.message : String(e)
-      if (!report.errors.includes(msg)) report.errors.push(msg)
     }
+  } else if (deadlineReached(opts)) {
+    report.stoppedForDeadline = true
   }
 
-  // Nemmeno la data dell'ultima passata: a vuoto non è successo niente.
-  if (!opts.dryRun) {
+  // Una passata fermata per deadline è intenzionalmente incompleta: non va
+  // marcata come eseguita, così l'ordinamento del cron la riprende al giro dopo.
+  if (!opts.dryRun && !report.stoppedForDeadline) {
     await supabase
       .from("group_tracking_configs")
       .update({ last_run_at: new Date().toISOString() })
