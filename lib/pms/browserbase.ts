@@ -36,6 +36,24 @@ export class BrowserbaseApiError extends Error {
   }
 }
 
+/**
+ * Gli errori di capacità/quota sono transitori dal punto di vista del tenant:
+ * non indicano una configurazione PMS errata e non vanno presentati come 502
+ * generici. Il match resta confinato nell'adapter del provider, così la route
+ * non dipende dal testo Browserbase e può esporre un codice applicativo stabile.
+ */
+export function isBrowserbaseCapacityError(error: unknown): boolean {
+  if (!(error instanceof BrowserbaseApiError)) return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes("browser minutes") ||
+    message.includes("minutes limit") ||
+    message.includes("minutes have been exhausted") ||
+    message.includes("quota") ||
+    message.includes("capacity")
+  )
+}
+
 function configurazione() {
   const apiKey = process.env.BROWSERBASE_API_KEY?.trim()
   const projectId = process.env.BROWSERBASE_PROJECT_ID?.trim()
