@@ -8,6 +8,13 @@
  *   - manubot_password: password account Manubot
  *   - manubot_supabase_url: URL Supabase di Manubot (per il login JWT)
  *   - manubot_company_id: UUID company su Manubot
+ *
+ * IMPORTANTE: il JWT identifica l'account tecnico, mentre la company da usare
+ * per la singola property viene inviata separatamente con
+ * `X-ManuBot-Company-Id`. ManuBot valida lo scope server-side e tratta
+ * l'account super_admin come tenant-scoped solo per quella richiesta. In questo
+ * modo non tocchiamo `profiles.company_id` / `active_company_id` e non esiste
+ * stato globale condiviso tra richieste concorrenti di tenant diversi.
  */
 
 import { decryptManubotPassword } from "@/lib/manubot/credential-secrets"
@@ -104,9 +111,11 @@ export const MANUBOT_TO_HA_PRIORITY: Record<string, string> = {
 export class ManubotClient {
   private accessToken: string | null = null
   private supabaseUrl: string
+  private companyId: string | null
 
-  constructor(supabaseUrl?: string) {
+  constructor(supabaseUrl?: string, companyId?: string | null) {
     this.supabaseUrl = supabaseUrl || requireEnv("MANUBOT_SUPABASE_URL")
+    this.companyId = companyId?.trim() || null
   }
 
   private get baseUrl(): string {
@@ -144,9 +153,13 @@ export class ManubotClient {
 
   private authHeaders() {
     if (!this.accessToken) throw new Error("Non autenticato su Manubot")
+    if (!this.companyId) {
+      throw new Error("Configurazione Manubot tenant incompleta: manubot_company_id mancante")
+    }
     return {
       "Content-Type": "application/json",
       Authorization: `Bearer ${this.accessToken}`,
+      "X-ManuBot-Company-Id": this.companyId,
     }
   }
 
@@ -204,7 +217,9 @@ export class ManubotClient {
     })
     if (!res.ok) throw await upstreamErrorFromResponse("team", "/team", res)
     const data = await res.json()
-    return Array.isArray(data) ? data : data.team || []
+    // ManuBot oggi restituisce `members`; `team` resta accettato per
+    // compatibilità con eventuali deploy precedenti.
+    return Array.isArray(data) ? data : data.members || data.team || []
   }
 
   /**
@@ -228,6 +243,7 @@ export async function getManubotClient(property: {
   manubot_email?: string | null
   manubot_password?: string | null
   manubot_supabase_url?: string | null
+  manubot_company_id?: string | null
 }): Promise<ManubotClient> {
   // DUAL-READ: `manubot_password` può essere salvata in chiaro (legacy) o
   // cifrata `enc:v1:`. La decifriamo qui, in un unico punto centrale, così
@@ -240,6 +256,10 @@ export async function getManubotClient(property: {
   // errore controllato.
   const email    = property.manubot_email || requireEnv("MANUBOT_DEFAULT_EMAIL")
   const password = decryptedPassword      || requireEnv("MANUBOT_DEFAULT_PASSWORD")
+  const companyId = property.manubot_company_id?.trim() || null
+  if (!companyId) {
+    throw new Error("Configurazione Manubot tenant incompleta: manubot_company_id mancante")
+  }
 
   // GUARD PROD/DEV (Step B1): risolvi la URL effettiva (property o env) e
   // validala PRIMA di creare il client e fare il login. In Production una URL
@@ -248,7 +268,7 @@ export async function getManubotClient(property: {
   const resolvedSupabaseUrl = property.manubot_supabase_url || process.env.MANUBOT_SUPABASE_URL
   validateManubotSupabaseUrlForEnvironment(resolvedSupabaseUrl)
 
-  const client = new ManubotClient(property.manubot_supabase_url || undefined)
+  const client = new ManubotClient(property.manubot_supabase_url || undefined, companyId)
   try {
     await client.login(email, password)
     return client
