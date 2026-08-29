@@ -11,7 +11,7 @@
  * sopra senza fare parsing di stringhe:
  *  - auth_failed            login a ManuBot rifiutato (credenziali non valide)
  *  - tenant_not_configured  configurazione della property assente/incoerente
- *                           (es. URL Supabase non ammessa per l'ambiente)
+ *                           (es. URL Supabase o company mapping non validi)
  *  - env_missing            variabile ambiente obbligatoria non impostata
  *  - network_error          ManuBot non raggiungibile o risposta non valida
  *  - permission_error       autenticati ma senza permessi sulla risorsa
@@ -69,6 +69,13 @@ export function categorizeManubotError(error: unknown): ManubotErrorCategory {
 
   const raw = error instanceof Error ? error.message : String(error ?? "")
   const msg = raw.toLowerCase()
+
+  // Configurazione tenant incompleta: il mapping `manubot_company_id` e' parte
+  // del confine di sicurezza S2S, non una env globale. Va quindi mostrato come
+  // tenant non configurato invece che come errore interno generico.
+  if (msg.includes("configurazione manubot tenant incompleta")) {
+    return "tenant_not_configured"
+  }
 
   // Env mancante: `requireEnv` in lib/manubot.ts lancia questo testo.
   if (msg.includes("variabile ambiente") || msg.includes("configurazione manubot mancante")) {
