@@ -9,9 +9,12 @@
  * arrivano SEMPRE dalla riga `properties`, mai dalle env.
  *
  * GARANZIE:
- *  - Nessun fallback su env globali: se la property non ha `manubot_email` e
- *    `manubot_password`, si risponde `tenant_not_configured` e non si effettua
- *    alcuna chiamata a ManuBot.
+ *  - Nessun fallback su env globali: se la property non ha `manubot_email`,
+ *    `manubot_password` o `manubot_company_id`, si risponde
+ *    `tenant_not_configured` e non si effettua alcuna chiamata a ManuBot.
+ *  - `manubot_company_id` e' lo scope server-to-server inviato a ManuBot con
+ *    `X-ManuBot-Company-Id`; non viene scritto nel profilo ManuBot e quindi non
+ *    crea stato globale condiviso tra tenant.
  *  - Tenant isolation: un tenant admin può risolvere solo la propria property;
  *    solo un super admin può indicarne un'altra.
  *  - Un super admin senza tenant attivo riceve `property_required` (nessun
@@ -77,12 +80,14 @@ export async function loadManubotPropertyForCaller(
 
   const property = data as ManubotPropertyCredentials
 
-  // NESSUN FALLBACK ENV: entrambe le credenziali devono stare sulla property.
-  // Senza questo controllo `getManubotClient` userebbe le env di default,
-  // riaprendo il leak cross-tenant.
+  // NESSUN FALLBACK ENV: credenziali e mapping tenant devono stare sulla
+  // property. Senza company id l'account tecnico super_admin non avrebbe uno
+  // scope per-request e le API ManuBot potrebbero negare l'accesso o, sulle
+  // route che consentono la vista globale, leggere aziende diverse.
   const hasEmail = Boolean(property.manubot_email && property.manubot_email.trim())
   const hasPassword = Boolean(property.manubot_password && property.manubot_password.trim())
-  if (!hasEmail || !hasPassword) {
+  const hasCompanyId = Boolean(property.manubot_company_id && property.manubot_company_id.trim())
+  if (!hasEmail || !hasPassword || !hasCompanyId) {
     return {
       ok: false,
       status: 400,
