@@ -19,12 +19,6 @@ begin
        where m.key = 'manubot'
          and m.is_available = true
      )
-     and not exists (
-       select 1
-       from public.tenant_modules as tm
-       where tm.property_id = new.id
-         and tm.module_key = 'manubot'
-     )
   then
     insert into public.tenant_modules (
       property_id,
@@ -41,7 +35,8 @@ begin
       null,
       now(),
       null
-    );
+    )
+    on conflict (property_id, module_key) do nothing;
   end if;
 
   return new;
@@ -90,9 +85,4 @@ where nullif(btrim(p.manubot_company_id), '') is not null
     where m.key = 'manubot'
       and m.is_available = true
   )
-  and not exists (
-    select 1
-    from public.tenant_modules as tm
-    where tm.property_id = p.id
-      and tm.module_key = 'manubot'
-  );
+on conflict (property_id, module_key) do nothing;
