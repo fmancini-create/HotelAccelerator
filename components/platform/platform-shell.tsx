@@ -3,6 +3,7 @@
  *
  * Struttura comune a tutte le pagine interne (admin):
  *   [ PlatformHeader    ]  altezza fissa: navigazione, tenant, utente
+ *   [ license row       ]  opzionale, non sovrapposta all'header
  *   [ <main>            ]  flex-1, gestisce il proprio scorrimento
  *       ...contenuto
  *       [ PlatformFooter ] footer completo, SCORRE COL CONTENUTO
@@ -31,12 +32,13 @@ import { PlatformFooter, PlatformFooterBar } from "@/components/platform/platfor
 
 export function PlatformShell({ children }: { children: React.ReactNode }) {
   return (
-    // `bg-muted/40` rather than a literal #f9fafb: same near-white page
-    // surface as Santaddeo's shell, but expressed as a token so it follows the
-    // theme instead of drifting from it.
     <div data-platform-shell className="h-[100dvh] flex flex-col bg-muted/40 overflow-hidden">
       <PlatformHeader />
-      <CustomerLicenseBadge />
+      <div className="flex-shrink-0 border-b border-border bg-white px-3 py-1 sm:px-4">
+        <div className="flex justify-end">
+          <CustomerLicenseBadge />
+        </div>
+      </div>
       <main className="flex-1 min-h-0 overflow-auto bg-white">
         {children}
         <PlatformFooter />
