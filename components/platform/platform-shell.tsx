@@ -26,7 +26,6 @@
 
 import type React from "react"
 import { PlatformHeader } from "@/components/platform/platform-header"
-import { CustomerLicenseBadge } from "@/components/platform/customer-license-badge"
 import { PlatformFooter, PlatformFooterBar } from "@/components/platform/platform-footer"
 
 export function PlatformShell({ children }: { children: React.ReactNode }) {
@@ -36,7 +35,6 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
     // theme instead of drifting from it.
     <div data-platform-shell className="h-[100dvh] flex flex-col bg-muted/40 overflow-hidden">
       <PlatformHeader />
-      <CustomerLicenseBadge />
       <main className="flex-1 min-h-0 overflow-auto bg-white">
         {children}
         <PlatformFooter />
