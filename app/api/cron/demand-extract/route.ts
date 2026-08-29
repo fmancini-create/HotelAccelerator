@@ -25,9 +25,17 @@ import { rebuildDemandCalendar } from "@/lib/demand/aggregate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const maxDuration = 60
+// Il vecchio limite di 60s coincideva con il timeout osservato in produzione.
+// Aumentarlo da solo non basta: l'estrazione riceve una deadline interna molto
+// più breve, lasciando una finestra separata al calendario materializzato.
+export const maxDuration = 120
 
-const BUDGET_MS = 50_000
+/** Entro questo punto devono fermarsi le chiamate AI e i cicli di estrazione. */
+const EXTRACTION_BUDGET_MS = 55_000
+/** Margine finale per serializzare la risposta e chiudere la funzione. */
+const HARD_BUDGET_MS = 110_000
+/** Non iniziare un rebuild se restano meno di 15 secondi. */
+const MIN_CALENDAR_BUDGET_MS = 15_000
 /** Conversazioni per gruppo in un giro. */
 const PER_GROUP = 40
 /** Tetto di spesa per giro: 50 centesimi. */
@@ -42,11 +50,6 @@ export async function GET(request: NextRequest) {
   // risponde 401 senza segreto e 200 con quello giusto), ma la chiusura resta
   // perche' il giorno in cui la variabile venisse rimossa la rotta deve
   // fermarsi, non spalancarsi.
-  //
-  // Quindi: senza segreto si passa solo in sviluppo locale, dove la rotta non
-  // e' raggiungibile da fuori. In produzione senza segreto si risponde 401 e il
-  // motivo e' scritto nella risposta, cosi' il guasto si legge subito invece di
-  // sembrare un cron che "non trova lavoro".
   const cronSecret = process.env.CRON_SECRET
   const host = (request.headers.get("host") || "").split(":")[0].trim().toLowerCase()
   const isLocalDev =
@@ -65,10 +68,10 @@ export async function GET(request: NextRequest) {
   }
 
   const startedAt = Date.now()
+  const extractionDeadlineAt = startedAt + EXTRACTION_BUDGET_MS
+  const hardDeadlineAt = startedAt + HARD_BUDGET_MS
   const supabase = createServiceClient()
 
-  // Solo le configurazioni accese. La colonna e' `is_enabled`: verificata sulla
-  // tabella, non dedotta dal nome piu' probabile.
   const { data: configs, error } = await supabase
     .from("group_tracking_configs")
     .select("*")
@@ -86,8 +89,8 @@ export async function GET(request: NextRequest) {
   let stopReason: string | null = null
 
   for (const raw of configs ?? []) {
-    if (Date.now() - startedAt >= BUDGET_MS) {
-      stopReason = "tempo esaurito"
+    if (Date.now() >= extractionDeadlineAt) {
+      stopReason = "tempo estrazione esaurito"
       break
     }
     if (spentMicroUsd >= COST_CAP_MICRO_USD) {
@@ -97,25 +100,23 @@ export async function GET(request: NextRequest) {
 
     const config = raw as unknown as TrackingConfigRow
 
-    // Il nome serve solo alle istruzioni del modello: se manca si continua,
-    // perche' un nome assente non e' una ragione per non estrarre.
     const { data: group } = await supabase
       .from("user_groups")
       .select("name")
       .eq("id", config.group_id)
       .maybeSingle()
 
+    if (Date.now() >= extractionDeadlineAt) {
+      stopReason = "tempo estrazione esaurito"
+      break
+    }
+
     try {
       const report = await runTrackingForGroup(supabase, config, group?.name ?? "gruppo", {
         limit: PER_GROUP,
+        deadlineAt: extractionDeadlineAt,
       })
       spentMicroUsd += report.costMicroUsd
-      // Si segna la struttura solo se qualcosa e' stato scritto. Segnarla sempre
-      // avrebbe ricostruito il calendario a ogni giro anche quando tutte le
-      // conversazioni erano gia' state lette: lavoro inutile ogni ora, e con
-      // molte strutture il giro sarebbe finito per il tempo invece che per il
-      // lavoro svolto. Le chiamate contano quanto le richieste, perche' anche
-      // loro finiscono nel calendario.
       if (report.withDemand > 0 || report.calls > 0) touchedProperties.add(config.property_id)
       reports.push({
         gruppo: config.group_id,
@@ -126,21 +127,34 @@ export async function GET(request: NextRequest) {
         conDomanda: report.withDemand,
         chiamate: report.calls,
         falliti: report.failed,
+        interrottoPerTempo: report.stoppedForDeadline,
         costoUsd: Number((report.costMicroUsd / 1e6).toFixed(4)),
       })
+
+      if (report.stoppedForDeadline) {
+        stopReason = "tempo estrazione esaurito"
+        break
+      }
     } catch (err) {
-      // Un gruppo che fallisce non deve fermare gli altri: la sua
-      // configurazione puo' essere rotta mentre le altre funzionano.
       const message = err instanceof Error ? err.message : String(err)
       console.error("[v0][demand-extract] gruppo", config.group_id, "fallito:", message)
       reports.push({ gruppo: config.group_id, errore: message })
     }
   }
 
-  // Il calendario si ricostruisce DOPO le estrazioni, una volta per struttura:
-  // ricostruirlo dentro il ciclo rifarebbe lo stesso lavoro a ogni gruppo.
+  // Il calendario si ricostruisce DOPO le estrazioni, una volta per struttura.
+  // Il margine è separato da quello AI: così una risposta lenta del modello non
+  // porta la funzione a morire proprio mentre sta materializzando i dati.
   const rebuilt: Array<Record<string, unknown>> = []
   for (const propertyId of touchedProperties) {
+    const remainingMs = hardDeadlineAt - Date.now()
+    if (remainingMs < MIN_CALENDAR_BUDGET_MS) {
+      stopReason = stopReason ?? "tempo calendario insufficiente"
+      rebuilt.push({ struttura: propertyId, rinviato: true, motivo: "budget temporale insufficiente" })
+      console.warn("[v0][demand-extract] calendario rinviato per budget", { propertyId, remainingMs })
+      break
+    }
+
     try {
       const res = await rebuildDemandCalendar(supabase, propertyId)
       rebuilt.push({ struttura: propertyId, giorni: res.days, estrazioni: res.extractions })
