@@ -25,14 +25,20 @@ async function readBody(request: NextRequest): Promise<unknown | null> {
 
 /**
  * Contratto server-to-server per Santaddeo, HotelProfitAI e ManuBot.
- * Il prodotto si autentica con la propria chiave, invia solo il suo tenant ID
- * interno e riceve il solo codice da stampare: mai l'ID Core o dati del cliente.
+ * Il prodotto si autentica con identita' OIDC Vercel di progetto in
+ * produzione, oppure con la chiave statica per-product come fallback di
+ * recovery/sviluppo. Invia solo il proprio tenant ID e riceve il solo codice
+ * da stampare: mai l'ID Core o dati del cliente.
  */
 export async function POST(request: NextRequest) {
   const product = getSuiteProduct(request.headers.get("x-4bid-product"))
   if (!product) return NextResponse.json({ error: "invalid_product" }, { status: 400, headers: NO_STORE })
 
-  const auth = authenticateRegistryClient(product.key, request.headers.get("x-4bid-registry-key"))
+  const auth = await authenticateRegistryClient(
+    product.key,
+    request.headers.get("x-4bid-registry-key"),
+    request.headers.get("authorization"),
+  )
   if (!auth.configured) {
     return NextResponse.json({ error: "registry_not_configured" }, { status: 503, headers: NO_STORE })
   }
@@ -59,6 +65,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("[customer-code-registry] resolution failed", {
       product: product.key,
+      auth_method: auth.method,
       error: error instanceof Error ? error.message : "unknown",
     })
     return NextResponse.json({ error: "internal_error" }, { status: 502, headers: NO_STORE })
