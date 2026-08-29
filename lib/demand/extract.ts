@@ -98,6 +98,8 @@ export interface ExtractionInput {
   presetLabel: string
   /** Oggi, per risolvere "il prossimo weekend" in una data vera. */
   today: string
+  /** Permette al cron di interrompere una chiamata modello prima del timeout Vercel. */
+  abortSignal?: AbortSignal
 }
 
 export interface ExtractionOutput {
@@ -125,6 +127,7 @@ export async function extractWithModel(input: ExtractionInput): Promise<Extracti
     schema,
     system,
     prompt: `Oggetto: ${input.subject ?? "(nessun oggetto)"}\n\nConversazione:\n${input.transcript}`,
+    abortSignal: input.abortSignal,
   })
 
   return {
