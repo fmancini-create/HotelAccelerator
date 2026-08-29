@@ -7,29 +7,18 @@ import { loadTelephonyRow, inboundSecretOf } from "@/lib/telephony/config"
 /**
  * Genera il file di template CRM da caricare in 3CX.
  *
- * PERCHE' ESISTE: la rotta `inbound-urls` consegnava due indirizzi "da
- * incollare nel template CRM", ma nella console di 3CX NON c'e' alcun campo in
- * cui incollare un URL. La pagina Integrazioni -> CRM offre solo: scelta della
- * soluzione, "Aggiungi template" (che carica un file XML), e i parametri
- * dichiarati DENTRO quel file. Gli indirizzi vivono nell'XML: senza il file,
- * quei due URL non erano utilizzabili in nessun punto della console.
- *
- * PERCHE' CONVIENE: questa strada NON richiede il ruolo Proprietario del
- * sistema ne' l'applicazione API (Call Control). Riconoscimento del chiamante e
- * registro chiamate funzionano con il solo template, che un Amministratore puo'
- * caricare. Resta al Call Control la sola chiamata in uscita dal CRM.
- *
- * Struttura ricalcata sul template Scidoo gia' funzionante su questo
- * centralino: stessi attributi, stesso schema di autenticazione Basic, stessi
- * percorsi `contact.*`. Non e' inventata.
+ * Il ReportCall e' anche il canale ufficiale con cui 3CX puo' consegnare al CRM
+ * trascrizione, riepilogo, sentiment e URL della registrazione. Per questo il
+ * template dichiara SupportsTranscription=true e inoltra i relativi placeholder
+ * quando 3CX li rende disponibili. Le chiamate non trascritte continuano a
+ * essere registrate normalmente con campi vuoti.
  */
-
 function xmlEscape(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(/\"/g, "&quot;")
     .replace(/'/g, "&apos;")
 }
 
@@ -47,19 +36,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Host della richiesta, non NEXT_PUBLIC_APP_URL: su un dominio con redirect
-    // verso www un indirizzo salvato sull'host sbagliato porterebbe 3CX a
-    // seguire un 307, che il centralino non gestisce, e le chiamate non
-    // arriverebbero mai. Stessa insidia gia' vista con il webhook di Telegram.
     const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host")
     const proto = request.headers.get("x-forwarded-proto") || "https"
     const base = forwardedHost ? `${proto}://${forwardedHost}` : process.env.NEXT_PUBLIC_APP_URL || ""
     const root = base.replace(/\/+$/, "")
 
-    // Il segreto NON viene scritto nel file: viaggia come utente dell'intestazione
-    // Basic, presa dal campo "API Key" che l'operatore compila nella console. Il
-    // file resta quindi condivisibile (per esempio con il partner del centralino)
-    // senza consegnare le credenziali.
     const lookupUrl = `${root}/api/telephony/3cx/lookup?property=${encodeURIComponent(propertyId)}&number=[Number]`
     const journalUrl = `${root}/api/telephony/3cx/journal?property=${encodeURIComponent(propertyId)}`
 
@@ -93,15 +74,11 @@ export async function GET(request: NextRequest) {
       .map(([type, value]) => `        <Output Type="${type}" Passes="0" Value="${xmlEscape(value)}" />`)
       .join("\n")
 
-    // NON reintrodurre `[CallEstablishedTimeUTC]` (l'istante di risposta) fra i
-    // valori inviati a `ReportCall`: la documentazione 3CX avverte che esiste
-    // solo per le chiamate a cui qualcuno ha risposto, quindi senza una
-    // condizione fa fallire l'invio proprio sulle chiamate PERSE, che in hotel
-    // sono quelle da richiamare. Oltretutto il registro lo scartava comunque:
-    // `phone_calls` non ha una colonna dove metterlo. Era rischio senza
-    // beneficio.
+    // [Transcription], [Summary], [RecordingUrl] e [Sentiment] sono variabili
+    // ReportCall di 3CX. Passes=2 evita che caratteri speciali e a-capo della
+    // trascrizione rompano il JSON inviato al nostro endpoint.
     const xml = `<?xml version="1.0" encoding="utf-8"?>
-<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="IT" Name="HotelAccelerator" Version="1" SupportsEmojis="true" SupportsTranscription="false" ListPageSize="0">
+<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="IT" Name="HotelAccelerator" Version="2" SupportsEmojis="true" SupportsTranscription="true" ListPageSize="0">
   <Number Prefix="AsIs" MaxLength="" />
   <Connection MaxConcurrentRequests="16" />
   <Parameters>
@@ -141,6 +118,10 @@ ${contactOutputs}
           <Value Key="duration" If="" SkipIf="" Passes="1" Type="String">[Duration]</Value>
           <Value Key="started_at" If="" SkipIf="" Passes="2" Type="String">[[CallStartTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
           <Value Key="ended_at" If="" SkipIf="" Passes="2" Type="String">[[CallEndTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
+          <Value Key="transcription" If="" SkipIf="" Passes="2" Type="String">[Transcription]</Value>
+          <Value Key="summary" If="" SkipIf="" Passes="2" Type="String">[Summary]</Value>
+          <Value Key="recording_url" If="" SkipIf="" Passes="2" Type="String">[RecordingUrl]</Value>
+          <Value Key="sentiment" If="" SkipIf="" Passes="2" Type="String">[Sentiment]</Value>
         </PostValues>
         <QueryParams />
         <Values />
@@ -157,8 +138,6 @@ ${contactOutputs}
       headers: {
         "Content-Type": "application/xml; charset=utf-8",
         "Content-Disposition": 'attachment; filename="HotelAccelerator.pv.xml"',
-        // Il file contiene gli indirizzi degli endpoint: non deve restare nelle
-        // cache intermedie.
         "Cache-Control": "no-store",
       },
     })
