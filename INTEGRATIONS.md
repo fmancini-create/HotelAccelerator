@@ -1,6 +1,6 @@
 # HotelAccelerator — Integrations Registry
 
-Ultimo aggiornamento: 2026-08-27
+Ultimo aggiornamento: 2026-08-29
 
 ## Regola
 
@@ -18,6 +18,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Email | IMAP/SMTP | Caselle generiche | Specifica | Sicurezza credenziali e limiti provider |
 | Messaggistica | WhatsApp | Inbox e automazioni | Tenant reale | Coexistence Business App verificata in produzione sul tenant Villa I Barronci: numero reale collegato, inbound in Inbox e outbound riuscito; webhook Meta configurato con `messages`, `smb_message_echoes`, `smb_app_state_sync` e `history`. Restano monitoraggio, retry drill e runbook prima di `Production-ready` |
 | Messaggistica | Telegram | Inbox/ManuBot | Da verificare | Separare bot manutenzioni e canale ospiti |
+| Manutenzioni | ManuBot | Asset, team e interventi federati dal Core | Codice | Client Core autenticato con JWT Supabase e scope tenant esplicito `X-ManuBot-Company-Id`; ManuBot valida lo scope per-request senza mutare il profilo superadmin e le route operative riusano `effective.companyId`. Il mapping `properties.manubot_company_id` è obbligatorio e tenant-scoped. Preview dei due progetti da verificare insieme e prova reale Villa I Barronci necessaria prima di `Tenant reale`; il contratto di creazione task richiede ancora un audit end-to-end dedicato |
 | Social | Instagram/Facebook | Messaggi | Specifica | API Meta, permessi e review app |
 | VoIP | 3CX | Chiamate, attribuzione e assistenti vocali tenant-aware | Codice | CRM/call control presenti; bridge v1 e mappa IVR 4 BID persistente con scope KB e fallback espliciti. CRM e voce usano ora credenziali cifrate e revocabili distinte. Mancano applicazione della migrazione, deploy PBX, configurazione delle basi, prova tenant reale, limite distribuito e osservabilità; vedere `docs/3CX_VOICE_AI.md` |
 | OTA | Booking.com | Recensioni, messaggi, risposte, analytics | Specifica | Subordinato a Connectivity/partnership e scope API |
@@ -31,6 +32,17 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Market pricing | Rate shopper/PriceGuard | Competitor e parity | Da verificare | Origine dati, termini e qualità |
 | AI | Knowledge sync interno 4BID | Fonti vocali commerciali da documenti Markdown versionati | Codice | Endpoint HMAC, allowlist e recovery dell'indicizzatore presenti; applicare migrazione, impostare segreti GitHub/Vercel, sincronizzare HotelAccelerator e collaudare 3CX. I satelliti richiedono workflow separati, senza accesso DB cross-prodotto |
 | AI | Provider da definire | Classificazione, generazione, OCR, forecast | Specifica | Privacy, costi, eval, fallback e data retention |
+
+## ManuBot — scope tenant server-to-server
+
+- Proprietario dei dati manutentivi: ManuBot; HotelAccelerator conserva soltanto il mapping della property verso la company ManuBot e i riferimenti necessari all'integrazione.
+- Identità: il client Core ottiene un access token Supabase ManuBot con le credenziali configurate sulla property. Il token identifica l'account tecnico; non decide da solo il tenant operativo.
+- Scope: ogni richiesta operativa invia `X-ManuBot-Company-Id` usando esclusivamente `properties.manubot_company_id`, già risolto dopo il guard tenant del Core.
+- Verifica lato ManuBot: l'header è accettato solo insieme a Bearer auth valida. Un account tenant può richiedere soltanto la propria company; un `super_admin` può essere ristretto a una company esistente. Lo scope produce un `effective.companyId` valido soltanto per la richiesta e non modifica `profiles.company_id` o `active_company_id`.
+- Conseguenza: chiamate concorrenti per strutture diverse non condividono uno stato di impersonation; `/assets`, `/tasks`, `/team` e le route task che usano `requireApiAuth` applicano lo stesso perimetro tenant.
+- Fail closed: se `manubot_company_id` manca, HotelAccelerator non chiama ManuBot e restituisce `tenant_not_configured`; non esiste fallback sull'account globale.
+- Evidenza 2026-08-29: sul database ManuBot la company mappata per Villa I Barronci contiene asset reali; il 403 osservato derivava dall'account tecnico `super_admin` senza company effettiva. Il contratto per-request elimina quella dipendenza senza modifiche dati o RLS.
+- Limite residuo: il flusso di creazione/aggiornamento task deve essere collaudato end-to-end contro il contratto corrente ManuBot prima di promuovere l'integrazione oltre `Codice`.
 
 ## WhatsApp Business App Coexistence (4BID)
 
