@@ -13,7 +13,6 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
   FileText,
   PhoneIncoming,
   PhoneMissed,
@@ -317,9 +316,19 @@ export default function CallsPage() {
                           )}
 
                           {c.recording_url && (
-                            <a href={c.recording_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-medium underline underline-offset-4">
-                              Ascolta registrazione <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                            </a>
+                            <div className="mt-3 max-w-3xl">
+                              <p className="mb-1 text-xs font-medium text-foreground">Ascolta registrazione</p>
+                              <audio
+                                controls
+                                controlsList="nodownload"
+                                preload="metadata"
+                                src={c.recording_url}
+                                className="h-10 w-full max-w-xl"
+                                aria-label="Riproduci la registrazione della chiamata"
+                              >
+                                Il browser non supporta la riproduzione audio.
+                              </audio>
+                            </div>
                           )}
                         </div>
 
