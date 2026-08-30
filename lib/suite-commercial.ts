@@ -97,8 +97,10 @@ export function getCrossSellOffer(
   context: SuiteCommercialContext,
   targetProduct: SuiteProduct,
 ): CrossSellOffer {
+  const targetAlreadyOwned = context.customerProducts.has(targetProduct)
   const sourceProducts = [...context.customerProducts].filter((product) => product !== targetProduct)
   const eligible =
+    !targetAlreadyOwned &&
     context.settings.crossSellEnabled &&
     context.settings.crossSellDiscountPercent > 0 &&
     sourceProducts.length > 0
