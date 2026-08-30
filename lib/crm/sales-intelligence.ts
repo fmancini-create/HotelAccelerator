@@ -141,7 +141,7 @@ export function recommendSalesAction(contact: SalesContact, now = new Date()): S
   // La disiscrizione prevale sempre sul punteggio e su qualsiasi recapito disponibile.
   if (contact.unsubscribed) {
     reason = "Il contatto risulta disiscritto: non proporre comunicazioni marketing e verifica solo eventuali esigenze operative consentite."
-  } else if (score >= 70 && hasPhone) {
+  } else if (score >= 70 && hasPhone && consent) {
     action = "call"
     channel = "telefono"
     actionLabel = "Chiama oggi"
@@ -153,18 +153,20 @@ export function recommendSalesAction(contact: SalesContact, now = new Date()): S
     actionLabel = "Prepara un'email personale"
     reason = "Il contatto mostra interesse e ha consenso marketing: prepara un messaggio personalizzato da approvare prima dell'invio."
     canExecute = true
-  } else if (bookings > 0 && recency !== null && recency > 365 && (hasPhone || (hasEmail && consent))) {
+  } else if (bookings > 0 && recency !== null && recency > 365 && consent && (hasPhone || hasEmail)) {
     action = "relationship"
     channel = hasPhone ? "telefono" : "relazione"
     actionLabel = "Riattiva la relazione"
     reason = "È un cliente già acquisito che non soggiorna da tempo: vale la pena riaprire la relazione con un contatto mirato."
     canExecute = true
-  } else if (clicks > 0 && hasPhone) {
+  } else if (clicks > 0 && hasPhone && consent) {
     action = "call"
     channel = "telefono"
     actionLabel = "Richiama il contatto"
     reason = "Ha interagito con una comunicazione e dispone di telefono: il segnale è più forte di una semplice apertura email."
     canExecute = true
+  } else if ((hasPhone || hasEmail) && !consent) {
+    reason = "È disponibile un recapito, ma non un consenso marketing utilizzabile: verifica base giuridica e preferenze prima di contattarlo."
   } else if (!hasPhone && !hasEmail) {
     reason = "Manca un recapito utilizzabile: completa prima l'anagrafica."
   } else if (hasEmail && !consent) {
