@@ -84,6 +84,7 @@ export async function GET(request: NextRequest) {
     const options: ConversationListOptions = {
       status: (searchParams.get("status") as any) || "open",
       channel: (searchParams.get("channel") as any) || undefined,
+      subchannel_id: searchParams.get("subchannel_id") || undefined,
       limit: limite.applicato,
       offset: interoNonNegativo(searchParams.get("offset")),
       search: searchParams.get("search") || undefined,

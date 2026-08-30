@@ -183,6 +183,7 @@ interface Conversation {
     } | null
   } | null
   contact: Contact | null
+  channel_id?: string | null
   /** Sender denormalised on the conversation, for mail with no CRM contact. */
   contact_email?: string | null
   contact_name?: string | null
@@ -649,6 +650,8 @@ export default function InboxPage() {
   const [statusFilter, setStatusFilter] = useState("open")
   // Channel filter for the unified (Smart) inbox: "all" or a specific channel.
   const [channelFilter, setChannelFilter] = useState<"all" | "email" | "whatsapp" | "telegram" | "chat">("all")
+  const [subchannelFilter, setSubchannelFilter] = useState("all")
+  const [subchannels, setSubchannels] = useState<Array<{ id: string; channel: string; label: string; detail?: string | null }>>([])
   const [smartDebugInfo, setSmartDebugInfo] = useState<SmartDebugInfo | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [lastSyncStatus, setLastSyncStatus] = useState<string | null>(null)
@@ -1287,6 +1290,28 @@ export default function InboxPage() {
     }
   }, [authLoading, adminUser?.id])
 
+  useEffect(() => {
+    if (authLoading || !adminUser || inboxMode !== "smart") return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/inbox/subchannels", { credentials: "include" })
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) setSubchannels(data.subchannels || [])
+      } catch (error) {
+        console.error("Error loading Inbox subchannels:", error)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authLoading, adminUser, inboxMode])
+
+  useEffect(() => {
+    if (subchannelFilter === "all") return
+    const selected = subchannels.find((item) => item.id === subchannelFilter)
+    if (!selected || (channelFilter !== "all" && selected.channel !== channelFilter)) setSubchannelFilter("all")
+  }, [channelFilter, subchannelFilter, subchannels])
+
   // Load Gmail data when mode changes to gmail
   useEffect(() => {
     if (inboxMode === "gmail" && !authLoading && adminUser) {
@@ -1443,13 +1468,14 @@ export default function InboxPage() {
       if (statusFilter) queryParams.set("status", statusFilter)
       // Unified inbox: only constrain by channel when a specific one is selected.
       if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
+      if (subchannelFilter !== "all") queryParams.set("subchannel_id", subchannelFilter)
       queryParams.set("mode", "smart")
       // Cambiare vista riparte dalle prime 50: la profondita' raggiunta vale per
       // l'elenco che si stava scorrendo, non per un filtro diverso, altrimenti
       // aprire "Archiviate" scaricherebbe 1.000 righe senza che nessuno le abbia
       // chieste. Il confronto sta qui, in un punto solo: farlo in un effetto a
       // parte significherebbe dipendere dall'ordine di esecuzione degli effetti.
-      const contesto = JSON.stringify([statusFilter, searchQuery, inboxSort, channelFilter])
+      const contesto = JSON.stringify([statusFilter, searchQuery, inboxSort, channelFilter, subchannelFilter])
       if (contestoElencoRef.current !== contesto) {
         contestoElencoRef.current = contesto
         limiteElencoRef.current = LIMITE_INIZIALE
@@ -1499,7 +1525,7 @@ export default function InboxPage() {
       conversationsLoadInFlightRef.current = false
       setIsLoading(false)
     }
-  }, [statusFilter, searchQuery, inboxSort, channelFilter])
+  }, [statusFilter, searchQuery, inboxSort, channelFilter, subchannelFilter])
 
   const caricaAltreConversazioni = useCallback(async () => {
     if (caricandoAltre) return
@@ -3025,6 +3051,46 @@ export default function InboxPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+
+            {inboxMode === "smart" && (() => {
+              const visibleSubchannels = channelFilter === "all"
+                ? subchannels
+                : subchannels.filter((item) => item.channel === channelFilter)
+              const selected = subchannels.find((item) => item.id === subchannelFilter)
+              if (visibleSubchannels.length === 0) return null
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 max-w-[240px] text-[13px] text-[#5f6368] font-normal gap-1 ml-1"
+                      title="Filtra per account del canale"
+                      aria-label="Filtra per account del canale"
+                    >
+                      <Mail className="h-4 w-4 shrink-0" />
+                      <span className="hidden max-w-[180px] truncate sm:inline">{selected?.label || "Tutti gli account"}</span>
+                      <ChevronDown className="h-3 w-3 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    <DropdownMenuItem onClick={() => setSubchannelFilter("all")}>
+                      <Inbox className="mr-2 h-4 w-4" /> Tutti gli account
+                      {subchannelFilter === "all" && <span className="ml-auto text-[#0b57d0]">&#10003;</span>}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {visibleSubchannels.map((item) => (
+                      <DropdownMenuItem key={item.id} onClick={() => { setChannelFilter(item.channel as typeof channelFilter); setSubchannelFilter(item.id) }}>
+                        <Mail className="mr-2 h-4 w-4" />
+                        <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        {item.detail && item.detail !== item.label ? <span className="ml-2 max-w-24 truncate text-xs text-muted-foreground">{item.detail}</span> : null}
+                        {subchannelFilter === item.id && <span className="ml-2 text-[#0b57d0]">&#10003;</span>}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )
+            })()}
 
             {/* Bulk actions: always present in the bar, enabled when >=1 selected.
                 Works in both Gmail mode and unified (smart) mode, for "Tutti i

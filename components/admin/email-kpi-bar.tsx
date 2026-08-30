@@ -1,18 +1,21 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Mail, Clock } from "lucide-react"
+import { Clock, Mail, MessageSquareText, Send } from "lucide-react"
 
 interface EmailKpi {
   unread_count: number | null
-  read_unreplied_count: number | null
-  overdue_count: number | null
-  avg_response_time_minutes: number | null
-  overdue_threshold_minutes: number | null
   metrics_status: "gmail_state_ready" | "reconciling" | "stale"
-  reconcile_never?: number
-  reconcile_stale?: number
   reconcile_age_minutes?: number | null
+}
+
+interface OperatorKpi {
+  enabled: boolean | null
+  days: number
+  responses: number | null
+  conversations: number | null
+  medianResponseSeconds: number | null
+  measuredResponses: number
 }
 
 function formatRitardo(minuti: number): string {
@@ -22,122 +25,95 @@ function formatRitardo(minuti: number): string {
   return `${Math.round(ore / 24)} giorni fa`
 }
 
+function formatDuration(seconds: number | null): string {
+  if (seconds === null) return "—"
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  const hours = minutes / 60
+  return `${hours < 10 ? hours.toFixed(1) : Math.round(hours)} h`
+}
+
 export function EmailKpiBar() {
-  const [kpi, setKpi] = useState<EmailKpi | null>(null)
+  const [emailKpi, setEmailKpi] = useState<EmailKpi | null>(null)
+  const [operatorKpi, setOperatorKpi] = useState<OperatorKpi | null>(null)
   const [loading, setLoading] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
   const [guastoServer, setGuastoServer] = useState(false)
 
   useEffect(() => {
-    let annullato = false
+    let cancelled = false
     let interval: ReturnType<typeof setInterval> | undefined
-    let cicliDaSaltare = 0
-    let fallimentiConsecutivi = 0
-    const MAX_CICLI_SALTATI = 9
-
-    const registraFallimento = () => {
-      fallimentiConsecutivi += 1
-      cicliDaSaltare = Math.min(2 ** (fallimentiConsecutivi - 1), MAX_CICLI_SALTATI)
-      if (!annullato) setGuastoServer(true)
-    }
 
     const fetchKpi = async () => {
-      if (cicliDaSaltare > 0) {
-        cicliDaSaltare -= 1
-        return
-      }
-
       try {
-        const res = await fetch("/api/kpi/email", { credentials: "include" })
-        if (annullato) return
-
-        if (res.status === 401 || res.status === 403) {
+        const [emailRes, operatorRes] = await Promise.all([
+          fetch("/api/kpi/email", { credentials: "include" }),
+          fetch("/api/kpi/operator-self", { credentials: "include" }),
+        ])
+        if (cancelled) return
+        if ([emailRes.status, operatorRes.status].some((status) => status === 401 || status === 403)) {
           setSessionExpired(true)
           if (interval) clearInterval(interval)
           return
         }
-
-        if (res.ok) {
-          setKpi(await res.json())
-          fallimentiConsecutivi = 0
-          cicliDaSaltare = 0
-          setGuastoServer(false)
-        } else {
-          registraFallimento()
+        if (!emailRes.ok || !operatorRes.ok) {
+          setGuastoServer(true)
+          return
         }
+        setEmailKpi(await emailRes.json())
+        setOperatorKpi(await operatorRes.json())
+        setGuastoServer(false)
       } catch (error) {
-        if (!annullato) {
-          console.error("Errore caricamento KPI:", error)
-          registraFallimento()
-        }
+        console.error("Errore caricamento KPI Inbox:", error)
+        if (!cancelled) setGuastoServer(true)
       } finally {
-        if (!annullato) setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
-    fetchKpi()
+    void fetchKpi()
     interval = setInterval(fetchKpi, 30000)
     return () => {
-      annullato = true
+      cancelled = true
       if (interval) clearInterval(interval)
     }
   }, [])
 
   if (sessionExpired) {
-    return (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/50 px-3 py-2 text-sm sm:px-4">
-        <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-muted-foreground">Sessione scaduta: i dati non sono aggiornati.</span>
-        <a href="/admin" className="font-medium text-ha-brand-soft-foreground underline underline-offset-2">
-          Accedi di nuovo
-        </a>
-      </div>
-    )
+    return <div className="border-b bg-muted/50 px-3 py-2 text-sm text-muted-foreground sm:px-4">Sessione scaduta: i KPI non sono aggiornati.</div>
+  }
+  if (guastoServer || (!loading && (!emailKpi || !operatorKpi))) {
+    return <div className="border-b bg-muted/50 px-3 py-2 text-sm text-muted-foreground sm:px-4">Statistiche non disponibili al momento. Riprovo automaticamente.</div>
+  }
+  if (loading || !emailKpi || !operatorKpi) {
+    return <div className="h-10 animate-pulse border-b bg-muted/50" />
   }
 
-  if (guastoServer && !kpi) {
-    return (
-      <div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm sm:px-4">
-        <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="text-muted-foreground">Statistiche non disponibili al momento. Riprovo automaticamente.</span>
-      </div>
-    )
-  }
-
-  if (loading || !kpi) {
-    return (
-      <div className="flex flex-wrap items-center gap-3 border-b bg-muted/50 px-3 py-2 animate-pulse sm:gap-4 sm:px-4">
-        <div className="h-4 w-20 rounded bg-muted sm:w-24" />
-        <div className="h-4 w-28 max-w-full rounded bg-muted sm:w-24" />
-        <div className="h-4 w-20 rounded bg-muted sm:w-24" />
-      </div>
-    )
-  }
+  const statusText = emailKpi.metrics_status === "reconciling"
+    ? "Allineamento Gmail in corso"
+    : emailKpi.metrics_status === "stale"
+      ? `Allineamento Gmail in ritardo${typeof emailKpi.reconcile_age_minutes === "number" ? ` (ultimo ${formatRitardo(emailKpi.reconcile_age_minutes)})` : ""}`
+      : null
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b bg-muted/50 px-3 py-2 text-xs sm:gap-x-6 sm:px-4 sm:text-sm">
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b bg-muted/50 px-3 py-2 text-xs sm:px-4 sm:text-sm">
       <div className="flex items-center gap-2 whitespace-nowrap">
-        <Mail className="h-4 w-4 shrink-0 text-blue-600" />
-        <span className="text-muted-foreground">Non lette:</span>
-        <span className={`font-semibold ${(kpi.unread_count || 0) > 0 ? "text-blue-600" : "text-muted-foreground"}`}>
-          {kpi.unread_count === null ? "Ricalcolo…" : kpi.unread_count}
-        </span>
+        <Mail className="h-4 w-4 text-blue-600" />
+        <span className="text-muted-foreground">Non lette</span>
+        <span className="font-semibold">{emailKpi.unread_count === null ? "Ricalcolo…" : emailKpi.unread_count}</span>
       </div>
-
-      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-        <Clock className="h-4 w-4 shrink-0" />
-        <span className="min-w-0">
-          {kpi.metrics_status === "reconciling"
-            ? "Allineamento stato Gmail in corso"
-            : kpi.metrics_status === "stale"
-              ? `Allineamento Gmail in ritardo${
-                  typeof kpi.reconcile_age_minutes === "number"
-                    ? ` (ultimo ${formatRitardo(kpi.reconcile_age_minutes)})`
-                    : ""
-                }`
-              : "KPI operatori configurabili in Team & Permessi"}
-        </span>
-      </div>
+      {operatorKpi.enabled ? (
+        <>
+          <div className="flex items-center gap-2 whitespace-nowrap"><Send className="h-4 w-4" /><span className="text-muted-foreground">Risposte</span><span className="font-semibold">{operatorKpi.responses ?? 0}</span></div>
+          <div className="flex items-center gap-2 whitespace-nowrap"><MessageSquareText className="h-4 w-4" /><span className="text-muted-foreground">Conversazioni</span><span className="font-semibold">{operatorKpi.conversations ?? 0}</span></div>
+          <div className="flex items-center gap-2 whitespace-nowrap" title={`Mediana su ${operatorKpi.measuredResponses} risposte misurabili negli ultimi ${operatorKpi.days} giorni`}><Clock className="h-4 w-4" /><span className="text-muted-foreground">Attesa mediana</span><span className="font-semibold">{formatDuration(operatorKpi.medianResponseSeconds)}</span></div>
+          <span className="text-muted-foreground">ultimi {operatorKpi.days} giorni</span>
+        </>
+      ) : (
+        <span className="text-muted-foreground">KPI operatore non attivi per questo utente</span>
+      )}
+      {statusText && <span className="text-muted-foreground">{statusText}</span>}
     </div>
   )
 }

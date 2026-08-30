@@ -175,6 +175,8 @@ export type InboxSort = "smart" | "date_desc" | "date_asc" | "sender_asc" | "sen
 export interface ConversationListOptions {
   status?: "open" | "closed" | "archived" | "all" | "starred"
   channel?: "email" | "chat" | "whatsapp" | "telegram" | "all"
+  /** Specific configured account inside the selected channel (mailbox / messaging account). */
+  subchannel_id?: string
   limit?: number
   offset?: number
   search?: string
