@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
 export const maxDuration = 30
 
 const IDLE_FLUSH_MS = 8_000
-const MAX_TRACES_PER_DRAIN = 12
+const MAX_TRACES_PER_DRAIN = 20
 
 type BrowserState = {
   active_session_id: string | null
@@ -256,7 +256,25 @@ function installaOsservatore(idleFlushMs: number) {
 }
 
 async function preparaPagina(page: Page) {
-  await page.evaluateOnNewDocument(installaOsservatore, IDLE_FLUSH_MS)
+  // `evaluateOnNewDocument` resta registrato sul target. Aggiungerlo a ogni
+  // polling farebbe crescere senza limite gli script eseguiti dopo ore di
+  // lavoro. Il marker in sessionStorage sopravvive alle navigazioni dello
+  // stesso PMS e ci permette di registrarlo una sola volta per origine/target.
+  const deveRegistrare = await page.evaluate(() => {
+    const marker = "__ha_pms_observer_future_v1"
+    try {
+      if (sessionStorage.getItem(marker) === "1") return false
+      sessionStorage.setItem(marker, "1")
+      return true
+    } catch {
+      const w = window as Window & { __haPmsObserverFutureRegistered?: boolean }
+      if (w.__haPmsObserverFutureRegistered) return false
+      w.__haPmsObserverFutureRegistered = true
+      return true
+    }
+  })
+
+  if (deveRegistrare) await page.evaluateOnNewDocument(installaOsservatore, IDLE_FLUSH_MS)
   await page.evaluate(installaOsservatore, IDLE_FLUSH_MS)
 }
 
