@@ -38,7 +38,7 @@ export const SOCIAL_PROVIDERS: Record<SocialProvider, SocialProviderDefinition> 
     id: "x",
     label: "X",
     channelType: "x",
-    description: "Menzioni sempre secondo il piano API; DM solo se il piano e gli scope dell'app li abilitano.",
+    description: "Menzioni secondo il piano API; DM solo se il piano e gli scope dell'app li abilitano.",
     capabilities: ["mentions"],
     approvalNote: "I DM vengono attivati solo se X concede dm.read/dm.write all'app e al piano API in uso.",
   },
@@ -103,5 +103,5 @@ export function oauthScopes(provider: SocialProvider): string[] {
     if (xDmRequested()) scopes.push("dm.read", "dm.write")
     return scopes
   }
-  return ["openid", "profile", "r_organization_admin", "r_organization_social", "w_organization_social"]
+  return ["openid", "profile", "rw_organization_admin", "r_organization_social", "w_organization_social"]
 }
