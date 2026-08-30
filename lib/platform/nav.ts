@@ -100,6 +100,8 @@ export interface NavEntry {
    * struttura, la voce non compare.
    */
   module?: string
+  /** Per launcher esterni: nascondi la voce finche' gli entitlement non sono noti. */
+  strictModule?: boolean
   /**
    * Chiave dell'AREA (lib/platform/areas.ts). Un membro non-admin vede la voce
    * solo se l'area gli e' stata concessa. Deve esistere in ALL_AREA_KEYS: c'e'
@@ -231,6 +233,36 @@ export const NAV_ENTRIES: NavEntry[] = [
     placement: "operative",
     icon: ListTodo,
     area: "todos",
+  },
+  {
+    id: "suite-hotelprofitai",
+    href: "/api/platform/suite-launch?product=hotelprofitai",
+    label: "Controllo di gestione",
+    description: "Apri HotelProfitAI senza un nuovo login",
+    placement: "operative",
+    icon: Coins,
+    module: "hotelprofitai",
+    strictModule: true,
+  },
+  {
+    id: "suite-santaddeo",
+    href: "/api/platform/suite-launch?product=santaddeo",
+    label: "Revenue & pricing",
+    description: "Apri Santaddeo senza un nuovo login",
+    placement: "operative",
+    icon: BarChart3,
+    module: "santaddeo",
+    strictModule: true,
+  },
+  {
+    id: "suite-manubot",
+    href: "/api/platform/suite-launch?product=manubot",
+    label: "Gestione manutenzioni",
+    description: "Apri ManuBot senza un nuovo login",
+    placement: "operative",
+    icon: ListTodo,
+    module: "manubot",
+    strictModule: true,
   },
   {
     // Consultazione quotidiana: "Sessioni live e timeline eventi".
@@ -599,7 +631,10 @@ export function visibleEntries(entries: NavEntry[], viewer: NavViewer): NavEntry
   const granted = new Set(areas ?? [])
 
   return entries.filter((entry) => {
-    // Moduli: fail-open quando il dato non c'e'.
+    // I launcher esterni sono fail-closed: non devono apparire finche' non e'
+    // stato confermato che il relativo modulo e' attivo per la struttura.
+    if (entry.strictModule && (!active || !entry.module || !active.has(entry.module))) return false
+    // Moduli normali: fail-open quando il dato non c'e'.
     if (entry.module && active && !active.has(entry.module)) return false
 
     // Piattaforma: PRIMA della scorciatoia qui sotto, e fail-closed.
