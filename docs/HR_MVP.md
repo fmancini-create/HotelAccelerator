@@ -15,7 +15,18 @@ Stato: **Codice**, non ancora collaudato su tenant reale.
 - registro presenze e revisione amministrativa;
 - archivio privato per cedolini, contratti, certificati e documenti, con URL di download temporanei;
 - scadenze documentali e audit delle operazioni sensibili;
-- RLS, controllo entitlement e associazione account per email interna al tenant.
+- RLS, controllo entitlement e associazione account per email interna al tenant;
+- provisioning automatico del dipendente predefinito: quando HR e' attivo, il primo tenant admin viene collegato a una scheda `hr_employees` senza dover essere ricreato manualmente.
+
+## Utente predefinito e scheda dipendente
+
+L'account amministratore principale della struttura deve poter usare subito `Il mio lavoro` quando il modulo HR e' attivo. La migrazione `20260830234500_auto_link_default_hr_employee.sql` applica tre garanzie idempotenti:
+
+1. backfill dei tenant HR gia' attivi;
+2. provisioning quando HR viene attivato su un tenant esistente;
+3. provisioning quando viene creato o promosso il primo tenant admin mentre HR e' gia' attivo.
+
+La selezione resta tenant-scoped e usa il tenant admin piu' anziano (`created_at`, poi `id`). I superadmin di piattaforma che selezionano temporaneamente una struttura non vengono trasformati in dipendenti. Il vincolo `UNIQUE (property_id, admin_user_id)` impedisce duplicati.
 
 ## Configurazione notifiche
 
@@ -35,4 +46,5 @@ Stato: **Codice**, non ancora collaudato su tenant reale.
 
 - La posizione viene acquisita solo quando il dipendente preme entrata/uscita; non esiste tracking continuo.
 - I documenti usano il bucket privato `hr-private`; il browser riceve soltanto URL firmati di 60 secondi dopo controllo tenant/dipendente.
-- Applicare `20260830150000_complete_hr_workforce.sql` prima del deploy. Rollback: disabilitare le nuove UI/API e conservare le tabelle; non eliminare documenti o timbrature senza procedura di retention approvata.
+- Le funzioni di provisioning automatico sono `SECURITY DEFINER`, fissano il `search_path` e non concedono `EXECUTE` a `public`, `anon` o `authenticated`; vengono invocate solo dai trigger interni.
+- Applicare `20260830150000_complete_hr_workforce.sql` e `20260830234500_auto_link_default_hr_employee.sql` prima del deploy. Rollback del provisioning: rimuovere i due trigger e le tre funzioni senza cancellare le schede dipendente gia' create; i dati HR esistenti restano conservati.
