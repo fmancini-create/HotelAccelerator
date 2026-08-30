@@ -60,8 +60,11 @@ const CHANNEL_CATEGORIES = [
   },
 ] as const
 
-const ALL_CHANNELS = CHANNEL_CATEGORIES.flatMap((category) => category.channels)
-type ChannelId = (typeof ALL_CHANNELS)[number]["id"]
+type ChannelDefinition = (typeof CHANNEL_CATEGORIES)[number]["channels"][number]
+const ALL_CHANNELS = CHANNEL_CATEGORIES.flatMap<ChannelDefinition>(
+  (category) => category.channels as readonly ChannelDefinition[],
+)
+type ChannelId = ChannelDefinition["id"]
 
 interface ChannelStatus {
   id: ChannelId
