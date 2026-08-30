@@ -9,7 +9,7 @@ import { getActiveModuleKeys } from "@/lib/modules"
 import { createServiceClient } from "@/lib/supabase/server"
 import { SUITE_SSO_CONFIG, type SuiteSsoProduct } from "@/lib/suite-sso/config"
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export interface SuiteReturnIdentity {
   product: SuiteSsoProduct
