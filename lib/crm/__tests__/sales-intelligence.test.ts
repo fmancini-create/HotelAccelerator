@@ -54,6 +54,26 @@ describe("Motore di Vendita Intelligente", () => {
     expect(result.reason.toLowerCase()).toContain("disiscritto")
   })
 
+  it("non rende eseguibile una chiamata senza consenso verificato", () => {
+    const result = recommendSalesAction(
+      {
+        id: "no-consent",
+        name: "Contatto senza consenso",
+        phone: "+390551010101",
+        lead_score: 100,
+        total_bookings: 8,
+        total_revenue_cents: 900000,
+        vip_level: "platinum",
+        marketing_consent: false,
+      },
+      NOW,
+    )
+
+    expect(result.canExecute).toBe(false)
+    expect(result.action).toBe("review")
+    expect(result.reason.toLowerCase()).toContain("consenso")
+  })
+
   it("propone riattivazione per un cliente storico inattivo", () => {
     const result = recommendSalesAction(
       {
@@ -64,6 +84,7 @@ describe("Motore di Vendita Intelligente", () => {
         total_bookings: 3,
         total_revenue_cents: 120000,
         last_booking_date: "2024-01-10T00:00:00.000Z",
+        marketing_consent: true,
       },
       NOW,
     )
