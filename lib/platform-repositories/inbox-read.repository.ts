@@ -116,7 +116,7 @@ export class InboxReadRepository {
   }
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access, ids } = options
+    const { status = "open", channel, subchannel_id, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access, ids } = options
 
     // Per-user channel access enforcement (restricted, non-admin users).
     // Build an OR filter so the user only sees conversations of their channels:
@@ -227,6 +227,21 @@ export class InboxReadRepository {
 
     if (channel && channel !== "all") {
       query = query.eq("channel", channel)
+    }
+
+    // A subchannel is a concrete configured account inside a channel. Email
+    // conversations store it in channel_id; messaging providers store it in
+    // metadata.messaging_channel_id. Never accept a browser-provided tenant id:
+    // propertyId remains the first mandatory predicate and channel access stays
+    // ANDed below, so a foreign or unassigned account returns zero rows.
+    if (subchannel_id) {
+      if (channel === "email") {
+        query = query.eq("channel_id", subchannel_id)
+      } else if (channel && ["whatsapp", "telegram"].includes(channel)) {
+        query = query.eq("metadata->>messaging_channel_id", subchannel_id)
+      } else {
+        query = query.or(`channel_id.eq.${subchannel_id},metadata->>messaging_channel_id.eq.${subchannel_id}`)
+      }
     }
 
     if (search) {
