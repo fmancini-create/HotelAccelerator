@@ -25,6 +25,8 @@ const fetcher = async (url: string) => {
   return res.json()
 }
 
+const PMS_OBSERVER_POLL_MS = 4_000
+
 /**
  * Porta il gestionale in primo piano e lascia a HotelAccelerator soltanto una
  * barra globale a scomparsa. La zona di richiamo e' un elemento della nostra
@@ -114,12 +116,51 @@ export default function PmsShadowPage() {
 
   useEffect(() => {
     if (!sessione) return
+
+    let stopped = false
+    let running = false
+
+    const raccogli = async () => {
+      if (stopped || running) return
+      running = true
+      try {
+        await fetch("/api/crm/pms-shadow/observer", {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+        })
+      } catch {
+        // L'osservatore e' best-effort e non deve mai interrompere il lavoro nel
+        // PMS. L'errore resta nei log server della route e verra' ritentato al
+        // giro successivo.
+      } finally {
+        running = false
+      }
+    }
+
+    void raccogli()
+    const timer = window.setInterval(() => void raccogli(), PMS_OBSERVER_POLL_MS)
+
     return () => {
-      void fetch("/api/crm/pms-browser-session", {
+      stopped = true
+      window.clearInterval(timer)
+
+      // Prima svuotiamo gli ultimi gesti osservati, poi rilasciamo la macchina.
+      // La catena evita la corsa in cui Browserbase viene chiuso mentre
+      // l'osservatore sta ancora leggendo la pagina.
+      void fetch("/api/crm/pms-shadow/observer", {
         method: "DELETE",
         credentials: "include",
         keepalive: true,
-      }).catch(() => undefined)
+      })
+        .catch(() => undefined)
+        .finally(() =>
+          fetch("/api/crm/pms-browser-session", {
+            method: "DELETE",
+            credentials: "include",
+            keepalive: true,
+          }).catch(() => undefined),
+        )
     }
   }, [sessione])
 
