@@ -83,6 +83,7 @@ export function oauthScopes(provider: SocialProvider): string[] {
   if (provider === "facebook") {
     return [
       "pages_show_list",
+      "pages_manage_metadata",
       "pages_read_engagement",
       "pages_read_user_content",
       "pages_manage_engagement",
@@ -92,6 +93,7 @@ export function oauthScopes(provider: SocialProvider): string[] {
   if (provider === "instagram") {
     return [
       "pages_show_list",
+      "pages_manage_metadata",
       "pages_read_engagement",
       "instagram_basic",
       "instagram_manage_comments",
