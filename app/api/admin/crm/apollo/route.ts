@@ -226,8 +226,20 @@ export async function POST(request: NextRequest) {
         })
         .select("id")
         .single()
-      if (insertError) throw insertError
-      contactId = inserted.id
+      if (insertError) {
+        if (insertError.code !== "23505") throw insertError
+        const { data: concurrent, error: concurrentError } = await supabase
+          .from("contacts")
+          .select("id")
+          .eq("property_id", propertyId)
+          .ilike("email", email)
+          .limit(1)
+          .single()
+        if (concurrentError) throw concurrentError
+        contactId = concurrent.id
+      } else {
+        contactId = inserted.id
+      }
     }
 
     const { data, error } = await supabase
