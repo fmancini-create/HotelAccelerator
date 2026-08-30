@@ -1,0 +1,183 @@
+/* Mobile-only adaptations for /admin/inbox. Scoped by the nested route layout. */
+@media (max-width: 639px) {
+  [data-inbox-mobile],
+  [data-inbox-mobile] > .h-full {
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* The Inbox header becomes two rows: navigation/actions, then full-width search. */
+  [data-inbox-mobile] > .h-full > header {
+    height: auto;
+    min-height: 6.75rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "menu brand actions"
+      "search search search";
+    align-content: center;
+    gap: 0.4rem 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  [data-inbox-mobile] > .h-full > header > button:first-child {
+    grid-area: menu;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  [data-inbox-mobile] > .h-full > header > div:nth-of-type(1) {
+    grid-area: brand;
+    overflow: hidden;
+  }
+
+  [data-inbox-mobile] > .h-full > header > div:nth-of-type(1) > svg {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  [data-inbox-mobile] > .h-full > header > div:nth-of-type(1) > span {
+    font-size: 1.25rem;
+  }
+
+  [data-inbox-mobile] > .h-full > header > div:nth-of-type(2) {
+    grid-area: search;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+
+  [data-inbox-mobile] > .h-full > header > div:nth-of-type(3) {
+    grid-area: actions;
+    margin-left: 0;
+    justify-self: end;
+  }
+
+  /* Stack the folder strip above the message workspace instead of consuming 256px horizontally. */
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 {
+    position: relative;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > .w-\[256px\] {
+    width: 100%;
+    max-width: 100%;
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.5rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-bottom: 1px solid hsl(var(--border));
+    scrollbar-width: none;
+  }
+
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > .w-\[256px\]::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Preserve the hamburger collapse semantics after changing the parent to a column. */
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > .w-0.opacity-0.pointer-events-none {
+    width: 0;
+    height: 0;
+    flex: none;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > .w-\[256px\] > div:first-child {
+    flex: none;
+    padding: 0;
+  }
+
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > .w-\[256px\] > div:first-child > button {
+    min-height: 2.5rem;
+    width: auto;
+    padding: 0.5rem 0.75rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+  }
+
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > .w-\[256px\] > nav {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.2rem;
+    width: max-content;
+    padding: 0;
+  }
+
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > .w-\[256px\] > nav > button {
+    width: auto;
+    min-height: 2.5rem;
+    flex: none;
+    padding: 0.5rem 0.75rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+  }
+
+  /* The conversation pane must own the full phone width. */
+  [data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > div:last-child {
+    width: 100%;
+    min-width: 0;
+    border-left: 0;
+  }
+
+  /* Desktop paddings are too expensive on 320-390px screens. */
+  [data-inbox-mobile] .px-6 {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  /* Keep sender, subject and timestamp readable on one compact list row. */
+  [data-inbox-mobile] .w-\[150px\] {
+    width: 5.75rem;
+  }
+
+  [data-inbox-mobile] .min-w-\[58px\] {
+    min-width: 2.8rem;
+  }
+
+  /* Toolbar remains horizontally scrollable but gets phone-sized hit targets. */
+  [data-inbox-mobile] .h-12.overflow-x-auto button,
+  [data-inbox-mobile] .h-12.overflow-x-auto [role="checkbox"] {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+
+  /* Recipient controls can wrap instead of forcing the composer wider than the viewport. */
+  [data-inbox-mobile] #reply-to,
+  [data-inbox-mobile] #reply-cc,
+  [data-inbox-mobile] #reply-bcc,
+  [data-inbox-mobile] #forward-subject {
+    min-width: 0;
+  }
+
+  [data-inbox-mobile] #reply-to + div {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  [data-inbox-mobile] #reply-to + div button:first-child {
+    display: none;
+  }
+
+  /* Compose dialog fits inside the dynamic mobile viewport and remains scrollable with the keyboard open. */
+  [data-inbox-mobile] .fixed.inset-0 > .max-w-2xl {
+    max-height: calc(100dvh - 1rem);
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
+    overflow-y: auto;
+  }
+
+  /* Warning/action banners must not squeeze their copy to a few characters. */
+  [data-inbox-mobile] > .h-full > .bg-ha-warning-soft {
+    flex-wrap: wrap;
+  }
+
+  [data-inbox-mobile] > .h-full > .bg-ha-warning-soft > button {
+    margin-left: auto;
+  }
+}
