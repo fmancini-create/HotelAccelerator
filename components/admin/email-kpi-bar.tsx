@@ -43,7 +43,6 @@ export function EmailKpiBar() {
 
   useEffect(() => {
     let cancelled = false
-    let interval: ReturnType<typeof setInterval> | undefined
 
     const fetchKpi = async () => {
       try {
@@ -54,7 +53,7 @@ export function EmailKpiBar() {
         if (cancelled) return
         if ([emailRes.status, operatorRes.status].some((status) => status === 401 || status === 403)) {
           setSessionExpired(true)
-          if (interval) clearInterval(interval)
+          clearInterval(interval)
           return
         }
         if (!emailRes.ok || !operatorRes.ok) {
@@ -72,11 +71,11 @@ export function EmailKpiBar() {
       }
     }
 
+    const interval = setInterval(fetchKpi, 30000)
     void fetchKpi()
-    interval = setInterval(fetchKpi, 30000)
     return () => {
       cancelled = true
-      if (interval) clearInterval(interval)
+      clearInterval(interval)
     }
   }, [])
 
