@@ -13,7 +13,7 @@ import { BarChart3, BrainCircuit, Database, Building2, CalendarDays, KanbanSquar
 // senza pagina fanno arrossire la prova.
 const items = [
   { href: "/admin/crm", label: "Dashboard", icon: BarChart3, exact: true },
-  { href: "/admin/crm/intelligence", label: "Vendita intelligente", icon: BrainCircuit },
+  { href: "/admin/crm/intelligence", label: "Vendite IA", icon: BrainCircuit },
   { href: "/admin/crm/contacts", label: "Contatti", icon: Users },
   { href: "/admin/crm/companies", label: "Aziende / Hotel", icon: Building2 },
   { href: "/admin/crm/pipeline", label: "Pipeline", icon: KanbanSquare },
