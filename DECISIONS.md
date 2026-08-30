@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-08-25
+Ultimo aggiornamento: 2026-08-30
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -195,6 +195,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Conseguenza: importazioni Gmail storiche e attribuzioni precedenti non diventano valutazioni del personale. La
   disattivazione interrompe la misurazione e una successiva riattivazione parte da una nuova decorrenza; IA e risposte
   senza autore restano dichiarate separatamente. Conversione, qualità e chiamate non vengono stimate senza eventi reali.
+
+## ADR-030 — Apollo alimenta una coda prospect separata dal CRM ospiti
+
+- Stato: accettata
+- Decisione: Apollo e' un provider sostituibile del Motore di Vendita Intelligente. La ricerca salva prima in `crm_apollo_prospects`, tenant-scoped; solo un'azione umana promuove un profilo verificato in `contacts`.
+- Conseguenza: una ricerca Apollo non crea clienti, non eredita consenso e non avvia campagne. Ricerca persone a costo zero; enrichment email solo dopo conferma esplicita del possibile credito. La chiave resta server-only in `APOLLO_API_KEY`.
 
 ## Decisioni aperte
 
