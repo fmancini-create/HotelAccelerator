@@ -151,9 +151,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ contac
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Conversazioni
+          <Button variant="outline" asChild>
+            <Link href="/admin/inbox">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Conversazioni
+            </Link>
           </Button>
           <Button variant="outline">
             <Send className="h-4 w-4 mr-2" />
