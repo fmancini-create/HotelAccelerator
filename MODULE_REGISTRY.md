@@ -1,6 +1,6 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-08-28
+Ultimo aggiornamento: 2026-08-30
 
 ## Avvertenza
 
@@ -26,6 +26,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | Gestione conversazioni | Assegnazione, stati, priorità, tag, note, SLA, template, allegati, ricerca, traduzione | Specifica | Audit UI, schema, API e permessi |
 | AI inbox | Intenti, estrazione dati, riassunti, risposte, escalation, sentiment, upselling, knowledge base | Specifica | Associazione ordinata delle basi per account Email/WhatsApp/Telegram e handoff staff durevole per conversazione/canale in stato `Codice`; restano da definire provider, valutazioni, privacy e human-in-the-loop dell'insieme del modulo |
 | CRM | Profilo ospite, deduplica, soggiorni, consensi, segmenti, pipeline, follow-up, LTV | Specifica | Definire identity resolution e data ownership |
+| CRM — Motore di vendita intelligente | Scoring spiegabile dei contatti tenant-scoped, priorità e prossima azione con controllo umano | Codice | `lib/crm/sales-intelligence.ts`, API `/api/admin/crm/sales-intelligence`, UI `/admin/crm/intelligence` e test unitari. Restano collaudo tenant reale, segnali da pipeline/Inbox/PMS, audit esiti e adapter Apollo |
 | PMS incorporato | Live View Browserbase, configurazione agnostica, Context/login per tenant, sessione interattiva, fallback iframe | Codice | Browser e connettori API sono separati; verificare login/sessione su un tenant reale prima di promuovere a `Tenant reale` |
 | KPI operatori | Risposte, conversazioni e attesa mediana per operatore, con opt-in tenant per singolo utente | Codice | Misurazione Inbox solo dalla data di attivazione; conversione, qualità, chiamate e storico precedente restano non disponibili finché non esistono eventi affidabili |
 | CMS e sito | AI website builder, pagine, camere, offerte, esperienze, blog, media, i18n, SEO/GEO, hosting | Specifica | Separare CMS reale da mock e definire publishing |
