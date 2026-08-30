@@ -1,4 +1,4 @@
-name: Fix and validate PR 315 blockers
+name: Validate PR 315 final state
 
 on:
   push:
@@ -8,17 +8,15 @@ on:
       - .github/workflows/fix-pr315-blockers.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  fix-and-validate:
-    if: github.actor != 'github-actions[bot]'
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: fix/inbox-kpi-subchannel-filter-20260830
-          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -29,98 +27,26 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install existing dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Fix channel typing
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('app/admin/channels/page.tsx')
-          text = p.read_text()
-          old = '''const CHANNEL_CATEGORIES = [\n'''
-          new = '''type ChannelId =\n  | "email"\n  | "chat"\n  | "whatsapp"\n  | "telegram"\n  | "facebook"\n  | "instagram"\n  | "twitter"\n  | "linkedin"\n  | "phone"\n\ntype ChannelDefinition = {\n  id: ChannelId\n  name: string\n  description: string\n  icon: typeof Mail\n  color: string\n  configPath: string\n}\n\ntype ChannelCategory = {\n  id: "messaging" | "social" | "voice"\n  name: string\n  description: string\n  channels: readonly ChannelDefinition[]\n}\n\nconst CHANNEL_CATEGORIES: readonly ChannelCategory[] = [\n'''
-          if old not in text:
-              raise SystemExit('CHANNEL_CATEGORIES start not found')
-          text = text.replace(old, new, 1)
-          old_tail = '''] as const\n\nconst ALL_CHANNELS = CHANNEL_CATEGORIES.flatMap((category) => category.channels)\ntype ChannelId = (typeof ALL_CHANNELS)[number]["id"]\n'''
-          new_tail = ''']\n\nconst ALL_CHANNELS: readonly ChannelDefinition[] = CHANNEL_CATEGORIES.flatMap((category) => category.channels)\n'''
-          if old_tail not in text:
-              raise SystemExit('CHANNEL_CATEGORIES tail not found')
-          text = text.replace(old_tail, new_tail, 1)
-          p.write_text(text)
-          PY
-
-      - name: Add ESLint for Next 16
-        run: pnpm add -Dw eslint@9.39.1 eslint-config-next@16.0.10
-
-      - name: Create ESLint config
-        shell: bash
-        run: |
-          cat > eslint.config.mjs <<'EOF'
-          import { defineConfig, globalIgnores } from "eslint/config"
-          import nextVitals from "eslint-config-next/core-web-vitals"
-          import nextTs from "eslint-config-next/typescript"
-
-          export default defineConfig([
-            ...nextVitals,
-            ...nextTs,
-            {
-              rules: {
-                "@typescript-eslint/no-explicit-any": "off",
-                "@typescript-eslint/no-unused-vars": "warn",
-                "react-hooks/exhaustive-deps": "warn",
-                "react-hooks/set-state-in-effect": "off",
-                "react-hooks/static-components": "off",
-                "react/no-unescaped-entities": "off",
-                "@next/next/no-img-element": "warn",
-              },
-            },
-            globalIgnores([
-              ".next/**",
-              "out/**",
-              "build/**",
-              "coverage/**",
-              "next-env.d.ts",
-              "apps/santaddeo/**",
-            ]),
-          ])
-          EOF
 
       - name: Typecheck Core
         run: pnpm run typecheck
 
       - name: Lint affected files
-        id: lint
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm exec eslint \
-            app/admin/channels/page.tsx \
-            app/admin/inbox/page.tsx \
-            components/admin/email-kpi-bar.tsx \
-            app/api/inbox/conversations/route.ts \
-            app/api/inbox/subchannels/route.ts \
-            app/api/kpi/operator-self/route.ts \
-            lib/platform-repositories/inbox-read.repository.ts \
-            lib/types/inbox-read.types.ts 2>&1 | tee .github/pr315-lint.log
+        run: >-
+          pnpm exec eslint
+          app/admin/channels/page.tsx
+          app/admin/inbox/page.tsx
+          components/admin/email-kpi-bar.tsx
+          app/api/inbox/conversations/route.ts
+          app/api/inbox/subchannels/route.ts
+          app/api/kpi/operator-self/route.ts
+          lib/platform-repositories/inbox-read.repository.ts
+          lib/types/inbox-read.types.ts
+
+      - name: Check dashboard manifest
+        run: pnpm run check:dashboard
 
       - name: Build Core
-        if: steps.lint.outcome == 'success'
         run: pnpm run build
-
-      - name: Commit candidate fixes and diagnostics
-        if: always()
-        shell: bash
-        run: |
-          git config user.name "hotelaccelerator-ci"
-          git config user.email "actions@users.noreply.github.com"
-          git add app/admin/channels/page.tsx eslint.config.mjs package.json pnpm-lock.yaml .github/pr315-lint.log
-          git commit -m "fix: restore Core typecheck and lint tooling"
-          git push origin HEAD:fix/inbox-kpi-subchannel-filter-20260830
-
-      - name: Fail when lint failed
-        if: steps.lint.outcome != 'success'
-        run: exit 1
