@@ -45,7 +45,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | ManuBot operativo | Segnalazioni testo/foto, presa in carico, ruoli, priorità, scadenza, risoluzione | Da verificare | Audit bot, backend, dati e autorizzazioni |
 | ManuBot programmato | Preventiva, ricorrenze, storico asset/camera, inventario, costi e KPI | Da verificare | Identificare unico proprietario cron/webhook |
 | Integrazione manutenzioni | Ticket da inbox/chiamate/recensioni/fatture e collegamento HotelProfitAI | Specifica | Contratti evento e deduplica |
-| Procedure e checklist | Procedure, manuali, checklist, prove foto/firma, scadenze, versioni, approvazioni | Specifica | Decidere collocazione Core o ManuBot |
+| Procedure e checklist | Procedure, manuali, checklist, prove foto/firma, scadenze, versioni, AI assistant | Specifica | Decidere collocazione Core o ManuBot |
 | HotelAccelerator HR | Dipendenti, reparti, turni, notifiche, ferie/permessi, timbrature geolocalizzate e documenti privati | Codice | Workforce v2 in codice con geofence, anomalie, audit, cedolini/documenti privati e download firmati. Applicare migrazioni e collaudare su tenant reale; regole CCNL/paghe e KPI operativi restano da sviluppare |
 | Centro notifiche/audit | Notifiche unificate, activity log, audit trail, health connettori, errori | Specifica | Fondazione trasversale prioritaria |
 | Billing SaaS | Piani, abbonamenti, entitlement, onboarding, assistenza e SLA | Specifica | Necessario per stato Vendibile |
@@ -62,6 +62,6 @@ Per ogni funzione il registro dovrà evolvere includendo: modulo, capability, st
 ## Divieti
 
 - Non promuovere lo stato sulla base della sola UI.
-- Non usare “completo”, “funzionante" o "sviluppato" senza livello ed evidenza.
+- Non usare “completo”, “funzionante” o “sviluppato” senza livello ed evidenza.
 - Non considerare un test con service role prova di isolamento multi-tenant.
 - Non confondere deploy riuscito con prodotto production-ready.
