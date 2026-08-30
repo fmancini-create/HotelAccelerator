@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, BrainCircuit, Mail, Phone, RefreshCw, Sparkles, UserRoundSearch } from "lucide-react"
+import { AlertCircle, BrainCircuit, Database, Mail, Phone, RefreshCw, Sparkles, UserRoundSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -94,10 +94,18 @@ export default function SalesIntelligencePage() {
             Trasforma i dati già presenti nel CRM in una lista operativa: chi contattare prima, perché e con quale azione consigliata.
           </p>
         </div>
-        <Button variant="outline" onClick={() => void load()} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
-          Aggiorna priorità
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="default">
+            <Link href="/admin/crm/intelligence/apollo">
+              <Database className="mr-2 h-4 w-4" aria-hidden />
+              Cerca con Apollo
+            </Link>
+          </Button>
+          <Button variant="outline" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden />
+            Aggiorna priorità
+          </Button>
+        </div>
       </div>
 
       {error && (
