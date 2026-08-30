@@ -70,7 +70,7 @@
     padding: 0.35rem 0.5rem;
     overflow-x: auto;
     overflow-y: hidden;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
     scrollbar-width: none;
   }
 
