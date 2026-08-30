@@ -5,11 +5,9 @@ import { Loader2 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Card, CardContent } from "@/components/ui/card"
 import { ModuleCard, type ModuleView } from "@/components/admin/module-card"
+import { SuiteCommercialSettingsCard } from "@/components/admin/suite-commercial-settings-card"
 import { errorMessage, isSessionExpired, jsonFetcher } from "@/lib/swr-fetcher"
 
-// Deve fallire sugli stati HTTP di errore: senza, `{"error":"Non autenticato"}`
-// veniva accolto come dato buono e la pagina si schiantava su
-// `data.modules.filter(...)`.
 const fetcher = jsonFetcher
 
 const SECTIONS: { category: ModuleView["category"]; title: string; subtitle: string }[] = [
@@ -60,6 +58,7 @@ export default function ModulesPage() {
   return (
     <div className="p-8 max-w-6xl mx-auto">
       <AdminHeader title="Moduli" subtitle="Attiva o disattiva le funzioni della tua struttura" />
+      <SuiteCommercialSettingsCard />
 
       <div className="mt-6 space-y-10">
         {SECTIONS.map((section) => {

@@ -4,6 +4,11 @@ import { getPlanById, calculateMonthlyPrice } from "@/lib/stripe-products"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import {
+  applyPercentageDiscount,
+  getCrossSellOffer,
+  getSuiteCommercialContext,
+} from "@/lib/suite-commercial"
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,22 +29,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid plan" }, { status: 400 })
     }
 
-    // Fetch property details for Stripe metadata
     const supabase = createServiceClient()
-    const { data: property } = await supabase
-      .from("properties")
-      .select("id, name, billing_email, rooms_count")
-      .eq("id", propertyId)
-      .single()
+    const [{ data: property }, commercialContext] = await Promise.all([
+      supabase
+        .from("properties")
+        .select("id, name, billing_email, rooms_count")
+        .eq("id", propertyId)
+        .single(),
+      getSuiteCommercialContext(supabase, propertyId),
+    ])
 
     if (!property) {
       return NextResponse.json({ error: "Property not found" }, { status: 404 })
     }
 
     const rooms = roomCount || property.rooms_count || 10
-    const amountInCents = calculateMonthlyPrice(plan, rooms)
+    const baseAmountInCents = calculateMonthlyPrice(plan, rooms)
+    const commercialOffer = getCrossSellOffer(commercialContext, "hotelaccelerator")
+    const recurringAmountInCents = commercialOffer.eligible
+      ? applyPercentageDiscount(baseAmountInCents, commercialOffer.discountPercent)
+      : baseAmountInCents
 
-    // For setup fees, use one-time payment
     const mode = plan.type === "setup" ? "payment" : "subscription"
     const priceData =
       plan.type === "setup"
@@ -49,7 +59,7 @@ export async function POST(request: NextRequest) {
               name: plan.name,
               description: plan.description,
             },
-            unit_amount: plan.setupFeeInCents || amountInCents,
+            unit_amount: plan.setupFeeInCents || baseAmountInCents,
           }
         : {
             currency: "eur",
@@ -57,19 +67,20 @@ export async function POST(request: NextRequest) {
               name: plan.name,
               description: plan.description,
             },
-            unit_amount: amountInCents,
+            unit_amount: recurringAmountInCents,
             recurring: { interval: "month" as const },
           }
+
+    const discountMetadata = {
+      crossSellEligible: String(commercialOffer.eligible),
+      crossSellDiscountPercent: String(commercialOffer.discountPercent),
+      crossSellSourceProducts: commercialOffer.sourceProducts.join(","),
+    }
 
     const session = await getStripe().checkout.sessions.create({
       mode,
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: priceData,
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price_data: priceData, quantity: 1 }],
       customer_email: property.billing_email || undefined,
       metadata: {
         propertyId,
@@ -77,24 +88,23 @@ export async function POST(request: NextRequest) {
         planId,
         roomCount: String(rooms),
         propertyName: property.name,
+        ...discountMetadata,
       },
       ...(mode === "subscription"
         ? {
             subscription_data: {
-              metadata: { propertyId, planId, project: "hotelaccelerator" },
+              metadata: { propertyId, planId, project: "hotelaccelerator", ...discountMetadata },
             },
           }
         : {
             invoice_creation: {
               enabled: true,
-              invoice_data: { metadata: { propertyId, planId, project: "hotelaccelerator" } },
+              invoice_data: { metadata: { propertyId, planId, project: "hotelaccelerator", ...discountMetadata } },
             },
           }),
       success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/admin/billing?success=true`,
       cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/admin/billing?canceled=true`,
-      // Allow promotion codes
-      allow_promotion_codes: true,
-      // Collect billing address for invoicing
+      allow_promotion_codes: commercialOffer.allowPromotionStacking || !commercialOffer.eligible,
       billing_address_collection: "required",
       tax_id_collection: { enabled: true },
       custom_fields: [
@@ -111,13 +121,16 @@ export async function POST(request: NextRequest) {
           optional: true,
         },
       ],
-      // Italian locale
       locale: "it",
     })
 
-    return NextResponse.json({ sessionId: session.id, url: session.url })
+    return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
+      commercialOffer,
+      amountInCents: mode === "subscription" ? recurringAmountInCents : priceData.unit_amount,
+    })
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("[v0] Stripe checkout error:", error)
     return NextResponse.json(

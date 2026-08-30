@@ -4,30 +4,51 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getModulesWithState } from "@/lib/modules"
 import { toTenantModuleViews } from "@/lib/modules/tenant-view"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
+import {
+  applyPercentageDiscount,
+  getCrossSellOffer,
+  getSuiteCommercialContext,
+  type SuiteProduct,
+} from "@/lib/suite-commercial"
 
 export const dynamic = "force-dynamic"
 
-/**
- * GET /api/admin/modules
- * Elenca tutti i moduli del catalogo con lo stato (attivo/inattivo, piano,
- * scadenza) per la struttura corrente. Alimenta la pagina "Moduli".
- */
+const SUITE_MODULE_KEYS = new Set<SuiteProduct>(["santaddeo", "hotelprofitai", "manubot"])
+
 export async function GET(request: NextRequest) {
   try {
     const { propertyId } = await requireTenantAdmin(request)
-
-    // Service client: l'auth e' gia' verificata sopra e filtriamo per propertyId.
     const supabase = createServiceClient()
-    const modules = await getModulesWithState(supabase, propertyId)
+    const [modulesWithState, commercialContext] = await Promise.all([
+      getModulesWithState(supabase, propertyId),
+      getSuiteCommercialContext(supabase, propertyId),
+    ])
 
-    // Si manda il PREZZO, non il costo che sosteniamo noi: dal costo si legge il
-    // nostro margine. `toTenantModuleViews` toglie il campo dall'oggetto, quindi
-    // non finisce nel JSON nemmeno per distrazione.
-    return NextResponse.json({ propertyId, modules: toTenantModuleViews(modules) })
+    const modules = toTenantModuleViews(modulesWithState).map((module) => {
+      if (!SUITE_MODULE_KEYS.has(module.key as SuiteProduct)) {
+        return {
+          ...module,
+          crossSellEligible: false,
+          crossSellDiscountPercent: 0,
+          discountedMonthlyPriceCents: module.monthlyPriceCents,
+        }
+      }
+
+      const offer = getCrossSellOffer(commercialContext, module.key as SuiteProduct)
+      return {
+        ...module,
+        crossSellEligible: offer.eligible,
+        crossSellDiscountPercent: offer.discountPercent,
+        discountedMonthlyPriceCents:
+          module.monthlyPriceCents === null || !offer.eligible
+            ? module.monthlyPriceCents
+            : applyPercentageDiscount(module.monthlyPriceCents, offer.discountPercent),
+      }
+    })
+
+    return NextResponse.json({ propertyId, modules })
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
-    // 401/403 are expected access-control outcomes, not server errors.
     if (!isAccessError(error)) console.error("[v0] Modules GET error:", error)
     const status = accessErrorStatus(error)
     const message = error instanceof Error && status !== 500 ? error.message : "Failed to fetch modules"

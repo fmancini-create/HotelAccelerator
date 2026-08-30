@@ -19,10 +19,10 @@ import {
   Bot,
   Lock,
   Loader2,
+  Percent,
   type LucideIcon,
 } from "lucide-react"
 
-/** Mappa nome-icona (dal DB) -> componente lucide. */
 const ICONS: Record<string, LucideIcon> = {
   "layout-template": LayoutTemplate,
   inbox: Inbox,
@@ -36,13 +36,6 @@ const ICONS: Record<string, LucideIcon> = {
   bot: Bot,
 }
 
-/**
- * Accento cromatico per modulo (Step 2 - design token --ha-module-*).
- * Mapping ESPLICITO e statico: le classi sono stringhe letterali cosi'
- * Tailwind v4 le rileva (niente costruzione dinamica di classi).
- * `borderL` = bordo-sinistro d'accento della card; `bg`/`fg` = icona attiva.
- * Chiavi = valori reali della tabella `modules.key`.
- */
 interface ModuleAccent {
   borderL: string
   bg: string
@@ -59,7 +52,6 @@ const MODULE_ACCENT: Record<string, ModuleAccent> = {
   ai: { borderL: "border-l-ha-module-automation", bg: "bg-ha-module-automation", fg: "text-ha-module-automation-foreground" },
   tracking: { borderL: "border-l-ha-module-automation", bg: "bg-ha-module-automation", fg: "text-ha-module-automation-foreground" },
 }
-/** Fallback neutro: nessun accento di modulo, comportamento invariato. */
 const FALLBACK_ACCENT: ModuleAccent = {
   borderL: "border-l-border",
   bg: "bg-primary",
@@ -76,15 +68,10 @@ export interface ModuleView {
   status: "active" | "inactive" | "trial"
   active: boolean
   expiresAt: string | null
-  /**
-   * Prezzo mensile in centesimi. `null` = ancora da definire, che NON vuol dire
-   * gratis: qui sotto viene scritto a parole, perche' un prezzo assente
-   * mostrato come "0 EUR" sarebbe una promessa sbagliata.
-   *
-   * Qui NON esiste il costo che sosteniamo noi: la vista che alimenta questa
-   * scheda lo elimina (lib/modules/tenant-view.ts).
-   */
   monthlyPriceCents: number | null
+  crossSellEligible?: boolean
+  crossSellDiscountPercent?: number
+  discountedMonthlyPriceCents?: number | null
 }
 
 export function ModuleCard({
@@ -98,6 +85,7 @@ export function ModuleCard({
   const Icon = (module.icon && ICONS[module.icon]) || Activity
   const isPaid = module.category === "product" || module.category === "addon"
   const accent = MODULE_ACCENT[module.key] ?? FALLBACK_ACCENT
+  const hasDiscount = module.crossSellEligible && (module.crossSellDiscountPercent ?? 0) > 0
 
   async function toggle(next: boolean) {
     setPending(true)
@@ -137,18 +125,20 @@ export function ModuleCard({
             </div>
             <div>
               <CardTitle className="text-base leading-tight">{module.name}</CardTitle>
-              <div className="mt-1 flex items-center gap-2">
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 {module.isCore ? (
-                  <Badge variant="secondary" className="text-xs">
-                    Core
-                  </Badge>
+                  <Badge variant="secondary" className="text-xs">Core</Badge>
                 ) : (
                   <Badge variant="outline" className="text-xs">
                     {module.category === "product" ? "Prodotto" : "Add-on"}
                   </Badge>
                 )}
-                {module.active && (
-                  <Badge className="text-xs">Attivo</Badge>
+                {module.active && <Badge className="text-xs">Attivo</Badge>}
+                {hasDiscount && !module.active && (
+                  <Badge variant="secondary" className="gap-1 text-xs">
+                    <Percent className="h-3 w-3" />
+                    Cliente 4BID -{module.crossSellDiscountPercent}%
+                  </Badge>
                 )}
               </div>
             </div>
@@ -172,15 +162,26 @@ export function ModuleCard({
           {module.description || "Nessuna descrizione disponibile."}
         </CardDescription>
         {isPaid && (
-          <p className="mt-3 text-sm font-medium">
+          <div className="mt-3 text-sm font-medium">
             {module.monthlyPriceCents === null ? (
               <span className="text-muted-foreground">Prezzo da definire</span>
+            ) : hasDiscount && module.discountedMonthlyPriceCents !== null && module.discountedMonthlyPriceCents !== undefined ? (
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-muted-foreground line-through">{formattaImporto(module.monthlyPriceCents)}</span>
+                <span>{formattaImporto(module.discountedMonthlyPriceCents)}</span>
+                <span className="font-normal text-muted-foreground">al mese, per struttura</span>
+              </div>
             ) : (
               <>
                 {formattaImporto(module.monthlyPriceCents)}
                 <span className="font-normal text-muted-foreground"> al mese, per struttura</span>
               </>
             )}
+          </div>
+        )}
+        {hasDiscount && !module.active && module.monthlyPriceCents === null && (
+          <p className="mt-1 text-xs text-ha-success-soft-foreground">
+            Sconto cliente 4BID del {module.crossSellDiscountPercent}% applicato quando il prezzo viene definito.
           </p>
         )}
         {isPaid && !module.active && (
