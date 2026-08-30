@@ -62,7 +62,7 @@ export function getSocialProvider(value: string): SocialProviderDefinition {
 }
 
 export function getMetaGraphVersion(): string {
-  return process.env.META_GRAPH_VERSION || "v23.0"
+  return process.env.META_GRAPH_VERSION || "v26.0"
 }
 
 export function providerEnvReady(provider: SocialProvider): boolean {
