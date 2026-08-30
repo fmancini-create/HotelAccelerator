@@ -39,9 +39,15 @@ alter table public.conversations
 alter table public.conversations
   add column if not exists external_thread_id text null;
 
+create unique index if not exists messaging_channels_social_account_uidx
+  on public.messaging_channels(property_id, channel_type, (config->>'external_account_id'))
+  where channel_type in ('messenger', 'instagram', 'x', 'linkedin')
+    and coalesce(config->>'external_account_id', '') <> '';
+
 create unique index if not exists conversations_social_thread_uidx
-  on public.conversations(property_id, channel, external_thread_id)
-  where external_thread_id is not null;
+  on public.conversations(property_id, channel, messaging_channel_id, external_thread_id)
+  where messaging_channel_id is not null
+    and external_thread_id is not null;
 
 create index if not exists conversations_messaging_channel_idx
   on public.conversations(property_id, messaging_channel_id)
