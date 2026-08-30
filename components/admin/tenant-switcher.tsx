@@ -39,10 +39,7 @@ type PlatformMe = {
 
 const fetcher = async (url: string): Promise<PlatformMe> => {
   const res = await fetch(url, { credentials: "include" })
-  if (!res.ok) {
-    // For 401 we still return a "none" shape so the UI can render without errors.
-    return { role: "none", tenants: [], activePropertyId: null }
-  }
+  if (!res.ok) return { role: "none", tenants: [], activePropertyId: null }
   return res.json()
 }
 
@@ -53,34 +50,25 @@ export function TenantSwitcher() {
   const [switching, setSwitching] = useState(false)
   const [open, setOpen] = useState(false)
 
-  if (isLoading || !data || data.role === "none") {
-    return null
-  }
+  if (isLoading || !data || data.role === "none") return null
 
-  // La struttura registrata nel cookie, se c'e'.
   const selected = data.tenants.find((t) => t.id === data.activePropertyId) ?? null
 
-  // Tenant admin or non-admin member on a single property: show a read-only
-  // badge for context (only super_admins get the full switcher below).
   if (data.role === "tenant_admin" || data.role === "member") {
-    // Qui il ripiego sull'unica struttura e' legittimo: per questi ruoli il
-    // server ricava la struttura da `admin_users.property_id`, non dal cookie,
-    // quindi il badge descrive un ambito che esiste davvero.
     const active = selected ?? data.tenants[0]
     if (!active) return null
     return (
       <div
-        className="flex items-center gap-2 px-3 h-8 rounded-md bg-[#f3f4f6] text-[#374151] text-xs"
+        className="flex h-8 max-w-9 items-center gap-2 rounded-md bg-[#f3f4f6] px-2 text-xs text-[#374151] sm:max-w-[220px] sm:px-3"
         title={active.subdomain || active.name}
         aria-label={`Tenant attivo: ${active.name}`}
       >
-        <Building2 className="h-3.5 w-3.5 text-[#6b7280]" />
-        <span className="truncate max-w-[180px] font-medium">{active.name}</span>
+        <Building2 className="h-3.5 w-3.5 shrink-0 text-[#6b7280]" />
+        <span className="hidden max-w-[180px] truncate font-medium sm:inline">{active.name}</span>
       </div>
     )
   }
 
-  // Super admin: full switcher.
   const handleSwitch = async (propertyId: string) => {
     if (propertyId === data.activePropertyId || switching) return
     setSwitching(true)
@@ -96,9 +84,6 @@ export function TenantSwitcher() {
         return
       }
       setOpen(false)
-      // `router.refresh()` aggiorna i Server Component ma conserva useState
-      // nei Client Component. Un cambio tenant deve invece eliminare anche
-      // caselle email, contatti e altre righe gia' presenti in memoria.
       window.location.reload()
     } finally {
       setSwitching(false)
@@ -111,8 +96,8 @@ export function TenantSwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-2 text-xs font-medium border-[#d1d5db] text-[#1f2937] bg-white hover:bg-[#f9fafb]"
-          aria-label="Seleziona tenant"
+          className="h-8 gap-1 border-[#d1d5db] bg-white px-2 text-xs font-medium text-[#1f2937] hover:bg-[#f9fafb] sm:gap-2 sm:px-3"
+          aria-label={selected ? `Seleziona tenant. Attivo: ${selected.name}` : "Seleziona tenant"}
           disabled={switching}
         >
           {switching ? (
@@ -120,20 +105,17 @@ export function TenantSwitcher() {
           ) : (
             <Building2 className="h-3.5 w-3.5 text-[#6b7280]" />
           )}
-          {/* Senza scelta registrata NON si mostra il nome della prima struttura:
-              sembrerebbe attiva mentre le pagine restano vuote. Si chiede di
-              scegliere, che e' l'azione che sblocca davvero i dati. */}
-          <span className="truncate max-w-[180px]">{selected?.name ?? "Scegli la struttura"}</span>
+          <span className="hidden max-w-[180px] truncate sm:inline">{selected?.name ?? "Scegli la struttura"}</span>
           <ChevronsUpDown className="h-3 w-3 text-[#9ca3af]" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
-        <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-[#6b7280] font-medium">
+      <DropdownMenuContent align="end" className="w-64 max-w-[calc(100vw-1rem)]">
+        <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-[#6b7280]">
           Tenant disponibili ({data.tenants.length})
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {data.tenants.length === 0 && (
-          <div className="px-2 py-4 text-xs text-[#6b7280] text-center">Nessun tenant disponibile</div>
+          <div className="px-2 py-4 text-center text-xs text-[#6b7280]">Nessun tenant disponibile</div>
         )}
         {data.tenants.map((tenant) => {
           const isActive = tenant.id === data.activePropertyId
@@ -141,15 +123,13 @@ export function TenantSwitcher() {
             <DropdownMenuItem
               key={tenant.id}
               onClick={() => handleSwitch(tenant.id)}
-              className="flex items-center justify-between gap-2 cursor-pointer"
+              className="flex cursor-pointer items-center justify-between gap-2"
             >
               <div className="min-w-0 flex-1">
-                <div className="font-medium text-sm truncate">{tenant.name}</div>
-                {tenant.subdomain && (
-                  <div className="text-[11px] text-[#6b7280] truncate">{tenant.subdomain}</div>
-                )}
+                <div className="truncate text-sm font-medium">{tenant.name}</div>
+                {tenant.subdomain && <div className="truncate text-[11px] text-[#6b7280]">{tenant.subdomain}</div>}
               </div>
-              {isActive && <Check className="h-4 w-4 text-[#0b57d0] shrink-0" />}
+              {isActive && <Check className="h-4 w-4 shrink-0 text-[#0b57d0]" />}
             </DropdownMenuItem>
           )
         })}
