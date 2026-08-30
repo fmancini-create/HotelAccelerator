@@ -28,23 +28,29 @@ describe("Motore di Vendita Intelligente", () => {
     expect(result.score).toBeGreaterThanOrEqual(70)
   })
 
-  it("non suggerisce marketing operativo a un disiscritto", () => {
+  it("non suggerisce alcun marketing operativo a un disiscritto, neanche per telefono", () => {
     const result = recommendSalesAction(
       {
         id: "2",
         name: "Cliente Disiscritto",
+        phone: "+390559999999",
         email: "stop@example.com",
-        lead_score: 95,
-        total_bookings: 4,
-        total_revenue_cents: 500000,
+        lead_score: 100,
+        total_bookings: 8,
+        total_revenue_cents: 900000,
+        vip_level: "platinum",
+        last_booking_date: "2026-08-20T00:00:00.000Z",
         unsubscribed: true,
         marketing_consent: true,
+        email_clicks_count: 6,
       },
       NOW,
     )
 
+    expect(result.score).toBeGreaterThanOrEqual(70)
     expect(result.canExecute).toBe(false)
     expect(result.action).toBe("review")
+    expect(result.channel).toBe("verifica")
     expect(result.reason.toLowerCase()).toContain("disiscritto")
   })
 
@@ -80,7 +86,23 @@ describe("Motore di Vendita Intelligente", () => {
   })
 
   it("mantiene il punteggio entro 0 e 100", () => {
-    expect(scoreSalesContact({ id: "x", lead_score: 999, total_revenue_cents: 99_000_000 }, NOW).score).toBe(100)
+    const maximum = scoreSalesContact(
+      {
+        id: "x",
+        lead_score: 100,
+        total_revenue_cents: 99_000_000,
+        total_bookings: 10,
+        vip_level: "platinum",
+        email_clicks_count: 10,
+        last_booking_date: "2026-08-20T00:00:00.000Z",
+        phone: "+390551234567",
+        email: "max@example.com",
+        marketing_consent: true,
+      },
+      NOW,
+    ).score
+
+    expect(maximum).toBe(100)
     expect(scoreSalesContact({ id: "y", lead_score: -100, unsubscribed: true }, NOW).score).toBe(0)
   })
 })
