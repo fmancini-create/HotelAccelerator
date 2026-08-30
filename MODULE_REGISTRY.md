@@ -46,7 +46,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | ManuBot programmato | Preventiva, ricorrenze, storico asset/camera, inventario, costi e KPI | Da verificare | Identificare unico proprietario cron/webhook |
 | Integrazione manutenzioni | Ticket da inbox/chiamate/recensioni/fatture e collegamento HotelProfitAI | Specifica | Contratti evento e deduplica |
 | Procedure e checklist | Procedure, manuali, checklist, prove foto/firma, scadenze, versioni, AI assistant | Specifica | Decidere collocazione Core o ManuBot |
-| HotelAccelerator HR | Dipendenti, reparti, turni, notifiche, conferme e richieste ferie/permessi | Codice | Applicare migrazione e collaudare su tenant reale; documenti privati, cedolini, timbrature e KPI restano da sviluppare |
+| HotelAccelerator HR | Dipendenti, reparti, turni, notifiche, ferie/permessi, timbrature geolocalizzate e documenti privati | Codice | Workforce v2 in codice con geofence, anomalie, audit, cedolini/documenti privati e download firmati. Applicare migrazioni e collaudare su tenant reale; regole CCNL/paghe e KPI operativi restano da sviluppare |
 | Centro notifiche/audit | Notifiche unificate, activity log, audit trail, health connettori, errori | Specifica | Fondazione trasversale prioritaria |
 | Billing SaaS | Piani, abbonamenti, entitlement, onboarding, assistenza e SLA | Specifica | Necessario per stato Vendibile |
 | 4BID area documentale | Accesso protetto, identità, commenti, revisioni, versioni, approvazioni | Specifica | Progetto separato salvo contratto API |
