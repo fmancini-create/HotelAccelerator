@@ -85,7 +85,7 @@ export default function Page() {
   const timeClockError = (code: string, distance?: number) => {
     switch (code) {
       case "outside_geofence":
-        return `Sei fuori dalla sede autorizzata${Number.isFinite(distance) ? ` (${Math.round(distance!)} m)` : ""}.`
+        return `Sei fuori dalla sede autorizzata${Number.isFinite(distance) ? ` (${Math.round(distance as number)} m)` : ""}.`
       case "already_clocked_in":
         return "Entrata già registrata."
       case "not_clocked_in":
@@ -155,10 +155,14 @@ export default function Page() {
         accuracy_m: pos.coords.accuracy,
       })
     } catch (e) {
-      if (e instanceof GeolocationPositionError) {
-        if (e.code === e.PERMISSION_DENIED) {
+      // GeolocationPositionError is an interface, not a constructible runtime
+      // class in every browser, so use its stable numeric shape instead of
+      // instanceof (which breaks on Safari/iOS implementations).
+      if (typeof e === "object" && e !== null && "code" in e && typeof (e as { code?: unknown }).code === "number") {
+        const geoError = e as GeolocationPositionError
+        if (geoError.code === geoError.PERMISSION_DENIED) {
           setError("Posizione non autorizzata. Consenti l'accesso alla posizione nelle impostazioni del browser e riprova.")
-        } else if (e.code === e.TIMEOUT) {
+        } else if (geoError.code === geoError.TIMEOUT) {
           setError("Non sono riuscito a rilevare la posizione in tempo. Spostati dove il GPS prende meglio e riprova.")
         } else {
           setError("Posizione non disponibile in questo momento. Riprova tra poco.")
