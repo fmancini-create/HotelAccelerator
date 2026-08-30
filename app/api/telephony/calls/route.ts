@@ -4,52 +4,13 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { resolveIdentity } from "@/lib/telephony/user-extension"
 
-/**
- * Registro delle telefonate.
- *
- * Le chiamate arrivavano nel database (dal template CRM di 3CX) ma NESSUNA
- * pagina e nessuna rotta leggeva `phone_calls`: i dati esistevano e il cliente
- * non poteva vederli. Questa rotta e' il lato leggibile di quel registro.
- *
- * DUE SCELTE DA NON DISFARE
- *
- * 1) Paginazione vera (`limit`/`offset` + `total`). Senza di essa le telefonate
- *    piu' vecchie della prima pagina diventano irraggiungibili: presenti nel
- *    database e invisibili, che e' esattamente il difetto da cui nasce questa
- *    rotta.
- *
- * 2) Nessuna "durata media". Sarebbe il numero piu' facile da aggiungere e il
- *    piu' falso: per i gruppi di squillo `duration_seconds` contiene il tempo di
- *    SQUILLO (verificato sui dati: 9 chiamate identiche a 75 secondi, cioe' un
- *    timeout, non una conversazione), mentre per un interno contiene il tempo di
- *    conversazione. Mediare le due cose produce un minutaggio che nessuno puo'
- *    interpretare. I conteggi, invece, sono confrontabili.
- */
-
 const MAX_LIMIT = 100
-/**
- * Gli interni non hanno un elenco proprio: si ricavano dalle telefonate. Il
- * tetto tiene la scansione limitata; e' dichiarato nella risposta perche' un
- * elenco potenzialmente parziale non deve sembrare completo.
- */
 const EXTENSION_SCAN = 2000
 
-/**
- * Forma delle righe lette. Dichiarata a mano perche' il client Supabase qui non
- * e' tipizzato sullo schema: senza questi tipi ogni campo sarebbe `any` e un
- * nome di colonna sbagliato passerebbe il controllo dei tipi per poi restituire
- * `undefined` a runtime, cioe' una colonna vuota in pagina senza alcun errore.
- */
 type RigaChiamata = {
   id: string
   direction: string | null
   status: string | null
-  /**
-   * Da dove viene `status`: "provider" se l'ha dichiarato il centralino,
-   * "ring_group_timeout" se l'abbiamo dedotto noi dal timeout del gruppo di
-   * squillo. Serve in pagina per non spacciare una deduzione per un dato
-   * certificato dal centralino.
-   */
   status_source: string | null
   counterpart_number: string | null
   extension: string | null
@@ -57,6 +18,11 @@ type RigaChiamata = {
   duration_seconds: number | null
   contact_id: string | null
   user_id: string | null
+  transcription: string | null
+  transcription_summary: string | null
+  recording_url: string | null
+  sentiment: string | null
+  transcription_updated_at: string | null
 }
 type RigaContatto = { id: string; name: string | null; company: string | null }
 type RigaUtente = { id: string; name: string | null }
@@ -67,14 +33,6 @@ function toInt(value: string | null, fallback: number): number {
   return Number.isFinite(n) ? n : fallback
 }
 
-/**
- * Mezzanotte di oggi in Italia, espressa in UTC.
- *
- * `started_at` e' un istante assoluto: confrontarlo con la mezzanotte UTC
- * sposterebbe il confine di una o due ore e farebbe comparire fra le chiamate
- * "di oggi" quelle di ieri sera tardi. L'ora legale cambia lo scarto, quindi
- * non e' fissato a mano.
- */
 function inizioGiornataItaliana(now = new Date()): Date {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Europe/Rome",
@@ -112,28 +70,11 @@ export async function GET(request: NextRequest) {
     const direction = params.get("direction")
     const status = params.get("status")
     const extension = params.get("extension")
-    // Solo cifre: i numeri sono salvati senza spazi ne' segni, e cercare
-    // "335 804 6836" con gli spazi non troverebbe mai nulla.
     const ricerca = (params.get("q") ?? "").replace(/\D/g, "")
-    /**
-     * Il prefisso internazionale va cercato ANCHE senza prefisso.
-     *
-     * Misurato: "3358046836" trovava 2 chiamate, "+39 3358046836" ZERO, perche'
-     * togliendo i simboli resta "393358046836" mentre in archivio il numero e'
-     * salvato come lo manda il centralino, cioe' senza "39". Chi incolla un
-     * numero da WhatsApp o da una email lo incolla quasi sempre col prefisso:
-     * la ricerca sarebbe sembrata rotta proprio nell'uso piu' comune.
-     *
-     * Si cercano entrambe le forme invece di scegliere: il prefisso puo' essere
-     * presente in archivio per le chiamate dall'estero, e scartarlo sempre
-     * renderebbe irraggiungibili quelle.
-     */
     const varianti = (() => {
       if (!ricerca) return [] as string[]
       const v = new Set<string>([ricerca])
       const senzaPrefisso = ricerca.replace(/^(?:0039|39)/, "")
-      // Almeno 4 cifre residue: togliendo "39" da "39" o da "391" resterebbe un
-      // frammento che somiglia a tutto e restituirebbe mezzo registro.
       if (senzaPrefisso.length >= 4) v.add(senzaPrefisso)
       return [...v]
     })()
@@ -150,23 +91,20 @@ export async function GET(request: NextRequest) {
       if (status === "missed" || status === "completed") q = q.eq("status", status)
       if (extension) q = q.eq("extension", extension)
       if (varianti.length === 1) q = q.like("counterpart_number", `%${varianti[0]}%`)
-      else if (varianti.length > 1) {
-        // Le varianti sono solo cifre, quindi non possono contenere la virgola
-        // che separa le condizioni ne' altri caratteri da proteggere.
-        q = q.or(varianti.map((v) => `counterpart_number.like.%${v}%`).join(","))
-      }
+      else if (varianti.length > 1) q = q.or(varianti.map((v) => `counterpart_number.like.%${v}%`).join(","))
       if (params.get("today") === "1") q = q.gte("started_at", inizioGiornataItaliana().toISOString())
       return q as unknown as T
     }
 
-    const base = () => supabase.from("phone_calls").select("id", { count: "exact", head: true }).eq("property_id", identity.propertyId)
+    const base = () =>
+      supabase.from("phone_calls").select("id", { count: "exact", head: true }).eq("property_id", identity.propertyId)
 
     const [righe, totale, perse, sconosciute, oggi, etichette, scansione] = await Promise.all([
       conFiltri(
         supabase
           .from("phone_calls")
           .select(
-            "id, direction, status, status_source, counterpart_number, extension, started_at, duration_seconds, contact_id, user_id",
+            "id, direction, status, status_source, counterpart_number, extension, started_at, duration_seconds, contact_id, user_id, transcription, transcription_summary, recording_url, sentiment, transcription_updated_at",
           )
           .eq("property_id", identity.propertyId),
       )
@@ -175,8 +113,6 @@ export async function GET(request: NextRequest) {
       conFiltri(base()),
       conFiltri(base()).eq("status", "missed"),
       conFiltri(base()).is("contact_id", null),
-      // "Oggi" ignora di proposito il filtro di data: e' il riferimento fisso
-      // che dice se il centralino sta ancora registrando.
       supabase
         .from("phone_calls")
         .select("id", { count: "exact", head: true })
@@ -196,32 +132,32 @@ export async function GET(request: NextRequest) {
 
     if (righe.error) {
       console.error("[telefonate] registro chiamate: lettura non riuscita", righe.error.message)
-      return NextResponse.json({ error: "Non è stato possibile leggere il registro." }, { status: 500 })
+      return NextResponse.json({ error: "Non e' stato possibile leggere il registro." }, { status: 500 })
     }
 
     const calls = (righe.data ?? []) as RigaChiamata[]
-
-    // Letture separate invece di un embed PostgREST: fra `phone_calls` e
-    // `contacts`/`admin_users` l'embed fallirebbe in silenzio se la FK non e'
-    // esposta, restituendo zero nomi senza alcun errore visibile.
     const idContatti = [...new Set(calls.map((c) => c.contact_id).filter(Boolean))] as string[]
     const idUtenti = [...new Set(calls.map((c) => c.user_id).filter(Boolean))] as string[]
 
     const [contatti, utenti] = await Promise.all([
       idContatti.length
-        ? supabase.from("contacts").select("id, name, company").eq("property_id", identity.propertyId).in("id", idContatti)
-        : Promise.resolve({ data: [] as Array<{ id: string; name: string | null; company: string | null }> }),
+        ? supabase
+            .from("contacts")
+            .select("id, name, company")
+            .eq("property_id", identity.propertyId)
+            .in("id", idContatti)
+        : Promise.resolve({ data: [] as RigaContatto[] }),
       idUtenti.length
-        ? supabase.from("admin_users").select("id, name").eq("property_id", identity.propertyId).in("id", idUtenti)
-        : Promise.resolve({ data: [] as Array<{ id: string; name: string | null }> }),
+        ? supabase
+            .from("admin_users")
+            .select("id, name")
+            .eq("property_id", identity.propertyId)
+            .in("id", idUtenti)
+        : Promise.resolve({ data: [] as RigaUtente[] }),
     ])
 
-    const nomeContatto = new Map(
-      ((contatti.data ?? []) as RigaContatto[]).map((c) => [c.id, c] as const),
-    )
-    const nomeUtente = new Map(
-      ((utenti.data ?? []) as RigaUtente[]).map((u) => [u.id, u.name ?? null] as const),
-    )
+    const nomeContatto = new Map(((contatti.data ?? []) as RigaContatto[]).map((c) => [c.id, c] as const))
+    const nomeUtente = new Map(((utenti.data ?? []) as RigaUtente[]).map((u) => [u.id, u.name ?? null] as const))
     const etichetta = new Map(
       ((etichette.data ?? []) as RigaEtichetta[]).map(
         (e) => [String(e.extension), { label: String(e.label), kind: String(e.kind) }] as const,
@@ -253,14 +189,17 @@ export async function GET(request: NextRequest) {
           extension_label: et?.label ?? null,
           extension_kind: et?.kind ?? null,
           handled_by: c.user_id ? (nomeUtente.get(String(c.user_id)) ?? null) : null,
+          transcription: c.transcription ?? null,
+          transcription_summary: c.transcription_summary ?? null,
+          recording_url: c.recording_url ?? null,
+          sentiment: c.sentiment ?? null,
+          transcription_updated_at: c.transcription_updated_at ?? null,
         }
       }),
       total: totale.count ?? 0,
       limit,
       offset,
       summary: {
-        // Coerenti coi filtri attivi, cosi' i numeri in alto descrivono sempre
-        // l'elenco che si sta guardando invece di un insieme diverso.
         filtered: totale.count ?? 0,
         missed: perse.count ?? 0,
         unknown_number: sconosciute.count ?? 0,
