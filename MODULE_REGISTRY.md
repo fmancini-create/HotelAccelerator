@@ -42,7 +42,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | Registrazione fatture AI | Manuale/automatica, OCR, classificazione, split fisso/variabile, confidenza, approvazione, apprendimento | Specifica | Definire explainability, audit e correzioni |
 | Banche e finanza | AISP, movimenti, riconciliazione, scadenze, cash flow, finanziamenti, DSCR | Specifica | Valutare Fabrick/altri provider e compliance |
 | Acquisti e fornitori | Anagrafiche, cataloghi, storico prezzi, ordini, DDT, fatture, pagamenti, magazzino | Specifica | Definire confine HotelProfitAI/ManuBot |
-| ManuBot operativo | Segnalazioni testo/foto, presa in carico, ruoli, priorità, scadenza, risoluzione | Da verificare | Audit bot, backend, dati e autorizzazioni |
+| ManuBot operativo | Segnalazioni testo/foto, presa in carico, ruoli, priorità, scadenza e risoluzione | Da verificare | Audit bot, backend, dati e autorizzazioni |
 | ManuBot programmato | Preventiva, ricorrenze, storico asset/camera, inventario, costi e KPI | Da verificare | Identificare unico proprietario cron/webhook |
 | Integrazione manutenzioni | Ticket da inbox/chiamate/recensioni/fatture e collegamento HotelProfitAI | Specifica | Contratti evento e deduplica |
 | Procedure e checklist | Procedure, manuali, checklist, prove foto/firma, scadenze, versioni, AI assistant | Specifica | Decidere collocazione Core o ManuBot |
