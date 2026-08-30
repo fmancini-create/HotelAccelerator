@@ -63,6 +63,9 @@ export async function ingestSocialInboxEvent(event: SocialInboxEvent): Promise<{
         last_message_at: occurredAt,
         unread_count: 0,
         metadata: {
+          // Kept at top-level for compatibility with the existing restricted-user
+          // Inbox access filter, which predates the dedicated DB column.
+          messaging_channel_id: channel.id,
           social: {
             provider: event.provider,
             external_account_id: event.externalAccountId,
