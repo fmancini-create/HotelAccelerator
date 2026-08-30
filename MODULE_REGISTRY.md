@@ -53,7 +53,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | 4BID commerciale | Preventivi, procacciatori, capi area, provvigioni e liquidazioni | Specifica | Progetto separato |
 | Ecomobility | Veicoli, prenotazioni, Stripe, contratti, foto danni, GPS, manutenzione | Specifica | Non modulo ufficiale finché non deciso |
 | AutoExel | Upload, AI mapping, piano Pro, admin, MRR e SEO | Da verificare | Prodotto separato |
-| MyPetSenseAI | Profilo cane, razze, dieta, i18n e Stripe | Da verificare | Prodotto separato |
+| MyPetSenseAI | Profilo cane, razze, dieta, i18n e Stripe | Da verificare |
 
 ## Campi obbligatori per il prossimo audit
 
