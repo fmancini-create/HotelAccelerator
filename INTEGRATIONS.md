@@ -54,6 +54,20 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 - Recovery: se una scrittura Inbox fallisce, il webhook risponde 5xx per far ritentare Meta. Le inserzioni sono idempotenti sull'ID esterno del messaggio.
 - Evidenza produzione 2026-08-27: configurazione webhook completata nell'app Meta 4BID; `messages`, `smb_message_echoes`, `smb_app_state_sync` e `history` sottoscritti. Sul tenant Villa I Barronci un numero reale riceve messaggi in Inbox e invia correttamente. Stato: `Tenant reale`.
 
+## Apollo.io — prospecting B2B del CRM
+
+- Proprietario: HotelAccelerator Core; Apollo e' provider esterno tramite adapter `lib/integrations/apollo/client.ts`.
+- Scope: ogni prospect e' salvato con il `property_id` risolto dalla sessione; nessun tenant viene accettato dal browser.
+- Segreto: `APOLLO_API_KEY` esclusivamente nelle variabili server Vercel, mai nel browser, database, log o repository.
+- Ricerca: People API Search, 0 crediti, massimo 50 risultati per richiesta nella V1.
+- Arricchimento: People Match senza email personali e senza telefono; possibile consumo massimo dichiarato di 1 credito e conferma umana obbligatoria.
+- Persistenza: `crm_apollo_prospects` e' una coda separata dai contatti ospite. Unique `(property_id, apollo_person_id)` impedisce duplicati.
+- Import CRM: solo manuale, solo dopo disponibilita' email; deduplica tenant+email. `marketing_consent=false` e nessuna base giuridica inferita.
+- Invii: nessuna sequenza, email, WhatsApp o chiamata viene avviata dall'integrazione V1.
+- Degrado: se la chiave manca l'API restituisce configurazione assente; 401/403 e rate limit Apollo restano errori visibili, senza fallback a dati finti.
+- Rollback: disabilitare/rimuovere `APOLLO_API_KEY`; i prospect salvati restano leggibili e isolati, senza processi automatici.
+- Stato: `Codice`. Richiede migrazione, segreto Vercel e collaudo su tenant 4BID prima di `Tenant reale`.
+
 ## Checklist obbligatoria per ogni integrazione
 
 - owner interno e sistema proprietario;
