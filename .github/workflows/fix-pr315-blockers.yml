@@ -53,7 +53,7 @@ jobs:
           PY
 
       - name: Add ESLint for Next 16
-        run: pnpm add -D eslint@9.39.1 eslint-config-next@16.0.10
+        run: pnpm add -Dw eslint@9.39.1 eslint-config-next@16.0.10
 
       - name: Create ESLint config
         shell: bash
