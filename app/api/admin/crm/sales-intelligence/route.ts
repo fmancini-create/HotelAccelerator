@@ -30,15 +30,16 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     const contacts = (data ?? []) as SalesContact[]
-    const recommendations = buildSalesRecommendations(contacts, new Date(), limit)
+    const allRecommendations = buildSalesRecommendations(contacts, new Date(), MAX_CONTACTS)
+    const recommendations = allRecommendations.slice(0, limit)
 
     const summary = {
       analyzed: contacts.length,
-      highPriority: recommendations.filter((item) => item.priority === "alta").length,
-      actionable: recommendations.filter((item) => item.canExecute).length,
-      calls: recommendations.filter((item) => item.action === "call").length,
-      emails: recommendations.filter((item) => item.action === "email").length,
-      relationship: recommendations.filter((item) => item.action === "relationship").length,
+      highPriority: allRecommendations.filter((item) => item.priority === "alta").length,
+      actionable: allRecommendations.filter((item) => item.canExecute).length,
+      calls: allRecommendations.filter((item) => item.action === "call").length,
+      emails: allRecommendations.filter((item) => item.action === "email").length,
+      relationship: allRecommendations.filter((item) => item.action === "relationship").length,
     }
 
     return NextResponse.json({
