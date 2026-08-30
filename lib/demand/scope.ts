@@ -4,22 +4,18 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 /**
  * Quali conversazioni appartengono al perimetro di un gruppo di lavoro.
  *
- * Le due vie non sono simmetriche, e la differenza è misurata sui dati veri,
+ * Le due vie non sono simmetriche, e la differenza e' misurata sui dati veri,
  * non dedotta dallo schema:
  *
- *   - EMAIL: `conversations.channel_id` punta alla casella ed è popolato su
- *     TUTTE le conversazioni email (misurato: 7.375 su 7.375, zero nulle). Si
- *     seleziona per casella, che è anche il modo in cui l'admin ragiona ("il
- *     Front Office legge info@").
+ *   - EMAIL: `conversations.channel_id` punta alla casella ed e' popolato su
+ *     tutte le conversazioni email. Si seleziona per casella.
+ *   - MESSAGGISTICA: `channel_id` non e' affidabile; si seleziona per TIPO di
+ *     canale (`whatsapp`/`telegram`/`chat`).
  *
- *   - MESSAGGISTICA: `channel_id` è NULL su tutte e 9 le conversazioni, e
- *     `metadata.messaging_channel_id` è assente su 2; dei 5 id presenti, 3
- *     puntano a canali che NON esistono più in messaging_channels. Selezionare
- *     per id coprirebbe 3 conversazioni su 9: si seleziona per TIPO di canale
- *     (whatsapp/telegram/chat), che è la colonna `channel`, sempre popolata.
- *
- * Selezionare la messaggistica per id sarebbe stato più elegante e avrebbe
- * perso due terzi dei dati.
+ * Le telefonate sono una terza sorgente: restano nella tabella `phone_calls`,
+ * sempre filtrata per property_id, e quando 3CX consegna la trascrizione il
+ * motore domanda puo' analizzarla con lo stesso estrattore usato per il testo
+ * libero delle altre conversazioni.
  */
 
 export type MessagingKind = "whatsapp" | "telegram" | "chat"
@@ -31,7 +27,7 @@ export interface TrackingSources {
   email_channel_ids: string[]
   /** Tipi di canale di messaggistica inclusi. Vuoto = nessuna messaggistica. */
   messaging_kinds: MessagingKind[]
-  /** Includere le chiamate telefoniche (solo metadati: non c'è audio). */
+  /** Includere le chiamate telefoniche; se trascritte, analizzare anche il contenuto. */
   include_phone: boolean
 }
 
@@ -41,7 +37,7 @@ export const EMPTY_SOURCES: TrackingSources = {
   include_phone: false,
 }
 
-/** Normalizza ciò che arriva dal database o dal form: mai fidarsi del jsonb. */
+/** Normalizza cio' che arriva dal database o dal form: mai fidarsi del jsonb. */
 export function normalizeSources(raw: unknown): TrackingSources {
   const obj = (raw ?? {}) as Record<string, unknown>
   const ids = Array.isArray(obj.email_channel_ids)
@@ -75,13 +71,6 @@ export interface ConversationRow {
 const CONVERSATION_COLUMNS =
   "id, channel, channel_id, subject, contact_email, contact_name, created_at, last_message_at"
 
-/**
- * Le conversazioni nel perimetro, ordinate dalla più recente.
- *
- * Le due vie sono interrogate separatamente e poi unite: un `or()` unico su
- * PostgREST con una lista di uuid è fragile — la virgola dentro `in.(...)`
- * spezza l'espressione, difetto già pagato sulle cartelle email.
- */
 export async function listScopedConversations(
   supabase: SupabaseClient,
   propertyId: string,
@@ -90,21 +79,6 @@ export async function listScopedConversations(
 ): Promise<ConversationRow[]> {
   const limit = opts.limit ?? 500
   const out: ConversationRow[] = []
-
-  /**
-   * `skipIds` sono le conversazioni già estratte, e vanno escluse QUI e non
-   * dopo.
-   *
-   * Misurato su una passata reale: 48 esaminate e 88 già fatte. Il tetto per
-   * giro si consumava sulle conversazioni più recenti — che sono le prime
-   * dell'ordinamento e proprio quelle già analizzate — e il lavoro nuovo non
-   * avanzava mai di un passo. Il cron sarebbe girato ogni ora, ogni volta a
-   * costo zero, e l'archivio vecchio non sarebbe stato letto mai.
-   *
-   * Si chiede un margine più ampio del tetto e si taglia dopo il filtro: senza
-   * margine una pagina fatta di sole conversazioni già viste tornerebbe vuota
-   * pur avendo lavoro disponibile subito dopo.
-   */
   const skip = opts.skipIds ?? new Set<string>()
   const fetchLimit = skip.size > 0 ? Math.min(1000, limit + skip.size) : limit
 
@@ -136,22 +110,12 @@ export async function listScopedConversations(
     out.push(...((data ?? []) as ConversationRow[]))
   }
 
-  // Una conversazione non può cadere in entrambe le vie (channel_id è NULL
-  // sulla messaggistica), ma la difesa costa una riga e non fa danni.
   const seen = new Set<string>()
   const deduped = out.filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)))
-
-  // Prima si scartano le già fatte, poi si applica il tetto: invertendo i due
-  // passaggi il tetto verrebbe consumato da conversazioni che vengono scartate
-  // subito dopo, ed è esattamente il difetto che si sta correggendo.
   return deduped.filter((c) => !skip.has(c.id)).slice(0, limit)
 }
 
-/**
- * Le colonne sono quelle vere di `phone_calls`, lette dalla tabella e non
- * dedotte: non esistono `from_number`/`to_number`, il numero dell'altra parte
- * sta in `counterpart_number` e l'interno in `extension`.
- */
+/** Colonne reali della tabella phone_calls usate dal tracking domanda. */
 export interface PhoneCallRow {
   id: string
   started_at: string | null
@@ -160,14 +124,18 @@ export interface PhoneCallRow {
   duration_seconds: number | null
   counterpart_number: string | null
   extension: string | null
+  transcription: string | null
+  transcription_summary: string | null
+  recording_url: string | null
+  sentiment: string | null
+  transcription_updated_at: string | null
 }
 
 /**
- * Le chiamate nel perimetro.
- *
- * Non c'è né registrazione né trascrizione: il contenuto non è disponibile e
- * non viene inventato. Dalle chiamate si ricava solo la PRESSIONE della
- * domanda (quante, quando, quante perse), che è comunque un dato di revenue.
+ * Chiamate nel perimetro del tenant. Quando `transcription` e' disponibile il
+ * chiamante viene trattato come una conversazione: il contenuto passa allo
+ * stesso estrattore configurabile del gruppo. Se manca, restano disponibili i
+ * soli metadati per misurare pressione telefonica e chiamate perse.
  */
 export async function listScopedCalls(
   supabase: SupabaseClient,
@@ -178,7 +146,9 @@ export async function listScopedCalls(
   if (!sources.include_phone) return []
   let q = supabase
     .from("phone_calls")
-    .select("id, started_at, direction, status, duration_seconds, counterpart_number, extension")
+    .select(
+      "id, started_at, direction, status, duration_seconds, counterpart_number, extension, transcription, transcription_summary, recording_url, sentiment, transcription_updated_at",
+    )
     .eq("property_id", propertyId)
     .order("started_at", { ascending: false, nullsFirst: false })
     .limit(opts.limit ?? 500)
