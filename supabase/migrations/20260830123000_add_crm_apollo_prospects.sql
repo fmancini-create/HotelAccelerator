@@ -46,6 +46,10 @@ create index if not exists crm_apollo_prospects_property_email_idx
 
 alter table public.crm_apollo_prospects enable row level security;
 
+revoke all on table public.crm_apollo_prospects from anon;
+grant select, insert, update, delete on table public.crm_apollo_prospects to authenticated;
+grant select, insert, update, delete on table public.crm_apollo_prospects to service_role;
+
 drop policy if exists crm_apollo_prospects_tenant_scoped on public.crm_apollo_prospects;
 create policy crm_apollo_prospects_tenant_scoped on public.crm_apollo_prospects
   for all
