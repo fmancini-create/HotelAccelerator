@@ -4,13 +4,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 /**
  * Il calendario della domanda: le estrazioni diventano numeri per giorno.
  *
- * Aggregato una volta e materializzato, non ricalcolato a ogni apertura della
- * pagina: sono migliaia di righe, e Santaddeo deve poter leggere lo stesso dato
- * stabile che vede l'operatore, non una versione ricalcolata a metà.
- *
- * Il giorno del calendario è quello dell'EVENTO (arrivo, servizio), non quello
- * del messaggio: "quanti mi cercano per il 14 agosto" è la domanda a cui un
- * revenue manager deve rispondere.
+ * Il giorno della richiesta e' quello dell'EVENTO (arrivo, servizio), mentre
+ * la pressione telefonica resta attribuita al giorno in cui e' avvenuta la
+ * chiamata. Una telefonata trascritta puo' quindi contribuire a entrambe le
+ * letture senza spostare artificialmente il volume chiamate sulla data di
+ * soggiorno richiesta dal cliente.
  */
 
 export const METRICS = {
@@ -25,19 +23,13 @@ export const METRICS = {
 
 interface ExtractionForAggregate {
   group_id: string
+  phone_call_id: string | null
   reference_date: string | null
   kind: string
   channel: string | null
   payload: Record<string, unknown>
 }
 
-/**
- * Le etichette del breakdown sono prefissate perché nello stesso oggetto
- * convivono due classificazioni diverse: il CANALE da cui è arrivata la
- * richiesta (`canale:email`) e il TIPO di richiesta (`tipo:prenotazione_camera`).
- * Senza prefisso "email" e "domanda" starebbero allo stesso livello e chi legge
- * non potrebbe sommarli senza sbagliare.
- */
 export const TAG_CANALE = "canale:"
 export const TAG_TIPO = "tipo:"
 
@@ -47,12 +39,20 @@ function num(v: unknown): number | null {
   return null
 }
 
+function obj(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+}
+
+function isoDate(v: unknown): string | null {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null
+}
+
 interface Bucket {
   value: number
   breakdown: Record<string, number>
 }
 
-type Key = string // groupId|date|metric
+type Key = string
 
 function bump(map: Map<Key, Bucket>, groupId: string, date: string, metric: string, by: number, tags: string[] = []) {
   const k = `${groupId}|${date}|${metric}`
@@ -64,13 +64,29 @@ function bump(map: Map<Key, Bucket>, groupId: string, date: string, metric: stri
   map.set(k, cur)
 }
 
-/**
- * Ricalcola il calendario per una struttura.
- *
- * Legge TUTTE le estrazioni in una volta e aggrega in memoria: la prima
- * versione faceva una query per gruppo e per giorno, cioè centinaia di andate e
- * ritorno che in serverless finiscono in timeout.
- */
+function aggregateDemandPayload(
+  map: Map<Key, Bucket>,
+  groupId: string,
+  date: string,
+  payload: Record<string, unknown>,
+  canale: string,
+  tipo: string,
+) {
+  bump(map, groupId, date, METRICS.richieste, 1, [canale, `${TAG_TIPO}${tipo}`])
+
+  const ospiti = num(payload.ospiti) ?? num(payload.persone) ?? num(payload.invitati)
+  if (ospiti !== null) bump(map, groupId, date, METRICS.ospiti, ospiti)
+
+  const coperti = num(payload.coperti)
+  if (coperti !== null) bump(map, groupId, date, METRICS.coperti, coperti)
+
+  const esito = typeof payload.esito === "string" ? payload.esito : null
+  if (esito === "confermata") bump(map, groupId, date, METRICS.confermate, 1)
+  if (esito === "persa" || esito === "annullata") {
+    bump(map, groupId, date, METRICS.perse, 1, [`esito:${esito}`])
+  }
+}
+
 export async function rebuildDemandCalendar(
   supabase: SupabaseClient,
   propertyId: string,
@@ -80,11 +96,10 @@ export async function rebuildDemandCalendar(
   const PAGE = 1000
   let offset = 0
 
-  // Supabase tronca a 1000 righe anche con limit più alto: si pagina sempre.
   for (;;) {
     let q = supabase
       .from("conversation_extractions")
-      .select("group_id, reference_date, kind, channel, payload")
+      .select("group_id, phone_call_id, reference_date, kind, channel, payload")
       .eq("property_id", propertyId)
       .not("reference_date", "is", null)
       .order("reference_date", { ascending: true })
@@ -105,30 +120,33 @@ export async function rebuildDemandCalendar(
     const date = r.reference_date
     if (!date) continue
     const p = r.payload ?? {}
-
     const canale = `${TAG_CANALE}${r.channel ?? "sconosciuto"}`
 
-    if (r.kind === "chiamata") {
+    if (r.kind === "chiamata" || r.phone_call_id) {
+      // La reference_date della riga telefonica resta il giorno della chiamata:
+      // e' la data corretta per volume e chiamate perse.
       bump(map, r.group_id, date, METRICS.chiamate, 1, [canale, `direzione:${p.direzione ?? "sconosciuta"}`])
       if (p.stato === "missed" || p.stato === "no_answer") {
         bump(map, r.group_id, date, METRICS.chiamate_perse, 1, [canale])
+      }
+
+      // Se la chiamata e' stata trascritta, l'IA salva nello stesso envelope la
+      // richiesta estratta. La sua data e' quella dell'evento richiesto, non la
+      // data della telefonata: in questo modo il calendario risponde a
+      // "quanti mi cercano per il 14 agosto?" anche quando hanno telefonato.
+      const richiesta = obj(p.richiesta)
+      if (richiesta?.presente === true) {
+        const demandDate = isoDate(richiesta.reference_date)
+        const dati = obj(richiesta.dati)
+        if (demandDate && dati) {
+          aggregateDemandPayload(map, r.group_id, demandDate, dati, canale, "domanda")
+        }
       }
       continue
     }
 
     if (r.kind === "nessuna_domanda" || r.kind === "formato_non_riconosciuto") continue
-
-    bump(map, r.group_id, date, METRICS.richieste, 1, [canale, `${TAG_TIPO}${r.kind}`])
-
-    const ospiti = num(p.ospiti) ?? num(p.persone) ?? num(p.invitati)
-    if (ospiti !== null) bump(map, r.group_id, date, METRICS.ospiti, ospiti)
-
-    const coperti = num(p.coperti)
-    if (coperti !== null) bump(map, r.group_id, date, METRICS.coperti, coperti)
-
-    const esito = typeof p.esito === "string" ? p.esito : null
-    if (esito === "confermata") bump(map, r.group_id, date, METRICS.confermate, 1)
-    if (esito === "persa" || esito === "annullata") bump(map, r.group_id, date, METRICS.perse, 1, [`esito:${esito}`])
+    aggregateDemandPayload(map, r.group_id, date, p, canale, r.kind)
   }
 
   const payload = Array.from(map.entries()).map(([k, v]) => {
@@ -144,8 +162,6 @@ export async function rebuildDemandCalendar(
     }
   })
 
-  // Le righe rimaste da un calcolo precedente e non più prodotte vanno
-  // rimosse, altrimenti un dato corretto convive con il suo fantasma.
   let del = supabase.from("demand_calendar_days").delete().eq("property_id", propertyId)
   if (opts.fromDate) del = del.gte("date", opts.fromDate)
   const { error: delError } = await del

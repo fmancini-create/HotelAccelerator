@@ -9,14 +9,11 @@ import { extractWithModel, shouldSkipAsNoise, costMicroUsd } from "./extract"
 /**
  * Una passata del cervello su un gruppo di lavoro.
  *
- * Tre livelli in cascata, dal più economico al più costoso:
- *   1. notifiche strutturate  -> regole, costo zero, esito deterministico
- *   2. mittenti automatici    -> escluse, registrate come "nessuna domanda"
- *   3. testo libero           -> modello, con i campi del reparto
- *
- * L'ordine non è un'ottimizzazione: leggere una conferma Scidoo col modello
- * darebbe un risultato PEGGIORE (e variabile) di un'espressione regolare su un
- * formato fisso.
+ * Email e messaggistica usano tre livelli in cascata: sorgenti strutturate,
+ * esclusione rumore e modello sul testo libero. Le telefonate entrano nello
+ * stesso terzo livello quando 3CX ha consegnato una trascrizione; se il testo
+ * non e' ancora disponibile viene conservata solo la pressione telefonica e la
+ * chiamata resta riprendibile in una passata successiva.
  */
 
 export interface TrackingConfigRow {
@@ -31,11 +28,8 @@ export interface TrackingConfigRow {
 }
 
 export interface RunOptions {
-  /** Analizza solo da questa data (ISO). Assente = tutto lo storico. */
   since?: string
-  /** Quante conversazioni al massimo in questa passata. */
   limit?: number
-  /** Non chiama il modello: utile per provare il perimetro senza spendere. */
   dryRun?: boolean
 }
 
@@ -56,6 +50,8 @@ export interface RunReport {
   errors: string[]
 }
 
+type ExtractionTargetType = "conversation" | "phone_call"
+
 function parseFields(raw: unknown): TrackingField[] {
   if (!Array.isArray(raw)) return []
   return raw.filter(
@@ -63,7 +59,6 @@ function parseFields(raw: unknown): TrackingField[] {
   )
 }
 
-/** Estrae la data di riferimento dal payload, se c'è ed è una data valida. */
 function referenceDateOf(payload: Record<string, unknown>, refField: string | null): string | null {
   if (!refField) return null
   const v = payload[refField]
@@ -71,34 +66,92 @@ function referenceDateOf(payload: Record<string, unknown>, refField: string | nu
   return v
 }
 
-/**
- * Scrive un'estrazione senza creare doppioni.
- *
- * L'unicità è garantita da un indice UNIQUE nel database e non da un controllo
- * "esiste già?" in codice: due passate avviate insieme supererebbero entrambe
- * il controllo e scriverebbero due righe. Il codice quindi TENTA e interpreta
- * la violazione 23505 come "già fatto", che è race-safe per costruzione.
- */
 async function saveExtraction(
   supabase: SupabaseClient,
   row: Record<string, unknown>,
-): Promise<"inserted" | "already" | "error"> {
+): Promise<"inserted" | "already"> {
   const { error } = await supabase.from("conversation_extractions").insert(row)
   if (!error) return "inserted"
   if (error.code === "23505") return "already"
   throw new Error(error.message)
 }
 
+/**
+ * La stessa unique key della telefonata serve prima come placeholder dei soli
+ * metadati e poi, quando arriva la trascrizione, come envelope dell'estrazione
+ * IA. Il passaggio e' un UPDATE della riga esistente, non una seconda riga:
+ * cosi' l'idempotenza rimane garantita dall'indice del database.
+ */
+async function savePhoneExtraction(
+  supabase: SupabaseClient,
+  row: Record<string, unknown> & {
+    property_id: string
+    group_id: string
+    phone_call_id: string
+    config_version: number
+    method: string
+  },
+): Promise<"inserted" | "promoted" | "already"> {
+  const findExisting = () =>
+    supabase
+      .from("conversation_extractions")
+      .select("id, method")
+      .eq("property_id", row.property_id)
+      .eq("group_id", row.group_id)
+      .eq("phone_call_id", row.phone_call_id)
+      .eq("config_version", row.config_version)
+      .maybeSingle()
+
+  const existing = await findExisting()
+  if (existing.error) throw new Error(existing.error.message)
+
+  if (existing.data) {
+    if (existing.data.method === "metadati" && row.method === "modello") {
+      const { id: _id, ...values } = row as Record<string, unknown> & { id?: string }
+      const { error } = await supabase
+        .from("conversation_extractions")
+        .update(values)
+        .eq("id", existing.data.id)
+        .eq("property_id", row.property_id)
+      if (error) throw new Error(error.message)
+      return "promoted"
+    }
+    return "already"
+  }
+
+  const inserted = await saveExtraction(supabase, row)
+  if (inserted === "inserted") return "inserted"
+
+  // Una seconda passata puo' aver inserito il placeholder fra SELECT e INSERT.
+  // Se noi abbiamo gia' una trascrizione, promuoviamolo invece di rimandare il
+  // lavoro al prossimo cron.
+  if (row.method === "modello") {
+    const raced = await findExisting()
+    if (raced.error) throw new Error(raced.error.message)
+    if (raced.data?.method === "metadati") {
+      const { error } = await supabase
+        .from("conversation_extractions")
+        .update(row)
+        .eq("id", raced.data.id)
+        .eq("property_id", row.property_id)
+      if (error) throw new Error(error.message)
+      return "promoted"
+    }
+  }
+  return "already"
+}
+
 async function claimModelExtraction(
   supabase: SupabaseClient,
   groupId: string,
-  conversationId: string,
+  targetType: ExtractionTargetType,
+  targetId: string,
   configVersion: number,
 ): Promise<boolean> {
   const { data, error } = await supabase.rpc("claim_demand_extraction", {
     p_group_id: groupId,
-    p_target_type: "conversation",
-    p_target_id: conversationId,
+    p_target_type: targetType,
+    p_target_id: targetId,
     p_config_version: configVersion,
     p_lease_seconds: 300,
   })
@@ -109,29 +162,25 @@ async function claimModelExtraction(
 async function releaseModelExtraction(
   supabase: SupabaseClient,
   groupId: string,
-  conversationId: string,
+  targetType: ExtractionTargetType,
+  targetId: string,
   configVersion: number,
 ): Promise<void> {
   const { error } = await supabase.rpc("release_demand_extraction_claim", {
     p_group_id: groupId,
-    p_target_type: "conversation",
-    p_target_id: conversationId,
+    p_target_type: targetType,
+    p_target_id: targetId,
     p_config_version: configVersion,
   })
   if (error) console.error("[v0][demand] rilascio claim fallito:", error.message)
 }
 
 /**
- * Cosa è già stato estratto per questo gruppo a questa versione.
- *
- * Serve a NON pagare due volte. L'indice UNIQUE impedisce il doppione, ma lo
- * scopre solo al momento della scrittura: il modello era già stato chiamato e
- * il denaro già speso. Misurato sulla seconda passata: 0 righe nuove e lo
- * stesso costo della prima. Su 3.769 conversazioni sarebbero stati $4,92
- * buttati a ogni ripetizione.
- *
- * Questo controllo è una difesa del portafoglio, non dell'unicità: due passate
- * simultanee lo supererebbero entrambe, ed è per quello che l'indice resta.
+ * I placeholder telefonici `method=metadati` NON sono un'elaborazione finale:
+ * la trascrizione 3CX puo' arrivare dopo il ReportCall iniziale. Per questo non
+ * entrano nel set `calls` e vengono ricontrollati finche' non sono promossi a
+ * `method=modello`. In assenza di testo il controllo costa solo una lettura DB,
+ * non una chiamata al modello.
  */
 async function loadAlreadyDone(
   supabase: SupabaseClient,
@@ -143,19 +192,18 @@ async function loadAlreadyDone(
   const PAGE = 1000
   let offset = 0
 
-  // Supabase tronca a 1000 righe anche chiedendone di più: si pagina sempre.
   for (;;) {
     const { data, error } = await supabase
       .from("conversation_extractions")
-      .select("conversation_id, phone_call_id")
+      .select("conversation_id, phone_call_id, method")
       .eq("group_id", groupId)
       .eq("config_version", configVersion)
       .range(offset, offset + PAGE - 1)
-    if (error) throw new Error(`Lettura estrazioni già fatte: ${error.message}`)
+    if (error) throw new Error(`Lettura estrazioni gia' fatte: ${error.message}`)
     const batch = data ?? []
     for (const r of batch) {
       if (r.conversation_id) conversations.add(r.conversation_id as string)
-      if (r.phone_call_id) calls.add(r.phone_call_id as string)
+      if (r.phone_call_id && r.method !== "metadati") calls.add(r.phone_call_id as string)
     }
     if (batch.length < PAGE) break
     offset += PAGE
@@ -192,9 +240,6 @@ export async function runTrackingForGroup(
     errors: [],
   }
 
-  // Le già fatte si leggono PRIMA di scegliere le conversazioni, così il tetto
-  // per giro viene speso su lavoro nuovo: l'ordinamento parte dalle più
-  // recenti, che sono anche le prime a essere state analizzate.
   const done = await loadAlreadyDone(supabase, config.group_id, config.version)
 
   const conversations = await listScopedConversations(supabase, config.property_id, sources, {
@@ -207,8 +252,6 @@ export async function runTrackingForGroup(
 
   for (const conv of conversations) {
     try {
-      // Difesa residua: il selettore le ha già escluse, ma tra la lettura delle
-      // già fatte e questo punto un'altra passata può averne aggiunte.
       if (done.conversations.has(conv.id)) {
         report.alreadyDone++
         continue
@@ -219,13 +262,9 @@ export async function runTrackingForGroup(
         group_id: config.group_id,
         conversation_id: conv.id,
         config_version: config.version,
-        // Il canale si porta dietro fin qui perché la pagina ripartisce le
-        // sorgenti per canale (Email, WhatsApp, Telefono): senza questo dato
-        // quella colonna resterebbe a zero accanto a numeri veri.
         channel: conv.channel ?? null,
       }
 
-      // --- Livello 1: sorgenti strutturate, lette con regole ---
       const structured = structuredSourceOf(conv.contact_email)
       if (structured) {
         if (opts.dryRun) {
@@ -261,8 +300,7 @@ export async function runTrackingForGroup(
           }
           continue
         }
-        // Formato non riconosciuto: non si passa al modello, si registra il
-        // buco. Un formato cambiato va visto, non mascherato da una stima.
+
         const res = await saveExtraction(supabase, {
           ...base,
           kind: "formato_non_riconosciuto",
@@ -274,7 +312,6 @@ export async function runTrackingForGroup(
         continue
       }
 
-      // --- Livello 2: mittenti automatici, esclusi senza spendere ---
       if (shouldSkipAsNoise(conv.contact_email)) {
         if (opts.dryRun) {
           report.skippedNoise++
@@ -291,7 +328,6 @@ export async function runTrackingForGroup(
         continue
       }
 
-      // --- Livello 3: testo libero, col modello ---
       if (fields.length === 0) {
         report.errors.push("Nessun campo configurato: il modello non saprebbe cosa estrarre.")
         break
@@ -321,7 +357,13 @@ export async function runTrackingForGroup(
         continue
       }
 
-      const claimed = await claimModelExtraction(supabase, config.group_id, conv.id, config.version)
+      const claimed = await claimModelExtraction(
+        supabase,
+        config.group_id,
+        "conversation",
+        conv.id,
+        config.version,
+      )
       if (!claimed) {
         report.alreadyDone++
         continue
@@ -360,56 +402,161 @@ export async function runTrackingForGroup(
           if (out.containsDemand) report.withDemand++
         }
       } finally {
-        await releaseModelExtraction(supabase, config.group_id, conv.id, config.version)
+        await releaseModelExtraction(
+          supabase,
+          config.group_id,
+          "conversation",
+          conv.id,
+          config.version,
+        )
       }
     } catch (e) {
       report.failed++
       const msg = e instanceof Error ? e.message : String(e)
-      // Un solo messaggio per tipo: 3.000 volte lo stesso errore non informa.
       if (!report.errors.includes(msg)) report.errors.push(msg)
     }
   }
 
-  // --- Chiamate: solo metadati, nessun contenuto ---
   const calls = await listScopedCalls(supabase, config.property_id, sources, {
     since: opts.since,
     limit: opts.limit ?? 500,
   })
+
   for (const call of calls) {
     try {
       if (done.calls.has(call.id)) {
         report.alreadyDone++
         continue
       }
-      // Una "passata a vuoto" che scrive nel database non è a vuoto. Prima
-      // questo ciclo ignorava dryRun e inseriva 40 righe di chiamate: la prova
-      // successiva le trovava già fatte e sembrava tutto normale.
-      if (opts.dryRun) {
-        report.calls++
+
+      const callDay = call.started_at ? String(call.started_at).slice(0, 10) : null
+      const rawTranscript = call.transcription?.trim() ?? ""
+      const hasTranscript = rawTranscript.length > 0
+      const phoneMeta = {
+        direzione: call.direction,
+        stato: call.status,
+        durata_secondi: call.duration_seconds,
+      }
+
+      if (!hasTranscript) {
+        if (opts.dryRun) {
+          report.calls++
+          continue
+        }
+        const res = await savePhoneExtraction(supabase, {
+          property_id: config.property_id,
+          group_id: config.group_id,
+          phone_call_id: call.id,
+          config_version: config.version,
+          channel: "phone",
+          kind: "chiamata",
+          reference_date: callDay,
+          payload: {
+            ...phoneMeta,
+            contenuto: "non_disponibile",
+          },
+          confidence: 1,
+          method: "metadati",
+        })
+        if (res === "inserted") report.calls++
+        else report.alreadyDone++
         continue
       }
-      const day = call.started_at ? String(call.started_at).slice(0, 10) : null
-      const res = await saveExtraction(supabase, {
-        property_id: config.property_id,
-        group_id: config.group_id,
-        phone_call_id: call.id,
-        config_version: config.version,
-        channel: "phone",
-        kind: "chiamata",
-        reference_date: day,
-        payload: {
-          direzione: call.direction,
-          stato: call.status,
-          durata_secondi: call.duration_seconds,
-          // Dichiarato, non simulato: 3CX non ci passa l'audio, quindi non
-          // esiste trascrizione da analizzare.
-          contenuto: "non_disponibile",
-        },
-        confidence: 1,
-        method: "metadati",
-      })
-      if (res === "already") report.alreadyDone++
-      else report.calls++
+
+      if (fields.length === 0) {
+        const msg = "Nessun campo configurato: la trascrizione telefonica non puo' essere analizzata."
+        if (!report.errors.includes(msg)) report.errors.push(msg)
+        continue
+      }
+
+      if (opts.dryRun) {
+        report.calls++
+        report.byModel++
+        continue
+      }
+
+      const claimed = await claimModelExtraction(
+        supabase,
+        config.group_id,
+        "phone_call",
+        call.id,
+        config.version,
+      )
+      if (!claimed) {
+        report.alreadyDone++
+        continue
+      }
+
+      try {
+        const truncated = rawTranscript.length > MAX_CHARS_PER_CONVERSATION
+        const phoneTranscript = rawTranscript.slice(0, MAX_CHARS_PER_CONVERSATION)
+        const out = await extractWithModel({
+          subject: call.direction === "outbound" ? "Telefonata in uscita" : "Telefonata in arrivo",
+          transcript: phoneTranscript,
+          fields,
+          groupName,
+          presetLabel,
+          today,
+        })
+
+        const cost = costMicroUsd(out.tokensIn, out.tokensOut)
+        const demandDate = out.containsDemand ? referenceDateOf(out.data, refField) : null
+        report.tokensIn += out.tokensIn
+        report.tokensOut += out.tokensOut
+        report.costMicroUsd += cost
+
+        const res = await savePhoneExtraction(supabase, {
+          property_id: config.property_id,
+          group_id: config.group_id,
+          phone_call_id: call.id,
+          config_version: config.version,
+          channel: "phone",
+          kind: "chiamata",
+          // La riga resta datata al giorno della chiamata. La data della domanda
+          // e' separata dentro `richiesta` e l'aggregatore la usa per i KPI di
+          // soggiorno/servizio.
+          reference_date: callDay,
+          payload: {
+            ...phoneMeta,
+            contenuto: "trascrizione",
+            richiesta: out.containsDemand
+              ? {
+                  presente: true,
+                  reference_date: demandDate,
+                  dati: out.data,
+                  confidenza: out.confidence,
+                }
+              : {
+                  presente: false,
+                  reference_date: null,
+                  dati: {},
+                  confidenza: out.confidence,
+                },
+          },
+          confidence: out.confidence,
+          method: "modello",
+          model: "openai/gpt-5.4-mini",
+          tokens_in: out.tokensIn,
+          tokens_out: out.tokensOut,
+          cost_micro_usd: cost,
+          truncated,
+        })
+
+        if (res === "already") report.alreadyDone++
+        else {
+          report.calls++
+          report.byModel++
+          if (out.containsDemand) report.withDemand++
+        }
+      } finally {
+        await releaseModelExtraction(
+          supabase,
+          config.group_id,
+          "phone_call",
+          call.id,
+          config.version,
+        )
+      }
     } catch (e) {
       report.failed++
       const msg = e instanceof Error ? e.message : String(e)
@@ -417,7 +564,6 @@ export async function runTrackingForGroup(
     }
   }
 
-  // Nemmeno la data dell'ultima passata: a vuoto non è successo niente.
   if (!opts.dryRun) {
     await supabase
       .from("group_tracking_configs")
