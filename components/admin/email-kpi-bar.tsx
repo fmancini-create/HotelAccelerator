@@ -10,15 +10,11 @@ interface EmailKpi {
   avg_response_time_minutes: number | null
   overdue_threshold_minutes: number | null
   metrics_status: "gmail_state_ready" | "reconciling" | "stale"
-  // Opzionali: una risposta servita da una versione precedente non li ha, e
-  // dichiararli obbligatori li farebbe leggere come `undefined` fingendo invece
-  // che ci siano.
   reconcile_never?: number
   reconcile_stale?: number
   reconcile_age_minutes?: number | null
 }
 
-/** Ritardo in forma leggibile: minuti sotto l'ora, poi ore, poi giorni. */
 function formatRitardo(minuti: number): string {
   if (minuti < 60) return `${minuti} min fa`
   const ore = minuti / 60
@@ -29,30 +25,15 @@ function formatRitardo(minuti: number): string {
 export function EmailKpiBar() {
   const [kpi, setKpi] = useState<EmailKpi | null>(null)
   const [loading, setLoading] = useState(true)
-  // Sessione scaduta: condizione ATTESA, non un guasto. Va mostrata e
-  // deve fermare il ciclo di aggiornamento.
   const [sessionExpired, setSessionExpired] = useState(false)
-  // Guasto del server: senza questo la barra resta sullo scheletro pulsante
-  // finche' dura il guasto, perche' `kpi` non viene mai valorizzato. E' lo
-  // stesso difetto gia' corretto per il 401, che pero' restava aperto sui 5xx.
   const [guastoServer, setGuastoServer] = useState(false)
 
   useEffect(() => {
-    // `annullato` evita di scrivere sullo stato dopo lo smontaggio.
     let annullato = false
     let interval: ReturnType<typeof setInterval> | undefined
-
-    // Freno progressivo sui guasti del server (5xx/rete).
-    // A differenza del 401 non possiamo fermarci del tutto: il guasto e'
-    // transitorio e vogliamo riprenderci da soli. Ma continuare a 30s fissi
-    // mentre il server e' in affanno lo tiene sotto carico proprio quando
-    // deve rialzarsi (nei log dell'8/8: 12 minuti di 500/504 con decine di
-    // schede che continuavano a interrogare). Raddoppiamo l'attesa a ogni
-    // fallimento fino a un tetto di 5 minuti, e torniamo a 30s al primo esito
-    // buono.
     let cicliDaSaltare = 0
     let fallimentiConsecutivi = 0
-    const MAX_CICLI_SALTATI = 9 // 9 cicli saltati + 1 eseguito = 5 min
+    const MAX_CICLI_SALTATI = 9
 
     const registraFallimento = () => {
       fallimentiConsecutivi += 1
@@ -61,7 +42,6 @@ export function EmailKpiBar() {
     }
 
     const fetchKpi = async () => {
-      // Attesa del freno: consumiamo un ciclo senza toccare la rete.
       if (cicliDaSaltare > 0) {
         cicliDaSaltare -= 1
         return
@@ -71,9 +51,6 @@ export function EmailKpiBar() {
         const res = await fetch("/api/kpi/email", { credentials: "include" })
         if (annullato) return
 
-        // Prima il 401 finiva nel ramo "!res.ok" senza distinzione: la barra
-        // restava in caricamento e il ciclo continuava a interrogare ogni 30s
-        // all'infinito (nei log: decine di richieste fallite al minuto).
         if (res.status === 401 || res.status === 403) {
           setSessionExpired(true)
           if (interval) clearInterval(interval)
@@ -86,7 +63,6 @@ export function EmailKpiBar() {
           cicliDaSaltare = 0
           setGuastoServer(false)
         } else {
-          // 5xx e altri esiti non attesi: guasto del server, applichiamo il freno.
           registraFallimento()
         }
       } catch (error) {
@@ -100,7 +76,6 @@ export function EmailKpiBar() {
     }
 
     fetchKpi()
-    // Refresh ogni 30 secondi
     interval = setInterval(fetchKpi, 30000)
     return () => {
       annullato = true
@@ -110,8 +85,8 @@ export function EmailKpiBar() {
 
   if (sessionExpired) {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-b text-sm">
-        <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b bg-muted/50 px-3 py-2 text-sm sm:px-4">
+        <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <span className="text-muted-foreground">Sessione scaduta: i dati non sono aggiornati.</span>
         <a href="/admin" className="font-medium text-ha-brand-soft-foreground underline underline-offset-2">
           Accedi di nuovo
@@ -120,47 +95,38 @@ export function EmailKpiBar() {
     )
   }
 
-  // Guasto in corso e nessun dato mai ricevuto: senza questo ramo resterebbe
-  // lo scheletro pulsante all'infinito. Se invece i dati c'erano gia', li
-  // teniamo a schermo: sono vecchi di qualche minuto, non assenti.
   if (guastoServer && !kpi) {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 border-b text-sm">
-        <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        <span className="text-muted-foreground">
-          Statistiche non disponibili al momento. Riprovo automaticamente.
-        </span>
+      <div className="flex flex-wrap items-center gap-2 border-b bg-muted/50 px-3 py-2 text-sm sm:px-4">
+        <Clock className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="text-muted-foreground">Statistiche non disponibili al momento. Riprovo automaticamente.</span>
       </div>
     )
   }
 
   if (loading || !kpi) {
     return (
-      <div className="flex items-center gap-4 px-4 py-2 bg-muted/50 border-b animate-pulse">
-        <div className="h-4 w-24 bg-muted rounded" />
-        <div className="h-4 w-24 bg-muted rounded" />
-        <div className="h-4 w-24 bg-muted rounded" />
+      <div className="flex flex-wrap items-center gap-3 border-b bg-muted/50 px-3 py-2 animate-pulse sm:gap-4 sm:px-4">
+        <div className="h-4 w-20 rounded bg-muted sm:w-24" />
+        <div className="h-4 w-28 max-w-full rounded bg-muted sm:w-24" />
+        <div className="h-4 w-20 rounded bg-muted sm:w-24" />
       </div>
     )
   }
 
   return (
-    <div className="flex items-center gap-6 px-4 py-2 bg-muted/50 border-b text-sm">
-      {/* Non lette */}
-      <div className="flex items-center gap-2">
-        <Mail className="h-4 w-4 text-blue-600" />
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b bg-muted/50 px-3 py-2 text-xs sm:gap-x-6 sm:px-4 sm:text-sm">
+      <div className="flex items-center gap-2 whitespace-nowrap">
+        <Mail className="h-4 w-4 shrink-0 text-blue-600" />
         <span className="text-muted-foreground">Non lette:</span>
         <span className={`font-semibold ${(kpi.unread_count || 0) > 0 ? "text-blue-600" : "text-muted-foreground"}`}>
           {kpi.unread_count === null ? "Ricalcolo…" : kpi.unread_count}
         </span>
       </div>
 
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Clock className="h-4 w-4" />
-        <span>
-          {/* "in corso" solo quando lo e' davvero (prima passata). Con un
-              segnalibro vecchio il lavoro NON sta avvenendo: dirlo comunque
-              sarebbe una conferma falsa, e il ritardo resterebbe invisibile. */}
+      <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
+        <Clock className="h-4 w-4 shrink-0" />
+        <span className="min-w-0">
           {kpi.metrics_status === "reconciling"
             ? "Allineamento stato Gmail in corso"
             : kpi.metrics_status === "stale"
