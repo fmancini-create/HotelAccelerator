@@ -5,6 +5,7 @@ import { parseWhatsAppWebhook, getWhatsAppChannelByPhoneNumberId } from "@/lib/w
 import { decryptWhatsAppCredentials } from "@/lib/whatsapp/channel-secrets"
 import { WhatsAppProcessor } from "@/lib/whatsapp/processor"
 import { markWhatsAppRead, sendWhatsAppText } from "@/lib/whatsapp/client"
+import { handleWhatsAppReopenAction } from "@/lib/whatsapp/pending"
 import { getPlatformWhatsAppConfig } from "@/lib/whatsapp/platform"
 import { runAutopilot } from "@/lib/ai/autopilot"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
@@ -69,8 +70,9 @@ export async function GET(request: NextRequest) {
  * Flow: read raw body -> route to tenant by phone_number_id -> verify signature
  * with that tenant's app secret -> process messages idempotently.
  *
- * Always returns 200 quickly so Meta does not retry/disable the webhook; real
- * errors are recorded in message_processing_logs.
+ * Always returns quickly; transient processing errors return 500 so Meta can
+ * retry. Every externally visible write is idempotent on Meta message id or on
+ * the durable pending-message status machine.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
@@ -154,10 +156,31 @@ export async function POST(request: NextRequest) {
           console.error("[WhatsApp webhook] inbound persistence failed:", result.error)
           continue
         }
-        if (result.isDuplicate) continue
 
-        anyInbound = true
-        await markWhatsAppRead(typedChannel.config, typedChannel.credentials, msg.externalId)
+        // Our reopen-template buttons are control messages. Handle them before
+        // the duplicate guard so a Meta retry can recover a failed delivery,
+        // while the pending status machine still guarantees at-most-once send.
+        const reopen = await handleWhatsAppReopenAction(
+          supabase,
+          msg,
+          typedChannel,
+          typedChannel.property_id,
+        )
+        if (reopen.requiresRetry) {
+          requiresRetry = true
+          console.error("[WhatsApp reopen] retry required:", reopen.error)
+        }
+
+        if (!result.isDuplicate) {
+          anyInbound = true
+          await markWhatsAppRead(typedChannel.config, typedChannel.credentials, msg.externalId)
+        }
+
+        // A quick-reply such as "Apri comunicazione" is not guest prose. It
+        // must never be fed to the hotel assistant, otherwise the AI could send
+        // an unrelated answer immediately after delivering the queued message.
+        if (reopen.handled) continue
+        if (result.isDuplicate) continue
 
         // The inbound message opens WhatsApp's 24h window, so a free-form
         // assistant response remains deliverable here.
