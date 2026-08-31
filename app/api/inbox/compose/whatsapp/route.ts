@@ -77,12 +77,17 @@ export async function POST(request: NextRequest) {
       contact = created
     }
 
+    if (!contact) {
+      return NextResponse.json({ error: "Impossibile risolvere o creare il contatto WhatsApp." }, { status: 500 })
+    }
+    const resolvedContact = contact
+
     const { data: candidates, error: convReadError } = await supabase
       .from("conversations")
       .select("id, contact_id, messaging_channel_id, metadata")
       .eq("property_id", propertyId)
       .eq("channel", "whatsapp")
-      .eq("contact_id", contact.id)
+      .eq("contact_id", resolvedContact.id)
       .order("created_at", { ascending: false })
       .limit(20)
     if (convReadError) throw convReadError
@@ -93,12 +98,12 @@ export async function POST(request: NextRequest) {
     }) as { id: string } | undefined
 
     if (!conversation) {
-      const label = contact.name?.trim() || `+${phone}`
+      const label = resolvedContact.name?.trim() || `+${phone}`
       const { data: created, error } = await supabase
         .from("conversations")
         .insert({
           property_id: propertyId,
-          contact_id: contact.id,
+          contact_id: resolvedContact.id,
           channel: "whatsapp",
           status: "open",
           subject: `WhatsApp · ${label}`,
@@ -118,7 +123,12 @@ export async function POST(request: NextRequest) {
       conversation = created
     }
 
-    const window = await getWhatsAppWindowState(supabase, propertyId, conversation.id)
+    if (!conversation) {
+      return NextResponse.json({ error: "Impossibile risolvere o creare la conversazione WhatsApp." }, { status: 500 })
+    }
+    const resolvedConversation = conversation
+
+    const window = await getWhatsAppWindowState(supabase, propertyId, resolvedConversation.id)
 
     if (window.isOpen) {
       const sent = await sendWhatsAppText(channel.config, channel.credentials, phone, text)
@@ -136,7 +146,7 @@ export async function POST(request: NextRequest) {
         .from("messages")
         .insert({
           property_id: propertyId,
-          conversation_id: conversation.id,
+          conversation_id: resolvedConversation.id,
           sender_type: "agent",
           sender_id: operatore.titolare.adminUserId,
           sender_name: operatore.titolare.label,
@@ -155,7 +165,7 @@ export async function POST(request: NextRequest) {
         supabase
           .from("conversations")
           .update({ last_message_at: sentAt, status: "open", updated_at: sentAt })
-          .eq("id", conversation.id)
+          .eq("id", resolvedConversation.id)
           .eq("property_id", propertyId),
         supabase
           .from("messaging_channels")
@@ -166,7 +176,7 @@ export async function POST(request: NextRequest) {
           .from("messages")
           .update({ status: "replied" })
           .eq("property_id", propertyId)
-          .eq("conversation_id", conversation.id)
+          .eq("conversation_id", resolvedConversation.id)
           .eq("sender_type", "customer")
           .in("status", ["received", "read"]),
       ])
@@ -174,7 +184,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         mode: "sent",
-        conversationId: conversation.id,
+        conversationId: resolvedConversation.id,
         messageId: message.id,
         window,
       })
@@ -182,8 +192,8 @@ export async function POST(request: NextRequest) {
 
     const queued = await queueWhatsAppReopen(supabase, {
       propertyId,
-      conversationId: conversation.id,
-      contactId: contact.id,
+      conversationId: resolvedConversation.id,
+      contactId: resolvedContact.id,
       channel,
       toPhone: phone,
       body: text,
@@ -194,13 +204,13 @@ export async function POST(request: NextRequest) {
 
     if (!queued.ok) {
       const status = queued.code === "ALREADY_PENDING" ? 409 : 502
-      return NextResponse.json({ error: queued.error, code: queued.code, conversationId: conversation.id }, { status })
+      return NextResponse.json({ error: queued.error, code: queued.code, conversationId: resolvedConversation.id }, { status })
     }
 
     return NextResponse.json({
       success: true,
       mode: "queued",
-      conversationId: conversation.id,
+      conversationId: resolvedConversation.id,
       pendingId: queued.pendingId,
       message: "Finestra WhatsApp chiusa: richiesta di apertura inviata al cliente.",
       window,
