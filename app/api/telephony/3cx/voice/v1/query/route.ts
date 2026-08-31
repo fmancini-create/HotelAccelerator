@@ -6,6 +6,7 @@ import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
 import { VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
 import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
+import { touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -84,6 +85,11 @@ export async function POST(request: NextRequest) {
       { status: 400, headers: NO_STORE },
     )
   }
+
+  await touchSharedPbxRouteHint({
+    targetPropertyId: auth.propertyId,
+    callerNumber: parsed.data.caller_number,
+  })
 
   try {
     const response = await answerVoiceQuestion({
