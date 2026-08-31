@@ -1,6 +1,6 @@
 import "server-only"
 
-const DEFAULT_BASE_URL = "https://operator.las.ap-southeast-1.bytepluses.com/api/v1"
+const DEFAULT_BASE_URL = "https://ark.ap-southeast.bytepluses.com/api/v3"
 const DEFAULT_MODEL = "dreamina-seedance-2-5-260628"
 
 export interface CreateBytePlusVideoInput {
@@ -42,18 +42,28 @@ async function parseResponse(response: Response) {
     body = text
   }
   if (!response.ok) {
+    const objectBody = typeof body === "object" && body ? (body as Record<string, unknown>) : null
+    const nestedError = objectBody?.error
     const message =
-      typeof body === "object" && body && "message" in body
-        ? String((body as { message?: unknown }).message || response.statusText)
-        : `BytePlus video API ${response.status}: ${response.statusText}`
+      objectBody && typeof objectBody.message === "string"
+        ? objectBody.message
+        : typeof nestedError === "object" && nestedError && "message" in nestedError
+          ? String((nestedError as { message?: unknown }).message || response.statusText)
+          : `BytePlus video API ${response.status}: ${response.statusText}`
     throw new Error(message)
   }
   return body
 }
 
-/** Start a Seedance 2.5 task. API key is server-only. */
+/** Start a Seedance 2.5 task through BytePlus ModelArk. API key is server-only. */
 export async function createBytePlusVideoTask(input: CreateBytePlusVideoInput): Promise<{ id: string; raw: unknown }> {
   const { apiKey, baseUrl, model } = config()
+
+  // BytePlus currently supports Seedance 2.5 output at 480p/720p. Keep the
+  // higher-resolution option in the app contract for future providers, but do
+  // not send an unsupported value to ModelArk.
+  const resolution = input.resolution === "1080p" ? "720p" : input.resolution
+
   const response = await fetch(`${baseUrl}/contents/generations/tasks`, {
     method: "POST",
     headers: {
@@ -65,7 +75,7 @@ export async function createBytePlusVideoTask(input: CreateBytePlusVideoInput): 
       content: [{ type: "text", text: input.prompt }],
       duration: input.durationSeconds,
       ratio: input.aspectRatio,
-      resolution: input.resolution,
+      resolution,
       generate_audio: input.generateAudio,
       watermark: false,
     }),
