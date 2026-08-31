@@ -25,8 +25,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 async function persistOutput(propertyId: string, jobId: string, providerUrl: string): Promise<string> {
   try {
     const response = await fetch(providerUrl, { cache: "no-store" })
-    if (!response.ok || !response.body) return providerUrl
-    const blob = await put(`ai-video/${propertyId}/${jobId}.mp4`, response.body, {
+    if (!response.ok) return providerUrl
+    const body = await response.blob()
+    const blob = await put(`ai-video/${propertyId}/${jobId}.mp4`, body, {
       access: "public",
       contentType: response.headers.get("content-type") || "video/mp4",
       addRandomSuffix: false,
