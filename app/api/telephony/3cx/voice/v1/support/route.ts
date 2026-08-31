@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
       {
         ...serviceErrorVoiceResponse(product, afterHoursHandoff.destination ?? VOICE_FALLBACK_EXTENSION, "provider_error"),
         customer: { recognized: true },
-        speech: shouldRecord ? handoff.speech : "Non riesco a completare la richiesta. La metto in contatto con un operatore.",
+        speech: shouldRecord ? afterHoursHandoff.speech : "Non riesco a completare la richiesta. La metto in contatto con un operatore.",
         transfer: shouldRecord
           ? { required: false, destination: VOICE_FALLBACK_EXTENSION, reason: "none" }
           : { required: true, destination: afterHoursHandoff.destination ?? VOICE_FALLBACK_EXTENSION, reason: "service_error" },
