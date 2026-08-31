@@ -14,6 +14,8 @@ export interface SendTextResult {
   success: boolean
   externalMessageId?: string
   error?: string
+  /** True only when the network failed before we could learn Meta's outcome. */
+  outcomeUnknown?: boolean
 }
 
 export interface WhatsAppTemplateQuickReply {
@@ -79,15 +81,22 @@ export async function sendWhatsAppText(
 
     if (!res.ok) {
       const apiError = json?.error?.message || `WhatsApp API error (HTTP ${res.status})`
-      return { success: false, error: apiError }
+      // Meta answered explicitly: the request was not accepted as successful,
+      // therefore a controlled retry can be considered by the caller.
+      return { success: false, error: apiError, outcomeUnknown: false }
     }
 
     const externalMessageId: string | undefined = json?.messages?.[0]?.id
     return { success: true, externalMessageId }
   } catch (e) {
+    // A transport failure is different from an HTTP rejection: Meta may have
+    // accepted the message before the connection broke. Automatic resend could
+    // therefore duplicate a guest message, so callers must treat this outcome
+    // as unknown rather than retrying blindly.
     return {
       success: false,
       error: e instanceof Error ? e.message : "Errore di rete verso WhatsApp",
+      outcomeUnknown: true,
     }
   }
 }
@@ -158,7 +167,7 @@ export async function sendWhatsAppTemplate(
     const json = await res.json().catch(() => null)
     if (!res.ok) {
       const apiError = json?.error?.message || `WhatsApp template API error (HTTP ${res.status})`
-      return { success: false, error: apiError }
+      return { success: false, error: apiError, outcomeUnknown: false }
     }
 
     return { success: true, externalMessageId: json?.messages?.[0]?.id }
@@ -166,6 +175,7 @@ export async function sendWhatsAppTemplate(
     return {
       success: false,
       error: e instanceof Error ? e.message : "Errore di rete verso WhatsApp",
+      outcomeUnknown: true,
     }
   }
 }
