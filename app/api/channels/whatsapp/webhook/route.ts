@@ -68,8 +68,13 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST: inbound messages, delivery statuses and managed-template lifecycle
- * events from Meta. The platform signature is verified before any status event
- * can mutate tenant channel configuration.
+ * events from Meta.
+ *
+ * Embedded-Signup tenants are signed by the shared platform app. Legacy/manual
+ * tenants may still be connected through a different Meta app, so message
+ * events fall back to the routed tenant channel's app secret. Template lifecycle
+ * events have no safe phone-number route and are accepted ONLY with the shared
+ * platform signature.
  *
  * Transient processing errors return 500 so Meta can retry. Every externally
  * visible write is idempotent on Meta message id or on the durable pending
@@ -91,25 +96,24 @@ export async function POST(request: NextRequest) {
   try {
     const parsed = parseWhatsAppWebhook(body)
     const platform = getPlatformWhatsAppConfig()
+    const platformSignatureValid = Boolean(
+      platform.appSecret && verifyWhatsAppSignature(rawBody, signature, platform.appSecret),
+    )
 
-    // All Embedded Signup/coexistence WABAs use the platform Meta app. Verify
-    // before processing message_template_status_update because those callbacks
-    // may not carry a phone_number_id and therefore cannot be tenant-routed first.
-    if (platform.appSecret && !verifyWhatsAppSignature(rawBody, signature, platform.appSecret)) {
-      console.warn("[WhatsApp webhook] invalid platform signature")
-      return NextResponse.json({ received: false }, { status: 401 })
-    }
-
-    // Synchronize status only after signature verification. Matching uses the
-    // WABA id plus our managed template name/id, then updates each channel under
-    // its own property id. This is the normal approval/rejection monitoring path.
-    if (platform.appSecret) {
+    // Status callbacks can lack phone_number_id. Never route them by guesswork:
+    // only the platform app signature can mutate managed-template metadata.
+    if (platformSignatureValid) {
       await syncWhatsAppReopenTemplateStatusFromWebhook(supabase, body)
     }
 
-    // A status-only callback has no Inbox record to write. Template lifecycle
-    // events have already been consumed above.
+    // A callback without Inbox-routable events is either a status/template event
+    // or an event type we intentionally ignore. When a platform secret exists,
+    // an invalidly signed callback must not be acknowledged as trusted.
     if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
+      if (platform.appSecret && !platformSignatureValid) {
+        console.warn("[WhatsApp webhook] invalid platform signature on unroutable event")
+        return NextResponse.json({ received: false }, { status: 401 })
+      }
       return NextResponse.json({ received: true }, { status: 200 })
     }
 
@@ -131,30 +135,38 @@ export async function POST(request: NextRequest) {
 
     const processor = new WhatsAppProcessor(supabase)
     let requiresRetry = false
+    let processedAuthenticatedGroup = false
+    let invalidSignatureSeen = false
 
     for (const [phoneNumberId, events] of eventsByPhone) {
       const channel = await getWhatsAppChannelByPhoneNumberId(supabase, phoneNumberId)
       if (!channel) {
-        // Unknown number: authenticated but not connected to this platform.
+        // An authenticated platform event may reference a number no longer
+        // connected. There is no tenant data to mutate, so ignore it.
         continue
       }
 
       const typedChannel = channel as MessagingChannelRow
-      // Legacy channels can have different apps. In deployments without the
-      // shared platform app secret, verify against the tenant channel secret.
-      if (!platform.appSecret) {
-        const signatureValid = verifyWhatsAppSignature(rawBody, signature, typedChannel.credentials?.app_secret || null)
-        if (!signatureValid) {
-          await supabase.from("message_processing_logs").insert({
-            property_id: typedChannel.property_id,
-            channel: "whatsapp",
-            event_type: "signature_invalid",
-            event_data: { phone_number_id: phoneNumberId },
-          })
-          continue
-        }
+      // Backward compatibility: once the platform app secret is configured we
+      // must NOT lock out legacy tenants that were onboarded with another Meta
+      // app. Route first by phone_number_id, then verify that channel's own
+      // decrypted app secret when the shared signature does not match.
+      const tenantSignatureValid = platformSignatureValid
+        ? true
+        : verifyWhatsAppSignature(rawBody, signature, typedChannel.credentials?.app_secret || null)
+
+      if (!tenantSignatureValid) {
+        invalidSignatureSeen = true
+        await supabase.from("message_processing_logs").insert({
+          property_id: typedChannel.property_id,
+          channel: "whatsapp",
+          event_type: "signature_invalid",
+          event_data: { phone_number_id: phoneNumberId },
+        })
+        continue
       }
 
+      processedAuthenticatedGroup = true
       let anyInbound = false
       let anyAppEcho = false
 
@@ -168,7 +180,7 @@ export async function POST(request: NextRequest) {
 
         // Our reopen-template buttons are control messages. Handle them before
         // the duplicate guard so a Meta retry can recover a failed delivery,
-        // while the pending status machine still guarantees at-most-once send.
+        // while the pending status machine still guarantees no blind resend.
         const reopen = await handleWhatsAppReopenAction(
           supabase,
           msg,
@@ -253,6 +265,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (!processedAuthenticatedGroup && invalidSignatureSeen) {
+      return NextResponse.json({ received: false }, { status: 401 })
+    }
     if (requiresRetry) {
       return NextResponse.json({ received: false, retry: true }, { status: 500 })
     }
