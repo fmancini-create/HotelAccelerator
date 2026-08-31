@@ -9,6 +9,7 @@ import {
   BrowserbaseApiError,
   creaBrowserbaseContext,
   creaBrowserbaseSessione,
+  isBrowserbaseCapacityError,
   leggiBrowserbaseLiveView,
   leggiBrowserbaseSessione,
   sessioneBrowserbaseAttiva,
@@ -274,6 +275,18 @@ export async function POST(request: NextRequest) {
     const detail = error instanceof Error ? error.message : "Errore sconosciuto"
     console.error("[pms-browser] apertura non riuscita", { correlationId, propertyId, detail })
     if (leaseId) await salvaErrore(propertyId, leaseId, detail)
+
+    if (isBrowserbaseCapacityError(error)) {
+      return risposta(
+        {
+          error: "Il browser del gestionale ha raggiunto temporaneamente il limite di capacità",
+          code: "PMS_BROWSER_CAPACITY_EXHAUSTED",
+          retryable: true,
+          correlationId,
+        },
+        503,
+      )
+    }
 
     const status = error instanceof BrowserbaseApiError && error.status === 503 ? 503 : 502
     return risposta({ error: "Il gestionale non è disponibile in questo momento", correlationId }, status)

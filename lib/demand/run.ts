@@ -31,6 +31,8 @@ export interface RunOptions {
   since?: string
   limit?: number
   dryRun?: boolean
+  /** Timestamp assoluto oltre il quale la passata restituisce il controllo. */
+  deadlineAt?: number
 }
 
 export interface RunReport {
@@ -48,9 +50,27 @@ export interface RunReport {
   tokensOut: number
   costMicroUsd: number
   errors: string[]
+  stoppedForDeadline: boolean
 }
 
 type ExtractionTargetType = "conversation" | "phone_call"
+
+const MIN_MODEL_BUDGET_MS = 8_000
+
+function deadlineReached(opts: RunOptions, reserveMs = 0): boolean {
+  return typeof opts.deadlineAt === "number" && Date.now() + reserveMs >= opts.deadlineAt
+}
+
+function modelAbortSignal(opts: RunOptions): AbortSignal | undefined {
+  if (typeof opts.deadlineAt !== "number") return undefined
+  return AbortSignal.timeout(Math.max(1, opts.deadlineAt - Date.now()))
+}
+
+function isDeadlineAbort(error: unknown, opts: RunOptions): boolean {
+  if (deadlineReached(opts)) return true
+  if (!(error instanceof Error)) return false
+  return error.name === "TimeoutError" || error.name === "AbortError"
+}
 
 function parseFields(raw: unknown): TrackingField[] {
   if (!Array.isArray(raw)) return []
@@ -238,9 +258,20 @@ export async function runTrackingForGroup(
     tokensOut: 0,
     costMicroUsd: 0,
     errors: [],
+    stoppedForDeadline: false,
+  }
+
+  if (deadlineReached(opts)) {
+    report.stoppedForDeadline = true
+    return report
   }
 
   const done = await loadAlreadyDone(supabase, config.group_id, config.version)
+
+  if (deadlineReached(opts)) {
+    report.stoppedForDeadline = true
+    return report
+  }
 
   const conversations = await listScopedConversations(supabase, config.property_id, sources, {
     since: opts.since,
@@ -251,6 +282,11 @@ export async function runTrackingForGroup(
   report.alreadyDone = done.conversations.size + done.calls.size
 
   for (const conv of conversations) {
+    if (deadlineReached(opts)) {
+      report.stoppedForDeadline = true
+      break
+    }
+
     try {
       if (done.conversations.has(conv.id)) {
         report.alreadyDone++
@@ -336,6 +372,10 @@ export async function runTrackingForGroup(
         report.byModel++
         continue
       }
+      if (deadlineReached(opts, MIN_MODEL_BUDGET_MS)) {
+        report.stoppedForDeadline = true
+        break
+      }
 
       const { data: msgs } = await supabase
         .from("messages")
@@ -357,6 +397,11 @@ export async function runTrackingForGroup(
         continue
       }
 
+      if (deadlineReached(opts, MIN_MODEL_BUDGET_MS)) {
+        report.stoppedForDeadline = true
+        break
+      }
+
       const claimed = await claimModelExtraction(
         supabase,
         config.group_id,
@@ -376,6 +421,7 @@ export async function runTrackingForGroup(
           groupName,
           presetLabel,
           today,
+          abortSignal: modelAbortSignal(opts),
         })
 
         const cost = costMicroUsd(out.tokensIn, out.tokensOut)
@@ -411,160 +457,186 @@ export async function runTrackingForGroup(
         )
       }
     } catch (e) {
+      if (isDeadlineAbort(e, opts)) {
+        report.stoppedForDeadline = true
+        break
+      }
       report.failed++
       const msg = e instanceof Error ? e.message : String(e)
       if (!report.errors.includes(msg)) report.errors.push(msg)
     }
   }
 
-  const calls = await listScopedCalls(supabase, config.property_id, sources, {
-    since: opts.since,
-    limit: opts.limit ?? 500,
-  })
+  if (!report.stoppedForDeadline && !deadlineReached(opts)) {
+    const calls = await listScopedCalls(supabase, config.property_id, sources, {
+      since: opts.since,
+      limit: opts.limit ?? 500,
+    })
 
-  for (const call of calls) {
-    try {
-      if (done.calls.has(call.id)) {
-        report.alreadyDone++
-        continue
-      }
-
-      const callDay = call.started_at ? String(call.started_at).slice(0, 10) : null
-      const rawTranscript = call.transcription?.trim() ?? ""
-      const hasTranscript = rawTranscript.length > 0
-      const phoneMeta = {
-        direzione: call.direction,
-        stato: call.status,
-        durata_secondi: call.duration_seconds,
-      }
-
-      if (!hasTranscript) {
-        if (opts.dryRun) {
-          report.calls++
-          continue
-        }
-        const res = await savePhoneExtraction(supabase, {
-          property_id: config.property_id,
-          group_id: config.group_id,
-          phone_call_id: call.id,
-          config_version: config.version,
-          channel: "phone",
-          kind: "chiamata",
-          reference_date: callDay,
-          payload: {
-            ...phoneMeta,
-            contenuto: "non_disponibile",
-          },
-          confidence: 1,
-          method: "metadati",
-        })
-        if (res === "inserted") report.calls++
-        else report.alreadyDone++
-        continue
-      }
-
-      if (fields.length === 0) {
-        const msg = "Nessun campo configurato: la trascrizione telefonica non puo' essere analizzata."
-        if (!report.errors.includes(msg)) report.errors.push(msg)
-        continue
-      }
-
-      if (opts.dryRun) {
-        report.calls++
-        report.byModel++
-        continue
-      }
-
-      const claimed = await claimModelExtraction(
-        supabase,
-        config.group_id,
-        "phone_call",
-        call.id,
-        config.version,
-      )
-      if (!claimed) {
-        report.alreadyDone++
-        continue
+    for (const call of calls) {
+      if (deadlineReached(opts)) {
+        report.stoppedForDeadline = true
+        break
       }
 
       try {
-        const truncated = rawTranscript.length > MAX_CHARS_PER_CONVERSATION
-        const phoneTranscript = rawTranscript.slice(0, MAX_CHARS_PER_CONVERSATION)
-        const out = await extractWithModel({
-          subject: call.direction === "outbound" ? "Telefonata in uscita" : "Telefonata in arrivo",
-          transcript: phoneTranscript,
-          fields,
-          groupName,
-          presetLabel,
-          today,
-        })
+        if (done.calls.has(call.id)) {
+          report.alreadyDone++
+          continue
+        }
 
-        const cost = costMicroUsd(out.tokensIn, out.tokensOut)
-        const demandDate = out.containsDemand ? referenceDateOf(out.data, refField) : null
-        report.tokensIn += out.tokensIn
-        report.tokensOut += out.tokensOut
-        report.costMicroUsd += cost
+        const callDay = call.started_at ? String(call.started_at).slice(0, 10) : null
+        const rawTranscript = call.transcription?.trim() ?? ""
+        const hasTranscript = rawTranscript.length > 0
+        const phoneMeta = {
+          direzione: call.direction,
+          stato: call.status,
+          durata_secondi: call.duration_seconds,
+        }
 
-        const res = await savePhoneExtraction(supabase, {
-          property_id: config.property_id,
-          group_id: config.group_id,
-          phone_call_id: call.id,
-          config_version: config.version,
-          channel: "phone",
-          kind: "chiamata",
-          // La riga resta datata al giorno della chiamata. La data della domanda
-          // e' separata dentro `richiesta` e l'aggregatore la usa per i KPI di
-          // soggiorno/servizio.
-          reference_date: callDay,
-          payload: {
-            ...phoneMeta,
-            contenuto: "trascrizione",
-            richiesta: out.containsDemand
-              ? {
-                  presente: true,
-                  reference_date: demandDate,
-                  dati: out.data,
-                  confidenza: out.confidence,
-                }
-              : {
-                  presente: false,
-                  reference_date: null,
-                  dati: {},
-                  confidenza: out.confidence,
-                },
-          },
-          confidence: out.confidence,
-          method: "modello",
-          model: "openai/gpt-5.4-mini",
-          tokens_in: out.tokensIn,
-          tokens_out: out.tokensOut,
-          cost_micro_usd: cost,
-          truncated,
-        })
+        if (!hasTranscript) {
+          if (opts.dryRun) {
+            report.calls++
+            continue
+          }
+          const res = await savePhoneExtraction(supabase, {
+            property_id: config.property_id,
+            group_id: config.group_id,
+            phone_call_id: call.id,
+            config_version: config.version,
+            channel: "phone",
+            kind: "chiamata",
+            reference_date: callDay,
+            payload: {
+              ...phoneMeta,
+              contenuto: "non_disponibile",
+            },
+            confidence: 1,
+            method: "metadati",
+          })
+          if (res === "inserted") report.calls++
+          else report.alreadyDone++
+          continue
+        }
 
-        if (res === "already") report.alreadyDone++
-        else {
+        if (fields.length === 0) {
+          const msg = "Nessun campo configurato: la trascrizione telefonica non puo' essere analizzata."
+          if (!report.errors.includes(msg)) report.errors.push(msg)
+          continue
+        }
+
+        if (opts.dryRun) {
           report.calls++
           report.byModel++
-          if (out.containsDemand) report.withDemand++
+          continue
         }
-      } finally {
-        await releaseModelExtraction(
+        if (deadlineReached(opts, MIN_MODEL_BUDGET_MS)) {
+          report.stoppedForDeadline = true
+          break
+        }
+
+        const claimed = await claimModelExtraction(
           supabase,
           config.group_id,
           "phone_call",
           call.id,
           config.version,
         )
+        if (!claimed) {
+          report.alreadyDone++
+          continue
+        }
+
+        try {
+          const truncated = rawTranscript.length > MAX_CHARS_PER_CONVERSATION
+          const phoneTranscript = rawTranscript.slice(0, MAX_CHARS_PER_CONVERSATION)
+          const out = await extractWithModel({
+            subject: call.direction === "outbound" ? "Telefonata in uscita" : "Telefonata in arrivo",
+            transcript: phoneTranscript,
+            fields,
+            groupName,
+            presetLabel,
+            today,
+            abortSignal: modelAbortSignal(opts),
+          })
+
+          const cost = costMicroUsd(out.tokensIn, out.tokensOut)
+          const demandDate = out.containsDemand ? referenceDateOf(out.data, refField) : null
+          report.tokensIn += out.tokensIn
+          report.tokensOut += out.tokensOut
+          report.costMicroUsd += cost
+
+          const res = await savePhoneExtraction(supabase, {
+            property_id: config.property_id,
+            group_id: config.group_id,
+            phone_call_id: call.id,
+            config_version: config.version,
+            channel: "phone",
+            kind: "chiamata",
+            // La riga resta datata al giorno della chiamata. La data della domanda
+            // e' separata dentro `richiesta` e l'aggregatore la usa per i KPI di
+            // soggiorno/servizio.
+            reference_date: callDay,
+            payload: {
+              ...phoneMeta,
+              contenuto: "trascrizione",
+              richiesta: out.containsDemand
+                ? {
+                    presente: true,
+                    reference_date: demandDate,
+                    dati: out.data,
+                    confidenza: out.confidence,
+                  }
+                : {
+                    presente: false,
+                    reference_date: null,
+                    dati: {},
+                    confidenza: out.confidence,
+                  },
+            },
+            confidence: out.confidence,
+            method: "modello",
+            model: "openai/gpt-5.4-mini",
+            tokens_in: out.tokensIn,
+            tokens_out: out.tokensOut,
+            cost_micro_usd: cost,
+            truncated,
+          })
+
+          if (res === "already") report.alreadyDone++
+          else {
+            report.calls++
+            report.byModel++
+            if (out.containsDemand) report.withDemand++
+          }
+        } finally {
+          await releaseModelExtraction(
+            supabase,
+            config.group_id,
+            "phone_call",
+            call.id,
+            config.version,
+          )
+        }
+      } catch (e) {
+        if (isDeadlineAbort(e, opts)) {
+          report.stoppedForDeadline = true
+          break
+        }
+        report.failed++
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!report.errors.includes(msg)) report.errors.push(msg)
       }
-    } catch (e) {
-      report.failed++
-      const msg = e instanceof Error ? e.message : String(e)
-      if (!report.errors.includes(msg)) report.errors.push(msg)
     }
+  } else if (deadlineReached(opts)) {
+    report.stoppedForDeadline = true
   }
 
   if (!opts.dryRun) {
+    // Anche una passata incompleta avanza il turno del gruppo. Il lavoro nuovo
+    // resta riprendibile grazie agli indici idempotenti e al set `alreadyDone`,
+    // mentre aggiornare `last_run_at` impedisce che un tenant con backlog
+    // monopolizzi ogni cron e affami quelli successivi.
     await supabase
       .from("group_tracking_configs")
       .update({ last_run_at: new Date().toISOString() })
