@@ -8,37 +8,68 @@ HotelAccelerator deve impedire che un operatore, una UI o una route interna invi
 
 La finestra viene calcolata sulla conversazione del cliente, non su `messaging_channels.last_inbound_at`: il numero business è condiviso da più ospiti e l'ultimo messaggio di un ospite non deve aprire la finestra di un altro.
 
-## Template standard
+Il tenant non configura manualmente i template in WhatsApp Manager. HotelAccelerator gestisce una definizione logica standard e la provisiona automaticamente sul WABA autorizzato dal tenant durante Embedded Signup.
 
-Nome tecnico atteso di default:
+## Template standard gestito dalla piattaforma
+
+Nome tecnico:
 
 `hotelaccelerator_nuova_comunicazione`
 
-Lingua attesa di default:
+Lingua:
 
 `it`
 
-Testo previsto:
+Categoria richiesta a Meta:
 
-`{{1}} ha una nuova comunicazione per te. Vuoi riceverla qui su WhatsApp?`
+`MARKETING`
 
-`{{1}}` è il nome della property/azienda tenant-scoped.
+Meta può applicare la propria classificazione finale; HotelAccelerator registra la categoria restituita dall'API senza usarla per aggirare regole di consenso o messaggistica.
+
+Testo:
+
+`L'azienda {{1}} ha una nuova comunicazione per te. Vuoi riceverla qui su WhatsApp?`
+
+`{{1}}` è il nome della property/azienda tenant-scoped. La variabile non è all'inizio o alla fine del template, in linea con la validazione applicata da Meta.
 
 Pulsanti quick reply, nell'ordine:
 
 1. `Apri comunicazione`
 2. `Non ora`
 
-I label sono configurati nel template Meta. HotelAccelerator passa payload opachi per collegare il click alla richiesta corretta senza affidarsi al testo visibile del pulsante.
+I label sono parte del template Meta. HotelAccelerator passa payload opachi per collegare il click alla richiesta corretta senza affidarsi al testo visibile del pulsante.
 
-È possibile sovrascrivere nome e lingua per uno specifico `messaging_channels.config` con:
+## Provisioning multi-tenant
+
+Ogni tenant mantiene il proprio WABA. Non esiste un template Meta unico condiviso fisicamente fra aziende diverse.
+
+HotelAccelerator possiede invece una sola definizione applicativa del template e la replica/provisiona sui WABA autorizzati:
+
+1. il tenant avvia `Collega WhatsApp` dentro HotelAccelerator;
+2. Meta Embedded Signup restituisce il WABA e il numero autorizzati;
+3. HotelAccelerator sottoscrive il WABA al webhook condiviso;
+4. `lib/whatsapp/template-provisioning.ts` cerca il template per nome e lingua sul WABA;
+5. se esiste, ne salva `id`, `status` e `category` in `messaging_channels.config`;
+6. se manca, lo crea via Graph API e salva lo stato restituito, normalmente `PENDING`;
+7. il webhook `message_template_status_update` aggiorna automaticamente `APPROVED`, `REJECTED`, `DISABLED`, `FLAGGED` e gli altri stati Meta;
+8. prima di un outbound fuori 24h, la compose route ripete la verifica: questo costituisce il retry/self-healing se il provisioning iniziale era fallito o se lo stato era ancora in revisione.
+
+Metadati non segreti salvati per canale:
 
 - `reopen_template_name`
 - `reopen_template_language`
+- `reopen_template_status`
+- `reopen_template_id`
+- `reopen_template_category`
+- `reopen_template_checked_at`
+- `reopen_template_managed_by = hotelaccelerator`
+- `reopen_template_provisioning_error`
 
-Non inserire token o segreti in questi campi.
+Token e app secret non entrano in questi campi e non vengono mai esposti al browser.
 
-## Flusso
+Se Meta sta ancora revisionando il template, gli invii free-form dentro le 24h continuano a funzionare. Gli outbound business-initiated fuori finestra falliscono chiusi con `TEMPLATE_NOT_READY`; l'operatore non viene invitato ad aprire Meta o a configurare manualmente il tenant.
+
+## Flusso messaggio
 
 ### Finestra aperta
 
@@ -50,14 +81,15 @@ Non inserire token o segreti in questi campi.
 
 ### Finestra chiusa
 
-1. Il testo dell'operatore viene salvato in `whatsapp_pending_messages` prima di contattare Meta.
-2. Parte il template approvato con `{{1}} = properties.name`.
-3. La UI mostra `Comunicazione in attesa`.
-4. Se il cliente preme `Non ora`, la richiesta passa a `declined` e il testo non viene inviato.
-5. Se il cliente preme `Apri comunicazione`, il webhook registra prima il messaggio inbound; questo apre la customer-care window.
-6. Il webhook reclama la richiesta con stato `sending`, invia il testo sospeso e poi la marca `sent`.
-7. Il messaggio viene inserito nella timeline con `source = whatsapp_reopen_queue`.
-8. I quick reply di controllo non vengono passati all'autopilot AI.
+1. La compose route verifica automaticamente che il template managed sia `APPROVED`; se manca lo crea e, finché Meta lo revisiona, non tenta un invio non consentito.
+2. Il testo dell'operatore viene salvato in `whatsapp_pending_messages` prima di contattare Meta.
+3. Parte il template approvato con `{{1}} = properties.name`.
+4. La UI mostra `Comunicazione in attesa`.
+5. Se il cliente preme `Non ora`, la richiesta passa a `declined` e il testo non viene inviato.
+6. Se il cliente preme `Apri comunicazione`, il webhook registra prima il messaggio inbound; questo apre la customer-care window.
+7. Il webhook reclama la richiesta con stato `sending`, invia il testo sospeso e poi la marca `sent`.
+8. Il messaggio viene inserito nella timeline con `source = whatsapp_reopen_queue`.
+9. I quick reply di controllo non vengono passati all'autopilot AI.
 
 ## Idempotenza e retry
 
@@ -77,11 +109,17 @@ Il webhook processa il payload di riapertura anche quando il messaggio inbound �
 
 Dopo una risposta positiva da Meta, lo stato esterno `sent_message_id` viene registrato prima dell'inserimento nella timeline: in caso di errore DB successivo si preferisce un record locale da riparare a un doppio messaggio al cliente.
 
+Il provisioning del template non usa un cron separato: il lifecycle arriva dal webhook Meta già proprietario degli eventi WhatsApp e la compose route esegue un controllo lazy prima del primo outbound fuori finestra. In questo modo non esistono due automazioni concorrenti per lo stesso stato.
+
 ## Sicurezza e tenant isolation
 
+- Ogni WABA resta legato al `messaging_channels` del tenant che lo ha autorizzato.
+- Il provisioning usa il `waba_id` restituito dall'Embedded Signup, mai un WABA indicato liberamente dal browser.
+- Gli aggiornamenti lifecycle dal webhook sono applicati soltanto dopo verifica `X-Hub-Signature-256` della Meta app della piattaforma.
+- Un evento template viene applicato ai canali con lo stesso `waba_id` e al template managed per nome/id.
 - `whatsapp_pending_messages` ha RLS abilitata e policy basata su `auth_property_id()` / `auth_is_super_admin()`.
 - `anon` non ha accesso alla tabella.
-- Tutti gli endpoint verificano l'operatore e ricavano `propertyId` lato server.
+- Tutti gli endpoint operatore verificano l'identità e ricavano `propertyId` lato server.
 - Il contatto passato dalla UI viene riletto con `property_id` prima dell'uso.
 - Il quick-reply viene accettato solo se `pending.property_id`, `messaging_channel_id` e numero mittente coincidono.
 - Nessun segreto WhatsApp viene esposto al browser.
@@ -98,11 +136,14 @@ Il vecchio pulsante `Scrivi` email-only è ritirato a livello route-scoped per e
 
 La UI è responsive (`DialogContent` con limite `92dvh`, launcher accessibile da smartphone).
 
+Il tenant non deve vedere istruzioni del tipo “vai in Meta e crea un template”. Se il managed template è ancora `PENDING` o ha un errore, l'interfaccia deve presentarlo come stato tecnico del canale gestito da HotelAccelerator.
+
 ## Endpoint
 
 - `GET /api/inbox/compose/contacts?q=...`: ricerca minima di nome/email/telefono nel tenant dell'operatore, senza richiedere il modulo CRM completo.
-- `POST /api/inbox/compose/whatsapp`: crea o riusa contatto/conversazione e decide invio immediato vs template.
-- `POST /api/channels/whatsapp/webhook`: oltre all'inbound standard gestisce i quick reply di riapertura.
+- `POST /api/inbox/compose/whatsapp`: crea o riusa contatto/conversazione, decide invio immediato vs template e verifica/provisiona lazy il template managed.
+- `POST /api/channels/whatsapp/embedded-signup`: collega il WABA/numero e provisiona automaticamente il template standard.
+- `POST /api/channels/whatsapp/webhook`: gestisce inbound, quick reply di riapertura e lifecycle `message_template_status_update`.
 
 ## Migrazione
 
@@ -110,19 +151,22 @@ La UI è responsive (`DialogContent` con limite `92dvh`, launcher accessibile da
 
 Migrazione additiva già applicata al progetto Supabase HotelAccelerator il 2026-08-31.
 
+Il provisioning template non richiede nuove colonne: lo stato lifecycle non sensibile vive nel JSONB `messaging_channels.config`, già tenant-scoped.
+
 ## Rollback
 
 Rollback applicativo sicuro:
 
 1. ripristinare le route/client/UI precedenti;
 2. lasciare la tabella `whatsapp_pending_messages` presente ma inutilizzata, così nessun dato/audit viene perso;
-3. non rimuovere la tabella finché esistono richieste in `awaiting_acceptance`, `sending` o `failed_delivery`.
+3. lasciare i template già creati sui WABA: sono innocui se non referenziati e la loro cancellazione automatica non fa parte del rollback;
+4. non rimuovere la tabella finché esistono richieste in `awaiting_acceptance`, `sending` o `failed_delivery`.
 
-La rimozione fisica della tabella è distruttiva e richiede una decisione separata.
+La rimozione fisica della tabella o dei template Meta è distruttiva e richiede una decisione separata.
 
 ## Stato ufficiale
 
 - Composer omnicanale Email/WhatsApp: `Codice` finché non viene collaudato su preview/tenant reale.
 - Enforcement server-side finestra 24h: `Codice`.
-- Template di riapertura: `Specifica` finché il template non è creato e approvato nel WABA interessato.
-- Flusso end-to-end fuori 24h: non promuovere oltre `Codice` senza prova reale del template approvato e click cliente.
+- Provisioning automatico template per-WABA: `Codice` finché non viene provato con un Embedded Signup reale e confermato il lifecycle Meta.
+- Flusso end-to-end fuori 24h: non promuovere oltre `Codice` senza prova reale di `APPROVED`, ricezione template e click cliente.
