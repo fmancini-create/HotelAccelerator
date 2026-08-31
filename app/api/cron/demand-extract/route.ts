@@ -155,6 +155,21 @@ export async function GET(request: NextRequest) {
         limit: PER_GROUP,
         deadlineAt: extractionDeadlineAt,
       })
+
+      // `runTrackingForGroup` aggiorna normalmente last_run_at alla fine. Esiste
+      // però un caso limite intenzionale: se la deadline è già scaduta prima o
+      // subito dopo il caricamento del set idempotente, il helper restituisce
+      // presto per non iniziare altro I/O. Il cron garantisce comunque la
+      // rotazione del gruppo così un backlog non monopolizza il primo posto.
+      if (report.stoppedForDeadline) {
+        const { error: rotationError } = await supabase
+          .from("group_tracking_configs")
+          .update({ last_run_at: new Date().toISOString() })
+          .eq("id", config.id)
+          .eq("property_id", config.property_id)
+        if (rotationError) throw new Error(`Demand rotation marker: ${rotationError.message}`)
+      }
+
       spentMicroUsd += report.costMicroUsd
 
       const changedCalendarInputs = report.withDemand > 0 || report.calls > 0
@@ -184,9 +199,6 @@ export async function GET(request: NextRequest) {
       })
 
       if (report.stoppedForDeadline) {
-        // `last_run_at` è stato avanzato da runTrackingForGroup: al prossimo
-        // giro un altro gruppo/tenant ha priorità. Il backlog incompleto resta
-        // selezionabile perché le singole estrazioni sono idempotenti.
         stopReason = "deadline gruppo raggiunta"
         break
       }
