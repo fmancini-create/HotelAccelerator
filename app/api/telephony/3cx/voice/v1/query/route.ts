@@ -6,7 +6,7 @@ import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
 import { VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
 import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
-import { touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
+import { captureSharedPbxVoiceExchange, touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -100,10 +100,19 @@ export async function POST(request: NextRequest) {
       callerNumber: parsed.data.caller_number,
     })
 
+    await captureSharedPbxVoiceExchange({
+      targetPropertyId: auth.propertyId,
+      callerNumber: parsed.data.caller_number,
+      history: parsed.data.history,
+      question: parsed.data.question,
+      responseSpeech: response.speech,
+      agentLabel: "Assistente telefonico",
+    })
+
     return NextResponse.json({ ...response, request_id: requestId }, { headers: NO_STORE })
   } catch (error) {
-    // Non si registra il testo del chiamante né il token. Il dettaglio tecnico
-    // resta nel log server; al centralino arriva sempre un fallback eseguibile.
+    // Non si registra il testo del chiamante né il token nei log. Il dettaglio
+    // tecnico resta server-side; al centralino arriva sempre un fallback.
     console.error("[3cx-voice] query failed", {
       requestId,
       propertyId: auth.propertyId,
