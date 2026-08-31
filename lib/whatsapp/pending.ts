@@ -6,6 +6,13 @@ import { normalizeWhatsAppNumber, sendWhatsAppTemplate, sendWhatsAppText } from 
 export const DEFAULT_WHATSAPP_REOPEN_TEMPLATE = "hotelaccelerator_nuova_comunicazione"
 export const DEFAULT_WHATSAPP_REOPEN_LANGUAGE = "it"
 export const WHATSAPP_REOPEN_REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000
+/**
+ * While a webhook is actively delivering the queued free-form message, Meta
+ * retries the same quick-reply event instead of receiving a false success.
+ * After this window we no longer know whether the external send completed, so
+ * we stop automatic retries and move the row to a manual-review state.
+ */
+export const WHATSAPP_SENDING_UNCERTAIN_AFTER_MS = 2 * 60 * 1000
 
 const ACCEPT_PREFIX = "HA_WA_OPEN:"
 const DECLINE_PREFIX = "HA_WA_DECLINE:"
@@ -18,6 +25,7 @@ type PendingStatus =
   | "declined"
   | "failed_template"
   | "failed_delivery"
+  | "delivery_unknown"
   | "expired"
 
 interface PendingRow {
@@ -37,6 +45,7 @@ interface PendingRow {
   expires_at: string
   accepted_at: string | null
   sent_message_id: string | null
+  updated_at: string
 }
 
 export interface QueueReopenInput {
@@ -67,6 +76,16 @@ function templateLanguage(channel: MessagingChannelRow): string {
   return typeof configured === "string" && configured.trim()
     ? configured.trim()
     : DEFAULT_WHATSAPP_REOPEN_LANGUAGE
+}
+
+export function isWhatsAppSendingAttemptStale(
+  updatedAt: string | null | undefined,
+  nowMs = Date.now(),
+): boolean {
+  if (!updatedAt) return true
+  const startedAt = new Date(updatedAt).getTime()
+  if (!Number.isFinite(startedAt)) return true
+  return nowMs - startedAt >= WHATSAPP_SENDING_UNCERTAIN_AFTER_MS
 }
 
 /**
@@ -240,7 +259,7 @@ export async function handleWhatsAppReopenAction(
 
   const now = new Date()
   if (new Date(pending.expires_at).getTime() <= now.getTime()) {
-    if (!["sent", "declined", "expired"].includes(pending.status)) {
+    if (!["sent", "declined", "expired", "delivery_unknown"].includes(pending.status)) {
       await supabase
         .from("whatsapp_pending_messages")
         .update({ status: "expired", updated_at: now.toISOString() })
@@ -263,8 +282,33 @@ export async function handleWhatsAppReopenAction(
   }
 
   if (pending.status === "sent") return { handled: true, delivered: true }
-  if (pending.status === "declined" || pending.status === "expired" || pending.status === "failed_template") {
-    return { handled: true, delivered: false }
+  if (
+    pending.status === "declined" ||
+    pending.status === "expired" ||
+    pending.status === "failed_template" ||
+    pending.status === "delivery_unknown"
+  ) {
+    return { handled: true, delivered: false, error: pending.status === "delivery_unknown" ? "Esito consegna da verificare manualmente" : undefined }
+  }
+
+  // If a previous invocation died after claiming the row, replying 200 here
+  // would strand it forever. While the attempt is fresh we ask Meta to retry
+  // the webhook, but we NEVER issue a second send. Once it is stale the real
+  // external outcome is unknowable, so it becomes terminal/manual-review.
+  if (pending.status === "sending") {
+    if (!isWhatsAppSendingAttemptStale(pending.updated_at, now.getTime())) {
+      return { handled: true, requiresRetry: true, error: "Consegna WhatsApp ancora in corso" }
+    }
+
+    const unknownMessage =
+      "Esito consegna WhatsApp incerto: nessun reinvio automatico per evitare duplicati. Verificare la conversazione prima di ritentare."
+    await supabase
+      .from("whatsapp_pending_messages")
+      .update({ status: "delivery_unknown", last_error: unknownMessage, updated_at: now.toISOString() })
+      .eq("id", pending.id)
+      .eq("property_id", propertyId)
+      .eq("status", "sending")
+    return { handled: true, delivered: false, error: unknownMessage }
   }
 
   // Claim before the external call. A concurrent/retried webhook sees `sending`
@@ -284,20 +328,31 @@ export async function handleWhatsAppReopenAction(
     .maybeSingle()
 
   if (claimError) return { handled: true, requiresRetry: true, error: claimError.message }
-  if (!claimed?.id) return { handled: true }
+  if (!claimed?.id) return { handled: true, requiresRetry: true, error: "Consegna già presa in carico" }
 
   const sent = await sendWhatsAppText(channel.config, channel.credentials, pending.to_phone, pending.body)
   if (!sent.success) {
+    const outcomeUnknown = sent.outcomeUnknown === true
+    const message = outcomeUnknown
+      ? `Esito consegna WhatsApp incerto: ${sent.error ?? "errore di rete"}. Nessun reinvio automatico.`
+      : sent.error ?? "Errore consegna WhatsApp"
+
     await supabase
       .from("whatsapp_pending_messages")
       .update({
-        status: "failed_delivery",
-        last_error: sent.error ?? "Errore consegna WhatsApp",
+        status: outcomeUnknown ? "delivery_unknown" : "failed_delivery",
+        last_error: message,
         updated_at: new Date().toISOString(),
       })
       .eq("id", pending.id)
       .eq("property_id", propertyId)
-    return { handled: true, requiresRetry: true, error: sent.error }
+
+    return {
+      handled: true,
+      requiresRetry: !outcomeUnknown,
+      delivered: false,
+      error: message,
+    }
   }
 
   // Mark external delivery first. If timeline persistence fails later we must
