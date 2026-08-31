@@ -16,7 +16,7 @@ const createSchema = z.object({
   brief: z.string().trim().min(20).max(6000),
   aspectRatio: z.enum(["16:9", "9:16"]).default("16:9"),
   durationSeconds: z.number().int().min(4).max(30).default(30),
-  resolution: z.enum(["720p", "1080p"]).default("1080p"),
+  resolution: z.literal("720p").default("720p"),
   generateAudio: z.boolean().default(false),
 })
 
