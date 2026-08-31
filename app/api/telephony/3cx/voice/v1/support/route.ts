@@ -11,6 +11,7 @@ import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
 import { getVoiceIvrRoute, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
 import { findVoiceSupportCustomer, isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { invalidCustomerCodeSpeech, resolveSupportHandoff } from "@/lib/telephony/voice-support"
+import { captureSharedPbxVoiceExchange, touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -110,6 +111,11 @@ export async function POST(request: NextRequest) {
   const parsed = requestSchema.safeParse(raw)
   if (!parsed.success) return unauthenticatedCodeResponse(requestId)
 
+  await touchSharedPbxRouteHint({
+    targetPropertyId: auth.propertyId,
+    callerNumber: parsed.data.caller_number,
+  })
+
   const suiteProductKey = VOICE_PRODUCT_TO_SUITE_PRODUCT[product.key]
   const customerCode = normalizeCustomerCode(parsed.data.customer_code, suiteProductKey)
   if (!customerCode) return unauthenticatedCodeResponse(requestId)
@@ -166,12 +172,22 @@ export async function POST(request: NextRequest) {
       ? afterHoursHandoff
       : { action: "none" as const, destination: null, mode: null, speech: null }
     const shouldRecord = handoff.action === "record_message"
+    const speech = shouldRecord ? handoff.speech || response.speech : response.speech
+
+    await captureSharedPbxVoiceExchange({
+      targetPropertyId: auth.propertyId,
+      callerNumber: parsed.data.caller_number,
+      history: parsed.data.history,
+      question: parsed.data.question,
+      responseSpeech: speech,
+      agentLabel: route?.agent_label ?? product.label,
+    })
 
     return NextResponse.json(
       {
         ...response,
         customer: { recognized: true },
-        speech: shouldRecord ? handoff.speech : response.speech,
+        speech,
         transfer: shouldRecord
           ? { required: false, destination: VOICE_FALLBACK_EXTENSION, reason: "none" }
           : response.transfer,

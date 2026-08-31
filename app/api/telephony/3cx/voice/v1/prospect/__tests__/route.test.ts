@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   getVoiceIvrRoute: vi.fn(),
   getVoiceIvrSharedBaseIds: vi.fn(),
   isVoiceSupportHub: vi.fn(),
+  touchSharedPbxRouteHint: vi.fn(),
+  captureSharedPbxVoiceExchange: vi.fn(),
 }))
 
 vi.mock("@/lib/telephony/inbound-auth", () => ({ authenticateVoiceInbound: mocks.authenticateVoiceInbound }))
@@ -25,6 +27,10 @@ vi.mock("@/lib/telephony/voice-routing", () => ({
   isMissingVoiceRoutingSchema: () => false,
 }))
 vi.mock("@/lib/telephony/voice-support-customer", () => ({ isVoiceSupportHub: mocks.isVoiceSupportHub }))
+vi.mock("@/lib/telephony/shared-pbx-routing", () => ({
+  touchSharedPbxRouteHint: mocks.touchSharedPbxRouteHint,
+  captureSharedPbxVoiceExchange: mocks.captureSharedPbxVoiceExchange,
+}))
 
 const HUB = "6b1e7c05-18b5-43a3-b7bd-1ae09e6921b7"
 const BASE = "19ff108d-06c0-4123-8a6b-56b1cde09921"
@@ -39,6 +45,8 @@ function setupRoute() {
   mocks.isVoiceSupportHub.mockResolvedValue(true)
   mocks.takeVoiceRequest.mockReturnValue({ allowed: true })
   mocks.getVoiceIvrSharedBaseIds.mockResolvedValue([])
+  mocks.touchSharedPbxRouteHint.mockResolvedValue(true)
+  mocks.captureSharedPbxVoiceExchange.mockResolvedValue("voice-call")
   mocks.getVoiceIvrRoute.mockResolvedValue({
     id: "115a9ff2-7b49-4ba6-8b12-c5b93a9523a5",
     primary_knowledge_base_id: BASE,
@@ -51,7 +59,7 @@ function setupRoute() {
 }
 
 describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
-  it("interroga la knowledge base configurata senza richiedere una fonte repo sincronizzata", async () => {
+  it("interroga la knowledge base e registra la conversazione del PBX condiviso", async () => {
     setupRoute()
     mocks.answerVoiceQuestion.mockResolvedValue({
       ok: true,
@@ -62,7 +70,7 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
     const { POST } = await loadRoute()
     const response = await POST(new NextRequest("https://example.test/api/telephony/3cx/voice/v1/prospect?product=santaddeo-rms", {
       method: "POST",
-      body: JSON.stringify({ question: "Cos'è Santaddeo?" }),
+      body: JSON.stringify({ question: "Cos'è Santaddeo?", caller_number: "+393331234567", history: [] }),
     }))
 
     expect(response.status).toBe(200)
@@ -71,6 +79,16 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
       productKey: "santaddeo-rms",
       primaryKnowledgeBaseId: BASE,
       question: "Cos'è Santaddeo?",
+    }))
+    expect(mocks.touchSharedPbxRouteHint).toHaveBeenCalledWith({
+      targetPropertyId: HUB,
+      callerNumber: "+393331234567",
+    })
+    expect(mocks.captureSharedPbxVoiceExchange).toHaveBeenCalledWith(expect.objectContaining({
+      targetPropertyId: HUB,
+      callerNumber: "+393331234567",
+      question: "Cos'è Santaddeo?",
+      responseSpeech: "Santaddeo RMS è il sistema di revenue management di 4BID.",
     }))
   })
 

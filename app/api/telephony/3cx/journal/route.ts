@@ -4,6 +4,7 @@ import { esitoGruppoSquillo, ESITO_DEDOTTO, ESITO_DAL_CENTRALINO } from "@/lib/t
 import { authenticateInbound, syntheticCallId } from "@/lib/telephony/inbound-auth"
 import { phoneMatchKey } from "@/lib/telephony/threecx-client"
 import { findUserIdByExtension, findUserIdByEmail } from "@/lib/telephony/user-extension"
+import { consumeSharedPbxRouteHint, resolveSharedPbxJournalTarget } from "@/lib/telephony/shared-pbx-routing"
 
 /**
  * Endpoint richiamato DA 3CX a fine chiamata ("ReportCall" nel template CRM):
@@ -52,7 +53,7 @@ function capped(value: string, max: number): string | null {
 export async function POST(request: NextRequest) {
   const auth = await authenticateInbound(request)
   if (!auth.ok) return errorFor(auth.status)
-  const propertyId = auth.propertyId
+  const authenticatedPropertyId = auth.propertyId
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return NextResponse.json({ error: "Corpo della richiesta non valido." }, { status: 400 })
@@ -62,6 +63,20 @@ export async function POST(request: NextRequest) {
   const direction = rawDirection.includes("out") ? "outbound" : "inbound"
   const extension = pick(body, "extension", "agent")
   const startedAtRaw = pick(body, "started_at", "callStart")
+  const endedAtRaw = pick(body, "ended_at", "callEnd")
+
+  // Una integrazione CRM 3CX e' globale per PBX e il ReportCall non espone il
+  // DID. Nel caso esplicitamente configurato di PBX condiviso, un endpoint
+  // voce autenticato puo' avere lasciato un hint temporale per lo stesso
+  // chiamante. Senza hint verificato il tenant autenticato resta invariato.
+  const routing = await resolveSharedPbxJournalTarget({
+    sourcePropertyId: authenticatedPropertyId,
+    callerNumber: number,
+    direction,
+    startedAt: startedAtRaw || null,
+    endedAt: endedAtRaw || null,
+  })
+  const propertyId = routing.propertyId
 
   const providedId = pick(body, "call_id", "callId")
   const externalId =
@@ -76,9 +91,31 @@ export async function POST(request: NextRequest) {
   const transcriptionSummary = capped(pick(body, "summary", "transcription_summary", "Summary"), 25_000)
   const recordingUrl = capped(pick(body, "recording_url", "recordingUrl", "RecordingUrl"), 8_000)
   const sentiment = capped(pick(body, "sentiment", "Sentiment"), 500)
-  const hasTranscriptData = Boolean(transcription || transcriptionSummary || recordingUrl || sentiment)
+  const providerHasVoiceData = Boolean(transcription || transcriptionSummary || recordingUrl || sentiment)
 
   const supabase = createServiceClient()
+
+  let existingVoiceCall: {
+    external_call_id: string | null
+    started_at: string | null
+    ended_at: string | null
+    agent_name: string | null
+    transcription: string | null
+    transcription_summary: string | null
+    recording_url: string | null
+    sentiment: string | null
+    transcription_updated_at: string | null
+  } | null = null
+
+  if (routing.phoneCallId) {
+    const { data } = await supabase
+      .from("phone_calls")
+      .select("external_call_id, started_at, ended_at, agent_name, transcription, transcription_summary, recording_url, sentiment, transcription_updated_at")
+      .eq("id", routing.phoneCallId)
+      .eq("property_id", propertyId)
+      .maybeSingle()
+    if (data) existingVoiceCall = data
+  }
 
   let contactId: string | null = null
   const key = phoneMatchKey(number)
@@ -134,6 +171,12 @@ export async function POST(request: NextRequest) {
     timeoutSecondi: timeoutGruppo,
   })
 
+  const effectiveTranscription = transcription ?? existingVoiceCall?.transcription ?? null
+  const effectiveSummary = transcriptionSummary ?? existingVoiceCall?.transcription_summary ?? null
+  const effectiveRecording = recordingUrl ?? existingVoiceCall?.recording_url ?? null
+  const effectiveSentiment = sentiment ?? existingVoiceCall?.sentiment ?? null
+  const hasVoiceData = Boolean(effectiveTranscription || effectiveSummary || effectiveRecording || effectiveSentiment)
+
   const record = {
     property_id: propertyId,
     contact_id: contactId,
@@ -141,23 +184,35 @@ export async function POST(request: NextRequest) {
     counterpart_number: number || null,
     extension: extension || null,
     user_id: userId,
-    agent_name: pick(body, "agent_name", "agent") || null,
+    agent_name: pick(body, "agent_name", "agent") || existingVoiceCall?.agent_name || null,
     status: esitoDedotto ?? statusDalCentralino,
     provider_status: statusDalCentralino,
     status_source: esitoDedotto ? ESITO_DEDOTTO : ESITO_DAL_CENTRALINO,
-    started_at: toIsoOrNull(startedAtRaw) ?? new Date().toISOString(),
-    ended_at: toIsoOrNull(pick(body, "ended_at", "callEnd")),
+    started_at: toIsoOrNull(startedAtRaw) ?? existingVoiceCall?.started_at ?? new Date().toISOString(),
+    ended_at: toIsoOrNull(endedAtRaw) ?? existingVoiceCall?.ended_at ?? null,
     duration_seconds: durataSecondi,
-    external_call_id: externalId,
+    external_call_id: externalId ?? existingVoiceCall?.external_call_id ?? null,
     notes: typeof body.notes === "string" ? body.notes.slice(0, 1000) : null,
-    transcription,
-    transcription_summary: transcriptionSummary,
-    recording_url: recordingUrl,
-    sentiment,
-    transcription_updated_at: hasTranscriptData ? new Date().toISOString() : null,
+    transcription: effectiveTranscription,
+    transcription_summary: effectiveSummary,
+    recording_url: effectiveRecording,
+    sentiment: effectiveSentiment,
+    transcription_updated_at: providerHasVoiceData
+      ? new Date().toISOString()
+      : existingVoiceCall?.transcription_updated_at ?? (hasVoiceData ? new Date().toISOString() : null),
   }
 
-  if (externalId) {
+  if (routing.phoneCallId && existingVoiceCall) {
+    const { error } = await supabase
+      .from("phone_calls")
+      .update(record)
+      .eq("id", routing.phoneCallId)
+      .eq("property_id", propertyId)
+    if (error) {
+      console.error("[3cx-journal] shared voice merge failed", { propertyId, extension, message: error.message })
+      return NextResponse.json({ error: "Errore interno" }, { status: 500 })
+    }
+  } else if (externalId) {
     const { error } = await supabase
       .from("phone_calls")
       .upsert(record, { onConflict: "property_id,external_call_id" })
@@ -173,11 +228,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (routing.routed) {
+    await consumeSharedPbxRouteHint(routing.hintId)
+    console.info("[3cx-journal] shared PBX call routed", {
+      sourcePropertyId: authenticatedPropertyId,
+      propertyId,
+      extension,
+      mergedVoiceCapture: Boolean(routing.phoneCallId && existingVoiceCall),
+    })
+  }
+
   return NextResponse.json({
     ok: true,
     linked_contact: contactId,
     transcript_received: Boolean(transcription),
     summary_received: Boolean(transcriptionSummary),
     recording_received: Boolean(recordingUrl),
+    shared_pbx_routed: routing.routed,
+    voice_capture_merged: Boolean(routing.phoneCallId && existingVoiceCall),
   })
 }

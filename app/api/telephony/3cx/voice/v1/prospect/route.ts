@@ -12,6 +12,7 @@ import {
   isMissingVoiceRoutingSchema,
 } from "@/lib/telephony/voice-routing"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
+import { captureSharedPbxVoiceExchange, touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -108,6 +109,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Richiesta vocale non valida", request_id: requestId }, { status: 400, headers: NO_STORE })
   }
 
+  await touchSharedPbxRouteHint({
+    targetPropertyId: auth.propertyId,
+    callerNumber: parsed.data.caller_number,
+  })
+
   try {
     const sharedBaseIds = route ? await getVoiceIvrSharedBaseIds(route.id) : []
     const response = await answerVoiceQuestion({
@@ -123,6 +129,15 @@ export async function POST(request: NextRequest) {
       fallbackDestination: route?.fallback_destination,
       agentLabel: route?.agent_label,
       crmToolKey: route?.crm_tool_key,
+    })
+
+    await captureSharedPbxVoiceExchange({
+      targetPropertyId: auth.propertyId,
+      callerNumber: parsed.data.caller_number,
+      history: parsed.data.history,
+      question: parsed.data.question,
+      responseSpeech: response.speech,
+      agentLabel: route?.agent_label ?? product.label,
     })
 
     // Il centralino conversazionale deve prima parlare. Se il motore non ha

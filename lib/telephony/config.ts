@@ -22,6 +22,11 @@ export type TelephonyRow = {
   inbound_secret_encrypted: string | null
   /** Credenziale dedicata agli strumenti vocali 3CX, distinta dal CRM. */
   voice_inbound_secret_encrypted: string | null
+  /**
+   * Raro caso di PBX condiviso: property che possiede il template/secret CRM
+   * globale di 3CX e che riceve materialmente il ReportCall.
+   */
+  shared_pbx_journal_property_id: string | null
   is_active: boolean
   last_check_at: string | null
   last_check_status: string | null
