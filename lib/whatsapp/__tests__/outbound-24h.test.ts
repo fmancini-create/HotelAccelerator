@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { sendWhatsAppTemplate } from "@/lib/whatsapp/client"
 import { parseWhatsAppReopenAction } from "@/lib/whatsapp/pending"
+import {
+  ensureWhatsAppReopenTemplate,
+  WHATSAPP_REOPEN_TEMPLATE_BODY,
+  WHATSAPP_REOPEN_TEMPLATE_NAME,
+} from "@/lib/whatsapp/template-provisioning"
 import type { InboundWhatsAppMessage } from "@/lib/whatsapp/processor"
 
 afterEach(() => {
@@ -57,6 +62,94 @@ describe("WhatsApp 24h outbound", () => {
         sub_type: "quick_reply",
         index: "1",
         parameters: [{ type: "payload", payload: "HA_WA_DECLINE:11111111-1111-4111-8111-111111111111" }],
+      },
+    ])
+  })
+
+  it("reuses an existing tenant WABA template instead of creating a duplicate", async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "template-123",
+              name: WHATSAPP_REOPEN_TEMPLATE_NAME,
+              language: "it",
+              status: "APPROVED",
+              category: "MARKETING",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    )
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await ensureWhatsAppReopenTemplate({
+      wabaId: "waba-1",
+      graphVersion: "v26.0",
+      accessToken: "business-token",
+      sampleCompanyName: "Villa Demo",
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      created: false,
+      status: "APPROVED",
+      templateId: "template-123",
+      category: "MARKETING",
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("/waba-1/message_templates?")
+  })
+
+  it("creates the managed template automatically when a tenant WABA does not have it", async () => {
+    const responses = [
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+      new Response(JSON.stringify({ id: "template-new", status: "PENDING", category: "MARKETING" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ]
+    const fetchMock = vi.fn<typeof fetch>(async () => responses.shift()!)
+    vi.stubGlobal("fetch", fetchMock)
+
+    const result = await ensureWhatsAppReopenTemplate({
+      wabaId: "waba-2",
+      graphVersion: "v26.0",
+      accessToken: "business-token",
+      sampleCompanyName: "Villa I Barronci Resort & Spa",
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      created: true,
+      status: "PENDING",
+      templateId: "template-new",
+      category: "MARKETING",
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    const [, createInit] = fetchMock.mock.calls[1]!
+    const requestBody = JSON.parse(String(createInit?.body))
+    expect(requestBody.name).toBe(WHATSAPP_REOPEN_TEMPLATE_NAME)
+    expect(requestBody.language).toBe("it")
+    expect(requestBody.category).toBe("MARKETING")
+    expect(requestBody.components).toEqual([
+      {
+        type: "BODY",
+        text: WHATSAPP_REOPEN_TEMPLATE_BODY,
+        example: { body_text: [["Villa I Barronci Resort & Spa"]] },
+      },
+      {
+        type: "BUTTONS",
+        buttons: [
+          { type: "QUICK_REPLY", text: "Apri comunicazione" },
+          { type: "QUICK_REPLY", text: "Non ora" },
+        ],
       },
     ])
   })
