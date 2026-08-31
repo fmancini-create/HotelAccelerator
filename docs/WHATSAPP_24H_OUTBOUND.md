@@ -91,7 +91,7 @@ Se Meta sta ancora revisionando il template, gli invii free-form dentro le 24h c
 8. Il messaggio viene inserito nella timeline con `source = whatsapp_reopen_queue`.
 9. I quick reply di controllo non vengono passati all'autopilot AI.
 
-## Idempotenza e retry
+## Idempotenza, retry e recovery
 
 La coda usa gli stati:
 
@@ -101,15 +101,30 @@ La coda usa gli stati:
 - `declined`
 - `failed_template`
 - `failed_delivery`
+- `delivery_unknown`
 - `expired`
 
 Esiste al massimo una richiesta attiva per conversazione negli stati `awaiting_acceptance`, `sending`, `failed_delivery`.
 
-Il webhook processa il payload di riapertura anche quando il messaggio inbound è un retry già presente nella Inbox. In caso di `failed_delivery`, il retry Meta può ritentare la consegna. Una richiesta già `sent` non viene inviata nuovamente.
+Il webhook processa il payload di riapertura anche quando il messaggio inbound è un retry già presente nella Inbox. In caso di rifiuto HTTP esplicito da Meta, `failed_delivery` può essere ripreso dal retry dello stesso evento. Una richiesta già `sent` non viene inviata nuovamente.
+
+`delivery_unknown` è invece terminale e richiede verifica umana. Viene usato quando la connessione cade senza una risposta Meta oppure quando un processo resta in `sending` oltre la finestra di recovery: in entrambi i casi Meta potrebbe avere già accettato il messaggio e un reinvio automatico rischierebbe di duplicarlo. Finché un claim `sending` è recente, il webhook risponde retryable a Meta senza eseguire un secondo send; dopo due minuti lo stato diventa `delivery_unknown` e libera la conversazione da un lock permanente.
 
 Dopo una risposta positiva da Meta, lo stato esterno `sent_message_id` viene registrato prima dell'inserimento nella timeline: in caso di errore DB successivo si preferisce un record locale da riparare a un doppio messaggio al cliente.
 
 Il provisioning del template non usa un cron separato: il lifecycle arriva dal webhook Meta già proprietario degli eventi WhatsApp e la compose route esegue un controllo lazy prima del primo outbound fuori finestra. In questo modo non esistono due automazioni concorrenti per lo stesso stato.
+
+## Firma webhook e compatibilità
+
+Gli Embedded Signup/coexistence usano la Meta app di piattaforma e quindi `META_APP_SECRET`. I canali legacy/manuali possono però essere stati collegati a un'altra Meta app e conservano il proprio `app_secret` cifrato nelle credenziali tenant.
+
+Per non rompere quei tenant quando la piattaforma configura il secret condiviso:
+
+- gli eventi con `phone_number_id` vengono prima instradati al canale tenant corretto;
+- una firma valida della app di piattaforma è accettata per i canali Embedded Signup;
+- se la firma condivisa non coincide, viene verificato il secret del canale tenant già risolto;
+- gli eventi lifecycle del template, che possono non avere `phone_number_id`, modificano lo stato soltanto con firma valida della app di piattaforma;
+- un payload senza firma valida non produce scritture Inbox o configurazioni template.
 
 ## Sicurezza e tenant isolation
 
@@ -145,11 +160,12 @@ Il tenant non deve vedere istruzioni del tipo “vai in Meta e crea un template�
 - `POST /api/channels/whatsapp/embedded-signup`: collega il WABA/numero e provisiona automaticamente il template standard.
 - `POST /api/channels/whatsapp/webhook`: gestisce inbound, quick reply di riapertura e lifecycle `message_template_status_update`.
 
-## Migrazione
+## Migrazioni
 
-`supabase/migrations/20260831162757_add_whatsapp_pending_messages.sql`
+- `supabase/migrations/20260831162757_add_whatsapp_pending_messages.sql`
+- `supabase/migrations/20260831213000_harden_whatsapp_pending_delivery_recovery.sql`
 
-Migrazione additiva già applicata al progetto Supabase HotelAccelerator il 2026-08-31.
+La prima migrazione additiva è già applicata al progetto Supabase HotelAccelerator il 2026-08-31. La seconda aggiunge soltanto lo stato terminale `delivery_unknown`; non elimina dati né cambia il perimetro RLS.
 
 Il provisioning template non richiede nuove colonne: lo stato lifecycle non sensibile vive nel JSONB `messaging_channels.config`, già tenant-scoped.
 
@@ -160,13 +176,14 @@ Rollback applicativo sicuro:
 1. ripristinare le route/client/UI precedenti;
 2. lasciare la tabella `whatsapp_pending_messages` presente ma inutilizzata, così nessun dato/audit viene perso;
 3. lasciare i template già creati sui WABA: sono innocui se non referenziati e la loro cancellazione automatica non fa parte del rollback;
-4. non rimuovere la tabella finché esistono richieste in `awaiting_acceptance`, `sending` o `failed_delivery`.
+4. non rimuovere la tabella finché esistono richieste in `awaiting_acceptance`, `sending` o `failed_delivery`;
+5. conservare eventuali righe `delivery_unknown` per audit: cancellarle renderebbe impossibile ricostruire un invio dall'esito incerto.
 
 La rimozione fisica della tabella o dei template Meta è distruttiva e richiede una decisione separata.
 
 ## Stato ufficiale
 
-- Composer omnicanale Email/WhatsApp: `Codice` finché non viene collaudato su preview/tenant reale.
+- Composer omnicanale Email/WhatsApp: `Codice` finché non viene collaudato su tenant reale.
 - Enforcement server-side finestra 24h: `Codice`.
 - Provisioning automatico template per-WABA: `Codice` finché non viene provato con un Embedded Signup reale e confermato il lifecycle Meta.
 - Flusso end-to-end fuori 24h: non promuovere oltre `Codice` senza prova reale di `APPROVED`, ricezione template e click cliente.
