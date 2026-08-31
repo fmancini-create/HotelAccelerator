@@ -9,9 +9,9 @@ Permettere a un utente dell'area Marketing di descrivere uno spot in linguaggio 
 ## Flusso v1
 
 1. L'utente apre `/admin/marketing/video` e scrive il brief.
-2. Sceglie 16:9 o 9:16, 15/20/30 secondi, 720p/1080p e audio nativo on/off.
+2. Sceglie 16:9 o 9:16, 15/20/30 secondi, 720p e audio nativo on/off.
 3. `lib/marketing/video-director.ts` usa il provider AI centrale tramite Vercel AI Gateway per produrre titolo, storyboard e un master prompt cinematografico.
-4. `lib/integrations/byteplus/video.ts` avvia un task Seedance 2.5 con BytePlus.
+4. `lib/integrations/byteplus/video.ts` avvia un task Seedance 2.5 con BytePlus ModelArk.
 5. La UI interroga periodicamente lo stato; quando il task e' pronto l'API copia il file in Vercel Blob per non dipendere dall'URL temporaneo del provider.
 6. Job, storyboard, provider task ID, stato, errori e output restano tenant-scoped in `ai_video_jobs`.
 
@@ -28,14 +28,16 @@ Permettere a un utente dell'area Marketing di descrivere uno spot in linguaggio 
 
 Obbligatoria:
 
-- `BYTEPLUS_VIDEO_API_KEY`: chiave BytePlus per il servizio video.
+- `BYTEPLUS_VIDEO_API_KEY`: chiave BytePlus ModelArk per il servizio video.
 
 Opzionali:
 
-- `BYTEPLUS_VIDEO_API_BASE`: default `https://operator.las.ap-southeast-1.bytepluses.com/api/v1`.
+- `BYTEPLUS_VIDEO_API_BASE`: default `https://ark.ap-southeast.bytepluses.com/api/v3`.
 - `BYTEPLUS_VIDEO_MODEL`: default `dreamina-seedance-2-5-260628`.
 
 Restano inoltre necessari i segreti gia' usati dal Core per AI Gateway, Supabase e Vercel Blob.
+
+Dopo ogni modifica dei segreti Vercel va creato un nuovo deployment dell'ambiente interessato: i deployment gia' esistenti non acquisiscono retroattivamente le nuove variabili.
 
 ## Provider contract
 
@@ -53,7 +55,7 @@ Seedance 2.5 accetta task asincroni e supporta durate fino a 30 secondi. Il prov
 ## Verifica prima di `Tenant reale`
 
 1. applicare `20260831214500_add_ai_video_jobs.sql`;
-2. configurare `BYTEPLUS_VIDEO_API_KEY` su Preview;
+2. configurare `BYTEPLUS_VIDEO_API_KEY` su Preview e creare un nuovo deployment Preview;
 3. verificare `AI_GATEWAY_API_KEY` e Blob;
 4. eseguire typecheck/build/check nav esistenti;
 5. generare almeno un 16:9 e un 9:16 reali;
