@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { sendWhatsAppTemplate } from "@/lib/whatsapp/client"
-import { parseWhatsAppReopenAction } from "@/lib/whatsapp/pending"
+import { sendWhatsAppTemplate, sendWhatsAppText } from "@/lib/whatsapp/client"
+import {
+  isWhatsAppSendingAttemptStale,
+  parseWhatsAppReopenAction,
+  WHATSAPP_SENDING_UNCERTAIN_AFTER_MS,
+} from "@/lib/whatsapp/pending"
 import {
   ensureWhatsAppReopenTemplate,
   WHATSAPP_REOPEN_TEMPLATE_BODY,
@@ -64,6 +68,63 @@ describe("WhatsApp 24h outbound", () => {
         parameters: [{ type: "payload", payload: "HA_WA_DECLINE:11111111-1111-4111-8111-111111111111" }],
       },
     ])
+  })
+
+  it("marks transport failures as unknown so callers do not blindly resend", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () => {
+        throw new TypeError("socket closed")
+      }),
+    )
+
+    const result = await sendWhatsAppText(
+      { phone_number_id: "123456", graph_version: "v26.0" },
+      { access_token: "secret" },
+      "+39 333 123 4567",
+      "Messaggio",
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.outcomeUnknown).toBe(true)
+    expect(result.error).toContain("socket closed")
+  })
+
+  it("keeps explicit Meta rejections retry-classifiable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        new Response(JSON.stringify({ error: { message: "rate limited" } }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    )
+
+    const result = await sendWhatsAppText(
+      { phone_number_id: "123456", graph_version: "v26.0" },
+      { access_token: "secret" },
+      "393331234567",
+      "Messaggio",
+    )
+
+    expect(result).toEqual({ success: false, error: "rate limited", outcomeUnknown: false })
+  })
+
+  it("turns a stuck sending claim into manual review only after the retry window", () => {
+    const started = Date.parse("2026-08-31T12:00:00.000Z")
+    expect(
+      isWhatsAppSendingAttemptStale(
+        new Date(started).toISOString(),
+        started + WHATSAPP_SENDING_UNCERTAIN_AFTER_MS - 1,
+      ),
+    ).toBe(false)
+    expect(
+      isWhatsAppSendingAttemptStale(
+        new Date(started).toISOString(),
+        started + WHATSAPP_SENDING_UNCERTAIN_AFTER_MS,
+      ),
+    ).toBe(true)
   })
 
   it("reuses an existing tenant WABA template instead of creating a duplicate", async () => {
