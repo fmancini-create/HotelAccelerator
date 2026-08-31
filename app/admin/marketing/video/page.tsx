@@ -55,7 +55,6 @@ export default function VideoStudioPage() {
   const [brief, setBrief] = useState(HOTEL_ACCELERATOR_EXAMPLE)
   const [aspectRatio, setAspectRatio] = useState<"16:9" | "9:16">("16:9")
   const [durationSeconds, setDurationSeconds] = useState("30")
-  const [resolution, setResolution] = useState<"720p" | "1080p">("1080p")
   const [generateAudio, setGenerateAudio] = useState(false)
   const [creating, setCreating] = useState(false)
   const [jobs, setJobs] = useState<Job[]>([])
@@ -121,7 +120,7 @@ export default function VideoStudioPage() {
           brief,
           aspectRatio,
           durationSeconds: Number(durationSeconds),
-          resolution,
+          resolution: "720p",
           generateAudio,
         }),
       })
@@ -144,7 +143,9 @@ export default function VideoStudioPage() {
           <Sparkles className="h-5 w-5" />
           <h1 className="text-2xl font-bold">AI Video Studio</h1>
         </div>
-        <p className="text-muted-foreground">Descrivi lo spot. HotelAccelerator prepara regia e storyboard e avvia Seedance automaticamente.</p>
+        <p className="text-muted-foreground">
+          Descrivi lo spot. HotelAccelerator prepara regia e storyboard e avvia Seedance automaticamente.
+        </p>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -159,7 +160,7 @@ export default function VideoStudioPage() {
               <Textarea id="video-brief" value={brief} onChange={(e) => setBrief(e.target.value)} className="min-h-56" />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Formato</Label>
                 <Select value={aspectRatio} onValueChange={(value) => setAspectRatio(value as "16:9" | "9:16")}>
@@ -181,16 +182,13 @@ export default function VideoStudioPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>Qualita'</Label>
-                <Select value={resolution} onValueChange={(value) => setResolution(value as "720p" | "1080p")}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="720p">720p - Bozza</SelectItem>
-                    <SelectItem value="1080p">1080p - Premium</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+
+            <div className="rounded-lg border p-4 text-sm">
+              <p className="font-medium">Seedance 2.5 · 720p</p>
+              <p className="mt-1 text-muted-foreground">
+                E' la risoluzione massima attualmente supportata da Seedance 2.5 per generazioni fino a 30 secondi.
+              </p>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border p-4">
@@ -215,20 +213,28 @@ export default function VideoStudioPage() {
                 <CardTitle>Produzioni recenti</CardTitle>
                 <CardDescription>Lo stato si aggiorna automaticamente.</CardDescription>
               </div>
-              <Button variant="outline" size="icon" onClick={() => loadJobs()}><RefreshCw className="h-4 w-4" /></Button>
+              <Button variant="outline" size="icon" onClick={() => loadJobs()} aria-label="Aggiorna produzioni">
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {jobs.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">Nessun video ancora generato.</p>
             ) : jobs.map((job) => (
-              <button key={job.id} onClick={() => setSelectedId(job.id)} className="w-full rounded-lg border p-3 text-left transition hover:bg-muted/40">
+              <button
+                key={job.id}
+                onClick={() => setSelectedId(job.id)}
+                className="w-full rounded-lg border p-3 text-left transition hover:bg-muted/40"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">{job.title || "Nuovo video"}</p>
                     <p className="text-xs text-muted-foreground">{job.aspect_ratio} · {job.duration_seconds}s · {job.resolution}</p>
                   </div>
-                  <Badge variant={job.status === "succeeded" ? "default" : job.status === "failed" ? "destructive" : "secondary"}>{statusLabel(job.status)}</Badge>
+                  <Badge variant={job.status === "succeeded" ? "default" : job.status === "failed" ? "destructive" : "secondary"}>
+                    {statusLabel(job.status)}
+                  </Badge>
                 </div>
               </button>
             ))}
@@ -251,11 +257,19 @@ export default function VideoStudioPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {selected.error_message && <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">{selected.error_message}</div>}
+            {selected.error_message && (
+              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+                {selected.error_message}
+              </div>
+            )}
             {selected.output_url && (
               <div className="space-y-3">
                 <video src={selected.output_url} controls playsInline className="max-h-[70vh] w-full rounded-xl bg-black" />
-                <Button asChild><a href={selected.output_url} target="_blank" rel="noreferrer"><Play className="mr-2 h-4 w-4" />Apri video</a></Button>
+                <Button asChild>
+                  <a href={selected.output_url} target="_blank" rel="noreferrer">
+                    <Play className="mr-2 h-4 w-4" />Apri video
+                  </a>
+                </Button>
               </div>
             )}
             {selected.storyboard && selected.storyboard.length > 0 && (
