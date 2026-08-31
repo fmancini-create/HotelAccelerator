@@ -6,6 +6,7 @@ import { getWhatsAppChannelById, getWhatsAppChannelForProperty } from "@/lib/wha
 import { normalizeWhatsAppNumber, sendWhatsAppText } from "@/lib/whatsapp/client"
 import { getWhatsAppWindowState } from "@/lib/whatsapp/window"
 import { queueWhatsAppReopen } from "@/lib/whatsapp/pending"
+import { ensureWhatsAppReopenTemplateForChannel } from "@/lib/whatsapp/template-provisioning"
 
 export const runtime = "nodejs"
 
@@ -188,6 +189,37 @@ export async function POST(request: NextRequest) {
         messageId: message.id,
         window,
       })
+    }
+
+    // The tenant never configures templates manually. If onboarding provisioning
+    // failed or Meta was still reviewing the template, this check re-fetches the
+    // status and recreates a missing template before any business-initiated send.
+    const { data: property } = await supabase
+      .from("properties")
+      .select("name")
+      .eq("id", propertyId)
+      .maybeSingle()
+
+    const template = await ensureWhatsAppReopenTemplateForChannel(
+      supabase,
+      channel,
+      property?.name?.trim() || channel.display_name || "Hotel Demo",
+    )
+
+    if (!template.ok || template.status !== "APPROVED") {
+      const isReviewing = template.ok && ["PENDING", "IN_APPEAL"].includes(template.status)
+      return NextResponse.json(
+        {
+          error: isReviewing
+            ? "WhatsApp sta completando automaticamente l'attivazione dei messaggi fuori dalla finestra di 24 ore. Riprova quando Meta avrà approvato il modello."
+            : "HotelAccelerator non può ancora usare il modello WhatsApp gestito automaticamente. Il problema è stato registrato per il canale; non è richiesta alcuna configurazione Meta al tenant.",
+          code: "TEMPLATE_NOT_READY",
+          templateStatus: template.status,
+          templateManaged: true,
+          conversationId: resolvedConversation.id,
+        },
+        { status: isReviewing ? 409 : 503 },
+      )
     }
 
     const queued = await queueWhatsAppReopen(supabase, {
