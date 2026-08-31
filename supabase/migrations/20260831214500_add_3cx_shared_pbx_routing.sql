@@ -31,6 +31,7 @@ create table if not exists public.telephony_call_route_hints (
   source_property_id uuid not null references public.properties(id) on delete cascade,
   target_property_id uuid not null references public.properties(id) on delete cascade,
   caller_key text not null,
+  phone_call_id uuid references public.phone_calls(id) on delete set null,
   last_seen_at timestamptz not null default now(),
   expires_at timestamptz not null default (now() + interval '30 minutes'),
   consumed_at timestamptz,
@@ -51,6 +52,8 @@ comment on column public.telephony_integrations.shared_pbx_journal_property_id i
   'Tenant che possiede il template/secret CRM del PBX condiviso. Null nel caso normale.';
 comment on table public.telephony_call_route_hints is
   'Hint temporanei backend-only creati da endpoint voce autenticati per instradare il successivo ReportCall di un PBX condiviso senza usare il DID, che 3CX non espone al template CRM.';
+comment on column public.telephony_call_route_hints.phone_call_id is
+  'Chiamata sintetica creata dal bridge vocale quando il percorso bot non produce un ReportCall; se il provider lo invia dopo, la stessa riga viene arricchita invece di duplicata.';
 
 -- Caso reale autorizzato: il numero 4BID e Villa I Barronci condividono oggi la
 -- stessa istanza 3CX. Non vengono hardcodati UUID: il legame e' risolto tramite
