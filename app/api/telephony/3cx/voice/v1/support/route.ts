@@ -11,6 +11,7 @@ import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
 import { getVoiceIvrRoute, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
 import { findVoiceSupportCustomer, isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { invalidCustomerCodeSpeech, resolveSupportHandoff } from "@/lib/telephony/voice-support"
+import { touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -110,6 +111,11 @@ export async function POST(request: NextRequest) {
   const parsed = requestSchema.safeParse(raw)
   if (!parsed.success) return unauthenticatedCodeResponse(requestId)
 
+  await touchSharedPbxRouteHint({
+    targetPropertyId: auth.propertyId,
+    callerNumber: parsed.data.caller_number,
+  })
+
   const suiteProductKey = VOICE_PRODUCT_TO_SUITE_PRODUCT[product.key]
   const customerCode = normalizeCustomerCode(parsed.data.customer_code, suiteProductKey)
   if (!customerCode) return unauthenticatedCodeResponse(requestId)
@@ -187,7 +193,7 @@ export async function POST(request: NextRequest) {
       {
         ...serviceErrorVoiceResponse(product, afterHoursHandoff.destination ?? VOICE_FALLBACK_EXTENSION, "provider_error"),
         customer: { recognized: true },
-        speech: shouldRecord ? afterHoursHandoff.speech : "Non riesco a completare la richiesta. La metto in contatto con un operatore.",
+        speech: shouldRecord ? handoff.speech : "Non riesco a completare la richiesta. La metto in contatto con un operatore.",
         transfer: shouldRecord
           ? { required: false, destination: VOICE_FALLBACK_EXTENSION, reason: "none" }
           : { required: true, destination: afterHoursHandoff.destination ?? VOICE_FALLBACK_EXTENSION, reason: "service_error" },
