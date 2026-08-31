@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-08-30
+Ultimo aggiornamento: 2026-08-31
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -201,6 +201,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata
 - Decisione: Apollo e' un provider sostituibile del Motore di Vendita Intelligente. La ricerca salva prima in `crm_apollo_prospects`, tenant-scoped; solo un'azione umana promuove un profilo verificato in `contacts`.
 - Conseguenza: una ricerca Apollo non crea clienti, non eredita consenso e non avvia campagne. Ricerca persone a costo zero; enrichment email solo dopo conferma esplicita del possibile credito. La chiave resta server-only in `APOLLO_API_KEY`.
+
+## ADR-031 — PBX 3CX condiviso solo con mapping esplicito e hint autenticato
+
+- Stato: accettata
+- Decisione: il caso normale resta un tenant per integrazione CRM. Se piu' tenant condividono eccezionalmente lo stesso PBX 3CX, il Core non tenta di dedurre il tenant dal DID, dal contatto o dall'interno: il `ReportCall` non espone il DID e l'integrazione CRM di 3CX e' globale al PBX. Il tenant condiviso dichiara quindi esplicitamente `shared_pbx_journal_property_id`; un endpoint voice autenticato crea un hint temporale per il chiamante e il journal puo' deviare dal tenant sorgente solo se mapping, chiamante e intervallo temporale coincidono.
+- Conseguenza: `telephony_call_route_hints` resta backend-only e non introduce un secondo webhook owner. Nei percorsi solo-bot che non producono `ReportCall`, il bridge voice crea una `phone_calls` tenant-scoped con la trascrizione live; se il provider invia successivamente il journal, la stessa riga viene arricchita invece di duplicata. Senza mapping o hint valido il flusso fallisce sul comportamento standard e non attraversa tenant.
 
 ## Decisioni aperte
 
