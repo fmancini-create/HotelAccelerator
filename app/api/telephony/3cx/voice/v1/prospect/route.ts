@@ -13,6 +13,7 @@ import {
 } from "@/lib/telephony/voice-routing"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { captureSharedPbxVoiceExchange, touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
+import { normalizeVoiceCallerAliases } from "@/lib/telephony/voice-request"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -104,9 +105,15 @@ export async function POST(request: NextRequest) {
   }
 
   const raw = await readVoiceBody(request)
-  const parsed = requestSchema.safeParse(raw)
+  const parsed = requestSchema.safeParse(normalizeVoiceCallerAliases(raw))
   if (!parsed.success) {
     return NextResponse.json({ error: "Richiesta vocale non valida", request_id: requestId }, { status: 400, headers: NO_STORE })
+  }
+
+  if (!parsed.data.caller_number) {
+    // Non registriamo il payload o il testo: basta sapere che lo script PBX non
+    // ha fornito alcun identificatore chiamante utilizzabile per correlare la chiamata.
+    console.warn("[3cx-prospect] caller number missing", { requestId, product: product.key })
   }
 
   await touchSharedPbxRouteHint({
