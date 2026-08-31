@@ -12,6 +12,7 @@ import {
   isMissingVoiceRoutingSchema,
 } from "@/lib/telephony/voice-routing"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
+import { touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -107,6 +108,11 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Richiesta vocale non valida", request_id: requestId }, { status: 400, headers: NO_STORE })
   }
+
+  await touchSharedPbxRouteHint({
+    targetPropertyId: auth.propertyId,
+    callerNumber: parsed.data.caller_number,
+  })
 
   try {
     const sharedBaseIds = route ? await getVoiceIvrSharedBaseIds(route.id) : []
