@@ -12,7 +12,7 @@ import {
   isMissingVoiceRoutingSchema,
 } from "@/lib/telephony/voice-routing"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
-import { touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
+import { captureSharedPbxVoiceExchange, touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -129,6 +129,15 @@ export async function POST(request: NextRequest) {
       fallbackDestination: route?.fallback_destination,
       agentLabel: route?.agent_label,
       crmToolKey: route?.crm_tool_key,
+    })
+
+    await captureSharedPbxVoiceExchange({
+      targetPropertyId: auth.propertyId,
+      callerNumber: parsed.data.caller_number,
+      history: parsed.data.history,
+      question: parsed.data.question,
+      responseSpeech: response.speech,
+      agentLabel: route?.agent_label ?? product.label,
     })
 
     // Il centralino conversazionale deve prima parlare. Se il motore non ha
