@@ -36,6 +36,24 @@ export class BrowserbaseApiError extends Error {
   }
 }
 
+/**
+ * Quota/capacità è un problema transitorio del provider, non una configurazione
+ * PMS errata del tenant. Il riconoscimento resta dentro l'adapter Browserbase:
+ * le route possono così esporre un codice applicativo stabile senza dipendere
+ * dal testo del provider né mostrare dettagli di billing.
+ */
+export function isBrowserbaseCapacityError(error: unknown): boolean {
+  if (!(error instanceof BrowserbaseApiError)) return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes("browser minutes") ||
+    message.includes("minutes limit") ||
+    message.includes("minutes have been exhausted") ||
+    message.includes("quota") ||
+    message.includes("capacity")
+  )
+}
+
 function configurazione() {
   const apiKey = process.env.BROWSERBASE_API_KEY?.trim()
   const projectId = process.env.BROWSERBASE_PROJECT_ID?.trim()
