@@ -4,7 +4,7 @@ Ultimo aggiornamento: 2026-08-31
 
 ## Stato
 
-`Codice` sul branch `fix/3cx-shared-pbx-journal-routing` fino a collaudo reale. Non promuovere a `Tenant reale` finche' una chiamata al numero 4BID non compare nel tenant 4BID e una chiamata a Villa I Barronci non resta nel tenant Villa I Barronci.
+`Codice` fino a collaudo reale completo. Non promuovere a `Tenant reale` finche' una chiamata al numero 4BID non compare nel tenant 4BID e una chiamata a Villa I Barronci non resta nel tenant Villa I Barronci.
 
 ## Perche' esiste
 
@@ -28,6 +28,12 @@ Quando un endpoint vocale autenticato del tenant condiviso riceve una richiesta:
 
 Senza relazione esplicita o senza hint valido il journal resta sul tenant autenticato dal template CRM.
 
+## Compatibilita' payload caller 3CX
+
+Il nome canonico del contratto HotelAccelerator resta `caller_number`. Per compatibilita' con call script 3CX precedenti, il percorso prospect accetta anche `caller`, `caller_id` e `ani`, normalizzandoli server-side prima del matching. Nessuno di questi campi puo' scegliere il tenant: il tenant continua a derivare esclusivamente dalla credenziale vocale autenticata.
+
+Se nessun identificatore chiamante utilizzabile e' presente, il routing shared-PBX resta fail-closed e viene scritto soltanto un warning diagnostico senza numero, testo o segreti.
+
 ## Dati e sicurezza
 
 `telephony_call_route_hints` e' backend-only, ha RLS attiva e nessun grant per `anon` o `authenticated`. Conserva soltanto le ultime cifre normalizzate necessarie al matching, non il testo della conversazione e non segreti.
@@ -50,6 +56,10 @@ La migrazione non sovrascrive una relazione gia' configurata.
 L'hint mantiene l'ID della eventuale `phone_calls` sintetica. Un retry dello stesso `ReportCall` continua a risolvere allo stesso tenant attraverso la finestra temporale della chiamata anche dopo `consumed_at`.
 
 Le chiamate successive dello stesso numero non ereditano automaticamente il vecchio routing: `last_seen_at` deve essere successivo all'inizio della nuova chiamata.
+
+## Evidenza collaudo 31/08/2026
+
+Dopo il deploy della PR #323 una chiamata reale al numero 4BID ha raggiunto `POST /api/telephony/3cx/voice/v1/prospect` alle 22:11:51 UTC con HTTP 200. Non e' stato creato alcun `telephony_call_route_hints` e nessuna nuova `phone_calls`: il bridge non ha ricevuto `caller_number` nel nome canonico atteso. Il branch `fix/3cx-voice-caller-aliases` aggiunge compatibilita' con gli alias storici senza rilassare l'isolamento tenant.
 
 ## Rollback
 
@@ -76,6 +86,7 @@ Le righe `phone_calls` gia' create non vanno cancellate automaticamente.
 
 - `supabase/migrations/20260831214500_add_3cx_shared_pbx_routing.sql`
 - `lib/telephony/shared-pbx-routing.ts`
+- `lib/telephony/voice-request.ts`
 - `app/api/telephony/3cx/journal/route.ts`
 - `app/api/telephony/3cx/voice/v1/query/route.ts`
 - `app/api/telephony/3cx/voice/v1/prospect/route.ts`

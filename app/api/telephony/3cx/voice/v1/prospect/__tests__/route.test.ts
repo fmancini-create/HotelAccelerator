@@ -59,7 +59,7 @@ function setupRoute() {
 }
 
 describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
-  it("interroga la knowledge base e registra la conversazione del PBX condiviso", async () => {
+  it("accetta l'alias legacy caller e registra la conversazione del PBX condiviso", async () => {
     setupRoute()
     mocks.answerVoiceQuestion.mockResolvedValue({
       ok: true,
@@ -70,7 +70,7 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
     const { POST } = await loadRoute()
     const response = await POST(new NextRequest("https://example.test/api/telephony/3cx/voice/v1/prospect?product=santaddeo-rms", {
       method: "POST",
-      body: JSON.stringify({ question: "Cos'è Santaddeo?", caller_number: "+393331234567", history: [] }),
+      body: JSON.stringify({ question: "Cos'è Santaddeo?", caller: "+393331234567", history: [] }),
     }))
 
     expect(response.status).toBe(200)
@@ -79,6 +79,7 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
       productKey: "santaddeo-rms",
       primaryKnowledgeBaseId: BASE,
       question: "Cos'è Santaddeo?",
+      callerNumber: "+393331234567",
     }))
     expect(mocks.touchSharedPbxRouteHint).toHaveBeenCalledWith({
       targetPropertyId: HUB,
