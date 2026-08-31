@@ -370,7 +370,7 @@ export default function PhoneChannelPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {!apiKey ? (
-                <Button variant="outline" onClick={() => void prepareCrmLink()} disabled={preparingCrm || !connected}>
+                <Button variant="outline" onClick={() => void prepareCrmLink()} disabled={preparingCrm}>
                   {preparingCrm ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
                   Prepara collegamento CRM
                 </Button>
@@ -380,6 +380,7 @@ export default function PhoneChannelPage() {
                   <Button variant="outline" onClick={() => void copy("crm-key", apiKey)}><Copy className="mr-2 h-4 w-4" />{copied === "crm-key" ? "Copiata" : "Copia"}</Button>
                 </div>
               )}
+              {!connected ? <p className="text-xs text-muted-foreground">La chiave CRM può essere recuperata anche senza la Call Control API 3CX.</p> : null}
             </CardContent>
           </Card>
 

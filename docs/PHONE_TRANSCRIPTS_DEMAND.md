@@ -1,6 +1,6 @@
 # Trascrizioni telefoniche e calendario domanda
 
-Ultimo aggiornamento: 2026-08-30
+Ultimo aggiornamento: 2026-08-31
 
 ## Obiettivo
 
@@ -16,7 +16,7 @@ Per i tenant hotel, una telefonata trascritta deve essere trattata come una conv
 
 ## Implementazione
 
-Branch: `fix/phone-transcripts-demand-20260830`.
+Branch originario: `fix/phone-transcripts-demand-20260830`.
 
 ### UI e API
 
@@ -54,17 +54,40 @@ L'esito IA viene salvato nello stesso envelope sotto `payload.richiesta`, con un
 
 Questo evita sia il doppio conteggio sia lo spostamento artificiale del volume chiamate sulla data di soggiorno.
 
+## Configurazione CRM 3CX verificata il 31/08/2026
+
+Il test reale su Villa I Barronci ha confermato che 3CX genera la trascrizione, mentre il vecchio template non eseguiva correttamente il `ReportCall` verso HotelAccelerator.
+
+Correzioni applicate nel branch `fix/3cx-reportcall-transcription-20260831`:
+
+- template portato a `Version="3"`;
+- mantenuto `SupportsTranscription="true"`;
+- rimossi `Variables` e `Outputs` dallo scenario riservato `ReportCall`;
+- mantenuti `Transcription`, `Summary`, `RecordingUrl` e `Sentiment` nel payload JSON;
+- il pulsante `Prepara collegamento CRM` non dipende piu' dallo stato della Call Control API 3CX.
+
+La **Chiave di collegamento HotelAccelerator** e' distinta dalla API key Call Control di 3CX. Si recupera da **Canali -> Telefono IP -> Collegamento CRM -> Prepara collegamento CRM**. L'endpoint riusa la chiave CRM gia' esistente invece di rigenerarla, cosi' il caricamento di un nuovo template non invalida la configurazione precedente.
+
+Dopo il caricamento del template v3 in 3CX:
+
+1. incollare la Chiave di collegamento HotelAccelerator;
+2. lasciare `Registra le chiamate nel CRM = True`;
+3. verificare che le trascrizioni siano abilitate sui reparti/utenti/flussi 3CX interessati;
+4. fare una chiamata reale;
+5. verificare `POST /api/telephony/3cx/journal` e i campi voce nel tenant corretto.
+
 ## Isolamento tenant e sicurezza
 
 - nessun nuovo segreto;
 - nessun dato voce esposto senza autorizzazione area `calls`;
 - query telefoniche filtrate per `property_id` autenticato;
 - estrazioni e calendario continuano a usare le tabelle con RLS gia' previste dal modulo domanda;
-- nessun nuovo cron: il proprietario resta `/api/cron/demand-extract`.
+- nessun nuovo cron: il proprietario resta `/api/cron/demand-extract`;
+- la chiave CRM resta cifrata a riposo ed e' recuperabile solo attraverso l'azione amministrativa tenant-scoped prevista dall'applicazione.
 
 ## Livello funzione
 
-`Codice` sul branch indicato. Non promuovere a `Tenant reale` o superiore finche' non sono verificati build/typecheck, preview e una chiamata reale 3CX con trascrizione che genera una richiesta nel calendario del tenant corretto.
+`Codice`. Non promuovere a `Tenant reale` o superiore finche' non e' verificata una chiamata reale 3CX con `ReportCall` ricevuto, trascrizione persistita e richiesta generata nel calendario del tenant corretto.
 
 ## Collaudo richiesto
 

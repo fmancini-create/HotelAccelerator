@@ -77,8 +77,12 @@ export async function GET(request: NextRequest) {
     // [Transcription], [Summary], [RecordingUrl] e [Sentiment] sono variabili
     // ReportCall di 3CX. Passes=2 evita che caratteri speciali e a-capo della
     // trascrizione rompano il JSON inviato al nostro endpoint.
+    //
+    // Lo scenario riservato ReportCall NON deve dichiarare Variables/Outputs:
+    // la documentazione 3CX prevede solo Request/Query/Command. Tenerli vuoti
+    // puo' impedire l'esecuzione del journaling su alcune versioni del PBX.
     const xml = `<?xml version="1.0" encoding="utf-8"?>
-<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="IT" Name="HotelAccelerator" Version="2" SupportsEmojis="true" SupportsTranscription="true" ListPageSize="0">
+<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="IT" Name="HotelAccelerator" Version="3" SupportsEmojis="true" SupportsTranscription="true" ListPageSize="0">
   <Number Prefix="AsIs" MaxLength="" />
   <Connection MaxConcurrentRequests="16" />
   <Parameters>
@@ -126,8 +130,6 @@ ${contactOutputs}
         <QueryParams />
         <Values />
       </Request>
-      <Variables />
-      <Outputs AllowEmpty="false" />
     </Scenario>
   </Scenarios>
 </Crm>
