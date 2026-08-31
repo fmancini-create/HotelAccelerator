@@ -1,6 +1,6 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-08-30
+Ultimo aggiornamento: 2026-08-31
 
 ## Avvertenza
 
@@ -20,7 +20,7 @@ L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati s
 | Dashboard utente personalizzata | Performance individuali con obiettivi, estratti Inbox, attività assegnate, ultime telefonate/da richiamare, card visibili per utente configurate dal tenant | Codice | Branch `feat/tenant-user-dashboard-v2`: impostazioni tenant-scoped additive, performance solo da opt-in KPI, Inbox filtrata per canali assegnati e callback deduplicati da contatti successivi. Applicare migrazione, eseguire typecheck/build/check manifest e collaudare admin + collaboratore reale prima di `Tenant reale`; vedere `docs/PERSONALIZED_USER_DASHBOARD.md` |
 | Accesso suite | Login unico, SSO, tenant context, accesso per ruolo/modulo/abbonamento | Specifica | Verificare flussi e contratti tra prodotti |
 | Inbox email Gmail | OAuth, lettura diretta, import storico riprendibile multi-casella, import incrementale, Pub/Sub, poll di fallback, label e riconciliazione stato | Tenant reale | Villa I Barronci verificata; l'OAuth avvia lo storico del canale e la Inbox gestisce tutte le caselle del tenant. Verificare l'import iniziale sulle cinque caselle 4BID; completare recovery, autenticazione webhook, osservabilità e modello Sent/KPI prima di promuovere lo stato |
-| Inbox omnicanale | Gmail, Outlook, IMAP/SMTP, WhatsApp, Telegram, Instagram, Facebook, sito, booking, OTA, 3CX | Specifica | Inventariare connettori reali e mock |
+| Inbox omnicanale | Gmail, Outlook, IMAP/SMTP, WhatsApp, Telegram, Instagram, Facebook, sito, booking, OTA, 3CX; nuovo messaggio Email/WhatsApp e protezione customer-care window | Codice | PR #318 aggiunge composer unico Email/WhatsApp, ricerca destinatari tenant-scoped, enforcement server-side delle 24h, coda RLS e template di riapertura idempotente. Il template Meta `hotelaccelerator_nuova_comunicazione` resta da creare/approvare e collaudare su un WABA reale prima di `Tenant reale`; vedere `docs/WHATSAPP_24H_OUTBOUND.md`. Gli altri connettori restano da inventariare/auditare |
 | Assistente vocale 3CX | Agenti telefonici dalle basi del singolo tenant e IVR 4 BID con mappa persistente di otto route, primaria/condivise, tool CRM, codice cliente, risposta fondata, reperibilità/messaggio e coda supporto | Codice | Prospect limitati alle basi 4 BID; supporto risolto e rifiltrato nel tenant cliente. HotelAccelerator può sincronizzare documenti Markdown interni firmati, senza crawl pubblico; restano migrazioni, segreti, fonti dei satelliti, configurazione PBX e prova tenant reale prima di Demo |
 | Registro codice cliente suite | Numero cliente centrale, prefissi HA/SNT/HPA/MB, collegamento tenant satellite e contratto server-to-server | Codice | Registro e API v1 nel Core; collegare ogni tenant esterno e configurare le chiavi di deploy prima di dichiarare la stampa attiva nei prodotti autonomi |
 | Gestione conversazioni | Assegnazione, stati, priorità, tag, note, SLA, template, allegati, ricerca, traduzione | Specifica | Inbox in `Codice` per filtro canale + sottocanale/account tenant-scoped; il resto della capability richiede ancora audit UI, schema, API e permessi |
