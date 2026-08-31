@@ -4,6 +4,7 @@ import { esitoGruppoSquillo, ESITO_DEDOTTO, ESITO_DAL_CENTRALINO } from "@/lib/t
 import { authenticateInbound, syntheticCallId } from "@/lib/telephony/inbound-auth"
 import { phoneMatchKey } from "@/lib/telephony/threecx-client"
 import { findUserIdByExtension, findUserIdByEmail } from "@/lib/telephony/user-extension"
+import { consumeSharedPbxRouteHint, resolveSharedPbxJournalTarget } from "@/lib/telephony/shared-pbx-routing"
 
 /**
  * Endpoint richiamato DA 3CX a fine chiamata ("ReportCall" nel template CRM):
@@ -52,7 +53,7 @@ function capped(value: string, max: number): string | null {
 export async function POST(request: NextRequest) {
   const auth = await authenticateInbound(request)
   if (!auth.ok) return errorFor(auth.status)
-  const propertyId = auth.propertyId
+  const authenticatedPropertyId = auth.propertyId
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
   if (!body) return NextResponse.json({ error: "Corpo della richiesta non valido." }, { status: 400 })
@@ -62,6 +63,20 @@ export async function POST(request: NextRequest) {
   const direction = rawDirection.includes("out") ? "outbound" : "inbound"
   const extension = pick(body, "extension", "agent")
   const startedAtRaw = pick(body, "started_at", "callStart")
+  const endedAtRaw = pick(body, "ended_at", "callEnd")
+
+  // Una integrazione CRM 3CX e' globale per PBX e il ReportCall non espone il
+  // DID. Nel caso esplicitamente configurato di PBX condiviso, un endpoint
+  // voce autenticato puo' avere lasciato un hint temporale per lo stesso
+  // chiamante. Senza hint verificato il tenant autenticato resta invariato.
+  const routing = await resolveSharedPbxJournalTarget({
+    sourcePropertyId: authenticatedPropertyId,
+    callerNumber: number,
+    direction,
+    startedAt: startedAtRaw || null,
+    endedAt: endedAtRaw || null,
+  })
+  const propertyId = routing.propertyId
 
   const providedId = pick(body, "call_id", "callId")
   const externalId =
@@ -146,7 +161,7 @@ export async function POST(request: NextRequest) {
     provider_status: statusDalCentralino,
     status_source: esitoDedotto ? ESITO_DEDOTTO : ESITO_DAL_CENTRALINO,
     started_at: toIsoOrNull(startedAtRaw) ?? new Date().toISOString(),
-    ended_at: toIsoOrNull(pick(body, "ended_at", "callEnd")),
+    ended_at: toIsoOrNull(endedAtRaw),
     duration_seconds: durataSecondi,
     external_call_id: externalId,
     notes: typeof body.notes === "string" ? body.notes.slice(0, 1000) : null,
@@ -173,11 +188,21 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (routing.routed) {
+    await consumeSharedPbxRouteHint(routing.hintId)
+    console.info("[3cx-journal] shared PBX call routed", {
+      sourcePropertyId: authenticatedPropertyId,
+      propertyId,
+      extension,
+    })
+  }
+
   return NextResponse.json({
     ok: true,
     linked_contact: contactId,
     transcript_received: Boolean(transcription),
     summary_received: Boolean(transcriptionSummary),
     recording_received: Boolean(recordingUrl),
+    shared_pbx_routed: routing.routed,
   })
 }
