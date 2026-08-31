@@ -1,4 +1,19 @@
 /* Mobile-only adaptations for /admin/inbox. Scoped by the nested route layout. */
+
+/*
+ * The historical Inbox page owns an email-only "Scrivi" button identified by
+ * this unique legacy color class. The route layout now mounts the single
+ * omnichannel composer, so the old entry point must not remain visible and
+ * give users two different meanings for "new message". `:has()` removes the
+ * empty wrapper on modern browsers; the direct button rule is the fallback.
+ */
+[data-inbox-mobile] .px-2.pb-3:has(> button.bg-\[\#c2e7ff\]) {
+  display: none;
+}
+[data-inbox-mobile] button.bg-\[\#c2e7ff\] {
+  display: none;
+}
+
 @media (max-width: 639px) {
   [data-inbox-mobile],
   [data-inbox-mobile] > .h-full {
