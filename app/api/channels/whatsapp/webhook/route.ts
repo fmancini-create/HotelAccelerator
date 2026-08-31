@@ -7,6 +7,7 @@ import { WhatsAppProcessor } from "@/lib/whatsapp/processor"
 import { markWhatsAppRead, sendWhatsAppText } from "@/lib/whatsapp/client"
 import { handleWhatsAppReopenAction } from "@/lib/whatsapp/pending"
 import { getPlatformWhatsAppConfig } from "@/lib/whatsapp/platform"
+import { syncWhatsAppReopenTemplateStatusFromWebhook } from "@/lib/whatsapp/template-provisioning"
 import { runAutopilot } from "@/lib/ai/autopilot"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 
@@ -66,13 +67,13 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST: inbound messages and delivery statuses from Meta.
- * Flow: read raw body -> route to tenant by phone_number_id -> verify signature
- * with that tenant's app secret -> process messages idempotently.
+ * POST: inbound messages, delivery statuses and managed-template lifecycle
+ * events from Meta. The platform signature is verified before any status event
+ * can mutate tenant channel configuration.
  *
- * Always returns quickly; transient processing errors return 500 so Meta can
- * retry. Every externally visible write is idempotent on Meta message id or on
- * the durable pending-message status machine.
+ * Transient processing errors return 500 so Meta can retry. Every externally
+ * visible write is idempotent on Meta message id or on the durable pending
+ * message state machine.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
@@ -89,19 +90,27 @@ export async function POST(request: NextRequest) {
 
   try {
     const parsed = parseWhatsAppWebhook(body)
-
-    // A status-only callback has no Inbox record to write. Echo-only callbacks
-    // must pass this guard: they carry messages written in the phone app.
-    if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
-      return NextResponse.json({ received: true }, { status: 200 })
-    }
-
     const platform = getPlatformWhatsAppConfig()
-    // All coexistence numbers use the same 4BID Meta app. Verify once before
-    // inspecting any event; legacy per-tenant secrets are verified below.
+
+    // All Embedded Signup/coexistence WABAs use the platform Meta app. Verify
+    // before processing message_template_status_update because those callbacks
+    // may not carry a phone_number_id and therefore cannot be tenant-routed first.
     if (platform.appSecret && !verifyWhatsAppSignature(rawBody, signature, platform.appSecret)) {
       console.warn("[WhatsApp webhook] invalid platform signature")
       return NextResponse.json({ received: false }, { status: 401 })
+    }
+
+    // Synchronize status only after signature verification. Matching uses the
+    // WABA id plus our managed template name/id, then updates each channel under
+    // its own property id. This is the normal approval/rejection monitoring path.
+    if (platform.appSecret) {
+      await syncWhatsAppReopenTemplateStatusFromWebhook(supabase, body)
+    }
+
+    // A status-only callback has no Inbox record to write. Template lifecycle
+    // events have already been consumed above.
+    if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
+      return NextResponse.json({ received: true }, { status: 200 })
     }
 
     const eventsByPhone = new Map<
@@ -131,8 +140,8 @@ export async function POST(request: NextRequest) {
       }
 
       const typedChannel = channel as MessagingChannelRow
-      // Legacy channels can have different apps, while coexistence uses the
-      // already verified platform secret above.
+      // Legacy channels can have different apps. In deployments without the
+      // shared platform app secret, verify against the tenant channel secret.
       if (!platform.appSecret) {
         const signatureValid = verifyWhatsAppSignature(rawBody, signature, typedChannel.credentials?.app_secret || null)
         if (!signatureValid) {
