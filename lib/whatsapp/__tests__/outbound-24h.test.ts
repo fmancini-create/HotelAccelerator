@@ -10,7 +10,7 @@ afterEach(() => {
 
 describe("WhatsApp 24h outbound", () => {
   it("sends the approved template with tenant name and opaque quick-reply payloads", async () => {
-    const fetchMock = vi.fn(async () =>
+    const fetchMock = vi.fn<typeof fetch>(async (_input, _init) =>
       new Response(JSON.stringify({ messages: [{ id: "wamid.template" }] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -36,15 +36,15 @@ describe("WhatsApp 24h outbound", () => {
     expect(result).toEqual({ success: true, externalMessageId: "wamid.template" })
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
-    expect(url).toBe("https://graph.facebook.com/v26.0/123456/messages")
-    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer secret")
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toBe("https://graph.facebook.com/v26.0/123456/messages")
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer secret")
 
-    const body = JSON.parse(String(init.body))
-    expect(body.to).toBe("393331234567")
-    expect(body.type).toBe("template")
-    expect(body.template.name).toBe("hotelaccelerator_nuova_comunicazione")
-    expect(body.template.components).toEqual([
+    const requestBody = JSON.parse(String(init?.body))
+    expect(requestBody.to).toBe("393331234567")
+    expect(requestBody.type).toBe("template")
+    expect(requestBody.template.name).toBe("hotelaccelerator_nuova_comunicazione")
+    expect(requestBody.template.components).toEqual([
       { type: "body", parameters: [{ type: "text", text: "Villa Demo" }] },
       {
         type: "button",
