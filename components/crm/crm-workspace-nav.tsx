@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, BrainCircuit, Database, Building2, CalendarDays, KanbanSquare, ListTodo, Phone, Settings, Users } from "lucide-react"
+import { BarChart3, BrainCircuit, Database, Building2, CalendarDays, KanbanSquare, ListTodo, Phone, Search, Settings, Users } from "lucide-react"
 
 // Ogni sezione dell'area CRM va elencata qui: questa barra e' l'unico indice completo
 // del perimetro. Una pagina che esiste ma non compare sembra un pezzo mancante del
@@ -14,6 +14,7 @@ import { BarChart3, BrainCircuit, Database, Building2, CalendarDays, KanbanSquar
 const items = [
   { href: "/admin/crm", label: "Dashboard", icon: BarChart3, exact: true },
   { href: "/admin/crm/intelligence", label: "Vendite IA", icon: BrainCircuit },
+  { href: "/admin/crm/prospecting", label: "Prospecting", icon: Search },
   { href: "/admin/crm/contacts", label: "Contatti", icon: Users },
   { href: "/admin/crm/companies", label: "Aziende / Hotel", icon: Building2 },
   { href: "/admin/crm/pipeline", label: "Pipeline", icon: KanbanSquare },
