@@ -1,6 +1,6 @@
 # HotelAccelerator — Integrations Registry
 
-Ultimo aggiornamento: 2026-08-29
+Ultimo aggiornamento: 2026-08-31
 
 ## Regola
 
@@ -20,7 +20,7 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Messaggistica | Telegram | Inbox/ManuBot | Da verificare | Separare bot manutenzioni e canale ospiti |
 | Manutenzioni | ManuBot | Asset, team e interventi federati dal Core | Codice | Client Core autenticato con JWT Supabase e scope tenant esplicito `X-ManuBot-Company-Id`; ManuBot valida lo scope per-request senza mutare il profilo superadmin e le route operative riusano `effective.companyId`. Il mapping `properties.manubot_company_id` è obbligatorio e tenant-scoped. Preview dei due progetti da verificare insieme e prova reale Villa I Barronci necessaria prima di `Tenant reale`; il contratto di creazione task richiede ancora un audit end-to-end dedicato |
 | Social | Instagram/Facebook | Messaggi | Specifica | API Meta, permessi e review app |
-| VoIP | 3CX | Chiamate, attribuzione e assistenti vocali tenant-aware | Codice | CRM/call control presenti; bridge v1 e mappa IVR 4 BID persistente con scope KB e fallback espliciti. CRM e voce usano ora credenziali cifrate e revocabili distinte. Mancano applicazione della migrazione, deploy PBX, configurazione delle basi, prova tenant reale, limite distribuito e osservabilità; vedere `docs/3CX_VOICE_AI.md` |
+| VoIP | 3CX | Chiamate, attribuzione, trascrizioni e assistenti vocali tenant-aware | Codice | Template CRM v3, journal voce, bridge v1, mappa IVR 4BID e credenziali CRM/voice separate presenti. Per il raro PBX condiviso esiste mapping opt-in + hint autenticato e cattura live delle conversazioni solo-bot. Applicare migrazione e collaudare 4BID/Barronci dallo stesso chiamante prima di `Tenant reale`; vedere `docs/3CX_VOICE_AI.md`, `docs/PHONE_TRANSCRIPTS_DEMAND.md`, `docs/3CX_SHARED_PBX_ROUTING.md` |
 | OTA | Booking.com | Recensioni, messaggi, risposte, analytics | Specifica | Subordinato a Connectivity/partnership e scope API |
 | OTA | Altri portali | Messaggi, recensioni, prezzi | Idea/Specifica | Definire priorità e adapter |
 | Pagamenti | Stripe | Pagamenti, abbonamenti, extra | Da verificare | Account model, Connect, webhook owner e PCI scope |
@@ -32,6 +32,19 @@ Questo registro distingue intenzione e prova. `Da verificare` significa che una 
 | Market pricing | Rate shopper/PriceGuard | Competitor e parity | Da verificare | Origine dati, termini e qualità |
 | AI | Knowledge sync interno 4BID | Fonti vocali commerciali da documenti Markdown versionati | Codice | Endpoint HMAC, allowlist e recovery dell'indicizzatore presenti; applicare migrazione, impostare segreti GitHub/Vercel, sincronizzare HotelAccelerator e collaudare 3CX. I satelliti richiedono workflow separati, senza accesso DB cross-prodotto |
 | AI | Provider da definire | Classificazione, generazione, OCR, forecast | Specifica | Privacy, costi, eval, fallback e data retention |
+
+## 3CX — CRM, voce e PBX condiviso
+
+- Proprietario del canale: HotelAccelerator Core; 3CX possiede media, route point e trascrizione provider.
+- Credenziali: CRM e strumenti vocali usano segreti distinti, cifrati a riposo e mai inseriti negli URL vocali.
+- `ReportCall`: il template v3 invia `Transcription`, `Summary`, `RecordingUrl` e `Sentiment` al journal quando 3CX li rende disponibili.
+- Limite provider: il `ReportCall` non espone il DID chiamato e l'integrazione CRM server-side e' globale al PBX. Il Core non tenta quindi routing euristico per DID, contatto, interno o nome.
+- Caso standard: un tenant possiede il template/secret CRM e tutte le chiamate restano in quel tenant.
+- Caso shared-PBX: solo una relazione esplicita `shared_pbx_journal_property_id` abilita il routing. Un endpoint voice autenticato lascia un hint temporale per chiamante e intervallo della chiamata; il journal lo verifica nuovamente prima di cambiare tenant.
+- Percorso solo-bot: se 3CX non produce `ReportCall`, il bridge voice crea/aggiorna una singola `phone_calls` nel tenant corretto con la trascrizione live. Se il journal arriva dopo, arricchisce la stessa riga invece di duplicarla.
+- Dati di routing: `telephony_call_route_hints` e' backend-only, RLS attiva, nessun grant client. Non contiene testo della conversazione o segreti.
+- Configurazione attuale da collaudare: 4BID usa eccezionalmente il journal CRM del PBX condiviso con Villa I Barronci. La migrazione identifica i tenant tramite slug/type e non sovrascrive mapping esistenti.
+- Stato: `Codice`. Servono migrazione applicata, preview verde e due prove reali consecutive 4BID/Barronci prima di `Tenant reale`.
 
 ## ManuBot — scope tenant server-to-server
 
