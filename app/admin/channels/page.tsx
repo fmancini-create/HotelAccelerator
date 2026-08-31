@@ -27,7 +27,34 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "sonner"
 
-const CHANNEL_CATEGORIES = [
+type ChannelId =
+  | "email"
+  | "chat"
+  | "whatsapp"
+  | "telegram"
+  | "facebook"
+  | "instagram"
+  | "twitter"
+  | "linkedin"
+  | "phone"
+
+type ChannelDefinition = {
+  id: ChannelId
+  name: string
+  description: string
+  icon: typeof Mail
+  color: string
+  configPath: string
+}
+
+type ChannelCategory = {
+  id: "messaging" | "social" | "voice"
+  name: string
+  description: string
+  channels: readonly ChannelDefinition[]
+}
+
+const CHANNEL_CATEGORIES: readonly ChannelCategory[] = [
   {
     id: "messaging",
     name: "Messaggistica",
@@ -58,13 +85,9 @@ const CHANNEL_CATEGORIES = [
       { id: "phone", name: "Telefono IP (3CX)", description: "Chiamate dal CRM e riconoscimento del chiamante", icon: Phone, color: "bg-purple-500", configPath: "/admin/channels/phone" },
     ],
   },
-] as const
+]
 
-type ChannelDefinition = (typeof CHANNEL_CATEGORIES)[number]["channels"][number]
-const ALL_CHANNELS = CHANNEL_CATEGORIES.flatMap<ChannelDefinition>(
-  (category) => category.channels as readonly ChannelDefinition[],
-)
-type ChannelId = ChannelDefinition["id"]
+const ALL_CHANNELS: readonly ChannelDefinition[] = CHANNEL_CATEGORIES.flatMap((category) => category.channels)
 
 interface ChannelStatus {
   id: ChannelId
