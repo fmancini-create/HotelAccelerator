@@ -1,5 +1,6 @@
 import type React from "react"
 import "./mobile.css"
+import { OmnichannelCompose } from "@/components/admin/inbox/omnichannel-compose"
 
 /**
  * Route-local responsive shell for the operational Inbox.
@@ -11,8 +12,11 @@ import "./mobile.css"
  */
 export default function InboxLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div data-inbox-mobile className="h-full min-h-0 min-w-0 overflow-hidden">
+    <div data-inbox-mobile className="relative h-full min-h-0 min-w-0 overflow-hidden">
       {children}
+      <div className="fixed bottom-5 right-5 z-[70] sm:bottom-6 sm:right-6">
+        <OmnichannelCompose />
+      </div>
     </div>
   )
 }
