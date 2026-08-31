@@ -5,6 +5,10 @@ import { getPlatformWhatsAppConfig, getPublicWhatsAppConfig } from "@/lib/whatsa
 import { getWhatsAppQuota, quotaExceededMessage } from "@/lib/whatsapp/quota"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 import { encryptWhatsAppCredentialsForWrite } from "@/lib/whatsapp/channel-secrets"
+import {
+  ensureWhatsAppReopenTemplate,
+  templateStatePatch,
+} from "@/lib/whatsapp/template-provisioning"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -16,12 +20,13 @@ export const dynamic = "force-dynamic"
  *         the Embedded Signup widget, plus whether the platform is configured.
  * POST -> finishes onboarding after the hotel completed the Facebook popup:
  *         exchanges the returned `code` for a business token, subscribes the
- *         platform app to the client's WABA, registers the phone number, fetches
- *         the display number, and stores a ready-to-use channel row.
+ *         platform app to the client's WABA, resolves the selected phone number,
+ *         stores a ready-to-use channel row and provisions the standard outbound
+ *         reopen template on that WABA.
  *
- * The hotel never handles tokens or app secrets: those are platform-level env
- * vars (Meta Tech Provider model). Per tenant we only persist phone_number_id +
- * waba_id; ongoing sends use the platform system-user token.
+ * The hotel never handles tokens, app secrets or message-template setup: those
+ * are platform-managed. Per tenant we persist routing identifiers + non-secret
+ * template status metadata; ongoing sends use the platform system-user token.
  */
 
 export async function GET(request: NextRequest) {
@@ -86,7 +91,8 @@ export async function POST(request: NextRequest) {
     const v = platform.graphVersion
 
     // 1) Exchange the short-lived code for a business access token. This token
-    //    has access to the WABA the hotel just shared, used here for onboarding.
+    // has access to the WABA the hotel just shared and is therefore the safest
+    // credential for the one-off onboarding/provisioning operations below.
     const tokenRes = await fetch(
       `https://graph.facebook.com/${v}/oauth/access_token?` +
         new URLSearchParams({
@@ -103,8 +109,8 @@ export async function POST(request: NextRequest) {
     }
     const businessToken: string = tokenJson.access_token
 
-    // 2) Subscribe the platform app to the client's WABA so inbound messages and
-    //    statuses are delivered to our shared webhook.
+    // 2) Subscribe the platform app to the client's WABA so inbound messages,
+    // statuses and message_template_status_update events reach our shared webhook.
     const subRes = await fetch(`https://graph.facebook.com/${v}/${wabaId}/subscribed_apps`, {
       method: "POST",
       headers: { Authorization: `Bearer ${businessToken}` },
@@ -132,7 +138,8 @@ export async function POST(request: NextRequest) {
     const candidates = Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : []
 
     if (resolvedPhoneNumberId) {
-      resolvedNumber = candidates.find((candidate: any) => String(candidate?.id) === String(resolvedPhoneNumberId)) ?? null
+      resolvedNumber =
+        candidates.find((candidate: any) => String(candidate?.id) === String(resolvedPhoneNumberId)) ?? null
     }
 
     if (!resolvedNumber) {
@@ -175,12 +182,12 @@ export async function POST(request: NextRequest) {
     }
     const displayPhone = numberInfo?.display_phone_number ?? ""
     const verifiedName = numberInfo?.verified_name ?? ""
-    // 5) Persist the channel. Secrets stay in env; the row holds routing config
-    //    only. We DO store verify_token/app_secret references so the existing
-    //    per-tenant webhook + client paths keep working unchanged.
+
+    // 5) Persist the channel. Secrets stay server-side; the row holds routing
+    // configuration plus non-secret template lifecycle metadata.
     const supabase = createServiceClient()
 
-    const config = {
+    let config: Record<string, unknown> = {
       phone_number_id: String(resolvedPhoneNumberId),
       waba_id: String(wabaId),
       display_phone_number: displayPhone,
@@ -191,10 +198,9 @@ export async function POST(request: NextRequest) {
       is_on_biz_app: true,
       platform_type: numberInfo?.platform_type ?? "CLOUD_API",
     }
-    // WRITE-ENCRYPT: i segreti gestiti dalla piattaforma (singola app Meta)
-    // vengono salvati cifrati `enc:v1:` at-rest. Il dual-read dei reader li
-    // decifra lato server; ruotare gli env sovrascrive comunque a runtime.
-    // Cifriamo SOLO i tre campi segreti; nessun campo non segreto qui.
+    // WRITE-ENCRYPT: platform-managed credentials are persisted encrypted at
+    // rest. Only these secret fields are encrypted; routing/template config is
+    // intentionally queryable server-side.
     const credentials = encryptWhatsAppCredentialsForWrite({
       access_token: platform.systemUserToken,
       app_secret: platform.appSecret,
@@ -263,6 +269,35 @@ export async function POST(request: NextRequest) {
       row = data as MessagingChannelRow
     }
 
+    // 6) Multi-tenant template provisioning. Every tenant keeps its own WABA,
+    // but HotelAccelerator owns one logical template definition and creates it
+    // automatically on each WABA. Failure here must not disconnect WhatsApp:
+    // normal 24h conversations still work and the lazy send-time check retries.
+    const templateProvisioning = await ensureWhatsAppReopenTemplate({
+      wabaId: String(wabaId),
+      graphVersion: v,
+      accessToken: businessToken,
+      sampleCompanyName: verifiedName || "Hotel Demo",
+    })
+
+    config = {
+      ...config,
+      ...templateStatePatch(templateProvisioning),
+    }
+
+    const { data: refreshedRow, error: templateStateError } = await supabase
+      .from("messaging_channels")
+      .update({ config, updated_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .eq("property_id", propertyId)
+      .eq("channel_type", "whatsapp")
+      .select("*")
+      .single()
+
+    if (!templateStateError && refreshedRow) {
+      row = refreshedRow as MessagingChannelRow
+    }
+
     return NextResponse.json({
       success: true,
       channel: {
@@ -271,6 +306,13 @@ export async function POST(request: NextRequest) {
         display_phone_number: displayPhone,
         verified_name: verifiedName,
         is_active: row.is_active,
+      },
+      template: {
+        managed: true,
+        ready: templateProvisioning.ok && templateProvisioning.status === "APPROVED",
+        status: templateProvisioning.status,
+        created: templateProvisioning.created,
+        error: templateProvisioning.ok ? undefined : templateProvisioning.error,
       },
     })
   } catch (error) {

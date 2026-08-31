@@ -13,6 +13,7 @@ import { sendGmailEmail } from "@/lib/gmail-client"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 import { getWhatsAppChannelForConversation } from "@/lib/whatsapp/channels"
 import { sendWhatsAppText } from "@/lib/whatsapp/client"
+import { getWhatsAppWindowState } from "@/lib/whatsapp/window"
 import { getTelegramChannelForConversation } from "@/lib/telegram/channels"
 import { sendTelegramText } from "@/lib/telegram/client"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -333,16 +334,24 @@ export class InboxWriteService {
     propertyId: string,
     forwardTo?: string,
   ): Promise<{ success: boolean; error?: string }> {
-    // Forwarding: send to the provided phone number instead of the contact.
-    let phone: string | undefined = forwardTo?.trim()
-      ? forwardTo.trim()
-      : conversation.metadata?.phone || conversation.metadata?.from_phone
+    // A WhatsApp forward to an arbitrary number is a new business-initiated
+    // conversation. We cannot infer a 24h window from the source conversation,
+    // therefore it must go through the omnichannel composer/template flow.
+    if (forwardTo?.trim()) {
+      return {
+        success: false,
+        error: "Per inoltrare a un nuovo numero WhatsApp usa ‘Nuovo messaggio’: HotelAccelerator verificherà la finestra 24h e, se necessario, invierà il template di apertura.",
+      }
+    }
 
-    if (!phone && !forwardTo?.trim() && conversation.contact_id) {
+    let phone: string | undefined = conversation.metadata?.phone || conversation.metadata?.from_phone
+
+    if (!phone && conversation.contact_id) {
       const { data: contact } = await this.supabase
         .from("contacts")
         .select("phone, whatsapp_id")
         .eq("id", conversation.contact_id)
+        .eq("property_id", propertyId)
         .single()
       phone = contact?.whatsapp_id || contact?.phone || undefined
     }
@@ -350,6 +359,14 @@ export class InboxWriteService {
     if (!phone) {
       console.error("[v0] No WhatsApp recipient phone for conversation:", conversation.id)
       return { success: false, error: "Numero WhatsApp del destinatario non trovato" }
+    }
+
+    const window = await getWhatsAppWindowState(this.supabase, propertyId, conversation.id)
+    if (!window.isOpen) {
+      return {
+        success: false,
+        error: "La finestra WhatsApp di 24 ore è chiusa. Usa ‘Nuovo messaggio’ per inviare la richiesta di apertura; il testo libero non è stato inviato.",
+      }
     }
 
     const channel = await getWhatsAppChannelForConversation(this.supabase, propertyId, conversation)
@@ -364,11 +381,13 @@ export class InboxWriteService {
         .from("messaging_channels")
         .update({ last_outbound_at: new Date().toISOString(), last_error: null })
         .eq("id", channel.id)
+        .eq("property_id", propertyId)
     } else {
       await this.supabase
         .from("messaging_channels")
         .update({ last_error: result.error ?? "Errore invio WhatsApp" })
         .eq("id", channel.id)
+        .eq("property_id", propertyId)
     }
 
     return { success: result.success, error: result.error }

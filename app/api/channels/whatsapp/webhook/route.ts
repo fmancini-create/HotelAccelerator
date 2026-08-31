@@ -5,7 +5,9 @@ import { parseWhatsAppWebhook, getWhatsAppChannelByPhoneNumberId } from "@/lib/w
 import { decryptWhatsAppCredentials } from "@/lib/whatsapp/channel-secrets"
 import { WhatsAppProcessor } from "@/lib/whatsapp/processor"
 import { markWhatsAppRead, sendWhatsAppText } from "@/lib/whatsapp/client"
+import { handleWhatsAppReopenAction } from "@/lib/whatsapp/pending"
 import { getPlatformWhatsAppConfig } from "@/lib/whatsapp/platform"
+import { syncWhatsAppReopenTemplateStatusFromWebhook } from "@/lib/whatsapp/template-provisioning"
 import { runAutopilot } from "@/lib/ai/autopilot"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 
@@ -65,12 +67,18 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST: inbound messages and delivery statuses from Meta.
- * Flow: read raw body -> route to tenant by phone_number_id -> verify signature
- * with that tenant's app secret -> process messages idempotently.
+ * POST: inbound messages, delivery statuses and managed-template lifecycle
+ * events from Meta.
  *
- * Always returns 200 quickly so Meta does not retry/disable the webhook; real
- * errors are recorded in message_processing_logs.
+ * Embedded-Signup tenants are signed by the shared platform app. Legacy/manual
+ * tenants may still be connected through a different Meta app, so message
+ * events fall back to the routed tenant channel's app secret. Template lifecycle
+ * events have no safe phone-number route and are accepted ONLY with the shared
+ * platform signature.
+ *
+ * Transient processing errors return 500 so Meta can retry. Every externally
+ * visible write is idempotent on Meta message id or on the durable pending
+ * message state machine.
  */
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
@@ -87,19 +95,26 @@ export async function POST(request: NextRequest) {
 
   try {
     const parsed = parseWhatsAppWebhook(body)
+    const platform = getPlatformWhatsAppConfig()
+    const platformSignatureValid = Boolean(
+      platform.appSecret && verifyWhatsAppSignature(rawBody, signature, platform.appSecret),
+    )
 
-    // A status-only callback has no Inbox record to write. Echo-only callbacks
-    // must pass this guard: they carry messages written in the phone app.
-    if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
-      return NextResponse.json({ received: true }, { status: 200 })
+    // Status callbacks can lack phone_number_id. Never route them by guesswork:
+    // only the platform app signature can mutate managed-template metadata.
+    if (platformSignatureValid) {
+      await syncWhatsAppReopenTemplateStatusFromWebhook(supabase, body)
     }
 
-    const platform = getPlatformWhatsAppConfig()
-    // All coexistence numbers use the same 4BID Meta app. Verify once before
-    // inspecting any event; legacy per-tenant secrets are verified below.
-    if (platform.appSecret && !verifyWhatsAppSignature(rawBody, signature, platform.appSecret)) {
-      console.warn("[WhatsApp webhook] invalid platform signature")
-      return NextResponse.json({ received: false }, { status: 401 })
+    // A callback without Inbox-routable events is either a status/template event
+    // or an event type we intentionally ignore. When a platform secret exists,
+    // an invalidly signed callback must not be acknowledged as trusted.
+    if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
+      if (platform.appSecret && !platformSignatureValid) {
+        console.warn("[WhatsApp webhook] invalid platform signature on unroutable event")
+        return NextResponse.json({ received: false }, { status: 401 })
+      }
+      return NextResponse.json({ received: true }, { status: 200 })
     }
 
     const eventsByPhone = new Map<
@@ -120,30 +135,38 @@ export async function POST(request: NextRequest) {
 
     const processor = new WhatsAppProcessor(supabase)
     let requiresRetry = false
+    let processedAuthenticatedGroup = false
+    let invalidSignatureSeen = false
 
     for (const [phoneNumberId, events] of eventsByPhone) {
       const channel = await getWhatsAppChannelByPhoneNumberId(supabase, phoneNumberId)
       if (!channel) {
-        // Unknown number: authenticated but not connected to this platform.
+        // An authenticated platform event may reference a number no longer
+        // connected. There is no tenant data to mutate, so ignore it.
         continue
       }
 
       const typedChannel = channel as MessagingChannelRow
-      // Legacy channels can have different apps, while coexistence uses the
-      // already verified platform secret above.
-      if (!platform.appSecret) {
-        const signatureValid = verifyWhatsAppSignature(rawBody, signature, typedChannel.credentials?.app_secret || null)
-        if (!signatureValid) {
-          await supabase.from("message_processing_logs").insert({
-            property_id: typedChannel.property_id,
-            channel: "whatsapp",
-            event_type: "signature_invalid",
-            event_data: { phone_number_id: phoneNumberId },
-          })
-          continue
-        }
+      // Backward compatibility: once the platform app secret is configured we
+      // must NOT lock out legacy tenants that were onboarded with another Meta
+      // app. Route first by phone_number_id, then verify that channel's own
+      // decrypted app secret when the shared signature does not match.
+      const tenantSignatureValid = platformSignatureValid
+        ? true
+        : verifyWhatsAppSignature(rawBody, signature, typedChannel.credentials?.app_secret || null)
+
+      if (!tenantSignatureValid) {
+        invalidSignatureSeen = true
+        await supabase.from("message_processing_logs").insert({
+          property_id: typedChannel.property_id,
+          channel: "whatsapp",
+          event_type: "signature_invalid",
+          event_data: { phone_number_id: phoneNumberId },
+        })
+        continue
       }
 
+      processedAuthenticatedGroup = true
       let anyInbound = false
       let anyAppEcho = false
 
@@ -154,10 +177,31 @@ export async function POST(request: NextRequest) {
           console.error("[WhatsApp webhook] inbound persistence failed:", result.error)
           continue
         }
-        if (result.isDuplicate) continue
 
-        anyInbound = true
-        await markWhatsAppRead(typedChannel.config, typedChannel.credentials, msg.externalId)
+        // Our reopen-template buttons are control messages. Handle them before
+        // the duplicate guard so a Meta retry can recover a failed delivery,
+        // while the pending status machine still guarantees no blind resend.
+        const reopen = await handleWhatsAppReopenAction(
+          supabase,
+          msg,
+          typedChannel,
+          typedChannel.property_id,
+        )
+        if (reopen.requiresRetry) {
+          requiresRetry = true
+          console.error("[WhatsApp reopen] retry required:", reopen.error)
+        }
+
+        if (!result.isDuplicate) {
+          anyInbound = true
+          await markWhatsAppRead(typedChannel.config, typedChannel.credentials, msg.externalId)
+        }
+
+        // A quick-reply such as "Apri comunicazione" is not guest prose. It
+        // must never be fed to the hotel assistant, otherwise the AI could send
+        // an unrelated answer immediately after delivering the queued message.
+        if (reopen.handled) continue
+        if (result.isDuplicate) continue
 
         // The inbound message opens WhatsApp's 24h window, so a free-form
         // assistant response remains deliverable here.
@@ -221,6 +265,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (!processedAuthenticatedGroup && invalidSignatureSeen) {
+      return NextResponse.json({ received: false }, { status: 401 })
+    }
     if (requiresRetry) {
       return NextResponse.json({ received: false, retry: true }, { status: 500 })
     }
