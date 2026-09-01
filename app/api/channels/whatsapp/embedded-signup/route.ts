@@ -5,6 +5,7 @@ import { getPlatformWhatsAppConfig, getPublicWhatsAppConfig } from "@/lib/whatsa
 import { getWhatsAppQuota, quotaExceededMessage } from "@/lib/whatsapp/quota"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 import { encryptWhatsAppCredentialsForWrite } from "@/lib/whatsapp/channel-secrets"
+import { validateWhatsAppRuntimeAccess } from "@/lib/whatsapp/runtime-access"
 import {
   ensureWhatsAppReopenTemplate,
   templateStatePatch,
@@ -19,19 +20,19 @@ export const dynamic = "force-dynamic"
  * GET  -> returns the public (non-secret) Meta config the browser needs to boot
  *         the Embedded Signup widget, plus whether the platform is configured.
  * POST -> finishes onboarding after the hotel completed the Facebook popup:
- *         exchanges the returned `code` for a business token, subscribes the
- *         platform app to the client's WABA, resolves the selected phone number,
- *         stores a ready-to-use channel row and provisions the standard outbound
- *         reopen template on that WABA.
+ *         exchanges the returned `code` for the tenant-scoped business token,
+ *         subscribes the platform app to that tenant WABA, resolves the selected
+ *         phone number, stores a ready-to-use channel row and provisions the
+ *         standard outbound reopen template on that same WABA.
  *
- * The hotel never handles tokens, app secrets or message-template setup: those
- * are platform-managed. Per tenant we persist routing identifiers + non-secret
- * template status metadata; ongoing sends use the platform system-user token.
+ * The hotel never handles tokens, app secrets or message-template setup. The
+ * tenant-scoped credential returned by Embedded Signup is encrypted server-side
+ * and remains pinned to property_id + waba_id + phone_number_id. Runtime never
+ * falls back to a generic platform token for tenant outbound traffic.
  */
 
 export async function GET(request: NextRequest) {
   try {
-    // Auth still required so we don't leak even the public ids to anonymous users.
     await getAuthenticatedPropertyId(request)
     return NextResponse.json(getPublicWhatsAppConfig())
   } catch (error) {
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
 async function graphGet(version: string, path: string, token: string): Promise<any> {
   const res = await fetch(`https://graph.facebook.com/${version}/${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   })
   return res.json().catch(() => null)
 }
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Meta non ha confermato il collegamento in modalità WhatsApp Business App Coexistence. Verifica la configurazione Meta dedicata e riprova.",
+            "Meta non ha confermato il collegamento in modalità WhatsApp Business App Coexistence. Riprova il collegamento da HotelAccelerator.",
         },
         { status: 400 },
       )
@@ -90,9 +92,10 @@ export async function POST(request: NextRequest) {
 
     const v = platform.graphVersion
 
-    // 1) Exchange the short-lived code for a business access token. This token
-    // has access to the WABA the hotel just shared and is therefore the safest
-    // credential for the one-off onboarding/provisioning operations below.
+    // 1) The token returned by this exchange is the credential tied to the
+    // business integration the tenant just authorized. Keep this exact token
+    // for runtime: replacing it with a generic system-user token destroys the
+    // proof that WABA and phone belong to the selected tenant.
     const tokenRes = await fetch(
       `https://graph.facebook.com/${v}/oauth/access_token?` +
         new URLSearchParams({
@@ -100,7 +103,7 @@ export async function POST(request: NextRequest) {
           client_secret: platform.appSecret,
           code,
         }).toString(),
-      { method: "GET" },
+      { method: "GET", cache: "no-store" },
     )
     const tokenJson = await tokenRes.json().catch(() => null)
     if (!tokenRes.ok || !tokenJson?.access_token) {
@@ -109,11 +112,11 @@ export async function POST(request: NextRequest) {
     }
     const businessToken: string = tokenJson.access_token
 
-    // 2) Subscribe the platform app to the client's WABA so inbound messages,
-    // statuses and message_template_status_update events reach our shared webhook.
+    // 2) Subscribe the single HotelAccelerator platform app to this tenant WABA.
     const subRes = await fetch(`https://graph.facebook.com/${v}/${wabaId}/subscribed_apps`, {
       method: "POST",
       headers: { Authorization: `Bearer ${businessToken}` },
+      cache: "no-store",
     })
     const subJson = await subRes.json().catch(() => null)
     if (!subRes.ok || subJson?.success === false) {
@@ -121,13 +124,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 400 })
     }
 
-    // 3) Coexistence deliberately does NOT call /register. Registering a
-    // Business App number through the standard Cloud API endpoint can take it
-    // out of the phone app instead of keeping the two surfaces in sync.
-    //
-    // Meta's Business App completion event supplies the WABA; it may omit the
-    // phone_number_id. Resolve the sole selected number from that WABA, while
-    // still accepting a phone ID when Meta includes it in the session payload.
+    // 3) Coexistence deliberately does NOT call /register.
     let resolvedPhoneNumberId = phoneNumberId
     let resolvedNumber: any = null
     const phoneNumbers = await graphGet(
@@ -162,12 +159,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4) Fetch a current number snapshot. The business token is the token that
-    // just authorized this WABA, so it is valid even before the platform token
-    // has been granted access to the newly shared asset.
     const info = await graphGet(
       v,
-      `${resolvedPhoneNumberId}?fields=display_phone_number,verified_name,is_on_biz_app,platform_type`,
+      `${resolvedPhoneNumberId}?fields=id,display_phone_number,verified_name,is_on_biz_app,platform_type`,
       businessToken,
     )
     const numberInfo = info && !info.error ? info : resolvedNumber
@@ -175,17 +169,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Meta non ha confermato che il numero selezionato è attivo nell'app WhatsApp Business. Non è stato collegato: ripeti il flusso Coexistence selezionando il numero dell'app.",
+            "Meta non ha confermato che il numero selezionato è attivo nell'app WhatsApp Business. Ripeti il collegamento Coexistence da HotelAccelerator.",
         },
         { status: 400 },
       )
     }
     const displayPhone = numberInfo?.display_phone_number ?? ""
     const verifiedName = numberInfo?.verified_name ?? ""
-
-    // 5) Persist the channel. Secrets stay server-side; the row holds routing
-    // configuration plus non-secret template lifecycle metadata.
-    const supabase = createServiceClient()
 
     let config: Record<string, unknown> = {
       phone_number_id: String(resolvedPhoneNumberId),
@@ -197,18 +187,38 @@ export async function POST(request: NextRequest) {
       coexistence: true,
       is_on_biz_app: true,
       platform_type: numberInfo?.platform_type ?? "CLOUD_API",
+      credential_scope: "tenant_business_token",
     }
-    // WRITE-ENCRYPT: platform-managed credentials are persisted encrypted at
-    // rest. Only these secret fields are encrypted; routing/template config is
-    // intentionally queryable server-side.
+
+    // 4) Certify the routing boundary BEFORE persisting it. The same credential
+    // that will send at runtime must see this exact WABA and this exact number.
+    const runtimeProbe = await validateWhatsAppRuntimeAccess({
+      config,
+      credentials: { access_token: businessToken },
+    } as MessagingChannelRow)
+    if (!runtimeProbe.ok) {
+      return NextResponse.json(
+        {
+          error: `Collegamento WhatsApp non sicuro: ${runtimeProbe.error}`,
+          code: "WHATSAPP_RUNTIME_SCOPE_MISMATCH",
+        },
+        { status: 400 },
+      )
+    }
+
+    config = {
+      ...config,
+      runtime_access_verified_at: new Date().toISOString(),
+      runtime_access_status: "VERIFIED",
+    }
+
+    const supabase = createServiceClient()
     const credentials = encryptWhatsAppCredentialsForWrite({
-      access_token: platform.systemUserToken,
+      access_token: businessToken,
       app_secret: platform.appSecret,
       verify_token: platform.verifyToken,
     })
 
-    // Is this exact number already connected for this property? If so we just
-    // refresh its config/credentials (re-onboarding the same number).
     const { data: existing } = await supabase
       .from("messaging_channels")
       .select("id")
@@ -219,7 +229,6 @@ export async function POST(request: NextRequest) {
 
     let row: MessagingChannelRow
     if (existing?.id) {
-      // Update an existing number (do not touch is_default here).
       const { data, error } = await supabase
         .from("messaging_channels")
         .update({
@@ -227,15 +236,16 @@ export async function POST(request: NextRequest) {
           config,
           credentials,
           is_active: true,
+          last_error: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existing.id)
+        .eq("property_id", propertyId)
         .select("*")
         .single()
       if (error) throw error
       row = data as MessagingChannelRow
     } else {
-      // Adding a NEW number: enforce the per-property quota.
       const quota = await getWhatsAppQuota(supabase, propertyId)
       if (!quota.canAddNumber) {
         return NextResponse.json(
@@ -248,9 +258,6 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // First number for this property becomes the default automatically.
-      const isFirst = quota.used === 0
-
       const { data, error } = await supabase
         .from("messaging_channels")
         .insert({
@@ -260,7 +267,7 @@ export async function POST(request: NextRequest) {
           config,
           credentials,
           is_active: true,
-          is_default: isFirst,
+          is_default: quota.used === 0,
           updated_at: new Date().toISOString(),
         })
         .select("*")
@@ -269,10 +276,8 @@ export async function POST(request: NextRequest) {
       row = data as MessagingChannelRow
     }
 
-    // 6) Multi-tenant template provisioning. Every tenant keeps its own WABA,
-    // but HotelAccelerator owns one logical template definition and creates it
-    // automatically on each WABA. Failure here must not disconnect WhatsApp:
-    // normal 24h conversations still work and the lazy send-time check retries.
+    // 5) Provision the logical platform template on THIS tenant WABA with the
+    // same tenant-scoped credential used by runtime sends.
     const templateProvisioning = await ensureWhatsAppReopenTemplate({
       wabaId: String(wabaId),
       graphVersion: v,
@@ -306,6 +311,7 @@ export async function POST(request: NextRequest) {
         display_phone_number: displayPhone,
         verified_name: verifiedName,
         is_active: row.is_active,
+        routing_verified: true,
       },
       template: {
         managed: true,
