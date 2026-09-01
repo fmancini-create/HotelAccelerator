@@ -27,37 +27,54 @@ export async function sendTelegramText(
   text: string,
 ): Promise<SendTextResult> {
   const token = credentials.bot_token
-  if (!token) {
-    return { success: false, error: "bot_token mancante nelle credenziali del canale" }
-  }
+  if (!token) return { success: false, error: "bot_token mancante nelle credenziali del canale" }
 
   try {
     const res = await fetch(apiUrl(token, "sendMessage"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        // Telegram rejects unbalanced markdown; keep it plain for safety.
-        disable_web_page_preview: true,
-      }),
+      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
     })
-
     const json = await res.json().catch(() => null)
-
     if (!res.ok || !json?.ok) {
-      const apiError = json?.description || `Telegram API error (HTTP ${res.status})`
-      return { success: false, error: apiError }
+      return { success: false, error: json?.description || `Telegram API error (HTTP ${res.status})` }
     }
-
-    const externalMessageId =
-      json?.result?.message_id != null ? String(json.result.message_id) : undefined
-    return { success: true, externalMessageId }
-  } catch (e) {
     return {
-      success: false,
-      error: e instanceof Error ? e.message : "Errore di rete verso Telegram",
+      success: true,
+      externalMessageId: json?.result?.message_id != null ? String(json.result.message_id) : undefined,
     }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Errore di rete verso Telegram" }
+  }
+}
+
+/** Send a local document through Telegram Bot API. */
+export async function sendTelegramDocument(
+  credentials: TelegramCredentials,
+  chatId: string,
+  file: File,
+  caption?: string,
+): Promise<SendTextResult> {
+  const token = credentials.bot_token
+  if (!token) return { success: false, error: "bot_token mancante nelle credenziali del canale" }
+
+  try {
+    const form = new FormData()
+    form.append("chat_id", chatId)
+    form.append("document", file, file.name || "documento")
+    if (caption?.trim()) form.append("caption", caption.trim().slice(0, 1024))
+
+    const res = await fetch(apiUrl(token, "sendDocument"), { method: "POST", body: form })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.ok) {
+      return { success: false, error: json?.description || `Telegram API error (HTTP ${res.status})` }
+    }
+    return {
+      success: true,
+      externalMessageId: json?.result?.message_id != null ? String(json.result.message_id) : undefined,
+    }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Errore di rete verso Telegram" }
   }
 }
 
@@ -69,18 +86,12 @@ export interface GetMeResult {
   error?: string
 }
 
-/**
- * Validate a bot token and fetch the bot's identity (id, username). Used at
- * connect time to confirm the token works before we persist it.
- */
 export async function getTelegramMe(botToken: string): Promise<GetMeResult> {
   if (!botToken) return { success: false, error: "Token mancante" }
   try {
     const res = await fetch(apiUrl(botToken, "getMe"), { method: "GET" })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.ok) {
-      return { success: false, error: json?.description || `HTTP ${res.status}` }
-    }
+    if (!res.ok || !json?.ok) return { success: false, error: json?.description || `HTTP ${res.status}` }
     return {
       success: true,
       botId: json.result?.id != null ? String(json.result.id) : undefined,
@@ -97,11 +108,6 @@ export interface SetWebhookResult {
   error?: string
 }
 
-/**
- * Register the webhook URL for a bot. Telegram will POST updates to `url` and
- * echo `secretToken` in the X-Telegram-Bot-Api-Secret-Token header so we can
- * verify authenticity without a signature scheme.
- */
 export async function setTelegramWebhook(
   botToken: string,
   url: string,
@@ -120,9 +126,7 @@ export async function setTelegramWebhook(
       }),
     })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.ok) {
-      return { success: false, error: json?.description || `HTTP ${res.status}` }
-    }
+    if (!res.ok || !json?.ok) return { success: false, error: json?.description || `HTTP ${res.status}` }
     return { success: true }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "Errore di rete" }
@@ -139,20 +143,12 @@ export interface WebhookInfoResult {
   error?: string
 }
 
-/**
- * Ask Telegram what webhook it currently has registered for this bot, plus any
- * delivery errors. This is the ground truth for diagnosing "messages don't
- * arrive": a non-empty `lastErrorMessage` or a `url` on a redirecting host
- * (e.g. non-www) explains silent non-delivery.
- */
 export async function getTelegramWebhookInfo(botToken: string): Promise<WebhookInfoResult> {
   if (!botToken) return { success: false, error: "Token mancante" }
   try {
     const res = await fetch(apiUrl(botToken, "getWebhookInfo"), { method: "GET" })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.ok) {
-      return { success: false, error: json?.description || `HTTP ${res.status}` }
-    }
+    if (!res.ok || !json?.ok) return { success: false, error: json?.description || `HTTP ${res.status}` }
     const r = json.result || {}
     return {
       success: true,
@@ -167,9 +163,6 @@ export async function getTelegramWebhookInfo(botToken: string): Promise<WebhookI
   }
 }
 
-/**
- * Remove the webhook for a bot (used on disconnect). Best-effort.
- */
 export async function deleteTelegramWebhook(botToken: string): Promise<SetWebhookResult> {
   if (!botToken) return { success: false, error: "Token mancante" }
   try {
@@ -179,9 +172,7 @@ export async function deleteTelegramWebhook(botToken: string): Promise<SetWebhoo
       body: JSON.stringify({ drop_pending_updates: false }),
     })
     const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.ok) {
-      return { success: false, error: json?.description || `HTTP ${res.status}` }
-    }
+    if (!res.ok || !json?.ok) return { success: false, error: json?.description || `HTTP ${res.status}` }
     return { success: true }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "Errore di rete" }
