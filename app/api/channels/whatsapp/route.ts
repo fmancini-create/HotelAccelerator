@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { getWhatsAppQuota, quotaExceededMessage } from "@/lib/whatsapp/quota"
 import { maskSecret, type MessagingChannelRow } from "@/lib/whatsapp/types"
 import {
@@ -8,15 +9,6 @@ import {
   encryptWhatsAppCredentialsForWrite,
 } from "@/lib/whatsapp/channel-secrets"
 import { ensureWhatsAppReopenTemplateForChannel } from "@/lib/whatsapp/template-provisioning"
-
-/**
- * Per-tenant WhatsApp channel configuration.
- *
- * Secrets (access_token, app_secret, verify_token) are NEVER returned in full:
- * GET returns masked previews + booleans. POST only overwrites a secret when a
- * new non-empty value is provided (so the UI can leave fields blank to keep the
- * existing secret).
- */
 
 function serializeChannel(row: MessagingChannelRow) {
   const creds = row.credentials || {}
@@ -60,15 +52,9 @@ export async function GET(request: NextRequest) {
       .eq("property_id", propertyId)
       .eq("channel_type", "whatsapp")
       .order("created_at", { ascending: true })
-
     if (error) throw error
 
     let rows = (data as MessagingChannelRow[]) ?? []
-
-    // Self-heal managed template state from the tenant's own WABA. This keeps
-    // onboarding truly multi-tenant: the hotel never has to open Meta/WhatsApp
-    // Manager just to refresh PENDING -> APPROVED. We throttle already-approved
-    // templates but aggressively recheck pending/error states.
     const now = Date.now()
     const candidates = rows.filter((row) => {
       if (!row.is_active) return false
@@ -101,8 +87,6 @@ export async function GET(request: NextRequest) {
         }),
       )
 
-      // Re-read persisted metadata after the Graph lookup. Credentials remain
-      // encrypted at rest and are never returned to the browser in clear text.
       const { data: refreshed, error: refreshError } = await supabase
         .from("messaging_channels")
         .select("*")
@@ -112,9 +96,8 @@ export async function GET(request: NextRequest) {
       if (!refreshError && refreshed) rows = refreshed as MessagingChannelRow[]
     }
 
-    const channels = rows.map(serializeChannel)
     const quota = await getWhatsAppQuota(supabase, propertyId)
-    return NextResponse.json({ channels, quota })
+    return NextResponse.json({ channels: rows.map(serializeChannel), quota })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
@@ -122,12 +105,26 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Manual Meta credentials are a platform recovery tool only.
+ * Tenant admins must use Embedded Signup and are never asked for WABA IDs,
+ * tokens, app secrets, verify tokens, billing settings or Meta configuration.
+ */
 export async function POST(request: NextRequest) {
   try {
-    const propertyId = await getAuthenticatedPropertyId(request)
-    const supabase = createServiceClient()
-    const body = await request.json()
+    const identity = await getCallerIdentity(request)
+    if (!identity) return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
+    if (!identity.isSuperAdmin) {
+      return NextResponse.json(
+        { error: "La configurazione WhatsApp è gestita da HotelAccelerator. Usa Collega WhatsApp." },
+        { status: 403 },
+      )
+    }
+    if (!identity.propertyId) return NextResponse.json({ error: "Nessun tenant selezionato" }, { status: 400 })
 
+    const propertyId = identity.propertyId
+    const supabase = createServiceClient()
+    const body = await request.json().catch(() => ({}))
     const {
       id,
       display_name,
@@ -145,7 +142,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "phone_number_id è obbligatorio" }, { status: 400 })
     }
 
-    // Load existing row (if any) to preserve secrets that were left blank.
     let existing: MessagingChannelRow | null = null
     if (id) {
       const { data } = await supabase
@@ -153,34 +149,28 @@ export async function POST(request: NextRequest) {
         .select("*")
         .eq("id", id)
         .eq("property_id", propertyId)
+        .eq("channel_type", "whatsapp")
         .maybeSingle()
       existing = (data as MessagingChannelRow) ?? null
     }
 
-    // WRITE-ENCRYPT: cifriamo SOLO i nuovi valori in arrivo (in chiaro) prima
-    // del merge. I segreti esistenti vengono preservati così come sono nel DB
-    // (sia legacy in chiaro sia `enc:v1:`), senza ricifratura: il merge dei soli
-    // campi nuovi evita di alterare i valori non inviati -> nessun backfill.
     const incomingSecrets: Record<string, unknown> = {}
-    if (typeof access_token === "string" && access_token.trim() !== "") {
-      incomingSecrets.access_token = access_token.trim()
-    }
-    if (typeof app_secret === "string" && app_secret.trim() !== "") {
-      incomingSecrets.app_secret = app_secret.trim()
-    }
-    if (typeof verify_token === "string" && verify_token.trim() !== "") {
-      incomingSecrets.verify_token = verify_token.trim()
-    }
+    if (typeof access_token === "string" && access_token.trim()) incomingSecrets.access_token = access_token.trim()
+    if (typeof app_secret === "string" && app_secret.trim()) incomingSecrets.app_secret = app_secret.trim()
+    if (typeof verify_token === "string" && verify_token.trim()) incomingSecrets.verify_token = verify_token.trim()
+
     const mergedCredentials: Record<string, unknown> = {
       ...(existing?.credentials ?? {}),
       ...encryptWhatsAppCredentialsForWrite(incomingSecrets),
     }
 
     const config: Record<string, unknown> = {
+      ...(existing?.config ?? {}),
       phone_number_id: String(phone_number_id).trim(),
       waba_id: waba_id ? String(waba_id).trim() : "",
       display_phone_number: display_phone_number ? String(display_phone_number).trim() : "",
       graph_version: graph_version ? String(graph_version).trim() : "",
+      manual_configuration_by_platform: true,
     }
 
     const payload = {
@@ -205,7 +195,6 @@ export async function POST(request: NextRequest) {
       if (error) throw error
       row = data as MessagingChannelRow
     } else {
-      // Adding a NEW number: enforce the per-property quota.
       const quota = await getWhatsAppQuota(supabase, propertyId)
       if (!quota.canAddNumber) {
         return NextResponse.json(
@@ -229,15 +218,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ channel: serializeChannel(row) })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
-    const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
-/**
- * PATCH: set a specific WhatsApp number as the default for the property.
- * Body: { id: string, action: "set_default" }
- */
 export async function PATCH(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
@@ -245,42 +229,36 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const id: string | undefined = body?.id
     const action: string | undefined = body?.action
-
     if (!id) return NextResponse.json({ error: "id mancante" }, { status: 400 })
 
-    if (action === "set_default") {
-      // Ensure the target belongs to this property and is active.
-      const { data: target } = await supabase
-        .from("messaging_channels")
-        .select("id")
-        .eq("id", id)
-        .eq("property_id", propertyId)
-        .eq("channel_type", "whatsapp")
-        .eq("is_active", true)
-        .maybeSingle()
-      if (!target) return NextResponse.json({ error: "Numero non trovato" }, { status: 404 })
+    if (action !== "set_default") return NextResponse.json({ error: "Azione non supportata" }, { status: 400 })
 
-      // Clear the current default(s), then set the new one. Two steps so the
-      // partial unique index (one default per property) never conflicts.
-      await supabase
-        .from("messaging_channels")
-        .update({ is_default: false, updated_at: new Date().toISOString() })
-        .eq("property_id", propertyId)
-        .eq("channel_type", "whatsapp")
-        .eq("is_default", true)
+    const { data: target } = await supabase
+      .from("messaging_channels")
+      .select("id")
+      .eq("id", id)
+      .eq("property_id", propertyId)
+      .eq("channel_type", "whatsapp")
+      .eq("is_active", true)
+      .maybeSingle()
+    if (!target) return NextResponse.json({ error: "Numero non trovato" }, { status: 404 })
 
-      const { data, error } = await supabase
-        .from("messaging_channels")
-        .update({ is_default: true, updated_at: new Date().toISOString() })
-        .eq("id", id)
-        .eq("property_id", propertyId)
-        .select("*")
-        .single()
-      if (error) throw error
-      return NextResponse.json({ channel: serializeChannel(data as MessagingChannelRow) })
-    }
+    await supabase
+      .from("messaging_channels")
+      .update({ is_default: false, updated_at: new Date().toISOString() })
+      .eq("property_id", propertyId)
+      .eq("channel_type", "whatsapp")
+      .eq("is_default", true)
 
-    return NextResponse.json({ error: "Azione non supportata" }, { status: 400 })
+    const { data, error } = await supabase
+      .from("messaging_channels")
+      .update({ is_default: true, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("property_id", propertyId)
+      .select("*")
+      .single()
+    if (error) throw error
+    return NextResponse.json({ channel: serializeChannel(data as MessagingChannelRow) })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
@@ -295,12 +273,12 @@ export async function DELETE(request: NextRequest) {
     const id = new URL(request.url).searchParams.get("id")
     if (!id) return NextResponse.json({ error: "id mancante" }, { status: 400 })
 
-    // Was this the default number? If so, we'll promote another one after delete.
     const { data: removed } = await supabase
       .from("messaging_channels")
       .select("is_default")
       .eq("id", id)
       .eq("property_id", propertyId)
+      .eq("channel_type", "whatsapp")
       .maybeSingle()
 
     const { error } = await supabase
@@ -308,9 +286,9 @@ export async function DELETE(request: NextRequest) {
       .delete()
       .eq("id", id)
       .eq("property_id", propertyId)
+      .eq("channel_type", "whatsapp")
     if (error) throw error
 
-    // Promote the oldest remaining active number to default if we removed it.
     if (removed?.is_default) {
       const { data: next } = await supabase
         .from("messaging_channels")
@@ -326,6 +304,7 @@ export async function DELETE(request: NextRequest) {
           .from("messaging_channels")
           .update({ is_default: true, updated_at: new Date().toISOString() })
           .eq("id", next.id)
+          .eq("property_id", propertyId)
       }
     }
 

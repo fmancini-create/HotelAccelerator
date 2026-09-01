@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getPlatformWhatsAppConfig, getPublicWhatsAppConfig } from "@/lib/whatsapp/platform"
+import { attachPlatformBillingToWaba } from "@/lib/whatsapp/platform-billing"
 import { getWhatsAppQuota, quotaExceededMessage } from "@/lib/whatsapp/quota"
 import type { MessagingChannelRow } from "@/lib/whatsapp/types"
 import { encryptWhatsAppCredentialsForWrite } from "@/lib/whatsapp/channel-secrets"
@@ -17,20 +18,10 @@ export const dynamic = "force-dynamic"
 /**
  * Embedded Signup endpoint.
  *
- * GET  -> returns the public (non-secret) Meta config the browser needs to boot
- *         the Embedded Signup widget, plus whether the platform is configured.
- * POST -> finishes onboarding after the hotel completed the Facebook popup:
- *         exchanges the returned `code` for the tenant-scoped business token,
- *         subscribes the platform app to that tenant WABA, resolves the selected
- *         phone number, stores a ready-to-use channel row and provisions the
- *         standard outbound reopen template on that same WABA.
- *
- * The hotel never handles tokens, app secrets or message-template setup. The
- * tenant-scoped credential returned by Embedded Signup is encrypted server-side
- * and remains pinned to property_id + waba_id + phone_number_id. Runtime never
- * falls back to a generic platform token for tenant outbound traffic.
+ * The tenant only authorizes the WhatsApp number in Meta's embedded flow. It
+ * never handles tokens, WABA IDs, webhook configuration, templates, currency,
+ * payment methods or billing. All of those are platform responsibilities.
  */
-
 export async function GET(request: NextRequest) {
   try {
     await getAuthenticatedPropertyId(request)
@@ -57,10 +48,7 @@ export async function POST(request: NextRequest) {
 
     if (!platform.isConfigured) {
       return NextResponse.json(
-        {
-          error:
-            "WhatsApp non è ancora abilitato sulla piattaforma. Contatta l'amministratore (configurazione Meta mancante).",
-        },
+        { error: "WhatsApp è temporaneamente in attivazione lato HotelAccelerator. Non devi configurare nulla su Meta." },
         { status: 503 },
       )
     }
@@ -71,48 +59,29 @@ export async function POST(request: NextRequest) {
     const wabaId: string | undefined = body?.waba_id
     const signupEvent: string | undefined = body?.signup_event
 
-    if (!code) {
-      return NextResponse.json({ error: "Codice di autorizzazione mancante" }, { status: 400 })
-    }
+    if (!code) return NextResponse.json({ error: "Codice di autorizzazione mancante" }, { status: 400 })
     if (!wabaId) {
-      return NextResponse.json(
-        { error: "Account WhatsApp non selezionato. Riprova il collegamento." },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Account WhatsApp non selezionato. Riprova il collegamento." }, { status: 400 })
     }
     if (signupEvent !== "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING") {
       return NextResponse.json(
-        {
-          error:
-            "Meta non ha confermato il collegamento in modalità WhatsApp Business App Coexistence. Riprova il collegamento da HotelAccelerator.",
-        },
+        { error: "Il collegamento WhatsApp non è stato completato. Riprova da HotelAccelerator." },
         { status: 400 },
       )
     }
 
     const v = platform.graphVersion
-
-    // 1) The token returned by this exchange is the credential tied to the
-    // business integration the tenant just authorized. Keep this exact token
-    // for runtime: replacing it with a generic system-user token destroys the
-    // proof that WABA and phone belong to the selected tenant.
     const tokenRes = await fetch(
       `https://graph.facebook.com/${v}/oauth/access_token?` +
-        new URLSearchParams({
-          client_id: platform.appId,
-          client_secret: platform.appSecret,
-          code,
-        }).toString(),
+        new URLSearchParams({ client_id: platform.appId, client_secret: platform.appSecret, code }).toString(),
       { method: "GET", cache: "no-store" },
     )
     const tokenJson = await tokenRes.json().catch(() => null)
     if (!tokenRes.ok || !tokenJson?.access_token) {
-      const msg = tokenJson?.error?.message || "Scambio del codice fallito"
-      return NextResponse.json({ error: msg }, { status: 400 })
+      return NextResponse.json({ error: "Autorizzazione WhatsApp non completata. Riprova." }, { status: 400 })
     }
     const businessToken: string = tokenJson.access_token
 
-    // 2) Subscribe the single HotelAccelerator platform app to this tenant WABA.
     const subRes = await fetch(`https://graph.facebook.com/${v}/${wabaId}/subscribed_apps`, {
       method: "POST",
       headers: { Authorization: `Bearer ${businessToken}` },
@@ -120,11 +89,9 @@ export async function POST(request: NextRequest) {
     })
     const subJson = await subRes.json().catch(() => null)
     if (!subRes.ok || subJson?.success === false) {
-      const msg = subJson?.error?.message || "Iscrizione del webhook al numero fallita"
-      return NextResponse.json({ error: msg }, { status: 400 })
+      return NextResponse.json({ error: "HotelAccelerator non è riuscito ad attivare il canale WhatsApp. Riprova più tardi." }, { status: 502 })
     }
 
-    // 3) Coexistence deliberately does NOT call /register.
     let resolvedPhoneNumberId = phoneNumberId
     let resolvedNumber: any = null
     const phoneNumbers = await graphGet(
@@ -135,27 +102,16 @@ export async function POST(request: NextRequest) {
     const candidates = Array.isArray(phoneNumbers?.data) ? phoneNumbers.data : []
 
     if (resolvedPhoneNumberId) {
-      resolvedNumber =
-        candidates.find((candidate: any) => String(candidate?.id) === String(resolvedPhoneNumberId)) ?? null
+      resolvedNumber = candidates.find((candidate: any) => String(candidate?.id) === String(resolvedPhoneNumberId)) ?? null
     }
-
     if (!resolvedNumber) {
       if (candidates.length === 1) {
         resolvedNumber = candidates[0]
         resolvedPhoneNumberId = String(resolvedNumber.id)
       } else if (candidates.length === 0) {
-        return NextResponse.json(
-          { error: "Meta non ha restituito alcun numero WhatsApp per l'account selezionato." },
-          { status: 400 },
-        )
+        return NextResponse.json({ error: "WhatsApp non ha restituito alcun numero per l'account selezionato." }, { status: 400 })
       } else {
-        return NextResponse.json(
-          {
-            error:
-              "Meta ha restituito più numeri WhatsApp. Riapri il collegamento e seleziona un solo numero da collegare.",
-          },
-          { status: 400 },
-        )
+        return NextResponse.json({ error: "Seleziona un solo numero WhatsApp e ripeti il collegamento." }, { status: 400 })
       }
     }
 
@@ -166,17 +122,11 @@ export async function POST(request: NextRequest) {
     )
     const numberInfo = info && !info.error ? info : resolvedNumber
     if (numberInfo?.is_on_biz_app !== true) {
-      return NextResponse.json(
-        {
-          error:
-            "Meta non ha confermato che il numero selezionato è attivo nell'app WhatsApp Business. Ripeti il collegamento Coexistence da HotelAccelerator.",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Il numero selezionato non risulta attivo nell'app WhatsApp Business." }, { status: 400 })
     }
+
     const displayPhone = numberInfo?.display_phone_number ?? ""
     const verifiedName = numberInfo?.verified_name ?? ""
-
     let config: Record<string, unknown> = {
       phone_number_id: String(resolvedPhoneNumberId),
       waba_id: String(wabaId),
@@ -188,20 +138,18 @@ export async function POST(request: NextRequest) {
       is_on_biz_app: true,
       platform_type: numberInfo?.platform_type ?? "CLOUD_API",
       credential_scope: "tenant_business_token",
+      platform_billing_managed_by: "4bid",
+      platform_billing_status: "pending",
+      platform_billing_currency: "EUR",
     }
 
-    // 4) Certify the routing boundary BEFORE persisting it. The same credential
-    // that will send at runtime must see this exact WABA and this exact number.
     const runtimeProbe = await validateWhatsAppRuntimeAccess({
       config,
       credentials: { access_token: businessToken },
     } as MessagingChannelRow)
     if (!runtimeProbe.ok) {
       return NextResponse.json(
-        {
-          error: `Collegamento WhatsApp non sicuro: ${runtimeProbe.error}`,
-          code: "WHATSAPP_RUNTIME_SCOPE_MISMATCH",
-        },
+        { error: "Il numero WhatsApp non può essere associato in sicurezza a questa struttura.", code: "WHATSAPP_RUNTIME_SCOPE_MISMATCH" },
         { status: 400 },
       )
     }
@@ -221,11 +169,15 @@ export async function POST(request: NextRequest) {
 
     const { data: existing } = await supabase
       .from("messaging_channels")
-      .select("id")
+      .select("id,config")
       .eq("property_id", propertyId)
       .eq("channel_type", "whatsapp")
       .eq("config->>phone_number_id", String(resolvedPhoneNumberId))
       .maybeSingle()
+
+    if (existing?.config && typeof existing.config === "object") {
+      config = { ...(existing.config as Record<string, unknown>), ...config }
+    }
 
     let row: MessagingChannelRow
     if (existing?.id) {
@@ -257,7 +209,6 @@ export async function POST(request: NextRequest) {
           { status: 402 },
         )
       }
-
       const { data, error } = await supabase
         .from("messaging_channels")
         .insert({
@@ -276,21 +227,29 @@ export async function POST(request: NextRequest) {
       row = data as MessagingChannelRow
     }
 
-    // 5) Provision the logical platform template on THIS tenant WABA with the
-    // same tenant-scoped credential used by runtime sends.
+    const billing = await attachPlatformBillingToWaba(supabase, String(wabaId))
+    config = {
+      ...config,
+      platform_billing_managed_by: "4bid",
+      platform_billing_status: billing.status,
+      platform_billing_currency: billing.currency,
+      platform_billing_credit_line_id: billing.creditLineId ?? null,
+      platform_billing_allocation_config_id: billing.allocationConfigId ?? null,
+      platform_billing_checked_at: new Date().toISOString(),
+      platform_billing_error: billing.ok ? null : billing.error ?? "Platform billing not ready",
+    }
+
+    // Template provisioning remains useful even while central billing is being
+    // activated; inbound and 24h customer-care traffic can operate independently.
     const templateProvisioning = await ensureWhatsAppReopenTemplate({
       wabaId: String(wabaId),
       graphVersion: v,
       accessToken: businessToken,
       sampleCompanyName: verifiedName || "Hotel Demo",
     })
+    config = { ...config, ...templateStatePatch(templateProvisioning) }
 
-    config = {
-      ...config,
-      ...templateStatePatch(templateProvisioning),
-    }
-
-    const { data: refreshedRow, error: templateStateError } = await supabase
+    const { data: refreshedRow, error: stateError } = await supabase
       .from("messaging_channels")
       .update({ config, updated_at: new Date().toISOString() })
       .eq("id", row.id)
@@ -298,9 +257,16 @@ export async function POST(request: NextRequest) {
       .eq("channel_type", "whatsapp")
       .select("*")
       .single()
+    if (!stateError && refreshedRow) row = refreshedRow as MessagingChannelRow
 
-    if (!templateStateError && refreshedRow) {
-      row = refreshedRow as MessagingChannelRow
+    if (!billing.ok) {
+      console.warn("[WhatsApp embedded-signup] 4BID billing not ready", {
+        property_id: propertyId,
+        channel_id: row.id,
+        waba_id: String(wabaId),
+        status: billing.status,
+        error: billing.error,
+      })
     }
 
     return NextResponse.json({
@@ -313,18 +279,22 @@ export async function POST(request: NextRequest) {
         is_active: row.is_active,
         routing_verified: true,
       },
+      platformBilling: {
+        managed: true,
+        ready: billing.ok,
+        status: billing.status,
+      },
       template: {
         managed: true,
         ready: templateProvisioning.ok && templateProvisioning.status === "APPROVED",
         status: templateProvisioning.status,
         created: templateProvisioning.created,
-        error: templateProvisioning.ok ? undefined : templateProvisioning.error,
       },
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Errore"
     const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
     console.error("[WhatsApp embedded-signup] error:", error)
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: "Errore durante l'attivazione WhatsApp. HotelAccelerator ha registrato il problema." }, { status })
   }
 }
