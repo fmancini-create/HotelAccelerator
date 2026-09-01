@@ -3,7 +3,11 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getWhatsAppQuota, quotaExceededMessage } from "@/lib/whatsapp/quota"
 import { maskSecret, type MessagingChannelRow } from "@/lib/whatsapp/types"
-import { encryptWhatsAppCredentialsForWrite } from "@/lib/whatsapp/channel-secrets"
+import {
+  decryptWhatsAppCredentials,
+  encryptWhatsAppCredentialsForWrite,
+} from "@/lib/whatsapp/channel-secrets"
+import { ensureWhatsAppReopenTemplateForChannel } from "@/lib/whatsapp/template-provisioning"
 
 /**
  * Per-tenant WhatsApp channel configuration.
@@ -59,7 +63,56 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    const channels = (data as MessagingChannelRow[]).map(serializeChannel)
+    let rows = (data as MessagingChannelRow[]) ?? []
+
+    // Self-heal managed template state from the tenant's own WABA. This keeps
+    // onboarding truly multi-tenant: the hotel never has to open Meta/WhatsApp
+    // Manager just to refresh PENDING -> APPROVED. We throttle already-approved
+    // templates but aggressively recheck pending/error states.
+    const now = Date.now()
+    const candidates = rows.filter((row) => {
+      if (!row.is_active) return false
+      const status = String(row.config?.reopen_template_status ?? "").toUpperCase()
+      const checkedAt = Date.parse(String(row.config?.reopen_template_checked_at ?? ""))
+      const recentApproved = status === "APPROVED" && Number.isFinite(checkedAt) && now - checkedAt < 6 * 60 * 60 * 1000
+      return !recentApproved
+    })
+
+    if (candidates.length > 0) {
+      await Promise.allSettled(
+        candidates.map(async (row) => {
+          const channel: MessagingChannelRow = {
+            ...row,
+            credentials: decryptWhatsAppCredentials(row.credentials),
+          }
+          const result = await ensureWhatsAppReopenTemplateForChannel(
+            supabase,
+            channel,
+            row.display_name || "Hotel",
+          )
+          if (!result.ok) {
+            console.warn("[WhatsApp] managed template self-heal failed", {
+              channel_id: row.id,
+              property_id: row.property_id,
+              status: result.status,
+              error: result.error,
+            })
+          }
+        }),
+      )
+
+      // Re-read persisted metadata after the Graph lookup. Credentials remain
+      // encrypted at rest and are never returned to the browser in clear text.
+      const { data: refreshed, error: refreshError } = await supabase
+        .from("messaging_channels")
+        .select("*")
+        .eq("property_id", propertyId)
+        .eq("channel_type", "whatsapp")
+        .order("created_at", { ascending: true })
+      if (!refreshError && refreshed) rows = refreshed as MessagingChannelRow[]
+    }
+
+    const channels = rows.map(serializeChannel)
     const quota = await getWhatsAppQuota(supabase, propertyId)
     return NextResponse.json({ channels, quota })
   } catch (error) {
