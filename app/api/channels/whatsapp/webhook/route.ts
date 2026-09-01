@@ -106,12 +106,28 @@ export async function POST(request: NextRequest) {
       await syncWhatsAppReopenTemplateStatusFromWebhook(supabase, body)
     }
 
-    // A callback without Inbox-routable events is either a status/template event
-    // or an event type we intentionally ignore. When a platform secret exists,
-    // an invalidly signed callback must not be acknowledged as trusted.
+    // Coexistence also emits history/state-sync/status callbacks with no Inbox
+    // message. They can still carry metadata.phone_number_id and may be signed
+    // by the tenant/legacy app rather than the shared platform app. Route those
+    // by the concrete phone number and verify that tenant secret before acking;
+    // otherwise Meta retries valid tenant events forever with 401 noise.
     if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
-      if (platform.appSecret && !platformSignatureValid) {
-        console.warn("[WhatsApp webhook] invalid platform signature on unroutable event")
+      let tenantSignatureValid = false
+      if (!platformSignatureValid && parsed.phoneNumberId) {
+        const routed = await getWhatsAppChannelByPhoneNumberId(supabase, parsed.phoneNumberId)
+        if (routed) {
+          tenantSignatureValid = verifyWhatsAppSignature(
+            rawBody,
+            signature,
+            routed.credentials?.app_secret || null,
+          )
+        }
+      }
+
+      if (platform.appSecret && !platformSignatureValid && !tenantSignatureValid) {
+        console.warn("[WhatsApp webhook] invalid signature on non-message event", {
+          phone_number_id: parsed.phoneNumberId,
+        })
         return NextResponse.json({ received: false }, { status: 401 })
       }
       return NextResponse.json({ received: true }, { status: 200 })
