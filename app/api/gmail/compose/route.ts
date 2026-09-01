@@ -16,6 +16,20 @@ function base64Lines(buffer: Buffer) {
   return buffer.toString("base64").replace(/(.{76})/g, "$1\r\n")
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
+/** Keep composer formatting while dropping executable HTML. */
+function sanitizeComposerHtml(value: string) {
+  return value
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+\s*=\s*(["']).*?\1/gi, "")
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+    .replace(/href\s*=\s*(["'])\s*javascript:[\s\S]*?\1/gi, 'href="#"')
+}
+
 export async function POST(request: NextRequest) {
   try {
     const contentType = request.headers.get("content-type") || ""
@@ -24,6 +38,7 @@ export async function POST(request: NextRequest) {
     let bcc = ""
     let subject = ""
     let emailBody = ""
+    let emailBodyHtml = ""
     let requestedChannelId: string | undefined
     let attachments: File[] = []
 
@@ -34,6 +49,7 @@ export async function POST(request: NextRequest) {
       bcc = String(form.get("bcc") || "")
       subject = String(form.get("subject") || "")
       emailBody = String(form.get("body") || "")
+      emailBodyHtml = String(form.get("bodyHtml") || "")
       requestedChannelId = String(form.get("channelId") || "") || undefined
       attachments = form.getAll("attachments").filter((value): value is File => value instanceof File)
     } else {
@@ -43,10 +59,11 @@ export async function POST(request: NextRequest) {
       bcc = String(body.bcc || "")
       subject = String(body.subject || "")
       emailBody = String(body.body || "")
+      emailBodyHtml = String(body.bodyHtml || "")
       requestedChannelId = body.channelId || undefined
     }
 
-    if (!to.trim() || !emailBody.trim()) {
+    if (!to.trim() || (!emailBody.trim() && !emailBodyHtml.trim())) {
       return NextResponse.json({ error: "Destinatario e contenuto obbligatori" }, { status: 400 })
     }
 
@@ -75,7 +92,10 @@ export async function POST(request: NextRequest) {
     const fromAddress = channelData.email_address
     const fromName = channelData.display_name || channelData.name || fromAddress.split("@")[0]
     const { html: signatureHtml } = await getUserSignature(supabase, user.id)
-    const finalBody = appendSignatureHtml(emailBody.replace(/\n/g, "<br>"), signatureHtml)
+    const composerHtml = emailBodyHtml.trim()
+      ? sanitizeComposerHtml(emailBodyHtml)
+      : escapeHtml(emailBody).replace(/\n/g, "<br>")
+    const finalBody = appendSignatureHtml(composerHtml, signatureHtml)
 
     const headers = [
       `From: "${safeHeader(fromName)}" <${safeHeader(fromAddress)}>`,
