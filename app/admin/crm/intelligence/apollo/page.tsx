@@ -56,12 +56,13 @@ export default function ApolloCrmPage() {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [prospects, setProspects] = useState<Prospect[]>([])
   const [results, setResults] = useState<Person[]>([])
-  const [keywords, setKeywords] = useState("hotel resort hospitality")
+  const [keywords, setKeywords] = useState("hotel,hospitality")
   const [titles, setTitles] = useState("general manager, hotel manager, direttore, owner")
   const [location, setLocation] = useState("Italy")
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState("")
   const [error, setError] = useState("")
+  const [searched, setSearched] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -79,6 +80,7 @@ export default function ApolloCrmPage() {
 
   const searchPeople = async () => {
     setLoading(true)
+    setSearched(false)
     setError("")
     try {
       const data = await api({
@@ -91,6 +93,7 @@ export default function ApolloCrmPage() {
         perPage: 25,
       })
       setResults(data.people ?? [])
+      setSearched(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ricerca non completata")
     } finally {
@@ -173,8 +176,8 @@ export default function ApolloCrmPage() {
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <label className="space-y-1 text-sm">
-            <span className="font-medium">Settore / parole chiave</span>
-            <Input value={keywords} onChange={(e) => setKeywords(e.target.value)} />
+            <span className="font-medium">Settori azienda, separati da virgola</span>
+            <Input value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="hotel,hospitality" />
           </label>
           <label className="space-y-1 text-sm">
             <span className="font-medium">Ruoli, separati da virgola</span>
@@ -215,6 +218,14 @@ export default function ApolloCrmPage() {
                 </Button>
               </div>
             ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {searched && results.length === 0 && !error && (
+        <Card>
+          <CardContent className="pt-6 text-sm text-muted-foreground">
+            Nessun decision maker trovato con questi filtri. Prova ad ampliare settore, ruoli o località.
           </CardContent>
         </Card>
       )}
