@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { authenticateVoiceInbound } from "@/lib/telephony/inbound-auth"
 import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
-import { getVoiceProduct, VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
+import { getVoiceProduct, VOICE_4BID_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
 import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
 import {
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     if (!isMissingVoiceRoutingSchema(error)) {
       console.error("[3cx-prospect] route lookup failed", { requestId, product: product.key })
       return NextResponse.json(
-        { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "route_lookup_failed"), request_id: requestId },
+        { ...serviceErrorVoiceResponse(product, VOICE_4BID_FALLBACK_EXTENSION, "route_lookup_failed"), request_id: requestId },
         { status: 502, headers: NO_STORE },
       )
     }
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
 
   if (routingSchemaAvailable && !route) {
     return NextResponse.json(
-      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "route_not_configured"), request_id: requestId },
+      { ...serviceErrorVoiceResponse(product, VOICE_4BID_FALLBACK_EXTENSION, "route_not_configured"), request_id: requestId },
       { status: 503, headers: NO_STORE },
     )
   }
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
   const rate = takeVoiceRequest(`${auth.propertyId}:prospect`)
   if (!rate.allowed) {
     return NextResponse.json(
-      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "rate_limited"), request_id: requestId },
+      { ...serviceErrorVoiceResponse(product, VOICE_4BID_FALLBACK_EXTENSION, "rate_limited"), request_id: requestId },
       { status: 429, headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterSeconds) } },
     )
   }
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
       error: error instanceof Error ? error.message : "unknown",
     })
     return NextResponse.json(
-      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "provider_error"), audience: "prospect", request_id: requestId },
+      { ...serviceErrorVoiceResponse(product, VOICE_4BID_FALLBACK_EXTENSION, "provider_error"), audience: "prospect", request_id: requestId },
       { status: 502, headers: NO_STORE },
     )
   }
