@@ -26,6 +26,24 @@ Prima di modificare codice:
 8. verificare tenant isolation, autorizzazioni, errori, loading, empty state, mobile e accessibilita';
 9. aggiornare documentazione e stato del modulo quando cambia l'evidenza.
 
+## Regola fondamentale — ogni sviluppo vive nella Roadmap SuperAdmin
+
+La pagina `/super-admin/roadmap` e' la memoria operativa del prodotto per il founder e deve essere aggiornata **in parallelo allo sviluppo**, non a posteriori.
+
+- Ogni nuova funzionalita, nuovo modulo, integrazione, addon o sviluppo dedicato deve avere una riga nella roadmap.
+- Quando il founder chiede di **avviare una PR/branch dedicata a uno sviluppo**, l'agente deve nello stesso flusso creare la riga se non esiste oppure aggiornare quella esistente.
+- La riga deve contenere almeno: area, capability chiara in linguaggio prodotto, stato lavoro, branch e PR quando disponibile, livello tecnico ufficiale ed evidenza/limite residuo.
+- All'apertura del lavoro usare `In sviluppo`; se non ancora iniziato usare `Da fare`; se dipende da un ostacolo esterno usare `Bloccato`; se si decide di non proseguire usare `Abbandonato` senza cancellare la riga.
+- **Mai segnare verde/Online una funzione solo perche' esiste codice su un branch o una preview.**
+- Una riga diventa verde/`Online` esclusivamente dopo: merge in `main`, CI pertinente verde, deploy di produzione verificato e aggiornamento esplicito della roadmap.
+- Il verde indica che quello specifico sviluppo e' arrivato in produzione; **non** promuove automaticamente il livello tecnico a `Tenant reale`, `Multi-tenant`, `Production-ready` o `Vendibile`.
+- Se una PR viene chiusa senza merge o il lavoro viene sospeso definitivamente, la roadmap va aggiornata a `Abbandonato` o `Bloccato` prima di chiudere il lavoro.
+- Se una funzione gia' esistente riceve un'estensione sostanziale, aggiornare la riga esistente quando rappresenta la stessa capability; creare una nuova riga quando serve ricordare separatamente un deliverable ancora da terminare.
+- Un'attivita' di puro bugfix/refactor/manutenzione che non introduce o avvia una capability di prodotto puo' essere dichiarata `Roadmap: N/A` nella PR; non creare rumore con righe inutili.
+- Prima di dichiarare una PR di sviluppo conclusa, verificare sempre che la relativa riga roadmap esista e rappresenti lo stato reale.
+
+Questa regola e' parte della Definition of Done e non e' opzionale.
+
 ## Stati ufficiali
 
 Usare solo questi livelli:
@@ -82,6 +100,8 @@ Se non migliora nessuno dei quattro, resta fuori priorita'.
 ## Definition of Done
 
 Una funzione e' conclusa solo quando requisiti, UI, backend, dati, autorizzazioni, errori, audit, test, monitoraggio, documentazione, migrazione e rollback applicabili sono trattati insieme.
+
+Per qualunque sviluppo di prodotto, la Definition of Done include inoltre la roadmap: la riga deve esistere dall'avvio e diventare `Online` soltanto dopo merge in `main` e deploy produzione verificato.
 
 ## CTA commerciale delle home
 
