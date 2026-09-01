@@ -1,8 +1,20 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, ArrowLeft, Check, Mail, RefreshCw, Search, Sparkles, UserPlus, UserRoundSearch, X } from "lucide-react"
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  Clock3,
+  Mail,
+  RefreshCw,
+  Search,
+  Sparkles,
+  UserPlus,
+  UserRoundSearch,
+  X,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +24,7 @@ type Person = {
   id: string
   firstName: string | null
   lastName: string | null
+  lastNameObfuscated?: boolean
   fullName: string
   title: string | null
   seniority: string | null
@@ -39,6 +52,20 @@ type Prospect = {
   contact_id: string | null
 }
 
+type SearchHistory = {
+  id: string
+  keywords: string
+  titles: string[]
+  seniorities: string[]
+  organization_locations: string[]
+  page: number
+  per_page: number
+  total_entries: number
+  total_pages: number
+  people: Person[]
+  created_at: string
+}
+
 const statusLabels: Record<Prospect["status"], string> = {
   saved: "Salvato",
   enriched: "Verificato",
@@ -58,24 +85,56 @@ async function api(body?: Record<string, unknown>) {
   return payload
 }
 
+function formatDate(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+}
+
+function ToggleSelection({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (checked: boolean) => void
+  label: string
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      aria-label={label}
+      className="h-4 w-4 rounded border-border"
+    />
+  )
+}
+
 export default function ScoutCrmPage() {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [prospects, setProspects] = useState<Prospect[]>([])
+  const [recentSearches, setRecentSearches] = useState<SearchHistory[]>([])
   const [results, setResults] = useState<Person[]>([])
   const [keywords, setKeywords] = useState("hotel,hospitality")
   const [titles, setTitles] = useState("general manager, hotel manager, direttore, owner")
   const [location, setLocation] = useState("Italy")
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState("")
+  const [bulkBusy, setBulkBusy] = useState<"save" | "enrich" | "import" | "">("")
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [searched, setSearched] = useState(false)
+  const [selectedResultIds, setSelectedResultIds] = useState<string[]>([])
+  const [selectedProspectIds, setSelectedProspectIds] = useState<string[]>([])
 
   const load = useCallback(async () => {
     try {
       const data = await api()
       setConfigured(data.configured)
       setProspects(data.prospects ?? [])
+      setRecentSearches(data.recentSearches ?? [])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore inatteso")
     }
@@ -85,11 +144,23 @@ export default function ScoutCrmPage() {
     void load()
   }, [load])
 
+  const selectedResults = useMemo(
+    () => results.filter((person) => selectedResultIds.includes(person.id)),
+    [results, selectedResultIds],
+  )
+  const selectedProspects = useMemo(
+    () => prospects.filter((prospect) => selectedProspectIds.includes(prospect.id)),
+    [prospects, selectedProspectIds],
+  )
+  const enrichableSelected = selectedProspects.filter((p) => !p.email && p.status === "saved")
+  const importableSelected = selectedProspects.filter((p) => Boolean(p.email) && p.status !== "imported")
+
   const searchPeople = async () => {
     setLoading(true)
     setSearched(false)
     setError("")
     setNotice("")
+    setSelectedResultIds([])
     try {
       const data = await api({
         action: "search",
@@ -102,6 +173,7 @@ export default function ScoutCrmPage() {
       })
       setResults(data.people ?? [])
       setSearched(true)
+      await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ricerca non completata")
     } finally {
@@ -109,10 +181,21 @@ export default function ScoutCrmPage() {
     }
   }
 
+  const reopenSearch = (search: SearchHistory) => {
+    setKeywords(search.keywords)
+    setTitles(search.titles.join(", "))
+    setLocation(search.organization_locations.join(", "))
+    setResults(Array.isArray(search.people) ? search.people : [])
+    setSelectedResultIds([])
+    setSearched(true)
+    setError("")
+    setNotice(`Ricerca del ${formatDate(search.created_at)} riaperta dalla cronologia: nessuna nuova chiamata Scout.`)
+  }
+
   const act = async (id: string, action: "enrich" | "import" | "dismiss") => {
     if (action === "enrich") {
       const confirmed = window.confirm(
-        "La verifica del recapito può utilizzare crediti del tuo addon Scout. Vuoi procedere?",
+        "La verifica del recapito può utilizzare fino a 1 credito Scout se il profilo viene identificato. Vuoi procedere?",
       )
       if (!confirmed) return
     }
@@ -147,6 +230,76 @@ export default function ScoutCrmPage() {
     } finally {
       setBusyId("")
     }
+  }
+
+  const bulkSave = async () => {
+    if (!selectedResults.length) return
+    setBulkBusy("save")
+    setError("")
+    setNotice("")
+    let ok = 0
+    let failed = 0
+    for (const person of selectedResults) {
+      try {
+        await api({ action: "save", person })
+        ok += 1
+      } catch {
+        failed += 1
+      }
+    }
+    await load()
+    setBulkBusy("")
+    setSelectedResultIds([])
+    setNotice(`${ok} prospect salvati${failed ? `; ${failed} non salvati` : ""}. Nessun credito di verifica utilizzato.`)
+  }
+
+  const bulkEnrich = async () => {
+    if (!enrichableSelected.length) return
+    const count = enrichableSelected.length
+    const confirmed = window.confirm(
+      `Stai per verificare ${count} prospect. Il consumo massimo potenziale è ${count} crediti Scout (fino a 1 per profilo identificato). Vuoi procedere?`,
+    )
+    if (!confirmed) return
+    setBulkBusy("enrich")
+    setError("")
+    setNotice("")
+    let found = 0
+    let unavailable = 0
+    let failed = 0
+    for (const prospect of enrichableSelected) {
+      try {
+        const data = await api({ action: "enrich", prospectId: prospect.id, confirmCredit: true })
+        if (data.prospect?.email) found += 1
+        else unavailable += 1
+      } catch {
+        failed += 1
+      }
+    }
+    await load()
+    setBulkBusy("")
+    setSelectedProspectIds([])
+    setNotice(`Verifica completata: ${found} email trovate, ${unavailable} non disponibili${failed ? `, ${failed} errori` : ""}.`)
+  }
+
+  const bulkImport = async () => {
+    if (!importableSelected.length) return
+    setBulkBusy("import")
+    setError("")
+    setNotice("")
+    let ok = 0
+    let failed = 0
+    for (const prospect of importableSelected) {
+      try {
+        await api({ action: "import", prospectId: prospect.id })
+        ok += 1
+      } catch {
+        failed += 1
+      }
+    }
+    await load()
+    setBulkBusy("")
+    setSelectedProspectIds([])
+    setNotice(`${ok} prospect importati nel CRM${failed ? `; ${failed} non importati` : ""}. L'importazione non usa crediti Scout.`)
   }
 
   return (
@@ -201,7 +354,7 @@ export default function ScoutCrmPage() {
         <CardHeader>
           <CardTitle>Company & Agency Scout</CardTitle>
           <CardDescription>
-            Cerca aziende, strutture e partner commerciali. La ricerca iniziale non usa crediti di verifica; la verifica email richiede conferma.
+            Ricerca: 0 crediti. Salvataggio: 0 crediti. Verifica email: fino a 1 credito per profilo identificato. Import CRM: 0 crediti.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
@@ -226,23 +379,82 @@ export default function ScoutCrmPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Clock3 className="h-5 w-5" aria-hidden /> Ricerche recenti</CardTitle>
+          <CardDescription>Le ricerche restano nel tenant. Riaprirle non esegue una nuova chiamata e non usa crediti.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {recentSearches.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nessuna ricerca salvata finora.</p>
+          ) : (
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {recentSearches.map((search) => (
+                <button
+                  type="button"
+                  key={search.id}
+                  onClick={() => reopenSearch(search)}
+                  className="rounded-lg border p-3 text-left transition-colors hover:bg-muted/50"
+                >
+                  <p className="font-medium">{search.keywords || "Ricerca Scout"}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatDate(search.created_at)} · {search.people?.length ?? 0} visualizzati · {search.total_entries.toLocaleString("it-IT")} risultati totali</p>
+                </button>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {results.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Risultati Scout</CardTitle>
-            <CardDescription>Salva solo i profili coerenti. I recapiti vengono verificati separatamente.</CardDescription>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <CardTitle>Risultati Scout</CardTitle>
+                <CardDescription>Seleziona più profili e salvali insieme. Il salvataggio non consuma crediti.</CardDescription>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <ToggleSelection
+                    checked={selectedResultIds.length === results.length && results.length > 0}
+                    onChange={(checked) => setSelectedResultIds(checked ? results.map((person) => person.id) : [])}
+                    label="Seleziona tutti i risultati"
+                  />
+                  Tutti
+                </label>
+                <Button variant="outline" onClick={() => void bulkSave()} disabled={!selectedResults.length || Boolean(bulkBusy)}>
+                  <UserPlus className="mr-2 h-4 w-4" aria-hidden />
+                  Salva selezionati ({selectedResults.length})
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {results.map((person) => (
               <div key={person.id} className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="font-semibold">{person.fullName}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {[person.title, person.organizationName, person.city, person.country].filter(Boolean).join(" · ") || "Dati essenziali non disponibili"}
-                  </p>
-                  {person.seniority && <Badge variant="secondary" className="mt-2">{person.seniority}</Badge>}
+                <div className="flex min-w-0 gap-3">
+                  <ToggleSelection
+                    checked={selectedResultIds.includes(person.id)}
+                    onChange={(checked) =>
+                      setSelectedResultIds((current) => checked ? [...new Set([...current, person.id])] : current.filter((id) => id !== person.id))
+                    }
+                    label={`Seleziona ${person.fullName}`}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">{person.fullName}</p>
+                      {person.lastNameObfuscated && <Badge variant="outline">Cognome parziale</Badge>}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {[person.title, person.organizationName, person.city, person.country].filter(Boolean).join(" · ") || "Dati essenziali non disponibili"}
+                    </p>
+                    {person.lastNameObfuscated && (
+                      <p className="mt-1 text-xs text-muted-foreground">Scout maschera il cognome nella ricerca iniziale; l'arricchimento può restituire il nominativo completo.</p>
+                    )}
+                    {person.seniority && <Badge variant="secondary" className="mt-2">{person.seniority}</Badge>}
+                  </div>
                 </div>
-                <Button variant="outline" onClick={() => void save(person)} disabled={busyId === person.id}>
+                <Button variant="outline" onClick={() => void save(person)} disabled={busyId === person.id || Boolean(bulkBusy)}>
                   <UserPlus className="mr-2 h-4 w-4" aria-hidden />
                   Salva prospect
                 </Button>
@@ -262,10 +474,34 @@ export default function ScoutCrmPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Prospect salvati</CardTitle>
-          <CardDescription>
-            La verifica email richiede conferma e può utilizzare crediti Scout. Nessun contatto viene usato per campagne automaticamente.
-          </CardDescription>
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <CardTitle>Prospect salvati</CardTitle>
+              <CardDescription>
+                Seleziona più righe per verificare email o importare in CRM con un solo comando. La verifica è l'unica fase che può usare crediti Scout.
+              </CardDescription>
+            </div>
+            {prospects.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <ToggleSelection
+                    checked={selectedProspectIds.length === prospects.length && prospects.length > 0}
+                    onChange={(checked) => setSelectedProspectIds(checked ? prospects.map((p) => p.id) : [])}
+                    label="Seleziona tutti i prospect salvati"
+                  />
+                  Tutti
+                </label>
+                <Button variant="outline" onClick={() => void bulkEnrich()} disabled={!enrichableSelected.length || Boolean(bulkBusy)}>
+                  <Sparkles className="mr-2 h-4 w-4" aria-hidden />
+                  Verifica email ({enrichableSelected.length})
+                </Button>
+                <Button onClick={() => void bulkImport()} disabled={!importableSelected.length || Boolean(bulkBusy)}>
+                  <Check className="mr-2 h-4 w-4" aria-hidden />
+                  Importa CRM ({importableSelected.length})
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {prospects.length === 0 ? (
@@ -276,29 +512,38 @@ export default function ScoutCrmPage() {
             const emailUnavailable = !p.email && p.status === "enriched"
             return (
               <div key={p.id} className="flex flex-col gap-4 rounded-lg border p-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold">{p.full_name}</p>
-                    <Badge variant="outline">{statusLabels[p.status]}</Badge>
+                <div className="flex min-w-0 gap-3">
+                  <ToggleSelection
+                    checked={selectedProspectIds.includes(p.id)}
+                    onChange={(checked) =>
+                      setSelectedProspectIds((current) => checked ? [...new Set([...current, p.id])] : current.filter((id) => id !== p.id))
+                    }
+                    label={`Seleziona ${p.full_name}`}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold">{p.full_name}</p>
+                      <Badge variant="outline">{statusLabels[p.status]}</Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {[p.job_title, p.organization_name, p.city, p.country].filter(Boolean).join(" · ")}
+                    </p>
+                    <p className="mt-1 flex items-center gap-2 text-sm">
+                      <Mail className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      {p.email || (emailUnavailable ? "Email non disponibile" : "Email non ancora verificata")}
+                      {p.email_status && <Badge variant="secondary">{p.email_status}</Badge>}
+                    </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {[p.job_title, p.organization_name, p.city, p.country].filter(Boolean).join(" · ")}
-                  </p>
-                  <p className="mt-1 flex items-center gap-2 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" aria-hidden />
-                    {p.email || (emailUnavailable ? "Email non disponibile" : "Email non ancora verificata")}
-                    {p.email_status && <Badge variant="secondary">{p.email_status}</Badge>}
-                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {!p.email && p.status === "saved" && (
-                    <Button variant="outline" onClick={() => void act(p.id, "enrich")} disabled={busyId === p.id}>
+                    <Button variant="outline" onClick={() => void act(p.id, "enrich")} disabled={busyId === p.id || Boolean(bulkBusy)}>
                       <Sparkles className="mr-2 h-4 w-4" aria-hidden />
                       Verifica email
                     </Button>
                   )}
                   {p.email && p.status !== "imported" && (
-                    <Button onClick={() => void act(p.id, "import")} disabled={busyId === p.id}>
+                    <Button onClick={() => void act(p.id, "import")} disabled={busyId === p.id || Boolean(bulkBusy)}>
                       <Check className="mr-2 h-4 w-4" aria-hidden />
                       Importa nel CRM
                     </Button>
@@ -309,7 +554,7 @@ export default function ScoutCrmPage() {
                     </Button>
                   )}
                   {p.status !== "imported" && (
-                    <Button variant="ghost" size="icon" onClick={() => void act(p.id, "dismiss")} disabled={busyId === p.id} aria-label={`Scarta ${p.full_name}`}>
+                    <Button variant="ghost" size="icon" onClick={() => void act(p.id, "dismiss")} disabled={busyId === p.id || Boolean(bulkBusy)} aria-label={`Scarta ${p.full_name}`}>
                       <X className="h-4 w-4" aria-hidden />
                     </Button>
                   )}
