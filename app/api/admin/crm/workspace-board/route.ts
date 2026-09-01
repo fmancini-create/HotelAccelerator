@@ -54,16 +54,27 @@ export async function GET(request: NextRequest) {
     const db = createServiceClient()
     const workspace = await requireCrmWorkspaceAccess(db, identity, workspaceId)
 
-    const [{ count: contactCount, error: contactCountError }, { data: fields, error: fieldsError }] = await Promise.all([
+    const [
+      { count: contactCount, error: contactCountError },
+      { data: fields, error: fieldsError },
+      { data: workspaceGroups, error: workspaceGroupsError },
+    ] = await Promise.all([
       db.from("crm_workspace_contacts").select("id", { count: "exact", head: true }).eq("property_id", identity.propertyId).eq("workspace_id", workspace.id),
       db.from("crm_workspace_fields").select("id,field_key,label,field_type,options,is_required,sort_order").eq("property_id", identity.propertyId).eq("workspace_id", workspace.id).eq("is_active", true).order("sort_order"),
+      db.from("crm_workspace_groups").select("group_id").eq("property_id", identity.propertyId).eq("workspace_id", workspace.id),
     ])
     if (contactCountError) throw contactCountError
     if (fieldsError) throw fieldsError
+    if (workspaceGroupsError) throw workspaceGroupsError
+
+    const workspaceWithGroups = {
+      ...workspace,
+      groupIds: (workspaceGroups ?? []).map((row) => String(row.group_id)),
+    }
 
     if (workspace.mode === "hotel_date_requests") {
       return NextResponse.json({
-        workspace,
+        workspace: workspaceWithGroups,
         mode: workspace.mode,
         legacyPipelineHref: "/admin/crm/pipeline",
         contactCount: contactCount ?? 0,
@@ -92,7 +103,7 @@ export async function GET(request: NextRequest) {
     if (opportunitiesError) throw opportunitiesError
 
     return NextResponse.json({
-      workspace,
+      workspace: workspaceWithGroups,
       mode: workspace.mode,
       contactCount: contactCount ?? 0,
       fields: fields ?? [],
