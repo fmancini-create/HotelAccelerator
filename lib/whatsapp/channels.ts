@@ -165,8 +165,12 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
       // In coexistence, messages sent from the Business App are delivered as
       // smb_message_echoes. They are outbound operator messages, not customer
       // inbound messages, so they must follow a separate timeline path.
+      // Meta can also emit echo-side edit/revoke/control events without a `to`.
+      // Those cannot be attached to a customer conversation safely, so ignore
+      // them instead of turning a harmless sync event into an HTTP 500/retry loop.
       for (const m of value.message_echoes ?? []) {
-        const toPhone: string = m.to ?? ""
+        const toPhone: string = m.to ?? m.recipient_id ?? m.recipient?.wa_id ?? ""
+        if (!toPhone) continue
         const tsSeconds = Number(m.timestamp ?? 0)
         result.echoes.push({
           phoneNumberId,
