@@ -20,7 +20,6 @@ import {
   Star,
   Plus,
   Phone,
-  RefreshCw,
 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ChannelUserAssignment } from "@/components/admin/channel-user-assignment"
@@ -51,6 +50,7 @@ interface Quota {
   includedNumbers: number
   extraNumbers: number
   canAddNumber: boolean
+  /** numeri di prova Meta che occupano un posto: si liberano scollegandoli */
   testNumbers?: { id: string; displayPhoneNumber: string }[]
 }
 
@@ -65,10 +65,6 @@ interface SessionInfo {
   phone_number_id?: string
   waba_id?: string
   signup_event?: "FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING"
-}
-
-interface SignupMode {
-  reconnectChannelId?: string
 }
 
 declare global {
@@ -91,8 +87,8 @@ export default function WhatsAppChannelPage() {
   const [buyingExtra, setBuyingExtra] = useState(false)
 
   const sessionInfoRef = useRef<SessionInfo>({})
-  const signupModeRef = useRef<SignupMode>({})
 
+  // Manual/add form state
   const [saving, setSaving] = useState(false)
   const [displayName, setDisplayName] = useState("WhatsApp")
   const [phoneNumberId, setPhoneNumberId] = useState("")
@@ -103,6 +99,7 @@ export default function WhatsAppChannelPage() {
   const [verifyToken, setVerifyToken] = useState("")
   const [webhookUrl, setWebhookUrl] = useState("")
 
+  // Test send (per number)
   const [testNumber, setTestNumber] = useState("")
   const [testing, setTesting] = useState(false)
 
@@ -133,6 +130,7 @@ export default function WhatsAppChannelPage() {
     loadAll()
   }, [loadAll])
 
+  // Handle the return from the Stripe extra-number checkout.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const extra = params.get("extra_number")
@@ -145,11 +143,13 @@ export default function WhatsAppChannelPage() {
     } else if (extra === "canceled") {
       setFeedback({ type: "error", text: "Pagamento annullato." })
     }
+    // Clean the URL so a refresh doesn't repeat the message.
     params.delete("extra_number")
     const qs = params.toString()
     window.history.replaceState({}, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`)
   }, [])
 
+  // Load + init the Facebook JS SDK once we know the platform App ID.
   useEffect(() => {
     if (!publicConfig?.configured || !publicConfig.appId) return
     if (window.FB) {
@@ -179,6 +179,7 @@ export default function WhatsAppChannelPage() {
     }
   }, [publicConfig])
 
+  // Capture the session info (phone_number_id + waba_id) Meta posts during signup.
   useEffect(() => {
     const handler = (event: MessageEvent) => {
       if (!event.origin.endsWith("facebook.com")) return
@@ -192,56 +193,22 @@ export default function WhatsAppChannelPage() {
           }
         }
       } catch {
-        // Messaggi non JSON del popup Meta non riguardano Embedded Signup.
+        // non-JSON messages are unrelated
       }
     }
     window.addEventListener("message", handler)
     return () => window.removeEventListener("message", handler)
   }, [])
 
-  const finishSignup = async (code: string) => {
-    try {
-      const res = await fetch("/api/channels/whatsapp/embedded-signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          code,
-          phone_number_id: sessionInfoRef.current.phone_number_id,
-          waba_id: sessionInfoRef.current.waba_id,
-          signup_event: sessionInfoRef.current.signup_event,
-          reconnect_channel_id: signupModeRef.current.reconnectChannelId,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Errore durante il collegamento")
-      setFeedback({
-        type: "success",
-        text: data.reconnected
-          ? "WhatsApp ricollegato correttamente. Storico, assegnazioni e quota sono rimasti invariati."
-          : "Numero WhatsApp collegato con successo!",
-      })
-      await loadAll()
-    } catch (e) {
-      setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
-    } finally {
-      setConnecting(false)
-      signupModeRef.current = {}
-    }
-  }
-
-  const launchSignup = (reconnectChannel?: WhatsAppChannel) => {
-    if (!window.FB || !publicConfig?.configId || connecting) return
+  const launchSignup = () => {
+    if (!window.FB || !publicConfig?.configId) return
     setFeedback(null)
     sessionInfoRef.current = {}
-    signupModeRef.current = reconnectChannel ? { reconnectChannelId: reconnectChannel.id } : {}
-    setConnecting(true)
 
     window.FB.login(
       (response: any) => {
         const code = response?.authResponse?.code
         if (!code) {
-          setConnecting(false)
-          signupModeRef.current = {}
           setFeedback({ type: "error", text: "Collegamento annullato." })
           return
         }
@@ -253,11 +220,38 @@ export default function WhatsAppChannelPage() {
         override_default_response_type: true,
         extras: {
           setup: {},
+          // Meta's dedicated flow for a number that must remain active in the
+          // WhatsApp Business app as well as in Cloud API.
           featureType: "whatsapp_business_app_onboarding",
           sessionInfoVersion: "3",
         },
       },
     )
+  }
+
+  const finishSignup = async (code: string) => {
+    setConnecting(true)
+    setFeedback(null)
+    try {
+      const res = await fetch("/api/channels/whatsapp/embedded-signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          phone_number_id: sessionInfoRef.current.phone_number_id,
+          waba_id: sessionInfoRef.current.waba_id,
+          signup_event: sessionInfoRef.current.signup_event,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Errore durante il collegamento")
+      setFeedback({ type: "success", text: "Numero WhatsApp collegato con successo!" })
+      await loadAll()
+    } catch (e) {
+      setFeedback({ type: "error", text: e instanceof Error ? e.message : "Errore" })
+    } finally {
+      setConnecting(false)
+    }
   }
 
   const handleSaveManual = async () => {
@@ -375,8 +369,11 @@ export default function WhatsAppChannelPage() {
   }
 
   const copyToClipboard = (text: string) => navigator.clipboard.writeText(text)
+
   const platformReady = Boolean(publicConfig?.configured)
   const canAdd = quota?.canAddNumber ?? true
+  // Stesso testo del server: se il posto e' occupato da un numero di prova
+  // Meta la via d'uscita e' scollegarlo, non comprare un posto in piu'.
   const messaggioLimite = quotaExceededMessage({
     limit: quota?.limit ?? 0,
     testNumbers: quota?.testNumbers ?? [],
@@ -420,6 +417,7 @@ export default function WhatsAppChannelPage() {
               </div>
             )}
 
+            {/* Quota summary */}
             {quota && (
               <Card>
                 <CardContent className="flex flex-wrap items-center justify-between gap-4 py-4">
@@ -429,103 +427,76 @@ export default function WhatsAppChannelPage() {
                     </div>
                     <div className="text-muted-foreground">
                       {quota.includedNumbers} incluso nel piano
-                      {quota.extraNumbers > 0
-                        ? ` + ${quota.extraNumbers} aggiuntivo${quota.extraNumbers > 1 ? "i" : ""}`
-                        : ""}
+                      {quota.extraNumbers > 0 ? ` + ${quota.extraNumbers} aggiuntivo${quota.extraNumbers > 1 ? "i" : ""}` : ""}
                     </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={handleBuyExtra} disabled={buyingExtra}>
-                    {buyingExtra ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Plus className="mr-2 h-4 w-4" />
-                    )}
+                    {buyingExtra ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
                     Aggiungi numero extra
                   </Button>
                 </CardContent>
               </Card>
             )}
 
-            {channels.map((ch) => {
-              const reconnectingThis = connecting && signupModeRef.current.reconnectChannelId === ch.id
-              return (
-                <Card key={ch.id} className={ch.is_default ? "border-ha-success-soft" : ""}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Phone className="h-5 w-5 text-ha-success-soft-foreground" />
-                      {ch.config.display_phone_number || ch.display_name || "WhatsApp"}
-                      {ch.is_default && (
-                        <Badge variant="secondary" className="ml-1 gap-1">
-                          <Star className="h-3 w-3 fill-current" /> Predefinito
-                        </Badge>
-                      )}
-                    </CardTitle>
-                    <CardDescription>{ch.display_name || "WhatsApp"}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    {ch.last_error && (
-                      <div className="flex items-start gap-2 rounded-md border border-ha-warning-soft bg-ha-warning-soft p-2 text-xs text-ha-warning-soft-foreground">
-                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                        <span>Ultimo errore: {ch.last_error}</span>
-                      </div>
+            {/* Connected numbers list */}
+            {channels.map((ch) => (
+              <Card key={ch.id} className={ch.is_default ? "border-ha-success-soft" : ""}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Phone className="h-5 w-5 text-ha-success-soft-foreground" />
+                    {ch.config.display_phone_number || ch.display_name || "WhatsApp"}
+                    {ch.is_default && (
+                      <Badge variant="secondary" className="ml-1 gap-1">
+                        <Star className="h-3 w-3 fill-current" /> Predefinito
+                      </Badge>
                     )}
-
-                    <div className="flex flex-wrap gap-2">
+                  </CardTitle>
+                  <CardDescription>{ch.display_name || "WhatsApp"}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  {ch.last_error && (
+                    <div className="flex items-start gap-2 rounded-md border border-ha-warning-soft bg-ha-warning-soft p-2 text-xs text-ha-warning-soft-foreground">
+                      <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>Ultimo errore: {ch.last_error}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    {!ch.is_default && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => launchSignup(ch)}
-                        disabled={!platformReady || !sdkReady || connecting || busyId === ch.id}
+                        onClick={() => handleSetDefault(ch.id)}
+                        disabled={busyId === ch.id}
                       >
-                        {reconnectingThis ? (
+                        {busyId === ch.id ? (
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
-                          <RefreshCw className="mr-2 h-4 w-4" />
+                          <Star className="mr-2 h-4 w-4" />
                         )}
-                        Ricollega WhatsApp
+                        Imposta predefinito
                       </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDisconnect(ch.id)}
+                      disabled={busyId === ch.id}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" /> Scollega
+                    </Button>
+                  </div>
 
-                      {!ch.is_default && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSetDefault(ch.id)}
-                          disabled={busyId === ch.id || connecting}
-                        >
-                          {busyId === ch.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Star className="mr-2 h-4 w-4" />
-                          )}
-                          Imposta predefinito
-                        </Button>
-                      )}
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDisconnect(ch.id)}
-                        disabled={busyId === ch.id || connecting}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" /> Scollega
-                      </Button>
-                    </div>
-
-                    <p className="text-xs text-muted-foreground">
-                      “Ricollega WhatsApp” aggiorna le credenziali dello stesso numero. Non aggiunge numeri, non usa quote extra e non modifica lo storico.
+                  <div className="border-t pt-4">
+                    <ChannelUserAssignment channelType="whatsapp" channelId={ch.id} />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Gli utenti assegnati vedranno le conversazioni di questo numero nella Posta in arrivo.
                     </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
 
-                    <div className="border-t pt-4">
-                      <ChannelUserAssignment channelType="whatsapp" channelId={ch.id} />
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Gli utenti assegnati vedranno le conversazioni di questo numero nella Posta in arrivo.
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-
+            {/* Add a number (1-click) */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -533,7 +504,8 @@ export default function WhatsAppChannelPage() {
                   {hasNumbers ? "Collega un altro numero" : "Collega WhatsApp in un clic"}
                 </CardTitle>
                 <CardDescription>
-                  Questo flusso serve solo per aggiungere un numero. Per aggiornare un numero già presente usa “Ricollega WhatsApp” nella sua scheda.
+                  Accedi con Facebook, scegli il numero WhatsApp della tua struttura e il gioco è fatto. Nessun codice da
+                  copiare.
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
@@ -542,7 +514,8 @@ export default function WhatsAppChannelPage() {
                     <Zap className="h-4 w-4 text-emerald-600" /> Configurazione guidata da Meta
                   </li>
                   <li className="flex items-center gap-2">
-                    <ShieldCheck className="h-4 w-4 text-ha-success-soft-foreground" /> Le credenziali restano sulla piattaforma, al sicuro
+                    <ShieldCheck className="h-4 w-4 text-ha-success-soft-foreground" /> Le credenziali restano sulla piattaforma, al
+                    sicuro
                   </li>
                 </ul>
 
@@ -555,16 +528,17 @@ export default function WhatsAppChannelPage() {
                   <div className="flex items-start gap-2 rounded-lg border border-ha-warning-soft bg-ha-warning-soft p-3 text-sm text-ha-warning-soft-foreground">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                     <span>
-                      Il collegamento rapido non è ancora abilitato dall&apos;amministratore della piattaforma. Puoi usare la configurazione manuale qui sotto, oppure contattare il supporto.
+                      Il collegamento rapido non è ancora abilitato dall&apos;amministratore della piattaforma. Puoi
+                      usare la configurazione manuale qui sotto, oppure contattare il supporto.
                     </span>
                   </div>
                 ) : (
                   <Button
-                    onClick={() => launchSignup()}
+                    onClick={launchSignup}
                     disabled={!sdkReady || connecting}
                     className="w-fit bg-[#1877F2] text-white hover:bg-[#1877F2]/90"
                   >
-                    {connecting && !signupModeRef.current.reconnectChannelId ? (
+                    {connecting ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
                       <MessageCircle className="mr-2 h-4 w-4" />
@@ -575,12 +549,14 @@ export default function WhatsAppChannelPage() {
               </CardContent>
             </Card>
 
+            {/* Test send (when at least one number connected) */}
             {hasNumbers && (
               <Card>
                 <CardHeader>
                   <CardTitle>Invia messaggio di test</CardTitle>
                   <CardDescription>
-                    Inviato dal numero predefinito. Funziona solo se il destinatario ha scritto al numero negli ultimi 24h (finestra di assistenza).
+                    Inviato dal numero predefinito. Funziona solo se il destinatario ha scritto al numero negli ultimi
+                    24h (finestra di assistenza).
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -594,17 +570,14 @@ export default function WhatsAppChannelPage() {
                     />
                   </div>
                   <Button onClick={handleTest} disabled={testing || !testNumber.trim()} variant="outline">
-                    {testing ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="mr-2 h-4 w-4" />
-                    )}
+                    {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                     Invia test
                   </Button>
                 </CardContent>
               </Card>
             )}
 
+            {/* Advanced / manual configuration (power users / fallback) */}
             <div>
               <button
                 type="button"
@@ -622,7 +595,8 @@ export default function WhatsAppChannelPage() {
                     <CardHeader>
                       <CardTitle>Webhook</CardTitle>
                       <CardDescription>
-                        Solo per la configurazione manuale. Inserisci questi valori nell&apos;app Meta (campo <span className="font-mono">messages</span>).
+                        Solo per la configurazione manuale. Inserisci questi valori nell&apos;app Meta (campo{" "}
+                        <span className="font-mono">messages</span>).
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col gap-4">
@@ -711,7 +685,9 @@ export default function WhatsAppChannelPage() {
                           {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                           Aggiungi numero
                         </Button>
-                        {!canAdd && <p className="mt-2 text-xs text-ha-warning-soft-foreground">{messaggioLimite}</p>}
+                        {!canAdd && (
+                          <p className="mt-2 text-xs text-ha-warning-soft-foreground">{messaggioLimite}</p>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
