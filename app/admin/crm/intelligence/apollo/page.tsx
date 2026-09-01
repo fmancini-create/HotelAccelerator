@@ -62,6 +62,7 @@ export default function ApolloCrmPage() {
   const [loading, setLoading] = useState(false)
   const [busyId, setBusyId] = useState("")
   const [error, setError] = useState("")
+  const [notice, setNotice] = useState("")
   const [searched, setSearched] = useState(false)
 
   const load = useCallback(async () => {
@@ -82,6 +83,7 @@ export default function ApolloCrmPage() {
     setLoading(true)
     setSearched(false)
     setError("")
+    setNotice("")
     try {
       const data = await api({
         action: "search",
@@ -104,14 +106,20 @@ export default function ApolloCrmPage() {
   const act = async (id: string, action: "enrich" | "import" | "dismiss") => {
     if (action === "enrich") {
       const confirmed = window.confirm(
-        "Questa operazione può consumare 1 credito Apollo se viene trovato un dato utile. Vuoi procedere?",
+        "Questa operazione può consumare 1 credito Apollo se il profilo viene trovato. Vuoi procedere?",
       )
       if (!confirmed) return
     }
     setBusyId(id)
     setError("")
+    setNotice("")
     try {
-      await api({ action, prospectId: id, ...(action === "enrich" ? { confirmCredit: true } : {}) })
+      const data = await api({ action, prospectId: id, ...(action === "enrich" ? { confirmCredit: true } : {}) })
+      if (action === "enrich") {
+        setNotice(data.message || (data.prospect?.email ? "Email trovata da Apollo." : "Apollo non ha un'email disponibile per questo profilo."))
+      } else if (action === "import") {
+        setNotice("Prospect importato nel CRM.")
+      }
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Operazione non completata")
@@ -123,8 +131,10 @@ export default function ApolloCrmPage() {
   const save = async (person: Person) => {
     setBusyId(person.id)
     setError("")
+    setNotice("")
     try {
       await api({ action: "save", person })
+      setNotice("Prospect salvato. Ora puoi chiedere ad Apollo di verificare l'email.")
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Salvataggio non completato")
@@ -156,6 +166,14 @@ export default function ApolloCrmPage() {
           <CardContent className="flex gap-3 pt-6 text-red-800" role="alert">
             <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
             <span>{error}</span>
+          </CardContent>
+        </Card>
+      )}
+
+      {notice && (
+        <Card>
+          <CardContent className="pt-6 text-sm" role="status" aria-live="polite">
+            {notice}
           </CardContent>
         </Card>
       )}
@@ -242,48 +260,51 @@ export default function ApolloCrmPage() {
             <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               Nessun prospect Apollo salvato nel tenant attivo.
             </div>
-          ) : prospects.map((p) => (
-            <div key={p.id} className="flex flex-col gap-4 rounded-lg border p-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold">{p.full_name}</p>
-                  <Badge variant="outline">{p.status}</Badge>
+          ) : prospects.map((p) => {
+            const emailUnavailable = !p.email && p.status === "enriched"
+            return (
+              <div key={p.id} className="flex flex-col gap-4 rounded-lg border p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">{p.full_name}</p>
+                    <Badge variant="outline">{p.status}</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {[p.job_title, p.organization_name, p.city, p.country].filter(Boolean).join(" · ")}
+                  </p>
+                  <p className="mt-1 flex items-center gap-2 text-sm">
+                    <Mail className="h-4 w-4 text-muted-foreground" aria-hidden />
+                    {p.email || (emailUnavailable ? "Email non disponibile su Apollo" : "Email non ancora verificata")}
+                    {p.email_status && <Badge variant="secondary">{p.email_status}</Badge>}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  {[p.job_title, p.organization_name, p.city, p.country].filter(Boolean).join(" · ")}
-                </p>
-                <p className="mt-1 flex items-center gap-2 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" aria-hidden />
-                  {p.email || "Email non ancora disponibile"}
-                  {p.email_status && <Badge variant="secondary">{p.email_status}</Badge>}
-                </p>
+                <div className="flex flex-wrap gap-2">
+                  {!p.email && p.status === "saved" && (
+                    <Button variant="outline" onClick={() => void act(p.id, "enrich")} disabled={busyId === p.id}>
+                      <Sparkles className="mr-2 h-4 w-4" aria-hidden />
+                      Rivela email
+                    </Button>
+                  )}
+                  {p.email && p.status !== "imported" && (
+                    <Button onClick={() => void act(p.id, "import")} disabled={busyId === p.id}>
+                      <Check className="mr-2 h-4 w-4" aria-hidden />
+                      Importa nel CRM
+                    </Button>
+                  )}
+                  {p.status === "imported" && p.contact_id && (
+                    <Button asChild variant="outline">
+                      <Link href={`/admin/crm/contacts/${p.contact_id}`}>Apri contatto</Link>
+                    </Button>
+                  )}
+                  {p.status !== "imported" && (
+                    <Button variant="ghost" size="icon" onClick={() => void act(p.id, "dismiss")} disabled={busyId === p.id} aria-label={`Scarta ${p.full_name}`}>
+                      <X className="h-4 w-4" aria-hidden />
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {!p.email && p.status !== "imported" && (
-                  <Button variant="outline" onClick={() => void act(p.id, "enrich")} disabled={busyId === p.id}>
-                    <Sparkles className="mr-2 h-4 w-4" aria-hidden />
-                    Rivela email
-                  </Button>
-                )}
-                {p.email && p.status !== "imported" && (
-                  <Button onClick={() => void act(p.id, "import")} disabled={busyId === p.id}>
-                    <Check className="mr-2 h-4 w-4" aria-hidden />
-                    Importa nel CRM
-                  </Button>
-                )}
-                {p.status === "imported" && p.contact_id && (
-                  <Button asChild variant="outline">
-                    <Link href={`/admin/crm/contacts/${p.contact_id}`}>Apri contatto</Link>
-                  </Button>
-                )}
-                {p.status !== "imported" && (
-                  <Button variant="ghost" size="icon" onClick={() => void act(p.id, "dismiss")} disabled={busyId === p.id} aria-label={`Scarta ${p.full_name}`}>
-                    <X className="h-4 w-4" aria-hidden />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </CardContent>
       </Card>
 
