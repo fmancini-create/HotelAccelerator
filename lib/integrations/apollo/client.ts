@@ -77,6 +77,21 @@ function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
 
+function organizationKeywordTags(value: string) {
+  const seen = new Set<string>()
+  return value
+    .split(/[,;\n]+/)
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item) return false
+      const normalized = item.toLocaleLowerCase("en")
+      if (seen.has(normalized)) return false
+      seen.add(normalized)
+      return true
+    })
+    .slice(0, 12)
+}
+
 function normalizePerson(value: unknown): ApolloPerson | null {
   if (!value || typeof value !== "object") return null
   const row = value as Record<string, unknown>
@@ -87,7 +102,7 @@ function normalizePerson(value: unknown): ApolloPerson | null {
       ? (row.organization as Record<string, unknown>)
       : {}
   const firstName = text(row.first_name)
-  const lastName = text(row.last_name)
+  const lastName = text(row.last_name) || text(row.last_name_obfuscated)
   return {
     id,
     firstName,
@@ -114,8 +129,9 @@ export async function searchApolloPeople(input: {
   page: number
   perPage: number
 }) {
+  const keywordTags = organizationKeywordTags(input.keywords)
   const payload = await apolloPost("/mixed_people/api_search", {
-    q_keywords: input.keywords || undefined,
+    q_organization_keyword_tags: keywordTags.length ? keywordTags : undefined,
     person_titles: input.titles.length ? input.titles : undefined,
     person_seniorities: input.seniorities.length ? input.seniorities : undefined,
     organization_locations: input.organizationLocations.length ? input.organizationLocations : undefined,
@@ -130,10 +146,10 @@ export async function searchApolloPeople(input: {
       : {}
   return {
     people,
-    page: Number(pagination.page ?? input.page),
-    perPage: Number(pagination.per_page ?? input.perPage),
-    totalEntries: Number(pagination.total_entries ?? people.length),
-    totalPages: Number(pagination.total_pages ?? 1),
+    page: Number(pagination.page ?? root.page ?? input.page),
+    perPage: Number(pagination.per_page ?? root.per_page ?? input.perPage),
+    totalEntries: Number(pagination.total_entries ?? root.total_entries ?? people.length),
+    totalPages: Number(pagination.total_pages ?? root.total_pages ?? 1),
   }
 }
 
