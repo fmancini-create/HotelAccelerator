@@ -5,7 +5,12 @@ import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { getKnowledgeBases } from "@/lib/ai/knowledge-bases"
 import { loadTelephonyRow, voiceInboundSecretOf } from "@/lib/telephony/config"
 import { createVoiceAgentLinks } from "@/lib/telephony/voice-links"
-import { getVoiceProduct, resolveVoiceKnowledgeBase, VOICE_PRODUCTS } from "@/lib/telephony/voice-products"
+import {
+  getVoiceProduct,
+  resolveVoiceKnowledgeBase,
+  VOICE_4BID_FALLBACK_EXTENSION,
+  VOICE_PRODUCTS,
+} from "@/lib/telephony/voice-products"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { getVoiceIvrRoutes, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
 
@@ -51,7 +56,7 @@ export async function GET(request: NextRequest) {
         dtmf: product.dtmf,
         label: product.label,
         suggested_extension: product.suggestedExtension,
-        fallback_extension: "200",
+        fallback_extension: VOICE_4BID_FALLBACK_EXTENSION,
         status,
         knowledge_base: knowledgeBase,
         query_url: `${root}/api/telephony/3cx/voice/v1/${endpoint}?${voiceQuery}&product=${encodeURIComponent(product.key)}`,
