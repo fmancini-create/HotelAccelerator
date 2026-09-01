@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { createServiceClient } from "@/lib/supabase/server"
 import { esitoGruppoSquillo, ESITO_DEDOTTO, ESITO_DAL_CENTRALINO } from "@/lib/telephony/ring-group"
 import { authenticateInbound, syntheticCallId } from "@/lib/telephony/inbound-auth"
@@ -50,6 +51,62 @@ function capped(value: string, max: number): string | null {
   return trimmed ? trimmed.slice(0, max) : null
 }
 
+/**
+ * Fallback deterministico per PBX condivisi quando 3CX non espone il DID nel
+ * ReportCall e non esiste un route hint del voice agent. Una destinazione
+ * interna puo' appartenere a un tenant condiviso soltanto se e' dichiarata
+ * esplicitamente in `telephony_extension_labels` di quel tenant.
+ *
+ * Se piu' tenant rivendicano lo stesso interno non scegliamo: il journal resta
+ * sul tenant PBX autenticato. In questo modo non introduciamo euristiche o
+ * hardcode specifici di una struttura.
+ */
+async function resolveSharedPbxExtensionTarget(
+  supabase: SupabaseClient,
+  sourcePropertyId: string,
+  extension: string,
+): Promise<string | null> {
+  const cleanExtension = extension.replace(/\D/g, "")
+  if (!cleanExtension) return null
+
+  const { data: mappings, error: mappingError } = await supabase
+    .from("telephony_integrations")
+    .select("property_id")
+    .eq("provider", "3cx")
+    .eq("is_active", true)
+    .eq("shared_pbx_journal_property_id", sourcePropertyId)
+
+  if (mappingError) {
+    console.error("[3cx-journal] shared extension mapping lookup failed", {
+      sourcePropertyId,
+      message: mappingError.message,
+    })
+    return null
+  }
+
+  const targetIds = [...new Set((mappings ?? []).map((row) => String(row.property_id || "")).filter(Boolean))]
+  if (targetIds.length === 0) return null
+
+  const { data: labels, error: labelError } = await supabase
+    .from("telephony_extension_labels")
+    .select("property_id")
+    .in("property_id", targetIds)
+    .eq("extension", cleanExtension)
+    .limit(2)
+
+  if (labelError) {
+    console.error("[3cx-journal] shared extension label lookup failed", {
+      sourcePropertyId,
+      extension: cleanExtension,
+      message: labelError.message,
+    })
+    return null
+  }
+
+  const matches = [...new Set((labels ?? []).map((row) => String(row.property_id || "")).filter(Boolean))]
+  return matches.length === 1 ? matches[0] : null
+}
+
 export async function POST(request: NextRequest) {
   const auth = await authenticateInbound(request)
   if (!auth.ok) return errorFor(auth.status)
@@ -68,7 +125,9 @@ export async function POST(request: NextRequest) {
   // Una integrazione CRM 3CX e' globale per PBX e il ReportCall non espone il
   // DID. Nel caso esplicitamente configurato di PBX condiviso, un endpoint
   // voce autenticato puo' avere lasciato un hint temporale per lo stesso
-  // chiamante. Senza hint verificato il tenant autenticato resta invariato.
+  // chiamante. Senza hint proviamo soltanto una destinazione interna dichiarata
+  // in modo univoco dal tenant condiviso; altrimenti il tenant autenticato resta
+  // invariato.
   const routing = await resolveSharedPbxJournalTarget({
     sourcePropertyId: authenticatedPropertyId,
     callerNumber: number,
@@ -76,7 +135,12 @@ export async function POST(request: NextRequest) {
     startedAt: startedAtRaw || null,
     endedAt: endedAtRaw || null,
   })
-  const propertyId = routing.propertyId
+
+  const extensionTargetPropertyId =
+    !routing.routed && direction === "inbound"
+      ? await resolveSharedPbxExtensionTarget(supabaseForRouting(), authenticatedPropertyId, extension)
+      : null
+  const propertyId = extensionTargetPropertyId ?? routing.propertyId
 
   const providedId = pick(body, "call_id", "callId")
   const externalId =
@@ -153,7 +217,7 @@ export async function POST(request: NextRequest) {
       .from("telephony_extension_labels")
       .select("kind, no_answer_seconds")
       .eq("property_id", propertyId)
-      .eq("extension", extension)
+      .eq("extension", extension.replace(/\D/g, ""))
       .maybeSingle()
     if (erroreEtichetta) {
       console.log(`[v0] etichetta interno ${extension} non letta: ${erroreEtichetta.message}`)
@@ -236,6 +300,12 @@ export async function POST(request: NextRequest) {
       extension,
       mergedVoiceCapture: Boolean(routing.phoneCallId && existingVoiceCall),
     })
+  } else if (extensionTargetPropertyId) {
+    console.info("[3cx-journal] shared PBX call routed by extension", {
+      sourcePropertyId: authenticatedPropertyId,
+      propertyId,
+      extension,
+    })
   }
 
   return NextResponse.json({
@@ -244,7 +314,12 @@ export async function POST(request: NextRequest) {
     transcript_received: Boolean(transcription),
     summary_received: Boolean(transcriptionSummary),
     recording_received: Boolean(recordingUrl),
-    shared_pbx_routed: routing.routed,
+    shared_pbx_routed: routing.routed || Boolean(extensionTargetPropertyId),
+    shared_pbx_extension_routed: Boolean(extensionTargetPropertyId),
     voice_capture_merged: Boolean(routing.phoneCallId && existingVoiceCall),
   })
+}
+
+function supabaseForRouting(): SupabaseClient {
+  return createServiceClient()
 }
