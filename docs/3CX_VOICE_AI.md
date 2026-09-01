@@ -1,6 +1,6 @@
 # 3CX Voice AI ↔ HotelAccelerator
 
-Stato al 2026-09-01: **Codice** nel Core; configurazione 4BID aggiornata al fallback operatore 820, collaudo PBX reale ancora richiesto.
+Stato al 2026-09-01: **Codice** nel Core; configurazione 4BID aggiornata al fallback operatore 820. L'avvio dell'assistente Realtime sul PBX reale 4BID e' stato verificato dopo il ripristino del credito API OpenAI; restano da collaudare isolamento 4BID/Barronci, trascrizione, audio e handoff end-to-end prima di promuovere lo stato.
 
 ## Scopo
 
@@ -92,7 +92,33 @@ del tenant aziendale 4BID. Non richiede ne' legge un codice cliente.
 - property ID: `fe0e6052-f1b8-4752-9ade-812ceed90635`;
 - PBX condiviso con Villa I Barronci;
 - coda operatore: `820` (`4BID Operatore`);
-- route persistenti `1.1`–`1.4` e `2.1`–`2.4`: fallback 820.
+- route persistenti `1.1`–`1.4` e `2.1`–`2.4`: fallback 820;
+- modello Realtime configurato in 3CX: `gpt-realtime-2`;
+- il 2026-09-01 una sessione Realtime reale ha ripreso a rispondere dopo il ripristino del credito API OpenAI.
+
+## Osservabilita' costi OpenAI
+
+La pagina SuperAdmin **Costi della piattaforma** legge i costi ufficiali tramite `GET /v1/organization/costs`. Non
+stima il costo reale partendo dalla durata delle chiamate e non salva una copia del ledger OpenAI nel database.
+
+Configurazione server-only:
+
+- `OPENAI_ADMIN_KEY`: chiave amministrativa necessaria per leggere i costi dell'organizzazione;
+- `OPENAI_VOICE_PROJECT_ID`: opzionale, limita la lettura a un progetto OpenAI dedicato alla voce;
+- `OPENAI_VOICE_API_KEY_ID`: opzionale e piu' specifico, limita la lettura alla API key usata dal Voice Agent.
+
+Se non viene configurato uno scope Voice dedicato, il SuperAdmin mostra correttamente il totale dell'intera
+organizzazione OpenAI e lo dichiara esplicitamente: non lo presenta come costo telefonico esatto. Per ottenere
+attribuzione Voice esatta, il traffico 3CX deve essere isolato in un progetto o API key dedicata. La chiave
+amministrativa non viene mai inviata al browser, salvata nel database o riutilizzata da 3CX.
+
+File di evidenza costi:
+
+- `lib/integrations/openai/admin-costs.ts`;
+- `lib/integrations/openai/costs-utils.ts`;
+- `app/api/super-admin/ai-costs/route.ts`;
+- `components/platform/openai-costs-panel.tsx`;
+- `app/super-admin/module-costs/page.tsx`.
 
 ## Sicurezza
 
@@ -100,6 +126,7 @@ del tenant aziendale 4BID. Non richiede ne' legge un codice cliente.
 - Tenant ricavato dal segreto e riapplicato server-side.
 - Routing shared-PBX fail-closed: nessun `property_id` scelto dal browser o dal modello.
 - Le chiamate tenant-owned restano filtrate per `property_id`.
+- `OPENAI_ADMIN_KEY` e' accessibile soltanto alla route SuperAdmin protetta server-side; nessun client riceve la chiave.
 
 ## Collaudo richiesto
 
@@ -108,7 +135,9 @@ del tenant aziendale 4BID. Non richiede ne' legge un codice cliente.
 3. con voice agent operativo, verificare che lo script invii il numero chiamante e che `transcription` venga valorizzata;
 4. verificare `recording_url` separatamente, solo se 3CX lo invia;
 5. chiamare Villa I Barronci e verificare che la chiamata resti nel tenant Barronci;
-6. ripetere dal medesimo cellulare per escludere leakage tra tenant.
+6. ripetere dal medesimo cellulare per escludere leakage tra tenant;
+7. configurare `OPENAI_ADMIN_KEY` e verificare che il SuperAdmin mostri lo stesso costo restituito dall'API OpenAI;
+8. se viene dichiarato “costo Voice esatto”, verificare che `OPENAI_VOICE_PROJECT_ID` o `OPENAI_VOICE_API_KEY_ID` isoli realmente il traffico 3CX.
 
 ## File di evidenza
 
@@ -126,6 +155,7 @@ del tenant aziendale 4BID. Non richiede ne' legge un codice cliente.
 ## Rollback
 
 - applicativo: ripristinare il branch/commit precedente;
+- costi OpenAI: rimuovere `OPENAI_ADMIN_KEY` disabilita soltanto la lettura SuperAdmin senza interrompere il Voice Agent;
 - dati: riportare esplicitamente le otto `voice_ivr_routes` 4BID alla destinazione precedente solo se il PBX viene
   riconfigurato di conseguenza;
 - nessuna riga `phone_calls` viene spostata o cancellata automaticamente.
