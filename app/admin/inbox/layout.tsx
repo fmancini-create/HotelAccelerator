@@ -5,16 +5,15 @@ import { OmnichannelCompose } from "@/components/admin/inbox/omnichannel-compose
 /**
  * Route-local responsive shell for the operational Inbox.
  *
- * The Inbox page intentionally owns a dense desktop, Gmail-like layout. Keeping
- * the mobile adaptations at the route boundary avoids duplicating or branching
- * its message, collaboration and channel logic. The data attribute scopes every
- * rule in mobile.css so no other admin page is affected.
+ * Desktop intentionally mirrors Gmail: the primary compose action lives on the
+ * left, above the mailbox folders. On small screens it falls back to the
+ * floating bottom-right action so it remains reachable without stealing space.
  */
 export default function InboxLayout({ children }: { children: React.ReactNode }) {
   return (
     <div data-inbox-mobile className="relative h-full min-h-0 min-w-0 overflow-hidden">
       {children}
-      <div className="fixed bottom-5 right-5 z-[70] sm:bottom-6 sm:right-6">
+      <div className="fixed left-4 top-[250px] z-[70] max-sm:bottom-5 max-sm:left-auto max-sm:right-5 max-sm:top-auto">
         <OmnichannelCompose />
       </div>
     </div>
