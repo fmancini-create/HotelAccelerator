@@ -27,7 +27,7 @@ describe("OpenAI cost helpers", () => {
     expect(url.searchParams.getAll("group_by")).toEqual(["line_item"])
   })
 
-  it("somma bucket e line item senza confondere giorni diversi", () => {
+  it("somma bucket, line item e rettifiche senza confondere giorni diversi", () => {
     const aggregation = aggregateOpenAICostPages([
       {
         object: "page",
@@ -46,6 +46,11 @@ describe("OpenAI cost helpers", () => {
                 object: "organization.costs.result",
                 amount: { value: 0.03, currency: "usd" },
                 line_item: "gpt-5.6-sol",
+              },
+              {
+                object: "organization.costs.result",
+                amount: { value: -0.01, currency: "usd" },
+                line_item: "provider-adjustment",
               },
             ],
           },
@@ -68,11 +73,12 @@ describe("OpenAI cost helpers", () => {
     ])
 
     expect(aggregation.currency).toBe("usd")
-    expect(aggregation.total).toBeCloseTo(0.35)
-    expect(aggregation.daily.map((item) => item.amount)).toEqual([0.15, 0.2])
+    expect(aggregation.total).toBeCloseTo(0.34)
+    expect(aggregation.daily.map((item) => item.amount)).toEqual([0.13999999999999999, 0.2])
     expect(aggregation.lineItems).toEqual([
       { name: "gpt-realtime-2", amount: 0.32 },
       { name: "gpt-5.6-sol", amount: 0.03 },
+      { name: "provider-adjustment", amount: -0.01 },
     ])
   })
 
