@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/telephony/inbound-auth", () => ({ authenticateVoiceInbound: mocks.authenticateVoiceInbound }))
 vi.mock("@/lib/telephony/voice-agent", () => ({ answerVoiceQuestion: mocks.answerVoiceQuestion }))
 vi.mock("@/lib/telephony/voice-products", () => ({
-  VOICE_FALLBACK_EXTENSION: "200",
+  VOICE_4BID_FALLBACK_EXTENSION: "820",
   getVoiceProduct: () => ({ key: "santaddeo-rms", label: "Santaddeo RMS" }),
 }))
 vi.mock("@/lib/telephony/voice-rate-limit", () => ({ takeVoiceRequest: mocks.takeVoiceRequest }))
@@ -51,7 +51,7 @@ function setupRoute() {
     id: "115a9ff2-7b49-4ba6-8b12-c5b93a9523a5",
     primary_knowledge_base_id: BASE,
     agent_label: "Informazioni Santaddeo RMS",
-    fallback_destination: "200",
+    fallback_destination: "820",
     is_active: true,
     product_key: "santaddeo-rms",
     crm_tool_key: "caller_lookup",
@@ -64,7 +64,7 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
     mocks.answerVoiceQuestion.mockResolvedValue({
       ok: true,
       speech: "Santaddeo RMS è il sistema di revenue management di 4BID.",
-      transfer: { required: false, destination: "200", reason: "none" },
+      transfer: { required: false, destination: "820", reason: "none" },
     })
 
     const { POST } = await loadRoute()
@@ -80,6 +80,7 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
       primaryKnowledgeBaseId: BASE,
       question: "Cos'è Santaddeo?",
       callerNumber: "+393331234567",
+      fallbackDestination: "820",
     }))
     expect(mocks.touchSharedPbxRouteHint).toHaveBeenCalledWith({
       targetPropertyId: HUB,
@@ -98,7 +99,7 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
     mocks.answerVoiceQuestion.mockResolvedValue({
       ok: true,
       speech: "Non ho una risposta sufficientemente sicura. Se preferisce, posso metterla in contatto con un operatore.",
-      transfer: { required: true, destination: "200", reason: "not_grounded" },
+      transfer: { required: true, destination: "820", reason: "not_grounded" },
     })
 
     const { POST } = await loadRoute()
@@ -111,5 +112,6 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
     expect(response.status).toBe(200)
     expect(body.speech).toContain("operatore")
     expect(body.transfer.required).toBe(false)
+    expect(body.transfer.destination).toBe("820")
   })
 })
