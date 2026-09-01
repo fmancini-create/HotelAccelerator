@@ -41,7 +41,7 @@ function configuredScope(): OpenAICostScope {
   if (apiKeyId) {
     return {
       kind: "api_key",
-      label: "OpenAI Voice · API key dedicata",
+      label: "OpenAI Voice · API key configurata",
       apiKeyId,
       projectId: projectId || undefined,
     }
@@ -50,7 +50,7 @@ function configuredScope(): OpenAICostScope {
   if (projectId) {
     return {
       kind: "project",
-      label: "OpenAI Voice · progetto dedicato",
+      label: "OpenAI Voice · progetto configurato",
       projectId,
     }
   }
@@ -65,7 +65,7 @@ function publicScope(scope: OpenAICostScope) {
   return {
     kind: scope.kind,
     label: scope.label,
-    isVoiceExact: scope.kind !== "organization",
+    isVoiceScoped: scope.kind !== "organization",
   }
 }
 
