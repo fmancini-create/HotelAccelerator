@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { CheckCircle2, Circle, Code2, Loader2, Rocket, Search } from "lucide-react"
+import { AlertTriangle, Ban, CheckCircle2, Circle, Code2, Loader2, PauseCircle, Rocket, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
+
+type DevelopmentStatus = "planned" | "in_progress" | "blocked" | "abandoned" | "completed"
 
 type RoadmapItem = {
   roadmap_key: string
@@ -12,6 +13,11 @@ type RoadmapItem = {
   capability: string
   code_ready: boolean
   online_ready: boolean
+  development_status: DevelopmentStatus
+  branch_name: string | null
+  pr_number: number | null
+  started_at: string | null
+  completed_at: string | null
   note: string | null
   sort_order: number
   updated_by_email: string | null
@@ -32,6 +38,14 @@ const OFFICIAL_STATES = [
 
 type OfficialState = (typeof OFFICIAL_STATES)[number]
 
+const DEVELOPMENT_LABELS: Record<DevelopmentStatus, string> = {
+  planned: "Da fare",
+  in_progress: "In sviluppo",
+  blocked: "Bloccato",
+  abandoned: "Abbandonato",
+  completed: "Online",
+}
+
 function readOfficialState(note: string | null): OfficialState | null {
   if (!note) return null
   const prefix = "Stato ufficiale:"
@@ -43,6 +57,21 @@ function readOfficialState(note: string | null): OfficialState | null {
 function withoutOfficialState(note: string | null) {
   if (!note) return null
   return note.replace(/^Stato ufficiale:\s*[^.;]+[.;]?\s*/i, "").trim() || null
+}
+
+function statusClasses(status: DevelopmentStatus) {
+  switch (status) {
+    case "completed":
+      return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300"
+    case "in_progress":
+      return "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300"
+    case "blocked":
+      return "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300"
+    case "abandoned":
+      return "border-muted bg-muted/40 text-muted-foreground"
+    default:
+      return "border-border bg-background text-muted-foreground"
+  }
 }
 
 export default function ProductRoadmapPage() {
@@ -66,46 +95,31 @@ export default function ProductRoadmapPage() {
         if (!cancelled) setLoading(false)
       }
     }
-    load()
+    void load()
     return () => {
       cancelled = true
     }
   }, [])
 
-  const update = async (item: RoadmapItem, field: "code" | "online", value: boolean) => {
+  const updateStatus = async (item: RoadmapItem, value: DevelopmentStatus) => {
+    if (value === "completed") return
     const previous = item
-    const optimistic: RoadmapItem = {
-      ...item,
-      code_ready: field === "code" ? value : item.code_ready,
-      online_ready: field === "online" ? value : item.online_ready,
-    }
-
-    if (optimistic.online_ready && !optimistic.code_ready) {
-      setError("Prima attiva In main: un deploy non puo essere segnato senza implementazione nel repository.")
-      return
-    }
-
+    const optimistic = { ...item, development_status: value }
     setError(null)
     setSavingKey(item.roadmap_key)
-    setItems((current) =>
-      current.map((row) => (row.roadmap_key === item.roadmap_key ? optimistic : row)),
-    )
+    setItems((current) => current.map((row) => (row.roadmap_key === item.roadmap_key ? optimistic : row)))
 
     try {
       const response = await fetch("/api/super-admin/roadmap", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roadmapKey: item.roadmap_key, field, value }),
+        body: JSON.stringify({ roadmapKey: item.roadmap_key, field: "status", value }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || "Aggiornamento non riuscito")
-      setItems((current) =>
-        current.map((row) => (row.roadmap_key === item.roadmap_key ? payload.item : row)),
-      )
+      setItems((current) => current.map((row) => (row.roadmap_key === item.roadmap_key ? payload.item : row)))
     } catch (saveError) {
-      setItems((current) =>
-        current.map((row) => (row.roadmap_key === item.roadmap_key ? previous : row)),
-      )
+      setItems((current) => current.map((row) => (row.roadmap_key === item.roadmap_key ? previous : row)))
       setError(saveError instanceof Error ? saveError.message : "Errore durante il salvataggio")
     } finally {
       setSavingKey(null)
@@ -116,47 +130,64 @@ export default function ProductRoadmapPage() {
     const needle = query.trim().toLowerCase()
     if (!needle) return items
     return items.filter((item) =>
-      `${item.area} ${item.capability} ${item.note ?? ""}`.toLowerCase().includes(needle),
+      `${item.area} ${item.capability} ${item.note ?? ""} ${item.branch_name ?? ""} ${item.pr_number ?? ""} ${DEVELOPMENT_LABELS[item.development_status]}`
+        .toLowerCase()
+        .includes(needle),
     )
   }, [items, query])
 
-  const codeCount = items.filter((item) => item.code_ready).length
-  const deployedCount = items.filter((item) => item.code_ready && item.online_ready).length
+  const counts = useMemo(() => {
+    return items.reduce<Record<DevelopmentStatus, number>>(
+      (acc, item) => {
+        acc[item.development_status] += 1
+        return acc
+      },
+      { planned: 0, in_progress: 0, blocked: 0, abandoned: 0, completed: 0 },
+    )
+  }, [items])
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6 lg:p-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="space-y-4">
         <div>
           <p className="text-sm font-medium text-muted-foreground">Governance prodotto</p>
           <h1 className="text-2xl font-semibold tracking-tight">Roadmap HotelAccelerator</h1>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Snapshot tecnico riallineato al repository. <strong>In main</strong> significa che esiste
-            implementazione verificabile nel codice; <strong>Deploy prod</strong> significa soltanto che quella
-            implementazione e inclusa nel deploy di produzione. Non equivale a Production-ready o Vendibile.
+          <p className="mt-1 max-w-4xl text-sm text-muted-foreground">
+            Questa pagina e la memoria operativa degli sviluppi. Ogni nuova funzionalita o PR dedicata deve comparire
+            qui appena parte. Una riga diventa <strong className="text-emerald-700 dark:text-emerald-400">verde / Online</strong>
+            solo dopo merge in <strong>main</strong> e deploy di produzione verificato.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:min-w-[310px]">
+
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-lg border bg-card px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Code2 className="h-4 w-4" aria-hidden /> In main
-            </div>
-            <div className="mt-1 text-2xl font-semibold">{codeCount}</div>
-            <div className="text-xs text-muted-foreground">su {items.length} capability</div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground"><Circle className="h-4 w-4" />Da fare</div>
+            <div className="mt-1 text-2xl font-semibold">{counts.planned}</div>
           </div>
-          <div className="rounded-lg border bg-card px-4 py-3">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Rocket className="h-4 w-4" aria-hidden /> Deploy prod
-            </div>
-            <div className="mt-1 text-2xl font-semibold">{deployedCount}</div>
-            <div className="text-xs text-muted-foreground">senza promozione automatica</div>
+          <div className="rounded-lg border border-blue-200 bg-blue-50/60 px-4 py-3 dark:border-blue-900 dark:bg-blue-950/20">
+            <div className="flex items-center gap-2 text-xs text-blue-700 dark:text-blue-300"><Code2 className="h-4 w-4" />In sviluppo</div>
+            <div className="mt-1 text-2xl font-semibold">{counts.in_progress}</div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/20">
+            <div className="flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300"><AlertTriangle className="h-4 w-4" />Bloccati</div>
+            <div className="mt-1 text-2xl font-semibold">{counts.blocked}</div>
+          </div>
+          <div className="rounded-lg border bg-muted/30 px-4 py-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground"><Ban className="h-4 w-4" />Abbandonati</div>
+            <div className="mt-1 text-2xl font-semibold">{counts.abandoned}</div>
+          </div>
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/20">
+            <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300"><Rocket className="h-4 w-4" />Online</div>
+            <div className="mt-1 text-2xl font-semibold">{counts.completed}</div>
           </div>
         </div>
       </div>
 
       <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-        Il <strong>livello ufficiale</strong> e mostrato per ogni riga e segue esclusivamente: Idea, Specifica,
-        UI/mock, Codice, Demo, Tenant reale, Multi-tenant, Production-ready, Vendibile. Le note indicano evidenza e
-        verifica residua.
+        <strong>Regola:</strong> l agente che apre uno sviluppo deve creare o aggiornare la riga nello stesso momento.
+        Se il lavoro si ferma, va marcato <strong>Bloccato</strong> o <strong>Abbandonato</strong>. Il livello tecnico
+        ufficiale resta separato: Idea, Specifica, UI/mock, Codice, Demo, Tenant reale, Multi-tenant,
+        Production-ready, Vendibile.
       </div>
 
       <div className="relative max-w-lg">
@@ -164,89 +195,102 @@ export default function ProductRoadmapPage() {
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Cerca funzione, area, stato o PR..."
+          placeholder="Cerca funzione, area, stato, branch o PR..."
           className="pl-9"
         />
       </div>
 
       {error && (
-        <div
-          role="alert"
-          className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-        >
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
       <div className="overflow-hidden rounded-xl border bg-card">
-        <div className="hidden grid-cols-[130px_1fr_110px_110px_140px] gap-3 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid">
+        <div className="hidden grid-cols-[120px_1fr_160px_130px] gap-4 border-b bg-muted/40 px-4 py-3 text-xs font-medium uppercase tracking-wide text-muted-foreground lg:grid">
           <span>Area</span>
-          <span>Funzione / evidenza</span>
-          <span>In main</span>
-          <span>Deploy prod</span>
-          <span>Snapshot</span>
+          <span>Funzione / cosa manca</span>
+          <span>Lavoro</span>
+          <span>Codice</span>
         </div>
         {loading ? (
           <div className="flex items-center justify-center gap-2 px-4 py-12 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Caricamento roadmap...
+            <Loader2 className="h-4 w-4 animate-spin" />Caricamento roadmap...
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">Nessuna funzione trovata.</div>
         ) : (
           <div className="divide-y">
             {filtered.map((item) => {
-              const deployed = item.code_ready && item.online_ready
               const saving = savingKey === item.roadmap_key
               const officialState = readOfficialState(item.note)
               const evidence = withoutOfficialState(item.note)
+              const trulyOnline = item.development_status === "completed" && item.code_ready && item.online_ready
 
               return (
                 <div
                   key={item.roadmap_key}
-                  className={`grid gap-3 px-4 py-4 md:grid-cols-[130px_1fr_110px_110px_140px] md:items-center ${
-                    deployed ? "bg-emerald-50/40 dark:bg-emerald-950/15" : ""
+                  className={`grid gap-4 px-4 py-4 lg:grid-cols-[120px_1fr_160px_130px] lg:items-start ${
+                    trulyOnline ? "bg-emerald-50/40 dark:bg-emerald-950/15" : item.development_status === "abandoned" ? "opacity-65" : ""
                   }`}
                 >
                   <div className="text-xs font-medium text-muted-foreground">{item.area}</div>
+
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium">{item.capability}</span>
+                      <span className={`text-sm font-medium ${item.development_status === "abandoned" ? "line-through" : ""}`}>
+                        {item.capability}
+                      </span>
                       {officialState && <Badge variant="outline">{officialState}</Badge>}
+                      {item.pr_number && <Badge variant="secondary">PR #{item.pr_number}</Badge>}
                     </div>
                     {evidence && <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{evidence}</p>}
-                  </div>
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Switch
-                      checked={item.code_ready}
-                      disabled={saving || item.online_ready}
-                      onCheckedChange={(value) => update(item, "code", value)}
-                      aria-label={`In main ${item.capability}`}
-                    />
-                    In main
-                  </label>
-                  <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Switch
-                      checked={item.online_ready}
-                      disabled={saving || !item.code_ready}
-                      onCheckedChange={(value) => update(item, "online", value)}
-                      aria-label={`Deploy prod ${item.capability}`}
-                    />
-                    Prod
-                  </label>
-                  <div
-                    className={`flex items-center gap-2 text-sm font-medium ${
-                      deployed ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"
-                    }`}
-                  >
-                    {saving ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : deployed ? (
-                      <CheckCircle2 className="h-4 w-4" />
-                    ) : (
-                      <Circle className="h-4 w-4" />
+                    {item.branch_name && (
+                      <p className="mt-2 break-all font-mono text-[11px] text-muted-foreground">{item.branch_name}</p>
                     )}
-                    {saving ? "Salvataggio" : deployed ? "Deploy prod" : item.code_ready ? "Solo main" : "Non in main"}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium ${statusClasses(item.development_status)}`}>
+                      {saving ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : item.development_status === "completed" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : item.development_status === "blocked" ? (
+                        <PauseCircle className="h-3.5 w-3.5" />
+                      ) : item.development_status === "abandoned" ? (
+                        <Ban className="h-3.5 w-3.5" />
+                      ) : (
+                        <Circle className="h-3.5 w-3.5" />
+                      )}
+                      {DEVELOPMENT_LABELS[item.development_status]}
+                    </div>
+
+                    {item.development_status !== "completed" && (
+                      <select
+                        value={item.development_status}
+                        disabled={saving}
+                        onChange={(event) => void updateStatus(item, event.target.value as DevelopmentStatus)}
+                        aria-label={`Stato lavoro ${item.capability}`}
+                        className="h-8 w-full rounded-md border bg-background px-2 text-xs"
+                      >
+                        <option value="planned">Da fare</option>
+                        <option value="in_progress">In sviluppo</option>
+                        <option value="blocked">Bloccato</option>
+                        <option value="abandoned">Abbandonato</option>
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${item.code_ready ? "bg-emerald-500" : "bg-muted-foreground/25"}`} />
+                      <span className="text-muted-foreground">{item.code_ready ? "In main" : "Non in main"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${item.online_ready ? "bg-emerald-500" : "bg-muted-foreground/25"}`} />
+                      <span className="text-muted-foreground">{item.online_ready ? "Deploy prod" : "Non online"}</span>
+                    </div>
                   </div>
                 </div>
               )
@@ -256,9 +300,7 @@ export default function ProductRoadmapPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        I due switch sono flag operativi e vengono auditati. Il livello tecnico ufficiale resta documentato in
-        MODULE_REGISTRY.md: un deploy riuscito non promuove automaticamente una funzione a Tenant reale,
-        Multi-tenant o Production-ready.
+        Il verde non e modificabile manualmente dalla pagina: viene assegnato soltanto a sviluppo chiuso, mergiato in main e presente nel deploy di produzione verificato.
       </p>
     </div>
   )
