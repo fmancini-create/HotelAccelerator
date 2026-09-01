@@ -25,10 +25,10 @@ export const dynamic = "force-dynamic"
  *         phone number, stores a ready-to-use channel row and provisions the
  *         standard outbound reopen template on that same WABA.
  *
- * Reconnect mode is explicit and quota-free: when `reconnect_channel_id` is
- * supplied, the selected Meta number must match the already-connected physical
- * number. The existing channel row is refreshed in-place, preserving history,
- * assignments, default status and quota usage.
+ * The hotel never handles tokens, app secrets or message-template setup. The
+ * tenant-scoped credential returned by Embedded Signup is encrypted server-side
+ * and remains pinned to property_id + waba_id + phone_number_id. Runtime never
+ * falls back to a generic platform token for tenant outbound traffic.
  */
 
 export async function GET(request: NextRequest) {
@@ -48,10 +48,6 @@ async function graphGet(version: string, path: string, token: string): Promise<a
     cache: "no-store",
   })
   return res.json().catch(() => null)
-}
-
-function phoneDigits(value: unknown): string {
-  return typeof value === "string" ? value.replace(/\D/g, "") : ""
 }
 
 export async function POST(request: NextRequest) {
@@ -74,7 +70,6 @@ export async function POST(request: NextRequest) {
     const phoneNumberId: string | undefined = body?.phone_number_id
     const wabaId: string | undefined = body?.waba_id
     const signupEvent: string | undefined = body?.signup_event
-    const reconnectChannelId: string | undefined = body?.reconnect_channel_id
 
     if (!code) {
       return NextResponse.json({ error: "Codice di autorizzazione mancante" }, { status: 400 })
@@ -95,33 +90,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = createServiceClient()
-    let reconnectTarget: { id: string; config: Record<string, unknown> | null } | null = null
-
-    if (reconnectChannelId) {
-      const { data, error } = await supabase
-        .from("messaging_channels")
-        .select("id, config")
-        .eq("id", reconnectChannelId)
-        .eq("property_id", propertyId)
-        .eq("channel_type", "whatsapp")
-        .maybeSingle()
-
-      if (error) throw error
-      if (!data?.id) {
-        return NextResponse.json(
-          { error: "Il numero WhatsApp da ricollegare non appartiene a questo tenant." },
-          { status: 404 },
-        )
-      }
-      reconnectTarget = {
-        id: data.id,
-        config: (data.config as Record<string, unknown> | null) ?? null,
-      }
-    }
-
     const v = platform.graphVersion
 
+    // 1) The token returned by this exchange is the credential tied to the
+    // business integration the tenant just authorized. Keep this exact token
+    // for runtime: replacing it with a generic system-user token destroys the
+    // proof that WABA and phone belong to the selected tenant.
     const tokenRes = await fetch(
       `https://graph.facebook.com/${v}/oauth/access_token?` +
         new URLSearchParams({
@@ -138,6 +112,7 @@ export async function POST(request: NextRequest) {
     }
     const businessToken: string = tokenJson.access_token
 
+    // 2) Subscribe the single HotelAccelerator platform app to this tenant WABA.
     const subRes = await fetch(`https://graph.facebook.com/${v}/${wabaId}/subscribed_apps`, {
       method: "POST",
       headers: { Authorization: `Bearer ${businessToken}` },
@@ -149,6 +124,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: msg }, { status: 400 })
     }
 
+    // 3) Coexistence deliberately does NOT call /register.
     let resolvedPhoneNumberId = phoneNumberId
     let resolvedNumber: any = null
     const phoneNumbers = await graphGet(
@@ -201,26 +177,6 @@ export async function POST(request: NextRequest) {
     const displayPhone = numberInfo?.display_phone_number ?? ""
     const verifiedName = numberInfo?.verified_name ?? ""
 
-    if (reconnectTarget) {
-      const oldConfig = reconnectTarget.config ?? {}
-      const oldPhoneId = typeof oldConfig.phone_number_id === "string" ? oldConfig.phone_number_id : ""
-      const oldDisplayPhone = phoneDigits(oldConfig.display_phone_number)
-      const newDisplayPhone = phoneDigits(displayPhone)
-      const samePhoneId = Boolean(oldPhoneId && oldPhoneId === String(resolvedPhoneNumberId))
-      const samePhysicalNumber = Boolean(oldDisplayPhone && newDisplayPhone && oldDisplayPhone === newDisplayPhone)
-
-      if (!samePhoneId && !samePhysicalNumber) {
-        return NextResponse.json(
-          {
-            error:
-              "Per ricollegare questo canale devi selezionare lo stesso numero WhatsApp già associato. Nessuna quota extra è stata usata.",
-            code: "WHATSAPP_RECONNECT_NUMBER_MISMATCH",
-          },
-          { status: 400 },
-        )
-      }
-    }
-
     let config: Record<string, unknown> = {
       phone_number_id: String(resolvedPhoneNumberId),
       waba_id: String(wabaId),
@@ -234,6 +190,8 @@ export async function POST(request: NextRequest) {
       credential_scope: "tenant_business_token",
     }
 
+    // 4) Certify the routing boundary BEFORE persisting it. The same credential
+    // that will send at runtime must see this exact WABA and this exact number.
     const runtimeProbe = await validateWhatsAppRuntimeAccess({
       config,
       credentials: { access_token: businessToken },
@@ -254,27 +212,23 @@ export async function POST(request: NextRequest) {
       runtime_access_status: "VERIFIED",
     }
 
+    const supabase = createServiceClient()
     const credentials = encryptWhatsAppCredentialsForWrite({
       access_token: businessToken,
       app_secret: platform.appSecret,
       verify_token: platform.verifyToken,
     })
 
-    let existingId: string | null = reconnectTarget?.id ?? null
-
-    if (!existingId) {
-      const { data: existing } = await supabase
-        .from("messaging_channels")
-        .select("id")
-        .eq("property_id", propertyId)
-        .eq("channel_type", "whatsapp")
-        .eq("config->>phone_number_id", String(resolvedPhoneNumberId))
-        .maybeSingle()
-      existingId = existing?.id ?? null
-    }
+    const { data: existing } = await supabase
+      .from("messaging_channels")
+      .select("id")
+      .eq("property_id", propertyId)
+      .eq("channel_type", "whatsapp")
+      .eq("config->>phone_number_id", String(resolvedPhoneNumberId))
+      .maybeSingle()
 
     let row: MessagingChannelRow
-    if (existingId) {
+    if (existing?.id) {
       const { data, error } = await supabase
         .from("messaging_channels")
         .update({
@@ -285,7 +239,7 @@ export async function POST(request: NextRequest) {
           last_error: null,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", existingId)
+        .eq("id", existing.id)
         .eq("property_id", propertyId)
         .select("*")
         .single()
@@ -322,6 +276,8 @@ export async function POST(request: NextRequest) {
       row = data as MessagingChannelRow
     }
 
+    // 5) Provision the logical platform template on THIS tenant WABA with the
+    // same tenant-scoped credential used by runtime sends.
     const templateProvisioning = await ensureWhatsAppReopenTemplate({
       wabaId: String(wabaId),
       graphVersion: v,
@@ -349,7 +305,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      reconnected: Boolean(reconnectTarget),
       channel: {
         id: row.id,
         display_name: row.display_name,
