@@ -39,7 +39,9 @@ export const VOICE_PRODUCTS = [
 export type VoiceProduct = (typeof VOICE_PRODUCTS)[number]
 export type VoiceProductKey = VoiceProduct["key"]
 
-export const VOICE_FALLBACK_EXTENSION = "200"
+// Coda operatore 4BID sul PBX condiviso Villa I Barronci / 4BID.
+// Deve restare allineata al route point/fallback configurato in 3CX.
+export const VOICE_FALLBACK_EXTENSION = "820"
 
 export interface VoiceKnowledgeBaseCandidate {
   id: string
