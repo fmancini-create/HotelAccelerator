@@ -162,6 +162,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === "enrich") {
+      if (prospect.status === "enriched" && !prospect.email) {
+        return NextResponse.json(
+          { error: "Apollo ha già verificato questo profilo e non ha un'email disponibile." },
+          { status: 409 },
+        )
+      }
+
       const enriched = await enrichApolloPerson(prospect.apollo_person_id)
       if (!enriched) {
         return NextResponse.json({ error: "Apollo non ha trovato dati aggiuntivi per questo profilo." }, { status: 404 })
@@ -191,7 +198,13 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
       if (error) throw error
-      return NextResponse.json({ prospect: data })
+      return NextResponse.json({
+        prospect: data,
+        outcome: data.email ? "email_found" : "email_unavailable",
+        message: data.email
+          ? "Email trovata da Apollo."
+          : "Apollo ha verificato il profilo ma non ha un'email disponibile.",
+      })
     }
 
     const email = String(prospect.email ?? "").trim().toLowerCase()
