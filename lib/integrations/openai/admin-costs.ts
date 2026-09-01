@@ -131,8 +131,9 @@ async function fetchCostsPage(input: {
 export async function getOpenAICostSummary(days = 90) {
   const normalizedDays = Math.max(1, Math.min(180, Math.floor(days)))
   const now = new Date()
+  const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000
+  const startTime = todayStart - (normalizedDays - 1) * 24 * 60 * 60
   const endTime = Math.floor(now.getTime() / 1000) + 1
-  const startTime = endTime - normalizedDays * 24 * 60 * 60
   const scope = configuredScope()
   const pages: OpenAICostsPage[] = []
   let page: string | null = null
