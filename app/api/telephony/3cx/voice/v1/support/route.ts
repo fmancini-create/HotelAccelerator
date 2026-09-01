@@ -5,7 +5,7 @@ import { VOICE_PRODUCT_TO_SUITE_PRODUCT } from "@/lib/customer-codes/product"
 import { normalizeCustomerCode } from "@/lib/telephony/customer-code"
 import { authenticateVoiceInbound } from "@/lib/telephony/inbound-auth"
 import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
-import { getVoiceProduct, VOICE_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
+import { getVoiceProduct, VOICE_4BID_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
 import { serviceErrorVoiceResponse } from "@/lib/telephony/voice-response"
 import { getVoiceIvrRoute, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
@@ -43,7 +43,7 @@ function unauthenticatedCodeResponse(requestId: string) {
       customer: { recognized: false },
       speech: invalidCustomerCodeSpeech(),
       handoff: { action: "retry_customer_code", destination: null, mode: null },
-      transfer: { required: false, destination: VOICE_FALLBACK_EXTENSION, reason: "none" },
+      transfer: { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" },
       request_id: requestId,
     },
     { headers: NO_STORE },
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (!isMissingVoiceRoutingSchema(error)) {
       console.error("[3cx-support] route lookup failed", { requestId, product: product.key })
       return NextResponse.json(
-        { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "route_lookup_failed"), request_id: requestId },
+        { ...serviceErrorVoiceResponse(product, VOICE_4BID_FALLBACK_EXTENSION, "route_lookup_failed"), request_id: requestId },
         { status: 502, headers: NO_STORE },
       )
     }
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
   if (routingSchemaAvailable && !route) {
     return NextResponse.json(
-      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "route_not_configured"), request_id: requestId },
+      { ...serviceErrorVoiceResponse(product, VOICE_4BID_FALLBACK_EXTENSION, "route_not_configured"), request_id: requestId },
       { status: 503, headers: NO_STORE },
     )
   }
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   const rate = takeVoiceRequest(`${auth.propertyId}:support`)
   if (!rate.allowed) {
     return NextResponse.json(
-      { ...serviceErrorVoiceResponse(product, VOICE_FALLBACK_EXTENSION, "rate_limited"), request_id: requestId },
+      { ...serviceErrorVoiceResponse(product, VOICE_4BID_FALLBACK_EXTENSION, "rate_limited"), request_id: requestId },
       { status: 429, headers: { ...NO_STORE, "Retry-After": String(rate.retryAfterSeconds) } },
     )
   }
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
         crm_tool: { key: route?.crm_tool_key ?? "customer_code_lookup", executed: true },
         speech: "Codice cliente verificato. Mi dica come posso aiutarla.",
         handoff: { action: "none", destination: null, mode: null },
-        transfer: { required: false, destination: route?.fallback_destination ?? VOICE_FALLBACK_EXTENSION, reason: "none" },
+        transfer: { required: false, destination: route?.fallback_destination ?? VOICE_4BID_FALLBACK_EXTENSION, reason: "none" },
         request_id: requestId,
       },
       { headers: NO_STORE },
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
       question: parsed.data.question,
       history: parsed.data.history,
       callerNumber: parsed.data.caller_number,
-      fallbackDestination: afterHoursHandoff.destination ?? VOICE_FALLBACK_EXTENSION,
+      fallbackDestination: afterHoursHandoff.destination ?? VOICE_4BID_FALLBACK_EXTENSION,
       agentLabel: route?.agent_label,
       crmToolKey: route?.crm_tool_key,
     })
@@ -189,7 +189,7 @@ export async function POST(request: NextRequest) {
         customer: { recognized: true },
         speech,
         transfer: shouldRecord
-          ? { required: false, destination: VOICE_FALLBACK_EXTENSION, reason: "none" }
+          ? { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" }
           : response.transfer,
         handoff: { action: handoff.action, destination: handoff.destination, mode: handoff.mode },
         request_id: requestId,
@@ -201,12 +201,12 @@ export async function POST(request: NextRequest) {
     const shouldRecord = afterHoursHandoff.action === "record_message"
     return NextResponse.json(
       {
-        ...serviceErrorVoiceResponse(product, afterHoursHandoff.destination ?? VOICE_FALLBACK_EXTENSION, "provider_error"),
+        ...serviceErrorVoiceResponse(product, afterHoursHandoff.destination ?? VOICE_4BID_FALLBACK_EXTENSION, "provider_error"),
         customer: { recognized: true },
         speech: shouldRecord ? afterHoursHandoff.speech : "Non riesco a completare la richiesta. La metto in contatto con un operatore.",
         transfer: shouldRecord
-          ? { required: false, destination: VOICE_FALLBACK_EXTENSION, reason: "none" }
-          : { required: true, destination: afterHoursHandoff.destination ?? VOICE_FALLBACK_EXTENSION, reason: "service_error" },
+          ? { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" }
+          : { required: true, destination: afterHoursHandoff.destination ?? VOICE_4BID_FALLBACK_EXTENSION, reason: "service_error" },
         handoff: { action: afterHoursHandoff.action, destination: afterHoursHandoff.destination, mode: afterHoursHandoff.mode },
         request_id: requestId,
       },
