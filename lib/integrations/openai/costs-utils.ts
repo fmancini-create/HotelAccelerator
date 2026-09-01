@@ -77,8 +77,8 @@ export function buildOpenAICostsUrl(input: {
   return url.toString()
 }
 
-function finiteNonNegative(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
 }
 
 export function aggregateOpenAICostPages(pages: OpenAICostsPage[]): OpenAICostAggregation {
@@ -93,7 +93,7 @@ export function aggregateOpenAICostPages(pages: OpenAICostsPage[]): OpenAICostAg
 
       for (const result of bucket.results ?? []) {
         if (result.object && result.object !== "organization.costs.result") continue
-        const amount = finiteNonNegative(result.amount?.value)
+        const amount = finiteNumber(result.amount?.value)
         if (amount === null) continue
 
         bucketAmount += amount
