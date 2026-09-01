@@ -60,6 +60,7 @@ export type ApolloPerson = {
   id: string
   firstName: string | null
   lastName: string | null
+  lastNameObfuscated: boolean
   fullName: string
   title: string | null
   seniority: string | null
@@ -102,12 +103,15 @@ function normalizePerson(value: unknown): ApolloPerson | null {
       ? (row.organization as Record<string, unknown>)
       : {}
   const firstName = text(row.first_name)
-  const lastName = text(row.last_name) || text(row.last_name_obfuscated)
+  const clearLastName = text(row.last_name)
+  const obfuscatedLastName = text(row.last_name_obfuscated)
+  const lastName = clearLastName || obfuscatedLastName
   return {
     id,
     firstName,
     lastName,
-    fullName: text(row.name) || [firstName, lastName].filter(Boolean).join(" ") || "Profilo Apollo",
+    lastNameObfuscated: !clearLastName && Boolean(obfuscatedLastName),
+    fullName: text(row.name) || [firstName, lastName].filter(Boolean).join(" ") || "Profilo Scout",
     title: text(row.title),
     seniority: text(row.seniority),
     linkedinUrl: text(row.linkedin_url),

@@ -13,7 +13,7 @@ import {
 
 const searchSchema = z.object({
   action: z.literal("search"),
-  keywords: z.string().trim().max(120).default("hotel resort hospitality"),
+  keywords: z.string().trim().max(120).default("hotel,hospitality"),
   titles: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
   seniorities: z.array(z.string().trim().min(1).max(40)).max(10).default([]),
   organizationLocations: z.array(z.string().trim().min(1).max(80)).max(8).default(["Italy"]),
@@ -25,6 +25,7 @@ const personSchema = z.object({
   id: z.string().trim().min(1).max(120),
   firstName: z.string().trim().max(120).nullable().optional(),
   lastName: z.string().trim().max(120).nullable().optional(),
+  lastNameObfuscated: z.boolean().optional(),
   fullName: z.string().trim().min(1).max(240),
   title: z.string().trim().max(180).nullable().optional(),
   seniority: z.string().trim().max(80).nullable().optional(),
@@ -73,17 +74,27 @@ export async function GET(request: NextRequest) {
     await requireAreaApi("crm", request)
     const propertyId = await getCurrentProperty(request)
     const supabase = createServiceClient()
-    const { data, error } = await supabase
-      .from("crm_apollo_prospects")
-      .select("*")
-      .eq("property_id", propertyId)
-      .neq("status", "dismissed")
-      .order("updated_at", { ascending: false })
-      .limit(200)
+    const [{ data, error }, { data: recentSearches, error: historyError }] = await Promise.all([
+      supabase
+        .from("crm_apollo_prospects")
+        .select("*")
+        .eq("property_id", propertyId)
+        .neq("status", "dismissed")
+        .order("updated_at", { ascending: false })
+        .limit(200),
+      supabase
+        .from("crm_scout_searches")
+        .select("id,keywords,titles,seniorities,organization_locations,page,per_page,total_entries,total_pages,people,created_at")
+        .eq("property_id", propertyId)
+        .order("created_at", { ascending: false })
+        .limit(20),
+    ])
     if (error) throw error
+    if (historyError) throw historyError
     return NextResponse.json({
       configured: Boolean(process.env.APOLLO_API_KEY?.trim()),
       prospects: data ?? [],
+      recentSearches: recentSearches ?? [],
       policy: {
         searchCredits: 0,
         enrichmentMaxCredits: 1,
@@ -107,7 +118,24 @@ export async function POST(request: NextRequest) {
 
     if (body.action === "search") {
       const result = await searchApolloPeople(body)
-      return NextResponse.json({ ...result, creditCost: 0 })
+      const { data: searchRow, error: searchSaveError } = await supabase
+        .from("crm_scout_searches")
+        .insert({
+          property_id: propertyId,
+          keywords: body.keywords,
+          titles: body.titles,
+          seniorities: body.seniorities,
+          organization_locations: body.organizationLocations,
+          page: result.page,
+          per_page: result.perPage,
+          total_entries: result.totalEntries,
+          total_pages: result.totalPages,
+          people: result.people,
+        })
+        .select("id,created_at")
+        .single()
+      if (searchSaveError) throw searchSaveError
+      return NextResponse.json({ ...result, creditCost: 0, searchId: searchRow.id, searchedAt: searchRow.created_at })
     }
 
     if (body.action === "save") {
