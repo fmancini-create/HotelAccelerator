@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowUpRight, Bot, Check, Clipboard, Database, Mail, Phone, Play, RefreshCw, Save, Search, Send, Sparkles } from "lucide-react"
+import { ArrowUpRight, Bot, Check, Clipboard, Mail, Phone, Play, RefreshCw, Save, Search, Send, Sparkles, UserRoundSearch } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -142,15 +142,15 @@ export default function ProspectingPage() {
           <Button variant="ghost" onClick={() => void run(`lost-${a.id}`, { action: "complete", activityId: a.id, outcome: "not_interested" }, "Prospect escluso")}>Non interessato</Button>
         </div>}
 
-        {a.action === "review" && <div className="flex gap-2"><Button asChild variant="outline"><Link href="/admin/crm/intelligence/apollo">Apri Apollo</Link></Button><Button variant="ghost" onClick={() => void run(`skip-${a.id}`, { action: "complete", activityId: a.id, outcome: "skipped" }, "Attività chiusa")}>Chiudi</Button></div>}
+        {a.action === "review" && <div className="flex gap-2"><Button asChild variant="outline"><Link href="/admin/crm/intelligence/scout">Apri Scout</Link></Button><Button variant="ghost" onClick={() => void run(`skip-${a.id}`, { action: "complete", activityId: a.id, outcome: "skipped" }, "Attività chiusa")}>Chiudi</Button></div>}
       </CardContent>
     </Card>
   }
 
   return <div className="space-y-6">
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div><div className="flex items-center gap-2"><Search className="h-6 w-6 text-ha-brand" /><h1 className="text-2xl font-bold">Prospecting · LinkedIn + Apollo</h1></div><p className="mt-1 text-muted-foreground">Trova i decisori, prepara i messaggi e lascia al CRM i follow-up approvati.</p></div>
-      <div className="flex gap-2"><Button asChild><Link href="/admin/crm/intelligence/apollo"><Database className="mr-2 h-4 w-4" />Trova con Apollo</Link></Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Aggiorna</Button></div>
+      <div><div className="flex items-center gap-2"><Search className="h-6 w-6 text-ha-brand" /><h1 className="text-2xl font-bold">HotelAccelerator Scout · Prospecting</h1></div><p className="mt-1 text-muted-foreground">Trova i decisori, prepara i messaggi e lascia al CRM i follow-up approvati.</p></div>
+      <div className="flex gap-2"><Button asChild><Link href="/admin/crm/intelligence/scout"><UserRoundSearch className="mr-2 h-4 w-4" />Trova con Scout</Link></Button><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Aggiorna</Button></div>
     </div>
 
     {error && <Card className="border-red-200"><CardContent className="pt-6 text-red-800">{error}</CardContent></Card>}
@@ -168,7 +168,7 @@ export default function ProspectingPage() {
       <section className="space-y-3"><h2 className="text-xl font-semibold">Prospect</h2>{data.prospects.length ? data.prospects.map((p) => {
         const channel = p.preferred_email_channel_id || data.emailChannels[0]?.id || ""
         return <Card key={p.id}><CardContent className="grid gap-4 pt-6 xl:grid-cols-[1fr_auto] xl:items-center">
-          <div><div className="flex flex-wrap items-center gap-2"><strong>{p.full_name || "Prospect Apollo"}</strong><Badge>Score {p.lead_score}/100</Badge><Badge variant="outline">{p.sales_stage}</Badge>{p.automation_enabled && <Badge className="bg-emerald-100 text-emerald-800">Auto email ON</Badge>}{p.do_not_contact && <Badge className="bg-red-100 text-red-800">Non contattare</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">{[p.job_title, p.organization_name, p.city, p.country].filter(Boolean).join(" · ")}</p><p className="mt-2 text-sm">{p.email || "Email non disponibile"}{p.next_action ? ` · Prossimo: ${labels[p.next_action] || p.next_action}${p.next_action_at ? ` (${fmt(p.next_action_at)})` : ""}` : ""}</p></div>
+          <div><div className="flex flex-wrap items-center gap-2"><strong>{p.full_name || "Prospect Scout"}</strong><Badge>Score {p.lead_score}/100</Badge><Badge variant="outline">{p.sales_stage}</Badge>{p.automation_enabled && <Badge className="bg-emerald-100 text-emerald-800">Auto email ON</Badge>}{p.do_not_contact && <Badge className="bg-red-100 text-red-800">Non contattare</Badge>}</div><p className="mt-1 text-sm text-muted-foreground">{[p.job_title, p.organization_name, p.city, p.country].filter(Boolean).join(" · ")}</p><p className="mt-2 text-sm">{p.email || "Email non disponibile"}{p.next_action ? ` · Prossimo: ${labels[p.next_action] || p.next_action}${p.next_action_at ? ` (${fmt(p.next_action_at)})` : ""}` : ""}</p></div>
           <div className="flex flex-wrap gap-2 xl:justify-end">
             {!p.do_not_contact && <Button variant="outline" onClick={() => void run(`start-${p.id}`, { action: "start", prospectId: p.id }, "Sequenza avviata")}><Play className="mr-2 h-4 w-4" />Avvia/riattiva</Button>}
             <select className="h-10 rounded-md border bg-background px-3 text-sm" value={p.legal_basis || ""} disabled={p.do_not_contact} onChange={(e) => e.target.value && void run(`legal-${p.id}`, { action: "set_legal_basis", prospectId: p.id, legalBasis: e.target.value }, "Base giuridica registrata")}><option value="">Base giuridica…</option>{Object.entries(legalBases).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
@@ -179,7 +179,7 @@ export default function ProspectingPage() {
             {p.contact_id && <Button asChild variant="ghost" size="icon"><Link href={`/admin/crm/contacts/${p.contact_id}`} aria-label="Apri contatto"><Mail className="h-4 w-4" /></Link></Button>}
           </div>
         </CardContent></Card>
-      }) : <Card><CardContent className="py-10 text-center"><p className="text-muted-foreground">Non ci sono ancora prospect salvati.</p><Button asChild className="mt-4"><Link href="/admin/crm/intelligence/apollo">Cerca decision maker con Apollo</Link></Button></CardContent></Card>}</section>
+      }) : <Card><CardContent className="py-10 text-center"><p className="text-muted-foreground">Non ci sono ancora prospect salvati.</p><Button asChild className="mt-4"><Link href="/admin/crm/intelligence/scout">Cerca decision maker con Scout</Link></Button></CardContent></Card>}</section>
     </>}
 
     {loading && !data && <Card><CardContent className="py-10 text-muted-foreground">Caricamento prospecting…</CardContent></Card>}

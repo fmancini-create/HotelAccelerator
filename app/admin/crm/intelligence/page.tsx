@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, BrainCircuit, Database, Mail, Phone, RefreshCw, Sparkles, UserRoundSearch } from "lucide-react"
+import { AlertCircle, BrainCircuit, Mail, Phone, RefreshCw, Sparkles, UserRoundSearch } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -96,9 +96,9 @@ export default function SalesIntelligencePage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="default">
-            <Link href="/admin/crm/intelligence/apollo">
-              <Database className="mr-2 h-4 w-4" aria-hidden />
-              Cerca con Apollo
+            <Link href="/admin/crm/intelligence/scout">
+              <UserRoundSearch className="mr-2 h-4 w-4" aria-hidden />
+              Apri HotelAccelerator Scout
             </Link>
           </Button>
           <Button variant="outline" onClick={() => void load()} disabled={loading}>
@@ -123,36 +123,11 @@ export default function SalesIntelligencePage() {
       {data && (
         <>
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Contatti analizzati</CardDescription>
-                <CardTitle className="text-3xl">{data.summary.analyzed}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Priorità alta</CardDescription>
-                <CardTitle className="text-3xl">{data.summary.highPriority}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Azioni suggerite</CardDescription>
-                <CardTitle className="text-3xl">{data.summary.actionable}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Telefonate</CardDescription>
-                <CardTitle className="text-3xl">{data.summary.calls}</CardTitle>
-              </CardHeader>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardDescription>Riattivazioni</CardDescription>
-                <CardTitle className="text-3xl">{data.summary.relationship}</CardTitle>
-              </CardHeader>
-            </Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Contatti analizzati</CardDescription><CardTitle className="text-3xl">{data.summary.analyzed}</CardTitle></CardHeader></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Priorità alta</CardDescription><CardTitle className="text-3xl">{data.summary.highPriority}</CardTitle></CardHeader></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Azioni suggerite</CardDescription><CardTitle className="text-3xl">{data.summary.actionable}</CardTitle></CardHeader></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Telefonate</CardDescription><CardTitle className="text-3xl">{data.summary.calls}</CardTitle></CardHeader></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Riattivazioni</CardDescription><CardTitle className="text-3xl">{data.summary.relationship}</CardTitle></CardHeader></Card>
           </div>
 
           <Card>
@@ -167,41 +142,28 @@ export default function SalesIntelligencePage() {
                 </div>
               ) : (
                 data.recommendations.map((item, index) => (
-                  <div
-                    key={item.contactId}
-                    className="flex flex-col gap-4 rounded-xl border bg-background p-4 lg:flex-row lg:items-center lg:justify-between"
-                  >
+                  <div key={item.contactId} className="flex flex-col gap-4 rounded-xl border bg-background p-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-muted-foreground">#{index + 1}</span>
-                        <Link
-                          href={`/admin/crm/contacts/${item.contactId}`}
-                          className="font-semibold text-foreground hover:underline"
-                        >
+                        <Link href={`/admin/crm/contacts/${item.contactId}`} className="font-semibold text-foreground hover:underline">
                           {item.contactName}
                         </Link>
                         {item.company && <span className="text-sm text-muted-foreground">· {item.company}</span>}
                         <PriorityBadge priority={item.priority} />
                         <Badge variant="outline">Punteggio {item.score}/100</Badge>
                       </div>
-
                       <div className="mt-2 flex items-center gap-2 font-medium text-foreground">
                         <ActionIcon action={item.action} />
                         {item.actionLabel}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">{item.reason}</p>
-
                       {item.signals.length > 0 && (
                         <div className="mt-3 flex flex-wrap gap-2">
-                          {item.signals.map((signal) => (
-                            <Badge key={signal} variant="secondary" className="font-normal">
-                              {signal}
-                            </Badge>
-                          ))}
+                          {item.signals.map((signal) => <Badge key={signal} variant="secondary" className="font-normal">{signal}</Badge>)}
                         </div>
                       )}
                     </div>
-
                     <Button asChild variant={item.canExecute ? "default" : "outline"}>
                       <Link href={`/admin/crm/contacts/${item.contactId}`}>
                         {item.canExecute ? "Apri e procedi" : "Controlla profilo"}
