@@ -9,12 +9,20 @@ import { OmnichannelCompose } from "@/components/admin/inbox/omnichannel-compose
  * the mobile adaptations at the route boundary avoids duplicating or branching
  * its message, collaboration and channel logic. The data attribute scopes every
  * rule in mobile.css so no other admin page is affected.
+ *
+ * The compose action belongs on the left, like Gmail's "Scrivi", not as a
+ * floating action in the bottom-right corner. Keeping it route-local means the
+ * same omnichannel composer is available in every Inbox view without covering
+ * message content.
  */
 export default function InboxLayout({ children }: { children: React.ReactNode }) {
   return (
     <div data-inbox-mobile className="relative h-full min-h-0 min-w-0 overflow-hidden">
       {children}
-      <div className="fixed bottom-5 right-5 z-[70] sm:bottom-6 sm:right-6">
+      <div className="absolute left-4 top-[7.25rem] z-[70] hidden sm:block">
+        <OmnichannelCompose />
+      </div>
+      <div className="fixed bottom-4 left-4 z-[70] sm:hidden">
         <OmnichannelCompose />
       </div>
     </div>
