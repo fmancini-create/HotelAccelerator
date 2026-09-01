@@ -141,10 +141,9 @@ export function summarizeOpenAICosts(input: {
   now?: Date
 }) {
   const now = input.now ?? new Date()
-  const nowSeconds = Math.floor(now.getTime() / 1000)
   const todayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / 1000
   const monthStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1) / 1000
-  const last30Start = nowSeconds - 30 * 24 * 60 * 60
+  const last30Start = todayStart - 29 * 24 * 60 * 60
 
   const sumFrom = (start: number) =>
     input.aggregation.daily
