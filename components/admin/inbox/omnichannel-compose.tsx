@@ -1,13 +1,26 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { Mail, MessageCircle, Search, Send, Loader2, CheckCircle2, Clock3 } from "lucide-react"
+import {
+  Mail,
+  MessageCircle,
+  Search,
+  Send,
+  Loader2,
+  CheckCircle2,
+  Clock3,
+  Paperclip,
+  X,
+  Instagram,
+  Facebook,
+  Bot,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ContactSuggestion {
   id: string
@@ -17,94 +30,136 @@ interface ContactSuggestion {
   whatsapp_id: string | null
 }
 
-type ComposeChannel = "email" | "whatsapp"
+type ComposeChannel = "email" | "whatsapp" | "telegram" | "messenger" | "instagram"
+type Subchannel = { id: string; channel: ComposeChannel; label: string; detail: string | null }
+
+const channelMeta: Record<ComposeChannel, { label: string; icon: typeof Mail }> = {
+  email: { label: "Email", icon: Mail },
+  whatsapp: { label: "WhatsApp", icon: MessageCircle },
+  telegram: { label: "Telegram", icon: Bot },
+  messenger: { label: "Facebook", icon: Facebook },
+  instagram: { label: "Instagram", icon: Instagram },
+}
 
 export function OmnichannelCompose() {
   const [open, setOpen] = useState(false)
   const [channel, setChannel] = useState<ComposeChannel>("email")
+  const [subchannels, setSubchannels] = useState<Subchannel[]>([])
+  const [selectedChannelId, setSelectedChannelId] = useState("")
   const [recipient, setRecipient] = useState("")
+  const [cc, setCc] = useState("")
+  const [bcc, setBcc] = useState("")
+  const [showCc, setShowCc] = useState(false)
+  const [showBcc, setShowBcc] = useState(false)
   const [subject, setSubject] = useState("")
   const [body, setBody] = useState("")
+  const [attachments, setAttachments] = useState<File[]>([])
   const [selectedContact, setSelectedContact] = useState<ContactSuggestion | null>(null)
   const [suggestions, setSuggestions] = useState<ContactSuggestion[]>([])
   const [searching, setSearching] = useState(false)
   const [sending, setSending] = useState(false)
   const [queued, setQueued] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const searchSeq = useRef(0)
+
+  const availableTypes = useMemo(() => {
+    const types = new Set(subchannels.map((item) => item.channel))
+    return (["email", "whatsapp", "telegram", "messenger", "instagram"] as ComposeChannel[]).filter((type) => types.has(type))
+  }, [subchannels])
+
+  const channelsForType = useMemo(() => subchannels.filter((item) => item.channel === channel), [subchannels, channel])
 
   const reset = () => {
     setChannel("email")
+    setSelectedChannelId("")
     setRecipient("")
+    setCc("")
+    setBcc("")
+    setShowCc(false)
+    setShowBcc(false)
     setSubject("")
     setBody("")
+    setAttachments([])
     setSelectedContact(null)
     setSuggestions([])
     setQueued(false)
   }
 
   useEffect(() => {
-    if (!open || selectedContact || recipient.trim().length < 2) {
+    if (!open) return
+    fetch("/api/inbox/subchannels", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        const rows: Subchannel[] = data.subchannels ?? []
+        setSubchannels(rows)
+        const firstEmail = rows.find((row) => row.channel === "email")
+        const first = firstEmail || rows[0]
+        if (first) {
+          setChannel(first.channel)
+          setSelectedChannelId(first.id)
+        }
+      })
+      .catch(() => setSubchannels([]))
+  }, [open])
+
+  useEffect(() => {
+    const first = channelsForType[0]
+    if (first && !channelsForType.some((item) => item.id === selectedChannelId)) setSelectedChannelId(first.id)
+  }, [channel, channelsForType, selectedChannelId])
+
+  useEffect(() => {
+    if (!open || selectedContact || recipient.trim().length < 2 || channel === "telegram" || channel === "messenger" || channel === "instagram") {
       setSuggestions([])
       return
     }
-
     const seq = ++searchSeq.current
     const timer = window.setTimeout(async () => {
       setSearching(true)
       try {
         const res = await fetch(`/api/inbox/compose/contacts?q=${encodeURIComponent(recipient.trim())}`)
         const data = await res.json().catch(() => ({}))
-        if (seq !== searchSeq.current) return
-        setSuggestions(res.ok ? data.contacts ?? [] : [])
-      } catch {
-        if (seq === searchSeq.current) setSuggestions([])
+        if (seq === searchSeq.current) setSuggestions(res.ok ? data.contacts ?? [] : [])
       } finally {
         if (seq === searchSeq.current) setSearching(false)
       }
     }, 250)
-
     return () => window.clearTimeout(timer)
-  }, [open, recipient, selectedContact])
-
-  useEffect(() => {
-    if (!selectedContact) return
-    const value = channel === "email"
-      ? selectedContact.email || ""
-      : selectedContact.whatsapp_id || selectedContact.phone || ""
-    setRecipient(value)
-  }, [channel, selectedContact])
-
-  const recipientHint = useMemo(() => {
-    if (channel === "email") return "Email del destinatario"
-    return "Numero WhatsApp con prefisso internazionale, es. +393331234567"
-  }, [channel])
+  }, [open, recipient, selectedContact, channel])
 
   const chooseContact = (contact: ContactSuggestion) => {
     setSelectedContact(contact)
     setSuggestions([])
-    const value = channel === "email"
-      ? contact.email || ""
-      : contact.whatsapp_id || contact.phone || ""
-    setRecipient(value)
+    setRecipient(channel === "email" ? contact.email || "" : contact.whatsapp_id || contact.phone || "")
   }
 
-  const changeRecipient = (value: string) => {
-    setRecipient(value)
-    if (selectedContact) setSelectedContact(null)
-  }
+  const recipientHint = channel === "email"
+    ? "Destinatari"
+    : channel === "whatsapp"
+      ? "+39..."
+      : channel === "telegram"
+        ? "ID chat Telegram"
+        : "Seleziona una conversazione esistente"
 
   const send = async () => {
     if (!recipient.trim() || !body.trim()) return
+    if (channel === "messenger" || channel === "instagram") {
+      toast.error("Per Facebook e Instagram l'avvio di un nuovo DM è consentito solo verso conversazioni già aperte dal cliente. Usa la conversazione esistente in Inbox.")
+      return
+    }
+
     setSending(true)
     setQueued(false)
-
     try {
       if (channel === "email") {
-        const res = await fetch("/api/gmail/compose", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: recipient.trim(), subject: subject.trim(), body: body.trim() }),
-        })
+        const form = new FormData()
+        form.append("to", recipient.trim())
+        form.append("cc", cc.trim())
+        form.append("bcc", bcc.trim())
+        form.append("subject", subject.trim())
+        form.append("body", body.trim())
+        if (selectedChannelId) form.append("channelId", selectedChannelId)
+        attachments.forEach((file) => form.append("attachments", file))
+        const res = await fetch("/api/gmail/compose", { method: "POST", body: form })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data.error || "Invio email non riuscito")
         toast.success("Email inviata")
@@ -113,26 +168,26 @@ export function OmnichannelCompose() {
         return
       }
 
-      const res = await fetch("/api/inbox/compose/whatsapp", {
+      const endpoint = channel === "telegram" ? "/api/inbox/compose/telegram" : "/api/inbox/compose/whatsapp"
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: recipient.trim(),
           body: body.trim(),
+          channelId: selectedChannelId || undefined,
           contactId: selectedContact?.id,
           contactName: selectedContact?.name,
         }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || "Invio WhatsApp non riuscito")
-
-      if (data.mode === "queued") {
+      if (!res.ok) throw new Error(data.error || "Invio non riuscito")
+      if (channel === "whatsapp" && data.mode === "queued") {
         setQueued(true)
         setBody("")
-        setSuggestions([])
         toast.success("Richiesta di apertura WhatsApp inviata")
       } else {
-        toast.success("Messaggio WhatsApp inviato")
+        toast.success(channel === "telegram" ? "Messaggio Telegram inviato" : "Messaggio WhatsApp inviato")
         reset()
         setOpen(false)
       }
@@ -145,165 +200,118 @@ export function OmnichannelCompose() {
 
   return (
     <>
-      <Button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="h-10 gap-2 whitespace-nowrap"
-        aria-label="Crea un nuovo messaggio"
-      >
-        <Send className="h-4 w-4" />
+      <Button type="button" onClick={() => setOpen(true)} className="h-12 gap-3 rounded-2xl px-5 shadow-sm" aria-label="Crea un nuovo messaggio">
+        <Send className="h-5 w-5" />
         Nuovo messaggio
       </Button>
 
-      <Dialog
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next)
-          if (!next) reset()
-        }}
-      >
-        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
+      <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) reset() }}>
+        <DialogContent className="max-h-[94dvh] overflow-y-auto p-0 sm:max-w-3xl">
+          <DialogHeader className="border-b px-5 py-4">
             <DialogTitle>Nuovo messaggio</DialogTitle>
-            <DialogDescription>
-              Scegli il canale. HotelAccelerator applica automaticamente le regole di invio del provider.
-            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-5 py-1">
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Canale</legend>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setChannel("email")}
-                  className={`flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
-                    channel === "email" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted"
-                  }`}
-                >
-                  <Mail className="h-5 w-5" />
-                  <span>
-                    <span className="block text-sm font-medium">Email</span>
-                    <span className="block text-xs text-muted-foreground">Invio immediato</span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChannel("whatsapp")}
-                  className={`flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
-                    channel === "whatsapp" ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted"
-                  }`}
-                >
-                  <MessageCircle className="h-5 w-5" />
-                  <span>
-                    <span className="block text-sm font-medium">WhatsApp</span>
-                    <span className="block text-xs text-muted-foreground">Controllo finestra 24h</span>
-                  </span>
-                </button>
-              </div>
-            </fieldset>
+          <div className="px-5 pt-3">
+            <div className="flex flex-wrap gap-2 border-b pb-3">
+              {availableTypes.map((type) => {
+                const Icon = channelMeta[type].icon
+                return (
+                  <button key={type} type="button" onClick={() => { setChannel(type); setRecipient(""); setSelectedContact(null) }}
+                    className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${channel === type ? "border-foreground bg-muted font-medium" : "hover:bg-muted/60"}`}>
+                    <Icon className="h-4 w-4" />{channelMeta[type].label}
+                  </button>
+                )
+              })}
+            </div>
 
-            <div className="relative space-y-1.5">
-              <Label htmlFor="omni-recipient">Destinatario</Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="omni-recipient"
-                  value={recipient}
-                  onChange={(event) => changeRecipient(event.target.value)}
-                  placeholder={recipientHint}
-                  className="pl-9"
-                  autoComplete="off"
-                />
-                {searching && <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
+            {channelsForType.length > 0 && (
+              <div className="flex items-center gap-3 border-b py-2 text-sm">
+                <span className="w-10 shrink-0 text-muted-foreground">Da</span>
+                <Select value={selectedChannelId || channelsForType[0]?.id} onValueChange={setSelectedChannelId}>
+                  <SelectTrigger className="h-8 flex-1 border-0 px-0 shadow-none focus:ring-0"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {channelsForType.map((item) => <SelectItem key={item.id} value={item.id}>{item.label}{item.detail ? ` · ${item.detail}` : ""}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              {selectedContact && (
-                <p className="text-xs text-muted-foreground">
-                  Contatto CRM: <span className="font-medium text-foreground">{selectedContact.name || selectedContact.email || selectedContact.phone}</span>
-                </p>
-              )}
-              {suggestions.length > 0 && (
-                <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-lg">
-                  {suggestions.map((contact) => {
-                    const destination = channel === "email"
-                      ? contact.email
-                      : contact.whatsapp_id || contact.phone
-                    const disabled = !destination
-                    return (
-                      <button
-                        key={contact.id}
-                        type="button"
-                        disabled={disabled}
-                        onClick={() => chooseContact(contact)}
-                        className="flex w-full items-center justify-between gap-3 rounded-sm px-3 py-2 text-left text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium">{contact.name || "Senza nome"}</span>
-                          <span className="block truncate text-xs text-muted-foreground">{destination || `Nessun ${channel === "email" ? "indirizzo email" : "numero WhatsApp"}`}</span>
-                        </span>
+            )}
+
+            <div className="relative flex items-center gap-3 border-b py-2">
+              <span className="w-10 shrink-0 text-sm text-muted-foreground">A</span>
+              <div className="relative flex-1">
+                <Input value={recipient} onChange={(e) => { setRecipient(e.target.value); setSelectedContact(null) }} placeholder={recipientHint}
+                  className="h-8 border-0 px-0 shadow-none focus-visible:ring-0" autoComplete="off" />
+                {searching && <Loader2 className="absolute right-1 top-2 h-4 w-4 animate-spin text-muted-foreground" />}
+                {suggestions.length > 0 && (
+                  <div className="absolute left-0 right-0 top-9 z-30 max-h-56 overflow-y-auto rounded-md border bg-popover p-1 shadow-lg">
+                    {suggestions.map((contact) => (
+                      <button key={contact.id} type="button" onClick={() => chooseContact(contact)} className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-accent">
+                        <span className="block font-medium">{contact.name || "Senza nome"}</span>
+                        <span className="text-xs text-muted-foreground">{channel === "email" ? contact.email : contact.whatsapp_id || contact.phone}</span>
                       </button>
-                    )
-                  })}
+                    ))}
+                  </div>
+                )}
+              </div>
+              {channel === "email" && (
+                <div className="flex gap-2 text-xs text-muted-foreground">
+                  <button type="button" onClick={() => setShowCc(true)}>Cc</button>
+                  <button type="button" onClick={() => setShowBcc(true)}>Ccn</button>
                 </div>
               )}
             </div>
 
+            {channel === "email" && showCc && (
+              <div className="flex items-center gap-3 border-b py-2"><span className="w-10 text-sm text-muted-foreground">Cc</span><Input value={cc} onChange={(e) => setCc(e.target.value)} className="h-8 border-0 px-0 shadow-none focus-visible:ring-0" /></div>
+            )}
+            {channel === "email" && showBcc && (
+              <div className="flex items-center gap-3 border-b py-2"><span className="w-10 text-sm text-muted-foreground">Ccn</span><Input value={bcc} onChange={(e) => setBcc(e.target.value)} className="h-8 border-0 px-0 shadow-none focus-visible:ring-0" /></div>
+            )}
             {channel === "email" && (
-              <div className="space-y-1.5">
-                <Label htmlFor="omni-subject">Oggetto</Label>
-                <Input id="omni-subject" value={subject} onChange={(event) => setSubject(event.target.value)} placeholder="Oggetto del messaggio" />
-              </div>
+              <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Oggetto" className="h-11 rounded-none border-0 border-b px-0 shadow-none focus-visible:ring-0" />
             )}
 
-            <div className="space-y-1.5">
-              <Label htmlFor="omni-body">Messaggio</Label>
-              <Textarea
-                id="omni-body"
-                value={body}
-                onChange={(event) => setBody(event.target.value)}
-                placeholder="Scrivi il messaggio…"
-                className="min-h-40 resize-y"
-              />
-            </div>
+            <Textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Scrivi il messaggio..." className="min-h-72 resize-y rounded-none border-0 px-0 py-4 shadow-none focus-visible:ring-0" />
+
+            {channel === "email" && attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 border-t py-3">
+                {attachments.map((file, index) => (
+                  <span key={`${file.name}-${index}`} className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-xs">
+                    {file.name}<button type="button" onClick={() => setAttachments((files) => files.filter((_, i) => i !== index))}><X className="h-3 w-3" /></button>
+                  </span>
+                ))}
+              </div>
+            )}
 
             {channel === "whatsapp" && !queued && (
-              <div className="rounded-lg border bg-muted/40 p-3 text-sm">
-                <div className="flex gap-2">
-                  <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <p>
-                    Se il cliente ha scritto nelle ultime 24 ore il messaggio parte subito. Se la finestra è chiusa,
-                    il testo viene conservato e parte prima il template di apertura.
-                  </p>
-                </div>
-              </div>
+              <div className="mb-3 flex gap-2 rounded-lg bg-muted/50 p-3 text-sm"><Clock3 className="mt-0.5 h-4 w-4 shrink-0" />Se la finestra 24h è chiusa, HotelAccelerator usa automaticamente il template di apertura.</div>
             )}
-
+            {(channel === "messenger" || channel === "instagram") && (
+              <div className="mb-3 rounded-lg bg-muted/50 p-3 text-sm">Per questo canale Meta consente l'invio solo all'interno di una conversazione già avviata dal cliente. Le risposte restano disponibili direttamente dalla conversazione in Inbox.</div>
+            )}
             {queued && (
-              <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-                <div className="flex gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-                  <div>
-                    <p className="font-medium">Comunicazione in attesa</p>
-                    <p className="mt-1 text-sm">
-                      Il cliente ha ricevuto la richiesta di apertura. Quando sceglie “Apri comunicazione”,
-                      HotelAccelerator invierà automaticamente il messaggio che hai preparato.
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <div className="mb-3 flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900"><CheckCircle2 className="h-5 w-5" />Comunicazione in attesa: il messaggio partirà dopo “Apri comunicazione”.</div>
             )}
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              {queued ? "Chiudi" : "Annulla"}
-            </Button>
-            {!queued && (
-              <Button onClick={send} disabled={!recipient.trim() || !body.trim() || sending}>
-                {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                {channel === "whatsapp" ? "Invia / richiedi apertura" : "Invia email"}
-              </Button>
-            )}
+          <DialogFooter className="flex-row items-center justify-between border-t px-5 py-3 sm:justify-between">
+            <div>
+              {channel === "email" && (
+                <>
+                  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => setAttachments((files) => [...files, ...Array.from(e.target.files || [])])} />
+                  <Button type="button" variant="ghost" size="icon" onClick={() => fileInputRef.current?.click()} title="Allega file"><Paperclip className="h-5 w-5" /></Button>
+                </>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setOpen(false)}>{queued ? "Chiudi" : "Annulla"}</Button>
+              {!queued && (
+                <Button onClick={send} disabled={!recipient.trim() || !body.trim() || sending || channel === "messenger" || channel === "instagram"}>
+                  {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  Invia
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
