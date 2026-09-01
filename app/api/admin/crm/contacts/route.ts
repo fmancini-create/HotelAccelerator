@@ -4,9 +4,13 @@ import { getCurrentProperty } from "@/lib/auth-property"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireAreaApi } from "@/lib/auth/area-access"
 
+function whiteLabelSource<T extends Record<string, unknown>>(contact: T): T {
+  if (String(contact.source ?? "").toLowerCase() !== "apollo") return contact
+  return { ...contact, source: "scout" }
+}
+
 export async function GET(request: NextRequest) {
   try {
-    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("crm", request)
     const propertyId = await getCurrentProperty(request)
     if (!propertyId) {
@@ -19,14 +23,6 @@ export async function GET(request: NextRequest) {
     const segment = searchParams.get("segment")
     const vip = searchParams.get("vip")
 
-    // Il filtro per segmento era LETTO e mai applicato: la dashboard invia
-    // `segment=<id>` e riceveva in risposta TUTTI i contatti, presentati come se
-    // fossero i membri di quel segmento — una risposta sbagliata in silenzio,
-    // peggio di un errore. I segmenti sono dinamici (`contact_segments.conditions`,
-    // nessuna tabella di appartenenza) e in questo progetto non esiste alcun
-    // valutatore di quelle condizioni, quindi applicarlo qui richiederebbe di
-    // inventare un linguaggio di regole: preferisco dichiarare il limite.
-    // Oggi irraggiungibile (0 segmenti definiti), ma la trappola resta disarmata.
     if (segment && segment !== "all") {
       return NextResponse.json(
         { error: "Filtro per segmento non ancora supportato: i segmenti dinamici non sono valutati." },
@@ -56,9 +52,8 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json(data || [])
+    return NextResponse.json((data || []).map((contact) => whiteLabelSource(contact)))
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Error fetching contacts:", error)
     return NextResponse.json({ error: "Failed to fetch contacts" }, { status: 500 })
@@ -67,7 +62,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("crm", request)
     const propertyId = await getCurrentProperty(request)
     if (!propertyId) {
@@ -77,21 +71,23 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient()
     const body = await request.json()
 
+    const requestedSource = String(body.source || "manual").toLowerCase()
+    const source = requestedSource === "apollo" ? "scout" : requestedSource
+
     const { data, error } = await supabase
       .from("contacts")
       .insert({
         ...body,
         property_id: propertyId,
-        source: body.source || "manual",
+        source,
       })
       .select()
       .single()
 
     if (error) throw error
 
-    return NextResponse.json(data)
+    return NextResponse.json(whiteLabelSource(data))
   } catch (error) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Error creating contact:", error)
     return NextResponse.json({ error: "Failed to create contact" }, { status: 500 })
