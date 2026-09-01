@@ -66,6 +66,129 @@ export async function GET(request: NextRequest) {
   return new NextResponse("Forbidden", { status: 403 })
 }
 
+function deliveryFailureMessage(status: (ReturnType<typeof parseWhatsAppWebhook>["statuses"])[number]): string {
+  if (!status.errors.length) return "Meta ha segnalato la mancata consegna del messaggio WhatsApp."
+
+  const details = status.errors
+    .map((error) => {
+      const code = error.code !== undefined ? `codice ${error.code}` : null
+      const text = error.details || error.message || error.title || null
+      return [code, text].filter(Boolean).join(": ")
+    })
+    .filter(Boolean)
+    .join("; ")
+
+  return details
+    ? `Meta ha segnalato la mancata consegna del messaggio WhatsApp: ${details}`.slice(0, 1500)
+    : "Meta ha segnalato la mancata consegna del messaggio WhatsApp."
+}
+
+async function processDeliveryStatus(
+  supabase: ReturnType<typeof createServiceClient>,
+  channel: MessagingChannelRow,
+  status: (ReturnType<typeof parseWhatsAppWebhook>["statuses"])[number],
+): Promise<{ retry: boolean }> {
+  const eventType = `delivery_${status.status}`.slice(0, 50)
+  const eventData = {
+    status: status.status,
+    recipient_id: status.recipientId ?? null,
+    phone_number_id: status.phoneNumberId,
+    occurred_at: status.timestamp.toISOString(),
+    errors: status.errors,
+  }
+
+  // message_processing_logs predates WhatsApp and has no delivery-status unique
+  // constraint. Check before insert so Meta webhook retries normally stay
+  // idempotent without introducing a schema change just for observability.
+  const { data: existingLog, error: existingLogError } = await supabase
+    .from("message_processing_logs")
+    .select("id")
+    .eq("property_id", channel.property_id)
+    .eq("channel", "whatsapp")
+    .eq("external_message_id", status.id)
+    .eq("event_type", eventType)
+    .limit(1)
+    .maybeSingle()
+
+  if (existingLogError) {
+    console.error("[WhatsApp delivery] status log lookup failed:", existingLogError)
+  } else if (!existingLog?.id) {
+    const { error: logError } = await supabase.from("message_processing_logs").insert({
+      property_id: channel.property_id,
+      external_message_id: status.id,
+      channel: "whatsapp",
+      event_type: eventType,
+      event_data: eventData,
+      error_message: status.status === "failed" ? deliveryFailureMessage(status) : null,
+    })
+    if (logError) console.error("[WhatsApp delivery] status log insert failed:", logError)
+  }
+
+  if (status.status !== "failed") return { retry: false }
+
+  const failure = deliveryFailureMessage(status)
+
+  // First distinguish the reopen template from the queued free-form message.
+  // An explicit Meta failure is authoritative: the earlier HTTP 200 only meant
+  // that WhatsApp accepted the send request, not that it reached the recipient.
+  const { data: templatePending, error: templateLookupError } = await supabase
+    .from("whatsapp_pending_messages")
+    .select("id, status")
+    .eq("property_id", channel.property_id)
+    .eq("messaging_channel_id", channel.id)
+    .eq("template_message_id", status.id)
+    .maybeSingle()
+
+  if (templateLookupError) {
+    console.error("[WhatsApp delivery] template pending lookup failed:", templateLookupError)
+    return { retry: true }
+  }
+
+  if (templatePending?.id) {
+    if (templatePending.status === "awaiting_acceptance") {
+      const { error: updateError } = await supabase
+        .from("whatsapp_pending_messages")
+        .update({ status: "failed_template", last_error: failure, updated_at: new Date().toISOString() })
+        .eq("id", templatePending.id)
+        .eq("property_id", channel.property_id)
+        .eq("status", "awaiting_acceptance")
+      if (updateError) {
+        console.error("[WhatsApp delivery] failed-template persistence failed:", updateError)
+        return { retry: true }
+      }
+    }
+    return { retry: false }
+  }
+
+  const { data: deliveredPending, error: deliveredLookupError } = await supabase
+    .from("whatsapp_pending_messages")
+    .select("id, status")
+    .eq("property_id", channel.property_id)
+    .eq("messaging_channel_id", channel.id)
+    .eq("sent_message_id", status.id)
+    .maybeSingle()
+
+  if (deliveredLookupError) {
+    console.error("[WhatsApp delivery] queued-message lookup failed:", deliveredLookupError)
+    return { retry: true }
+  }
+
+  if (deliveredPending?.id && deliveredPending.status === "sent") {
+    const { error: updateError } = await supabase
+      .from("whatsapp_pending_messages")
+      .update({ status: "failed_delivery", last_error: failure, updated_at: new Date().toISOString() })
+      .eq("id", deliveredPending.id)
+      .eq("property_id", channel.property_id)
+      .eq("status", "sent")
+    if (updateError) {
+      console.error("[WhatsApp delivery] failed-delivery persistence failed:", updateError)
+      return { retry: true }
+    }
+  }
+
+  return { retry: false }
+}
+
 /**
  * POST: inbound messages, delivery statuses and managed-template lifecycle
  * events from Meta.
@@ -100,18 +223,16 @@ export async function POST(request: NextRequest) {
       platform.appSecret && verifyWhatsAppSignature(rawBody, signature, platform.appSecret),
     )
 
-    // Status callbacks can lack phone_number_id. Never route them by guesswork:
-    // only the platform app signature can mutate managed-template metadata.
+    // Template lifecycle callbacks can lack phone_number_id. Never route them by
+    // guesswork: only the platform app signature can mutate managed-template metadata.
     if (platformSignatureValid) {
       await syncWhatsAppReopenTemplateStatusFromWebhook(supabase, body)
     }
 
-    // Coexistence also emits history/state-sync/status callbacks with no Inbox
-    // message. They can still carry metadata.phone_number_id and may be signed
-    // by the tenant/legacy app rather than the shared platform app. Route those
-    // by the concrete phone number and verify that tenant secret before acking;
-    // otherwise Meta retries valid tenant events forever with 401 noise.
-    if (parsed.messages.length === 0 && parsed.echoes.length === 0) {
+    // Coexistence also emits history/state-sync callbacks with no routable Inbox
+    // message or delivery receipt. Those may still carry metadata.phone_number_id
+    // and can be signed by a tenant/legacy app rather than the shared platform app.
+    if (parsed.messages.length === 0 && parsed.echoes.length === 0 && parsed.statuses.length === 0) {
       let tenantSignatureValid = false
       if (!platformSignatureValid && parsed.phoneNumberId) {
         const routed = await getWhatsAppChannelByPhoneNumberId(supabase, parsed.phoneNumberId)
@@ -135,12 +256,12 @@ export async function POST(request: NextRequest) {
 
     const eventsByPhone = new Map<
       string,
-      { messages: typeof parsed.messages; echoes: typeof parsed.echoes }
+      { messages: typeof parsed.messages; echoes: typeof parsed.echoes; statuses: typeof parsed.statuses }
     >()
     const eventsFor = (phoneNumberId: string) => {
       let events = eventsByPhone.get(phoneNumberId)
       if (!events) {
-        events = { messages: [], echoes: [] }
+        events = { messages: [], echoes: [], statuses: [] }
         eventsByPhone.set(phoneNumberId, events)
       }
       return events
@@ -148,6 +269,7 @@ export async function POST(request: NextRequest) {
 
     for (const message of parsed.messages) eventsFor(message.phoneNumberId).messages.push(message)
     for (const echo of parsed.echoes) eventsFor(echo.phoneNumberId).echoes.push(echo)
+    for (const status of parsed.statuses) eventsFor(status.phoneNumberId).statuses.push(status)
 
     const processor = new WhatsAppProcessor(supabase)
     let requiresRetry = false
@@ -185,6 +307,11 @@ export async function POST(request: NextRequest) {
       processedAuthenticatedGroup = true
       let anyInbound = false
       let anyAppEcho = false
+
+      for (const status of events.statuses) {
+        const delivery = await processDeliveryStatus(supabase, typedChannel, status)
+        if (delivery.retry) requiresRetry = true
+      }
 
       for (const msg of events.messages) {
         const result = await processor.processInbound(msg, typedChannel.id, typedChannel.property_id)
@@ -290,8 +417,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 })
   } catch (error) {
     console.error("[WhatsApp webhook] unexpected error:", error)
-    // A transient processing failure must remain retryable. Inbound and echo
-    // inserts are idempotent on Meta's external message ID.
+    // A transient processing failure must remain retryable. Inbound, echo and
+    // delivery-state writes are idempotent on Meta IDs plus durable state guards.
     return NextResponse.json({ received: false, retry: true }, { status: 500 })
   }
 }

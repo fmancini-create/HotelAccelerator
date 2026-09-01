@@ -115,12 +115,29 @@ export async function listWhatsAppChannelsForProperty(
   return ((data as MessagingChannelRow[]) ?? []).map((row) => withDecryptedCredentials(row))
 }
 
+export interface WhatsAppDeliveryStatusError {
+  code?: number | string
+  title?: string
+  message?: string
+  details?: string
+}
+
+export interface WhatsAppDeliveryStatus {
+  phoneNumberId: string
+  id: string
+  status: string
+  recipientId?: string
+  timestamp: Date
+  errors: WhatsAppDeliveryStatusError[]
+}
+
 interface ParsedWebhook {
   phoneNumberId: string | null
   messages: InboundWhatsAppMessage[]
   /** Messages sent from the WhatsApp Business app and mirrored by coexistence. */
   echoes: OutboundWhatsAppMessage[]
-  statuses: Array<{ id: string; status: string; recipientId?: string }>
+  /** Delivery receipts are kept tenant-routable by preserving their source number. */
+  statuses: WhatsAppDeliveryStatus[]
 }
 
 /**
@@ -182,8 +199,34 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
           raw: m,
         })
       }
+
       for (const s of value.statuses ?? []) {
-        result.statuses.push({ id: s.id, status: s.status, recipientId: s.recipient_id })
+        const id = typeof s?.id === "string" ? s.id.trim() : ""
+        const status = typeof s?.status === "string" ? s.status.trim().toLowerCase() : ""
+        if (!id || !status) continue
+
+        const tsSeconds = Number(s.timestamp ?? 0)
+        const errors: WhatsAppDeliveryStatusError[] = (Array.isArray(s.errors) ? s.errors : []).map(
+          (error: any) => ({
+            code:
+              typeof error?.code === "number" || typeof error?.code === "string"
+                ? error.code
+                : undefined,
+            title: typeof error?.title === "string" ? error.title : undefined,
+            message: typeof error?.message === "string" ? error.message : undefined,
+            details:
+              typeof error?.error_data?.details === "string" ? error.error_data.details : undefined,
+          }),
+        )
+
+        result.statuses.push({
+          phoneNumberId,
+          id,
+          status,
+          recipientId: typeof s.recipient_id === "string" ? s.recipient_id : undefined,
+          timestamp: tsSeconds ? new Date(tsSeconds * 1000) : new Date(),
+          errors,
+        })
       }
     }
   }
