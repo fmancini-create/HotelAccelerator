@@ -17,7 +17,7 @@ interface OpenAICostSummary {
   scope: {
     kind: "organization" | "project" | "api_key"
     label: string
-    isVoiceExact: boolean
+    isVoiceScoped: boolean
   }
   daily: Array<{
     date: string
@@ -109,16 +109,21 @@ export function OpenAICostsPanel() {
       {data && (
         <>
           <div className="flex flex-wrap items-center gap-2 mb-4">
-            <Badge variant={data.scope.isVoiceExact ? "default" : "outline"}>{data.scope.label}</Badge>
+            <Badge variant={data.scope.isVoiceScoped ? "default" : "outline"}>{data.scope.label}</Badge>
             <span className="text-xs text-neutral-500">
               Ultima lettura {new Date(data.fetchedAt).toLocaleString("it-IT")}
             </span>
           </div>
 
-          {!data.scope.isVoiceExact && (
+          {!data.scope.isVoiceScoped ? (
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Il totale comprende tutta l&apos;organizzazione OpenAI. Per rendere il costo della telefonia esatto e separato dagli altri usi,
+              Il totale comprende tutta l&apos;organizzazione OpenAI. Per separare il costo della telefonia dagli altri usi,
               configura un progetto o una API key dedicata al Voice Agent e il relativo ID server-side.
+            </div>
+          ) : (
+            <div className="mb-4 rounded-lg border border-neutral-200 bg-white px-4 py-3 text-sm text-neutral-700">
+              Il provider è filtrato allo scope Voice configurato. Consideralo costo telefonico esatto solo dopo aver verificato
+              che progetto/API key siano usati esclusivamente dal Voice Agent.
             </div>
           )}
 
