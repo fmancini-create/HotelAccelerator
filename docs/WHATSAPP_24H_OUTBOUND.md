@@ -1,6 +1,6 @@
 # WhatsApp outbound e finestra 24h
 
-Ultimo aggiornamento: 2026-08-31
+Ultimo aggiornamento: 2026-09-01
 
 ## Obiettivo
 
@@ -91,6 +91,23 @@ Se Meta sta ancora revisionando il template, gli invii free-form dentro le 24h c
 8. Il messaggio viene inserito nella timeline con `source = whatsapp_reopen_queue`.
 9. I quick reply di controllo non vengono passati all'autopilot AI.
 
+## Delivery receipt Meta
+
+Una risposta HTTP positiva alla chiamata `/{phone_number_id}/messages` con un `wamid` prova che Meta ha accettato la richiesta, non che il telefono del destinatario abbia ricevuto il messaggio. L'esito successivo arriva sullo stesso webhook tramite `statuses`.
+
+Dal 2026-09-01 il webhook non scarta più questi callback:
+
+- ogni receipt conserva `phone_number_id`, `wamid`, stato, destinatario, timestamp ed eventuali errori Meta;
+- il callback viene instradato sul `messaging_channels` concreto e passa la stessa verifica firma platform/tenant degli altri eventi routabili;
+- `sent`, `delivered` e `read` vengono registrati in `message_processing_logs` come audit tenant-scoped, senza cambiare lo stato funzionale della richiesta di riapertura;
+- un `failed` riferito al `template_message_id` porta la richiesta ancora `awaiting_acceptance` a `failed_template` e salva in `last_error` codice e dettaglio restituiti da Meta;
+- un `failed` riferito al `sent_message_id` della comunicazione sospesa porta una richiesta già marcata `sent` a `failed_delivery`;
+- i retry dello stesso receipt non devono provocare nuovi invii: le transizioni sono condizionate dallo stato corrente e l'audit evita normalmente duplicati sullo stesso `wamid` + tipo evento.
+
+Questa distinzione impedisce di mostrare indefinitamente `awaiting_acceptance` quando Meta aveva accettato il POST ma aveva poi rifiutato la consegna.
+
+Evidenza dell'incidente 2026-09-01: sul tenant Villa I Barronci un invio fuori finestra ha ottenuto un `template_message_id` Meta e nessun errore sincrono, restando `awaiting_acceptance`; la versione allora in produzione parsava `statuses` ma restituiva `200` senza processarli quando il payload non conteneva `messages` o `message_echoes`. L'esito finale di quel singolo `wamid` non è quindi ricostruibile dal database applicativo retroattivamente. Il fix rende osservabili i tentativi successivi.
+
 ## Idempotenza, retry e recovery
 
 La coda usa gli stati:
@@ -158,7 +175,7 @@ Il tenant non deve vedere istruzioni del tipo “vai in Meta e crea un template�
 - `GET /api/inbox/compose/contacts?q=...`: ricerca minima di nome/email/telefono nel tenant dell'operatore, senza richiedere il modulo CRM completo.
 - `POST /api/inbox/compose/whatsapp`: crea o riusa contatto/conversazione, decide invio immediato vs template e verifica/provisiona lazy il template managed.
 - `POST /api/channels/whatsapp/embedded-signup`: collega il WABA/numero e provisiona automaticamente il template standard.
-- `POST /api/channels/whatsapp/webhook`: gestisce inbound, quick reply di riapertura e lifecycle `message_template_status_update`.
+- `POST /api/channels/whatsapp/webhook`: gestisce inbound, quick reply di riapertura, delivery receipt e lifecycle `message_template_status_update`.
 
 ## Migrazioni
 
@@ -167,7 +184,7 @@ Il tenant non deve vedere istruzioni del tipo “vai in Meta e crea un template�
 
 La prima migrazione additiva è già applicata al progetto Supabase HotelAccelerator il 2026-08-31. La seconda aggiunge soltanto lo stato terminale `delivery_unknown`; non elimina dati né cambia il perimetro RLS.
 
-Il provisioning template non richiede nuove colonne: lo stato lifecycle non sensibile vive nel JSONB `messaging_channels.config`, già tenant-scoped.
+Il provisioning template e il tracciamento dei delivery receipt non richiedono nuove colonne: lo stato lifecycle non sensibile vive nel JSONB `messaging_channels.config`, mentre gli esiti di consegna usano la coda e il log tenant-scoped già esistenti.
 
 ## Rollback
 
@@ -186,4 +203,5 @@ La rimozione fisica della tabella o dei template Meta è distruttiva e richiede 
 - Composer omnicanale Email/WhatsApp: `Codice` finché non viene collaudato su tenant reale.
 - Enforcement server-side finestra 24h: `Codice`.
 - Provisioning automatico template per-WABA: `Codice` finché non viene provato con un Embedded Signup reale e confermato il lifecycle Meta.
+- Tracciamento delivery receipt `sent/delivered/read/failed`: `Codice`; richiede un nuovo invio reale dopo deploy per verificare almeno un receipt sul tenant corretto.
 - Flusso end-to-end fuori 24h: non promuovere oltre `Codice` senza prova reale di `APPROVED`, ricezione template e click cliente.
