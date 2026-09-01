@@ -4,14 +4,13 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { getCallerIdentity, requireTenantAdmin, accessErrorStatus } from "@/lib/auth/admin-access"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
-import { listAccessibleCrmWorkspaces } from "@/lib/crm/workspace-access"
+import { listAccessibleCrmWorkspaces, requireCrmWorkspaceAccess } from "@/lib/crm/workspace-access"
 
 const workspaceKinds = ["hotel", "spa", "restaurant", "company", "agency", "sales", "custom"] as const
 const workspaceModes = ["generic", "hotel_date_requests"] as const
 const fieldTypes = ["text", "number", "date", "select", "boolean"] as const
 
 const stageSchema = z.object({
-  id: z.string().uuid().optional(),
   stageKey: z.string().trim().min(1).max(60),
   name: z.string().trim().min(1).max(100),
   category: z.enum(["open", "won", "lost"]),
@@ -20,7 +19,6 @@ const stageSchema = z.object({
 })
 
 const fieldSchema = z.object({
-  id: z.string().uuid().optional(),
   fieldKey: z.string().trim().regex(/^[a-z0-9_]+$/).max(60),
   label: z.string().trim().min(1).max(100),
   fieldType: z.enum(fieldTypes),
@@ -46,18 +44,10 @@ const saveSchema = z.object({
   fields: z.array(fieldSchema).max(40).default([]),
 })
 
-const deleteSchema = z.object({ action: z.literal("archive"), id: z.string().uuid() })
-const assignSchema = z.object({
-  action: z.literal("assign_contact"),
-  workspaceId: z.string().uuid(),
-  contactId: z.string().uuid(),
-})
-const unassignSchema = z.object({
-  action: z.literal("unassign_contact"),
-  workspaceId: z.string().uuid(),
-  contactId: z.string().uuid(),
-})
-const actionSchema = z.discriminatedUnion("action", [saveSchema, deleteSchema, assignSchema, unassignSchema])
+const archiveSchema = z.object({ action: z.literal("archive"), id: z.string().uuid() })
+const assignSchema = z.object({ action: z.literal("assign_contact"), workspaceId: z.string().uuid(), contactId: z.string().uuid() })
+const unassignSchema = z.object({ action: z.literal("unassign_contact"), workspaceId: z.string().uuid(), contactId: z.string().uuid() })
+const actionSchema = z.discriminatedUnion("action", [saveSchema, archiveSchema, assignSchema, unassignSchema])
 
 async function loadWorkspaceDetails(db: ReturnType<typeof createServiceClient>, propertyId: string, workspaceIds: string[]) {
   if (!workspaceIds.length) return { groups: [], pipelines: [], stages: [], fields: [] }
@@ -83,34 +73,29 @@ export async function GET(request: NextRequest) {
     const identity = await getCallerIdentity(request)
     if (!identity?.propertyId) return NextResponse.json({ error: "Nessun tenant selezionato" }, { status: 400 })
     const db = createServiceClient()
-    const workspaces = await listAccessibleCrmWorkspaces(db, identity as typeof identity & { propertyId: string })
+    const scopedIdentity = identity as typeof identity & { propertyId: string }
+    const workspaces = await listAccessibleCrmWorkspaces(db, scopedIdentity)
     const details = await loadWorkspaceDetails(db, identity.propertyId, workspaces.map((w) => w.id))
-    const { data: property, error: propertyError } = await db.from("properties").select("type").eq("id", identity.propertyId).single()
+    const [{ data: property, error: propertyError }, { data: tenantGroups, error: tenantGroupsError }] = await Promise.all([
+      db.from("properties").select("type").eq("id", identity.propertyId).single(),
+      db.from("user_groups").select("id,name,color").eq("property_id", identity.propertyId).order("name"),
+    ])
     if (propertyError) throw propertyError
-    const { data: tenantGroups, error: tenantGroupsError } = await db.from("user_groups").select("id,name,color").eq("property_id", identity.propertyId).order("name")
     if (tenantGroupsError) throw tenantGroupsError
-
-    const enriched = workspaces.map((workspace) => {
-      const pipeline = details.pipelines.find((p) => p.workspace_id === workspace.id && p.is_default)
-      return {
-        ...workspace,
-        groupIds: details.groups.filter((g) => g.workspace_id === workspace.id).map((g) => g.group_id),
-        pipeline: pipeline
-          ? {
-              id: pipeline.id,
-              name: pipeline.name,
-              stages: details.stages.filter((s) => s.pipeline_id === pipeline.id),
-            }
-          : null,
-        fields: details.fields.filter((f) => f.workspace_id === workspace.id),
-      }
-    })
 
     return NextResponse.json({
       propertyType: property.type,
       canConfigure: identity.isSuperAdmin || identity.isTenantAdmin,
-      workspaces: enriched,
       groups: tenantGroups ?? [],
+      workspaces: workspaces.map((workspace) => {
+        const pipeline = details.pipelines.find((p) => p.workspace_id === workspace.id && p.is_default)
+        return {
+          ...workspace,
+          groupIds: details.groups.filter((g) => g.workspace_id === workspace.id).map((g) => g.group_id),
+          pipeline: pipeline ? { id: pipeline.id, name: pipeline.name, stages: details.stages.filter((s) => s.pipeline_id === pipeline.id) } : null,
+          fields: details.fields.filter((f) => f.workspace_id === workspace.id),
+        }
+      }),
     })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
@@ -127,14 +112,17 @@ export async function POST(request: NextRequest) {
     if (raw.action === "assign_contact" || raw.action === "unassign_contact") {
       const identity = await getCallerIdentity(request)
       if (!identity?.propertyId) return NextResponse.json({ error: "Nessun tenant selezionato" }, { status: 400 })
-      const { data: workspace } = await db.from("crm_workspaces").select("id").eq("id", raw.workspaceId).eq("property_id", identity.propertyId).eq("is_active", true).maybeSingle()
-      if (!workspace) return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 })
-      const { data: contact } = await db.from("contacts").select("id").eq("id", raw.contactId).eq("property_id", identity.propertyId).maybeSingle()
+      const scopedIdentity = identity as typeof identity & { propertyId: string }
+      await requireCrmWorkspaceAccess(db, scopedIdentity, raw.workspaceId, true)
+      const { data: contact, error: contactError } = await db.from("contacts").select("id").eq("id", raw.contactId).eq("property_id", identity.propertyId).maybeSingle()
+      if (contactError) throw contactError
       if (!contact) return NextResponse.json({ error: "Contatto non trovato" }, { status: 404 })
       if (raw.action === "assign_contact") {
-        const { error } = await db.from("crm_workspace_contacts").upsert({ property_id: identity.propertyId, workspace_id: raw.workspaceId, contact_id: raw.contactId }, { onConflict: "workspace_id,contact_id" })
+        const { error } = await db.from("crm_workspace_contacts").upsert({ property_id: identity.propertyId, workspace_id: raw.workspaceId, contact_id: raw.contactId, created_by: identity.adminUserId }, { onConflict: "workspace_id,contact_id" })
         if (error) throw error
       } else {
+        const { data: workspace } = await db.from("crm_workspaces").select("is_default").eq("id", raw.workspaceId).eq("property_id", identity.propertyId).single()
+        if (workspace?.is_default) return NextResponse.json({ error: "Il contatto non può essere rimosso dal workspace predefinito." }, { status: 409 })
         const { error } = await db.from("crm_workspace_contacts").delete().eq("property_id", identity.propertyId).eq("workspace_id", raw.workspaceId).eq("contact_id", raw.contactId)
         if (error) throw error
       }
@@ -154,52 +142,42 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = raw
-    if (payload.isDefault) {
-      const q = db.from("crm_workspaces").update({ is_default: false }).eq("property_id", identity.propertyId)
-      if (payload.id) q.neq("id", payload.id)
-      const { error } = await q
-      if (error) throw error
-    }
-
     let workspaceId = payload.id
+    let isDefault = false
     if (workspaceId) {
-      const { data, error } = await db
-        .from("crm_workspaces")
-        .update({
-          name: payload.name,
-          slug: payload.slug,
-          kind: payload.kind,
-          description: payload.description ?? null,
-          color: payload.color ?? null,
-          mode: payload.mode,
-          is_default: payload.isDefault,
-          is_active: payload.isActive,
-          sort_order: payload.sortOrder,
-        })
-        .eq("id", workspaceId)
-        .eq("property_id", identity.propertyId)
-        .select("id")
-        .single()
+      const { data: current, error: currentError } = await db.from("crm_workspaces").select("id,is_default,mode").eq("id", workspaceId).eq("property_id", identity.propertyId).maybeSingle()
+      if (currentError) throw currentError
+      if (!current) return NextResponse.json({ error: "Workspace non trovato" }, { status: 404 })
+      isDefault = current.is_default === true
+      if (payload.isDefault !== isDefault) return NextResponse.json({ error: "Il workspace predefinito è stabile in questa versione e non può essere spostato." }, { status: 409 })
+      if (isDefault && payload.mode !== current.mode) return NextResponse.json({ error: "La modalità del workspace predefinito non può essere cambiata." }, { status: 409 })
+      const { data, error } = await db.from("crm_workspaces").update({
+        name: payload.name,
+        slug: payload.slug,
+        kind: payload.kind,
+        description: payload.description ?? null,
+        color: payload.color ?? null,
+        mode: payload.mode,
+        is_active: payload.isActive,
+        sort_order: payload.sortOrder,
+      }).eq("id", workspaceId).eq("property_id", identity.propertyId).select("id").single()
       if (error) throw error
       workspaceId = data.id
     } else {
-      const { data, error } = await db
-        .from("crm_workspaces")
-        .insert({
-          property_id: identity.propertyId,
-          name: payload.name,
-          slug: payload.slug,
-          kind: payload.kind,
-          description: payload.description ?? null,
-          color: payload.color ?? null,
-          mode: payload.mode,
-          is_default: payload.isDefault,
-          is_active: payload.isActive,
-          sort_order: payload.sortOrder,
-          created_by: identity.adminUserId,
-        })
-        .select("id")
-        .single()
+      if (payload.isDefault) return NextResponse.json({ error: "Esiste già un workspace predefinito. I nuovi workspace sono aggiuntivi." }, { status: 409 })
+      const { data, error } = await db.from("crm_workspaces").insert({
+        property_id: identity.propertyId,
+        name: payload.name,
+        slug: payload.slug,
+        kind: payload.kind,
+        description: payload.description ?? null,
+        color: payload.color ?? null,
+        mode: "generic",
+        is_default: false,
+        is_active: payload.isActive,
+        sort_order: payload.sortOrder,
+        created_by: identity.adminUserId,
+      }).select("id").single()
       if (error) throw error
       workspaceId = data.id
     }
@@ -226,10 +204,24 @@ export async function POST(request: NextRequest) {
       pipelineId = data.id
     }
 
-    const { error: deleteStagesError } = await db.from("crm_pipeline_stages").delete().eq("property_id", identity.propertyId).eq("pipeline_id", pipelineId)
-    if (deleteStagesError) throw deleteStagesError
-    const { error: stageInsertError } = await db.from("crm_pipeline_stages").insert(payload.stages.map((stage) => ({ property_id: identity.propertyId, pipeline_id: pipelineId, stage_key: stage.stageKey, name: stage.name, category: stage.category, color: stage.color ?? null, sort_order: stage.sortOrder, is_active: true })))
-    if (stageInsertError) throw stageInsertError
+    const { count: opportunityCount, error: opportunityCountError } = await db.from("crm_opportunities").select("id", { count: "exact", head: true }).eq("property_id", identity.propertyId).eq("workspace_id", workspaceId)
+    if (opportunityCountError) throw opportunityCountError
+    if ((opportunityCount ?? 0) > 0) {
+      const { data: currentStages, error: currentStagesError } = await db.from("crm_pipeline_stages").select("stage_key,name,category,sort_order").eq("property_id", identity.propertyId).eq("pipeline_id", pipelineId).eq("is_active", true).order("sort_order")
+      if (currentStagesError) throw currentStagesError
+      const currentKeys = (currentStages ?? []).map((s) => s.stage_key).sort().join("|")
+      const nextKeys = payload.stages.map((s) => s.stageKey).sort().join("|")
+      if (currentKeys !== nextKeys) return NextResponse.json({ error: "La pipeline contiene opportunità: puoi rinominare/riordinare le fasi, ma non aggiungerle o rimuoverle in questa versione." }, { status: 409 })
+      for (const stage of payload.stages) {
+        const { error } = await db.from("crm_pipeline_stages").update({ name: stage.name, category: stage.category, color: stage.color ?? null, sort_order: stage.sortOrder }).eq("property_id", identity.propertyId).eq("pipeline_id", pipelineId).eq("stage_key", stage.stageKey)
+        if (error) throw error
+      }
+    } else {
+      const { error: deleteStagesError } = await db.from("crm_pipeline_stages").delete().eq("property_id", identity.propertyId).eq("pipeline_id", pipelineId)
+      if (deleteStagesError) throw deleteStagesError
+      const { error: stageInsertError } = await db.from("crm_pipeline_stages").insert(payload.stages.map((stage) => ({ property_id: identity.propertyId, pipeline_id: pipelineId, stage_key: stage.stageKey, name: stage.name, category: stage.category, color: stage.color ?? null, sort_order: stage.sortOrder, is_active: true })))
+      if (stageInsertError) throw stageInsertError
+    }
 
     const { error: deleteFieldsError } = await db.from("crm_workspace_fields").delete().eq("property_id", identity.propertyId).eq("workspace_id", workspaceId)
     if (deleteFieldsError) throw deleteFieldsError
@@ -242,6 +234,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Configurazione workspace non valida", details: error.flatten() }, { status: 400 })
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Errore CRM" }, { status: accessErrorStatus(error) })
+    const message = error instanceof Error ? error.message : "Errore CRM"
+    const status = message.includes("sola lettura") || message.includes("non disponibile") ? 403 : accessErrorStatus(error)
+    return NextResponse.json({ error: message }, { status })
   }
 }
