@@ -74,7 +74,9 @@ describe("OpenAI cost helpers", () => {
 
     expect(aggregation.currency).toBe("usd")
     expect(aggregation.total).toBeCloseTo(0.34)
-    expect(aggregation.daily.map((item) => item.amount)).toEqual([0.13999999999999999, 0.2])
+    expect(aggregation.daily).toHaveLength(2)
+    expect(aggregation.daily[0]?.amount).toBeCloseTo(0.14)
+    expect(aggregation.daily[1]?.amount).toBeCloseTo(0.2)
     expect(aggregation.lineItems).toEqual([
       { name: "gpt-realtime-2", amount: 0.32 },
       { name: "gpt-5.6-sol", amount: 0.03 },
