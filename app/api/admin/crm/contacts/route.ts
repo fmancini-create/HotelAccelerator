@@ -52,7 +52,9 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json((data || []).map((contact) => whiteLabelSource(contact)))
+    return NextResponse.json(
+      (data || []).map((contact: Record<string, unknown>) => whiteLabelSource(contact)),
+    )
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     console.error("Error fetching contacts:", error)
