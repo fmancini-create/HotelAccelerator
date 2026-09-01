@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
+  AlertCircle,
   Bold,
   Bot,
   CheckCircle2,
@@ -20,6 +21,7 @@ import {
   Search,
   Send,
   Underline,
+  UserPlus,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -49,12 +51,18 @@ const channelMeta: Record<ComposeChannel, { label: string; icon: typeof Mail }> 
   instagram: { label: "Instagram", icon: Instagram },
 }
 
+function normalizedPhoneDigits(value: string) {
+  const digits = value.replace(/[^\d]/g, "")
+  return digits.startsWith("00") ? digits.slice(2) : digits
+}
+
 export function OmnichannelCompose() {
   const [open, setOpen] = useState(false)
   const [channel, setChannel] = useState<ComposeChannel>("email")
   const [subchannels, setSubchannels] = useState<Subchannel[]>([])
   const [selectedChannelId, setSelectedChannelId] = useState("")
   const [recipient, setRecipient] = useState("")
+  const [contactName, setContactName] = useState("")
   const [cc, setCc] = useState("")
   const [bcc, setBcc] = useState("")
   const [showCc, setShowCc] = useState(false)
@@ -69,6 +77,8 @@ export function OmnichannelCompose() {
   const [recipientFocused, setRecipientFocused] = useState(false)
   const [sending, setSending] = useState(false)
   const [queued, setQueued] = useState(false)
+  const [queuedPendingId, setQueuedPendingId] = useState("")
+  const [queuedError, setQueuedError] = useState("")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const richEditorRef = useRef<HTMLDivElement>(null)
@@ -91,6 +101,7 @@ export function OmnichannelCompose() {
     setChannel("email")
     setSelectedChannelId("")
     setRecipient("")
+    setContactName("")
     setCc("")
     setBcc("")
     setShowCc(false)
@@ -103,6 +114,8 @@ export function OmnichannelCompose() {
     setSuggestions([])
     setRecipientFocused(false)
     setQueued(false)
+    setQueuedPendingId("")
+    setQueuedError("")
     if (richEditorRef.current) richEditorRef.current.innerHTML = ""
   }
 
@@ -162,18 +175,85 @@ export function OmnichannelCompose() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recipient, recipientFocused, selectedContact, channel, open])
 
+  useEffect(() => {
+    if (!queuedPendingId) return
+    let cancelled = false
+
+    const checkStatus = async () => {
+      try {
+        const params = new URLSearchParams({ pendingId: queuedPendingId })
+        const res = await fetch(`/api/inbox/compose/whatsapp/status?${params.toString()}`, { cache: "no-store" })
+        const data = await res.json().catch(() => ({}))
+        if (cancelled || !res.ok) return
+
+        if (data.status === "sent") {
+          toast.success("Messaggio WhatsApp inviato dopo l'accettazione del cliente")
+          setOpen(false)
+          reset()
+          return
+        }
+
+        if (["failed_template", "failed_delivery", "delivery_unknown"].includes(data.status)) {
+          const message = data.error || "WhatsApp non ha consegnato il messaggio."
+          setQueued(false)
+          setQueuedPendingId("")
+          setQueuedError(message)
+          toast.error(message)
+          return
+        }
+
+        if (data.status === "declined") {
+          const message = "Il destinatario ha scelto di non aprire la comunicazione WhatsApp."
+          setQueued(false)
+          setQueuedPendingId("")
+          setQueuedError(message)
+          toast.error(message)
+          return
+        }
+
+        if (data.status === "expired") {
+          const message = data.error || "La richiesta di apertura WhatsApp è scaduta."
+          setQueued(false)
+          setQueuedPendingId("")
+          setQueuedError(message)
+          toast.error(message)
+        }
+      } catch {
+        // Lo stato resta recuperabile al controllo successivo; non interrompere la compose per un polling fallito.
+      }
+    }
+
+    void checkStatus()
+    const interval = window.setInterval(() => void checkStatus(), 1500)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+    // `reset` è intenzionalmente esclusa: il polling deve dipendere solo dalla richiesta durevole.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queuedPendingId])
+
   const chooseContact = (contact: ContactSuggestion) => {
     const destination = destinationForContact(contact)
     if (!destination) return
     setSelectedContact(contact)
     setRecipient(destination)
+    setContactName(contact.name || "")
     setSuggestions([])
   }
+
+  const whatsappRecipient = channel === "whatsapp" ? normalizedPhoneDigits(recipient) : ""
+  const looksLikeWhatsAppNumber = whatsappRecipient.length >= 8 && whatsappRecipient.length <= 15
+  const matchingSuggestedContact = channel === "whatsapp"
+    ? suggestions.find((contact) => normalizedPhoneDigits(destinationForContact(contact)) === whatsappRecipient)
+    : undefined
+  const canNameNewWhatsAppContact =
+    channel === "whatsapp" && looksLikeWhatsAppNumber && !selectedContact && !matchingSuggestedContact && !searching
 
   const recipientHint = channel === "email"
     ? "Cerca nome o email nella rubrica"
     : channel === "whatsapp"
-      ? "Cerca nome, telefono o inserisci +39..."
+      ? "Cerca nome, telefono o inserisci es. +39 324 892 6753"
       : channel === "telegram"
         ? "Cerca una chat Telegram già attiva"
         : "Seleziona una conversazione esistente"
@@ -220,6 +300,8 @@ export function OmnichannelCompose() {
 
     setSending(true)
     setQueued(false)
+    setQueuedError("")
+    setQueuedPendingId("")
     try {
       if (channel === "email") {
         const form = new FormData()
@@ -264,14 +346,14 @@ export function OmnichannelCompose() {
           body: body.trim(),
           channelId: selectedChannelId || undefined,
           contactId: selectedContact?.id,
-          contactName: selectedContact?.name,
+          contactName: selectedContact?.name || contactName.trim() || undefined,
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Invio WhatsApp non riuscito")
       if (data.mode === "queued") {
         setQueued(true)
-        setBody("")
+        setQueuedPendingId(data.pendingId || "")
         toast.success("Richiesta di apertura WhatsApp inviata")
       } else {
         toast.success("Messaggio WhatsApp inviato")
@@ -314,11 +396,15 @@ export function OmnichannelCompose() {
                     onClick={() => {
                       setChannel(type)
                       setRecipient("")
+                      setContactName("")
                       setSelectedContact(null)
                       setSuggestions([])
                       setAttachments([])
                       setBody("")
                       setBodyHtml("")
+                      setQueued(false)
+                      setQueuedPendingId("")
+                      setQueuedError("")
                       if (richEditorRef.current) richEditorRef.current.innerHTML = ""
                     }}
                     className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${
@@ -362,6 +448,7 @@ export function OmnichannelCompose() {
                   onBlur={() => window.setTimeout(() => setRecipientFocused(false), 180)}
                   onChange={(event) => {
                     setRecipient(event.target.value)
+                    setContactName("")
                     setSelectedContact(null)
                   }}
                   placeholder={recipientHint}
@@ -402,6 +489,31 @@ export function OmnichannelCompose() {
                 </div>
               )}
             </div>
+
+            {channel === "whatsapp" && (
+              <div className="border-b px-13 py-2 text-xs text-muted-foreground">
+                Usa sempre il prefisso internazionale: <strong>+39 324 892 6753</strong> oppure <strong>393248926753</strong>. Spazi, trattini e parentesi sono accettati.
+              </div>
+            )}
+
+            {canNameNewWhatsAppContact && (
+              <div className="flex items-start gap-3 border-b bg-muted/30 px-3 py-3 sm:px-10">
+                <UserPlus className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div>
+                    <p className="text-sm font-medium">Numero non presente in rubrica</p>
+                    <p className="text-xs text-muted-foreground">Al primo invio verrà salvato automaticamente nel CRM. Puoi assegnargli subito un nome.</p>
+                  </div>
+                  <Input
+                    value={contactName}
+                    onChange={(event) => setContactName(event.target.value)}
+                    placeholder="Nome contatto (opzionale)"
+                    className="h-9"
+                    aria-label="Nome del nuovo contatto WhatsApp"
+                  />
+                </div>
+              </div>
+            )}
 
             {channel === "email" && showCc && (
               <div className="flex items-center gap-3 border-b py-2">
@@ -473,7 +585,7 @@ export function OmnichannelCompose() {
               </div>
             )}
 
-            {channel === "whatsapp" && !queued && (
+            {channel === "whatsapp" && !queued && !queuedError && (
               <div className="mb-3 flex gap-2 rounded-lg bg-muted/50 p-3 text-sm">
                 <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
                 Se la finestra 24h è chiusa, HotelAccelerator usa automaticamente il template di apertura.
@@ -491,8 +603,20 @@ export function OmnichannelCompose() {
             )}
             {queued && (
               <div className="mb-3 flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                <CheckCircle2 className="h-5 w-5" />
-                Comunicazione in attesa: il messaggio partirà dopo “Apri comunicazione”.
+                <CheckCircle2 className="h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-medium">Richiesta di apertura inviata a Meta.</p>
+                  <p>HotelAccelerator sta verificando la consegna: il messaggio partirà dopo “Apri comunicazione”.</p>
+                </div>
+              </div>
+            )}
+            {queuedError && (
+              <div className="mb-3 flex gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900" role="alert">
+                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-medium">WhatsApp non ha consegnato la comunicazione.</p>
+                  <p className="mt-1 break-words">{queuedError}</p>
+                </div>
               </div>
             )}
           </div>
@@ -523,7 +647,7 @@ export function OmnichannelCompose() {
                   disabled={!recipient.trim() || !hasContent || sending || channel === "messenger" || channel === "instagram"}
                 >
                   {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                  Invia
+                  {queuedError ? "Riprova" : "Invia"}
                 </Button>
               )}
             </div>
