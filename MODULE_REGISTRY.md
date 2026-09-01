@@ -1,67 +1,87 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-08-31
+Ultimo aggiornamento: 2026-09-02
 
-## Avvertenza
+## Regola di lettura
 
-Questa prima versione consolida requisiti emersi nelle conversazioni. Non è ancora un audit completo del codice. Salvo evidenza indicata, lo stato è `Da verificare`. Nessuna riga autorizza a dichiarare una funzione vendibile.
+Questo registro usa il repository `main` come fonte tecnica primaria e separa **presenza del codice**, **deploy**, **prova su tenant reale** e **maturita' operativa**. Un deploy verde non promuove automaticamente una funzione.
 
-L'audit del sito pubblico del 2026-08-18 ha riallineato il copy a questi stati senza promuoverli. Evidenze, claim rimossi e limiti dichiarati sono documentati in `docs/PUBLIC_SITE_CONTENT_SEO_AUDIT_2026-08-18.md`.
+Stati ufficiali usati nel progetto:
 
-## Stati ufficiali
+`Idea` · `Specifica` · `UI/mock` · `Codice` · `Demo` · `Tenant reale` · `Multi-tenant` · `Production-ready` · `Vendibile`
 
-`Idea` · `Specifica` · `UI/mock` · `Codice` · `Demo` · `Tenant reale` · `Multi-tenant` · `Production-ready` · `Vendibile` · `Da verificare`
+Snapshot considerato per questo audit: `main` dopo la PR #349, con deploy HotelAccelerator di produzione verificato. Le funzioni di prodotti satellite restano al livello dimostrabile dal Core o dal codice presente in questo repository; non vengono promosse sulla base di descrizioni o vecchie chat.
 
 ## Registro sintetico
 
-| Area | Funzioni incluse | Stato baseline | Evidenza/azione richiesta |
+| Area | Funzioni incluse | Stato | Evidenza / limite residuo |
 |---|---|---|---|
-| Core e tenant | Strutture, utenti, ruoli, permessi, catalogo moduli, dashboard, super-admin | Da verificare | Cambio tenant del superadmin con reload completo e pagina Email vincolata a `/api/platform/me`; completare audit auth, RLS, server authorization e test di isolamento sulle altre sezioni |
-| Dashboard utente personalizzata | Performance individuali con obiettivi, estratti Inbox, attività assegnate, ultime telefonate/da richiamare, card visibili per utente configurate dal tenant | Codice | Branch `feat/tenant-user-dashboard-v2`: impostazioni tenant-scoped additive, performance solo da opt-in KPI, Inbox filtrata per canali assegnati e callback deduplicati da contatti successivi. Applicare migrazione, eseguire typecheck/build/check manifest e collaudare admin + collaboratore reale prima di `Tenant reale`; vedere `docs/PERSONALIZED_USER_DASHBOARD.md` |
-| Accesso suite | Login unico, SSO, tenant context, accesso per ruolo/modulo/abbonamento | Specifica | Verificare flussi e contratti tra prodotti |
-| Inbox email Gmail | OAuth, lettura diretta, import storico riprendibile multi-casella, import incrementale, Pub/Sub, poll di fallback, label e riconciliazione stato | Tenant reale | Villa I Barronci verificata; l'OAuth avvia lo storico del canale e la Inbox gestisce tutte le caselle del tenant. Verificare l'import iniziale sulle cinque caselle 4BID; completare recovery, autenticazione webhook, osservabilità e modello Sent/KPI prima di promuovere lo stato |
-| Inbox omnicanale | Gmail, Outlook, IMAP/SMTP, WhatsApp, Telegram, Instagram, Facebook, sito, booking, OTA, 3CX; nuovo messaggio Email/WhatsApp e protezione customer-care window | Codice | PR #318 aggiunge composer unico Email/WhatsApp, ricerca destinatari tenant-scoped, enforcement server-side delle 24h, coda RLS e riapertura idempotente. Il template Meta `hotelaccelerator_nuova_comunicazione` viene ora cercato/creato automaticamente sul WABA autorizzato dal tenant durante Embedded Signup, con lifecycle aggiornato dal webhook e retry lazy prima degli outbound fuori 24h. Restano il collaudo su WABA reale e il click end-to-end prima di `Tenant reale`; vedere `docs/WHATSAPP_24H_OUTBOUND.md`. Gli altri connettori restano da inventariare/auditare |
-| Assistente vocale 3CX | Agenti telefonici dalle basi del singolo tenant e IVR 4 BID con mappa persistente di otto route, primaria/condivise, tool CRM, codice cliente, risposta fondata, reperibilità/messaggio, trascrizioni e coda supporto | Codice | Template CRM v3 e bridge voice presenti. Il caso eccezionale 4BID/Villa I Barronci sullo stesso PBX usa mapping opt-in, hint autenticato e cattura live tenant-scoped quando il percorso bot non produce `ReportCall`; un eventuale journal provider arricchisce la stessa chiamata. Applicare `20260831214500_add_3cx_shared_pbx_routing.sql`, verificare CI/preview e collaudare 4BID + Barronci dallo stesso chiamante prima di `Tenant reale`; vedere `docs/3CX_SHARED_PBX_ROUTING.md` e `docs/PHONE_TRANSCRIPTS_DEMAND.md` |
-| Registro codice cliente suite | Numero cliente centrale, prefissi HA/SNT/HPA/MB, collegamento tenant satellite e contratto server-to-server | Codice | Registro e API v1 nel Core; collegare ogni tenant esterno e configurare le chiavi di deploy prima di dichiarare la stampa attiva nei prodotti autonomi |
-| Gestione conversazioni | Assegnazione, stati, priorità, tag, note, SLA, template, allegati, ricerca, traduzione | Specifica | Inbox in `Codice` per filtro canale + sottocanale/account tenant-scoped; il resto della capability richiede ancora audit UI, schema, API e permessi |
-| AI inbox | Intenti, estrazione dati, riassunti, risposte, escalation, sentiment, upselling, knowledge base | Specifica | Associazione ordinata delle basi per account Email/WhatsApp/Telegram e handoff staff durevole per conversazione/canale in stato `Codice`; restano da definire provider, valutazioni, privacy e human-in-the-loop dell'insieme del modulo |
-| CRM | Profilo ospite, deduplica, soggiorni, consensi, segmenti, pipeline, follow-up, LTV | Specifica | Definire identity resolution e data ownership |
-| CRM — Motore di vendita intelligente | Scoring spiegabile dei contatti tenant-scoped, priorità, prossima azione e prospecting Apollo con controllo umano | Codice | Scoring in `lib/crm/sales-intelligence.ts`; adapter Apollo server-only, coda `crm_apollo_prospects`, API `/api/admin/crm/apollo` e UI `/admin/crm/intelligence/apollo`. Restano migrazione/chiave Vercel, collaudo tenant 4BID e audit esiti prima di `Tenant reale` |
-| PMS incorporato | Live View Browserbase, configurazione agnostica, Context/login per tenant, sessione interattiva, osservazione attività per apprendimento, fallback iframe | Codice | Il 2026-08-30 il DB misurava 2 configurazioni browser attive e 1 sessione running ma 0 tracce/procedure apprese: la sorgente era scollegata. PR #312 collega un observer Browserbase tenant-aware allo store `pms_shadow`, senza valori digitati. Verificare preview e collaudare una procedura reale ripetuta prima di promuovere a `Tenant reale`; vedere `docs/PMS_LEARNING.md` |
-| KPI operatori | Risposte, conversazioni e attesa mediana per operatore, con opt-in tenant per singolo utente | Codice | Misurazione Inbox solo dalla data di attivazione; la Inbox riusa lo stesso calcolo self-only della dashboard e mostra i KPI quando l’utente è abilitato. Conversione, qualità, chiamate e storico precedente restano non disponibili finché non esistono eventi affidabili |
-| CMS e sito | AI website builder, pagine, camere, offerte, esperienze, blog, media, i18n, SEO/GEO, hosting | Specifica | Separare CMS reale da mock e definire publishing |
-| Tracking e marketing | Script, attribuzione, behavior, segmenti, campagne, recupero abbandoni, lifecycle, upselling | Specifica | Consent, privacy, event schema e attribution model |
-| Booking widget | Disponibilità, preventivo, prenotazione, alternative, pagamenti, promo, extra, CRM | Specifica | Definire PMS contract, inventory ownership e pagamento |
-| Santaddeo connettori | Scidoo, staging, normalizzazione, mapping, altri PMS, health, retry, log | Da verificare | Audit del codice e test con tenant reale |
-| Santaddeo KPI | Occupazione, ADR, RevPAR, capacità netta, produzione, confronti, alert | Da verificare | Verificare formule, fonti e casi limite |
-| Santaddeo pricing | Curva k, variabili, vincoli, approvazione/push, restrizioni, parity, rate shopper, forecast | Da verificare | Test end-to-end e tracciamento spiegazioni |
-| Domanda aerei/treni | Aeroporti/stazioni pesati, storico/futuro, mercati origine, capacità e impatto pricing | Specifica | Selezionare provider tramite adapter e validare modello |
-| Reputazione e OTA | Import recensioni, sentiment, risposta, pubblicazione, analytics Booking.com e altre OTA | Specifica | Subordinato a API/partnership disponibili |
-| HotelProfitAI dashboard | Ricavi, costi, budget, EBITDA, reparti, centri costo, forecast e benchmark | Da verificare | Audit repository/prodotto e formule |
-| Fatture elettroniche/SDI | OpenAPI Invoice, attive/passive, invio, storico, firma PA, conservazione, corrispettivi | Specifica | Mantenere ove possibile codice destinatario; verifica legale/provider |
-| Registrazione fatture AI | Manuale/automatica, OCR, classificazione, split fisso/variabile, confidenza, approvazione, apprendimento | Specifica | Definire explainability, audit e correzioni |
-| Banche e finanza | AISP, movimenti, riconciliazione, scadenze, cash flow, finanziamenti, DSCR | Specifica | Valutare Fabrick/altri provider e compliance |
-| Acquisti e fornitori | Anagrafiche, cataloghi, storico prezzi, ordini, DDT, fatture, pagamenti, magazzino | Specifica | Definire confine HotelProfitAI/ManuBot |
-| ManuBot operativo | Segnalazioni testo/foto, presa in carico, ruoli, priorità, scadenza, risoluzione | Da verificare | Audit bot, backend, dati e autorizzazioni |
-| ManuBot programmato | Preventiva, ricorrenze, storico asset/camera, inventario, costi e KPI | Da verificare | Identificare unico proprietario cron/webhook |
-| Integrazione manutenzioni | Ticket da inbox/chiamate/recensioni/fatture e collegamento HotelProfitAI | Specifica | Contratti evento e deduplica |
-| Procedure e checklist | Procedure, manuali, checklist, prove foto/firma, scadenze, versioni, AI assistant | Specifica | Decidere collocazione Core o ManuBot |
-| HotelAccelerator HR | Dipendenti, reparti, turni, notifiche, ferie/permessi, timbrature geolocalizzate e documenti privati | Codice | Workforce v2 in codice con geofence, anomalie, audit, cedolini/documenti privati e download firmati. Applicare migrazioni e collaudare su tenant reale; regole CCNL/paghe e KPI operativi restano da sviluppare |
-| Centro notifiche/audit | Notifiche unificate, activity log, audit trail, health connettori, errori | Specifica | Fondazione trasversale prioritaria |
-| Billing SaaS | Piani, abbonamenti, entitlement, onboarding, assistenza e SLA | Specifica | Necessario per stato Vendibile |
-| 4BID area documentale | Accesso protetto, identità, commenti, revisioni, versioni, approvazioni | Specifica | Progetto separato salvo contratto API |
-| 4BID commerciale | Preventivi, procacciatori, capi area, provvigioni e liquidazioni | Specifica | Progetto separato |
-| Ecomobility | Veicoli, prenotazioni, Stripe, contratti, foto danni, GPS, manutenzione | Specifica | Non modulo ufficiale finché non deciso |
-| AutoExel | Upload, AI mapping, piano Pro, admin, MRR e SEO | Da verificare | Prodotto separato |
-| MyPetSenseAI | Profilo cane, razze, dieta, i18n e Stripe | Da verificare | Prodotto separato |
+| Core e tenant | Strutture, utenti, ruoli, permessi, tenant context, cambio tenant, catalogo moduli, dashboard e superfici SuperAdmin | Codice | Auth e tenant context sono presenti con autorizzazione server-side sulle aree auditate. Serve una matrice di test sistematica su tutte le route prima di `Multi-tenant`. |
+| Dashboard utente personalizzata | Performance individuali, obiettivi, Inbox, task, chiamate e card configurabili dal tenant | Codice | Implementazione tenant-scoped presente; collaudo admin + collaboratore reale e migrazione/configurazione restano il gate prima di `Tenant reale`. Vedere `docs/PERSONALIZED_USER_DASHBOARD.md`. |
+| Accesso suite | SSO Core -> Santaddeo/HotelProfitAI/ManuBot, grant monouso, entitlement e rientro satellite -> Core | Codice | PR #307 e #313. Registry tenant, grant a TTL e controlli server-to-server sono in main; serve round-trip reale coordinato con ciascun satellite. |
+| Registro codice cliente suite | Numero cliente centrale, prefissi HA/SNT/HPA/MB e tenant satellite standalone | Codice | PR #299 e #310. Il Core supporta anche clienti senza property HotelAccelerator; va verificata l'esposizione su ogni prodotto autonomo. |
+| Regola commerciale suite | Vantaggio cliente/cross-sell globale 4BID, configurazione SuperAdmin e ricalcolo server-side | Codice | PR #308 e #340. Il Core e' la sorgente della policy; resta da verificare che ogni satellite/preventivatore la consumi senza duplicarla. |
+| Inbox email Gmail | OAuth, import storico riprendibile, multi-casella, Pub/Sub, history cursor, poll fallback e riconciliazione label | Tenant reale | Villa I Barronci verificata. Restano recovery drill, alert/SLO, modello Sent e KPI storici prima di `Production-ready`. |
+| Cartelle email dentro Inbox | Posta in arrivo, speciali, inviata, bozze, tutte, spam, cestino e label utente per account | Codice | PR #345 e #347. Lettura diretta Gmail separata dal modello conversazioni per evitare falsi inbound/KPI; collaudo visuale multi-account reale ancora richiesto. |
+| WhatsApp Coexistence | Business App Coexistence, numero reale tenant, inbound/outbound, echo telefono, routing per `phone_number_id` | Tenant reale | Villa I Barronci verificata per il flusso base. Credenziale/WABA sono tenant-scoped e cifrati. |
+| WhatsApp fuori 24h | Composer, coda durevole, template di riapertura, click, delivery receipt e stati di errore | Codice | PR #319, #346 e #348. Il test reale ha esposto Meta `131042`; serve nuovo E2E dopo disponibilita' billing/valuta sul WABA. |
+| WhatsApp billing 4BID | Billing centralizzato, extended credit discovery, attach WABA, reconciliation, cron e diagnostica SuperAdmin | Codice | PR #349, migrazione applicata. Il tenant non configura Meta manualmente. Serve evidenza reale di extended credit line 4BID e almeno una allocation WABA riuscita prima di `Tenant reale`. |
+| Telegram | Invio da composer verso chat note al bot, allegati e integrazione Inbox | Codice | PR #333 e #334. Serve collaudo completo del canale ospiti e separazione operativa da eventuali bot ManuBot. |
+| Social | Facebook/Instagram, X e LinkedIn: OAuth, webhook e superfici Inbox/community | Codice | PR #306. Restano credenziali production, app review e scope effettivamente concessi dai provider. Nessun DM viene simulato dove il provider non lo consente. |
+| Inbox omnicanale | Composer unificato, rubrica tenant, rich text/allegati e canali attivi | Codice | PR #333, #334 e #347. Email, WhatsApp, Telegram e social hanno implementazioni concrete; Outlook, IMAP/SMTP, OTA e copertura completa restano da implementare/auditare. |
+| Presenza operatori | Heartbeat, presenza recente tenant-scoped e utilizzo in routing/dashboard | Codice | `OperatorPresenceBeacon`, `/api/admin/presence`, `operator_presence` e helper server esistono. Serve test multi-utente reale sistematico. |
+| KPI operatori | Risposte, conversazioni e attesa mediana opt-in per utente | Codice | PR #315. Calcolo self-only e filtri account/canale presenti; conversione, qualita e storico pre-attivazione non vengono inventati. |
+| Gestione conversazioni | Assegnazioni, stati, priorita, tag, note, SLA, template, ricerca, traduzione e allegati | Specifica | Diverse parti sono gia' in codice, ma la capability aggregata non e' stata ancora auditata end-to-end su schema, API, permessi ed errori. |
+| AI Inbox | Intenti, estrazione, riassunti, risposte, escalation, sentiment, upselling e knowledge base | Specifica | Handoff durevole e associazione basi/canali hanno codice; l'insieme del modulo richiede eval, privacy, guardrail e misure di qualita prima di essere promosso. |
+| Assistente vocale 3CX | Voice Agent 4BID, route tenant, tool Core, fallback 820, codice cliente, journal e supporto shared-PBX | Codice | PR #322-#324, #329, #331 e #335. Il Voice Agent 4BID ha risposto in una chiamata reale; journal, trascrizione/recording e isolamento 4BID/Barronci vanno ancora provati insieme prima di promuovere l'intera capability a `Tenant reale`. Vedere `docs/3CX_VOICE_AI.md` e `docs/3CX_SHARED_PBX_ROUTING.md`. |
+| Telefonate -> calendario domanda | Trascrizione 3CX, estrazione richieste AI, data richiesta e recovery del rebuild | Codice | PR #314 e #320. Pipeline e marker durevole sono in main; serve una chiamata reale con transcript persistito e richiesta materializzata. |
+| HotelAccelerator Voice | Centralino proprietario/addon che possa sostituire o affiancare PBX esterni | Idea | PR #341. Registrata intenzionalmente senza sviluppo; priorita attuale e rendere affidabile 3CX + OpenAI Realtime + Core. |
+| CRM ospite completo | Profilo unico, identity resolution, soggiorni, consensi, segmenti, pipeline, follow-up e LTV | Specifica | Il CRM base esiste ma questa capability completa non e' ancora dimostrata nella sua interezza. Le parti implementate sono tracciate sotto. |
+| CRM workspace | Workspace tenant-scoped per Hotel, SPA, Ristorante, azienda/agenzia e B2B 4BID | Codice | PR #342. Tabelle/API/UI e RLS sono in main; il DB produzione contiene workspace. Serve test reale con due workspace e un operatore limitato per gruppo. |
+| HotelAccelerator Scout | Company/Agency Scout white-label, ricerca prospect, enrichment, import manuale e storico ricerche | Codice | PR #337-#339 e #344. Provider nascosto lato tenant. Guest Scout resta `Specifica`; billing x3/metering commerciale va completato prima della vendita. |
+| Motore di vendita CRM | Scoring spiegabile, prossima azione, coda commerciale, follow-up e messaggi LinkedIn human-in-the-loop | Codice | PR #301 e #325. Nessun invio LinkedIn automatico; serve collaudo commerciale reale sul workspace 4BID e verifica metering. |
+| PMS incorporato | Browserbase Live View, Context/login per tenant, sessione interattiva e fallback | Codice | Sessione browser e configurazione tenant-aware sono presenti. Serve login/procedura reale ripetibile e misurazione costi/durata prima di `Tenant reale`. |
+| Apprendimento PMS | Observer delle attivita, `pms_shadow`, procedure osservate senza valori digitati | Codice | PR #312 e #320. Il DB produzione non mostra ancora una sessione shadow completata: serve prova reale prima di promuovere. |
+| Calendario domanda | Estrazione da conversazioni/telefonate, aggregazione per data e recovery cron | Codice | Hardening cron in PR #320. Servono evidenze runtime su backlog, deadline e rebuild differito prima di `Production-ready`. |
+| CMS Studio | Pagine `/admin/cms` e `/admin/cms/studio` e interfaccia di gestione contenuti | UI/mock | Le superfici esistono in main, ma publishing reale, hosting, separazione da mock e pipeline SEO/GEO devono essere auditati. |
+| CMS/sito completo | Sito AI-first multilingua, pagine/camere/offerte/blog, media, SEO/GEO e hosting | Specifica | Non promuovere finche' non e' dimostrata la pubblicazione reale e il contratto dati. |
+| Marketing Hub | Contenuti social, approvazione, calendario editoriale e pubblicazione | Specifica | Esistono superfici parziali; workflow end-to-end e provider reali non sono ancora dimostrati. |
+| Meta/Google Ads | Campagne semplificate, targeting, attribution, budget e stop automatico | Specifica | Manca prova end-to-end affidabile di creazione, misurazione e controllo spesa. |
+| Email marketing/lifecycle | Segmenti CRM, consenso, campagne automatiche, recupero abbandoni e upsell | Specifica | Sono presenti superfici campagne, ma automazione lifecycle e conversion tracking completi non sono ancora dimostrati. |
+| Booking widget | Disponibilita, preventivo, prenotazione, alternative, pagamenti, promo ed extra | Specifica | Definire/validare PMS contract, inventory ownership, idempotenza pagamento e recovery. |
+| HotelAccelerator HR | Dipendenti, reparti, turni, assenze, geofence, timbrature, anomalie e documenti privati | Codice | PR #305, #311 e #317. Il DB produzione ha il dipendente tenant-admin provisionato; non risultano ancora timbrature reali persistite. Collaudo mobile/ruoli/documenti resta necessario. |
+| Sessione di lavoro HR | Collegamento unico turno-presenza-attivita e misurazione operativa | Specifica | Turni e presenza hanno codice, ma la sessione unificata non e' ancora dimostrata end-to-end. |
+| Integrazione ManuBot | Client Core con company scope esplicito, entitlement e mapping property -> company | Codice | PR #300 e #302. Scope fail-closed presente; creazione/aggiornamento task su tenant reale resta da collaudare con il backend ManuBot corrente. |
+| ManuBot prodotto | Segnalazioni, preventive, asset, inventario, costi e KPI | Specifica | Prodotto satellite separato: richiede audit del repository/deploy ManuBot per promuovere questa riga nel registro Core. |
+| Santaddeo | RMS, connettori PMS, KPI, pricing, forecast e demand intelligence | Codice | Il codice del prodotto e presente nel monorepo; stato dei sottodomini e deploy satellite vanno auditati separatamente. Non equivale a `Tenant reale` globale. |
+| HotelProfitAI | Controllo economico, fatture, banche, finanza e acquisti | Specifica | Prodotto satellite separato: il Core non fornisce evidenza sufficiente per promuovere l'intero prodotto. |
+| Centro notifiche/audit | Notifiche unificate, activity log, audit trail, health connettori e recovery | Specifica | Esistono audit/monitoring puntuali ma non ancora un centro trasversale dimostrato come capability completa. |
+| Billing SaaS | Piani, abbonamenti, entitlement, onboarding, assistenza, documentazione e SLA | Specifica | Stripe, entitlement e policy commerciali esistono in parti; i requisiti `Vendibile` non sono ancora soddisfatti/verificati come insieme. |
+| Costi OpenAI SuperAdmin | Lettura ledger ufficiale provider, costo giorno/mese/30 giorni e breakdown | Codice | PR #343. API e UI sono in main; `OPENAI_ADMIN_KEY` e configurata in produzione. Serve confronto numerico con OpenAI prima di dichiarare la lettura reale verificata. |
+| Roadmap SuperAdmin | Checklist persistente, RLS backend-only, API SuperAdmin e audit atomico | Codice | Pagina/API/DB esistono. Snapshot 2026-09-02 riallineato al repository e le note espongono stato/evidenza senza confondere deploy e maturita. |
 
-## Campi obbligatori per il prossimo audit
+## Prodotti/ambiti separati
 
-Per ogni funzione il registro dovrà evolvere includendo: modulo, capability, stato, tenant verificato, file/schema/API evidenza, test, owner, dipendenze, rischio, priorità, data ultima verifica e prossima azione.
+| Ambito | Stato nel progetto HotelAccelerator | Nota |
+|---|---|---|
+| 4BID area documentale | Specifica | Progetto separato salvo contratto API esplicito. |
+| 4BID commerciale/preventivi | Specifica | Progetto separato; integrare solo tramite contratti versionati. |
+| Ecomobility | Specifica | Non e' un modulo ufficiale HotelAccelerator finche' non viene deciso. |
+| AutoExel | Specifica | Prodotto separato. |
+| MyPetSenseAI | Specifica | Prodotto separato. |
+
+## Gate per promuovere uno stato
+
+- `Codice`: implementazione reale nel repository, non solo UI o descrizione.
+- `Demo`: esecuzione verificata con mock o dati di test dichiarati.
+- `Tenant reale`: flusso completo verificato per almeno una struttura reale.
+- `Multi-tenant`: isolamento, ruoli e permessi provati esplicitamente su piu tenant.
+- `Production-ready`: test, sicurezza, idempotenza/retry, log, monitoring e recovery verificati.
+- `Vendibile`: onboarding, billing, supporto, documentazione e SLA adeguati.
 
 ## Divieti
 
-- Non promuovere lo stato sulla base della sola UI.
-- Non usare “completo”, “funzionante” o “sviluppato” senza livello ed evidenza.
-- Non considerare un test con service role prova di isolamento multi-tenant.
-- Non confondere deploy riuscito con prodotto production-ready.
+- Non promuovere lo stato sulla base della sola UI o di un deploy verde.
+- Non considerare una query con service role una prova di isolamento multi-tenant.
+- Non presentare come reale un'integrazione che richiede ancora app review, credenziali, billing o provider activation.
+- Non confondere una capability ampia con una sua sottoparte gia' in codice.
