@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 
     const workspaceWithGroups = {
       ...workspace,
-      groupIds: (workspaceGroups ?? []).map((row) => String(row.group_id)),
+      groupIds: (workspaceGroups ?? []).map((row: { group_id: string }) => String(row.group_id)),
     }
 
     if (workspace.mode === "hotel_date_requests") {
