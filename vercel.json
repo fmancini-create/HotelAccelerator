@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/crm-sales-outreach",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-platform-billing",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
