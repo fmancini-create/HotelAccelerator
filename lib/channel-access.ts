@@ -11,18 +11,14 @@ import {
 } from "@/lib/auth/channel-permissions"
 
 /**
- * Channel access resolution, shared by the unified inbox and the channel routes.
- *
- * An admin sees every channel of the tenant. A restricted member sees the union
- * of channels assigned directly to them and channels inherited from groups.
- * Everything is intersected with the tenant's real channel inventory so a stale
- * or foreign permission row cannot open another tenant's channel.
+ * Channel access resolution, shared by the unified inbox and channel routes.
+ * Restricted members get the union of direct assignments and group grants,
+ * always intersected with the current tenant's real channel inventory.
  */
 export interface ChannelAccess {
   isAdmin: boolean
   adminUserId: string | null
   email: string | null
-  /** Authenticated Supabase client, reusable by the caller. */
   supabase: SupabaseClient
 }
 
@@ -83,7 +79,6 @@ async function listTenantChannels(supabase: SupabaseClient, propertyId: string):
   return channels
 }
 
-/** Effective grants for a restricted member, including group inheritance. */
 export async function getEffectiveChannelGrants(
   supabase: SupabaseClient,
   propertyId: string,
@@ -117,7 +112,6 @@ export async function getEffectiveChannelGrants(
   })
 }
 
-/** Reads only channel IDs, for list filtering in Inbox/dashboard APIs. */
 export async function getAccessibleChannelIds(
   supabase: SupabaseClient,
   propertyId: string,
@@ -135,15 +129,25 @@ export async function getAccessibleChannelIds(
   return result
 }
 
-/** Capability-aware email authorization. Admins always pass. */
-export async function canAccessEmailChannel(
+/** Capability-aware authorization for any concrete tenant channel. */
+export async function canAccessChannel(
   access: ChannelAccess,
   propertyId: string,
+  channelType: string,
   channelId: string,
   capability: ChannelCapability = "read",
 ): Promise<boolean> {
   if (access.isAdmin) return true
   if (!access.adminUserId) return false
   const grants = await getEffectiveChannelGrants(access.supabase, propertyId, access.adminUserId)
-  return hasChannelCapability(grants, "email", channelId, capability)
+  return hasChannelCapability(grants, channelType, channelId, capability)
+}
+
+export async function canAccessEmailChannel(
+  access: ChannelAccess,
+  propertyId: string,
+  channelId: string,
+  capability: ChannelCapability = "read",
+): Promise<boolean> {
+  return canAccessChannel(access, propertyId, "email", channelId, capability)
 }
