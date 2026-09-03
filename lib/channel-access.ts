@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { createClient, createClientWithToken } from "@/lib/supabase/server"
+import { createClient, createClientWithToken, createServiceClient } from "@/lib/supabase/server"
 import { getDevBypass, getTokenFromRequest } from "@/lib/auth-property"
 import {
   hasChannelCapability,
@@ -10,11 +10,6 @@ import {
   type TenantChannelRef,
 } from "@/lib/auth/channel-permissions"
 
-/**
- * Channel access resolution, shared by the unified inbox and channel routes.
- * Restricted members get the union of direct assignments and group grants,
- * always intersected with the current tenant's real channel inventory.
- */
 export interface ChannelAccess {
   isAdmin: boolean
   adminUserId: string | null
@@ -79,25 +74,42 @@ async function listTenantChannels(supabase: SupabaseClient, propertyId: string):
   return channels
 }
 
+/**
+ * Effective grants are resolved with the service client so group inheritance is
+ * not accidentally hidden by client RLS. Before any privileged read we verify
+ * that the operator really belongs to the requested tenant; failure returns no
+ * grants (fail closed).
+ */
 export async function getEffectiveChannelGrants(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   propertyId: string,
   adminUserId: string,
 ): Promise<EffectiveChannelGrant[]> {
+  const permissionDb = createServiceClient()
+
+  const { data: membership } = await permissionDb
+    .from("admin_users")
+    .select("id")
+    .eq("id", adminUserId)
+    .eq("property_id", propertyId)
+    .maybeSingle()
+
+  if (!membership) return []
+
   const [{ data: directAssignments }, { data: memberships }, tenantChannels] = await Promise.all([
-    supabase
+    permissionDb
       .from("channel_user_assignments")
       .select("channel_type, channel_id, can_send, can_receive")
       .eq("property_id", propertyId)
       .eq("user_id", adminUserId),
-    supabase.from("user_group_members").select("group_id").eq("user_id", adminUserId),
-    listTenantChannels(supabase, propertyId),
+    permissionDb.from("user_group_members").select("group_id").eq("user_id", adminUserId),
+    listTenantChannels(permissionDb, propertyId),
   ])
 
   const groupIds = (memberships ?? []).map((row: { group_id: string }) => row.group_id).filter(Boolean)
   let groupPermissions: any[] = []
   if (groupIds.length > 0) {
-    const { data } = await supabase
+    const { data } = await permissionDb
       .from("group_channel_permissions")
       .select("channel_type, channel_id, can_read, can_write, can_manage")
       .eq("property_id", propertyId)
@@ -129,7 +141,6 @@ export async function getAccessibleChannelIds(
   return result
 }
 
-/** Capability-aware authorization for any concrete tenant channel. */
 export async function canAccessChannel(
   access: ChannelAccess,
   propertyId: string,
