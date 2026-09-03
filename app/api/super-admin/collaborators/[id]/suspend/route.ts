@@ -6,10 +6,15 @@ import { getAuthenticatedUserEmail } from "@/lib/auth-property"
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const actorEmail = await getAuthenticatedUserEmail()
+    const actorEmail = await getAuthenticatedUserEmail(request as any)
     const service = new SuperAdminService()
-    await service.suspendCollaborator(id, actorEmail)
+    const collaborator = await service.getCollaboratorDetails(id, actorEmail)
 
+    if (collaborator.email.toLowerCase() === actorEmail.toLowerCase()) {
+      return NextResponse.json({ error: "Non puoi sospendere il tuo accesso SuperAdmin" }, { status: 409 })
+    }
+
+    await service.suspendCollaborator(id, actorEmail)
     return NextResponse.json({ success: true })
   } catch (error) {
     return handleServiceError(error)
