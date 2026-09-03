@@ -53,10 +53,10 @@ export function numeroLeggibile(n: string | null): string {
  * gruppo ha raggiunto il proprio timeout senza una risposta umana. Non significa
  * che il centralino sia caduto o abbia avuto un errore tecnico.
  *
- * La pagina conserva comunque la distinzione tramite `status_source` e mostra
- * sotto la durata la nota "nessuno ha risposto" per i timeout di gruppo.
+ * Manteniamo visibile la differenza rispetto a una mancata risposta dichiarata
+ * direttamente dal provider, ma con un testo operativo e non allarmistico.
  */
 export function etichettaEsito(status: string, statusSource: string): string {
   if (status !== "missed") return "Completata"
-  return statusSource === "ring_group_timeout" ? "Senza risposta" : "Senza risposta"
+  return statusSource === "ring_group_timeout" ? "Non risposta dal gruppo" : "Senza risposta"
 }
