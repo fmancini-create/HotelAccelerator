@@ -1,20 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { syncChannelIncremental, type SyncableChannel } from "@/lib/email/incremental-sync"
-
-// Reliable email polling cron.
-// Runs frequently (see vercel.json) and pulls new mail for every active,
-// sync-enabled Gmail channel — independent of Gmail push (Pub/Sub) delivery.
-// This is the safety net that keeps the unified inbox flowing even when the
-// real-time webhook pipeline is down.
+import { processEmailAiTasks, type EmailAiTask } from "@/lib/ai/channels/email"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 export async function GET(request: NextRequest) {
-  // Optional shared-secret guard. If CRON_SECRET is set, require it (Vercel Cron
-  // sends it as a Bearer token). If unset, allow (keeps parity with existing crons).
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {
     const auth = request.headers.get("authorization")
@@ -48,16 +41,43 @@ export async function GET(request: NextRequest) {
     const results = []
     let totalImported = 0
     for (const channel of list) {
+      const channelStartedAt = new Date().toISOString()
       try {
         const res = await syncChannelIncremental(supabase, channel)
         totalImported += res.imported
+
+        if (res.imported > 0) {
+          const { data: freshMessages, error: freshError } = await supabase
+            .from("messages")
+            .select(
+              "conversation_id, external_message_id, content, content_type, metadata, conversations!inner(gmail_thread_id, channel_id)",
+            )
+            .eq("property_id", channel.property_id)
+            .eq("sender_type", "customer")
+            .eq("conversations.channel_id", channel.id)
+            .gte("stored_at", channelStartedAt)
+            .not("external_message_id", "is", null)
+            .order("stored_at", { ascending: true })
+
+          if (freshError) {
+            console.error(`[v0][poll-email] ${res.email}: AI task lookup failed: ${freshError.message}`)
+          } else if (freshMessages?.length) {
+            const aiTasks: EmailAiTask[] = freshMessages.map((message: any) => ({
+              conversationId: message.conversation_id,
+              fromHeader: String(message.metadata?.from || ""),
+              subject: String(message.metadata?.subject || ""),
+              threadId: message.conversations?.gmail_thread_id || undefined,
+              externalId: message.external_message_id || undefined,
+              body: String(message.content || ""),
+              contentType: message.content_type === "html" ? "html" : "text",
+            }))
+            await processEmailAiTasks(supabase, channel.id, channel.property_id, aiTasks)
+          }
+        }
+
         if (res.error) {
           console.error(`[v0][poll-email] ${res.email}: ${res.error}`)
         } else {
-          // Le riconciliazioni fallite compaiono NELLA riga di riepilogo: prima
-          // finivano solo in una `console.error` separata, mentre il riepilogo
-          // diceva `err=0` e `stars+0/-0` — indistinguibile da "tutto bene,
-          // nulla da fare". Chi legge i log vedeva una riga sana.
           const riconciliazioniFallite = res.reconcileFailures?.length
             ? ` reconcile-FALLITE=${res.reconcileFailures.join(",")}`
             : ""
@@ -94,7 +114,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Allow manual trigger via POST as well (e.g. a "Sincronizza ora" button).
 export async function POST(request: NextRequest) {
   return GET(request)
 }
