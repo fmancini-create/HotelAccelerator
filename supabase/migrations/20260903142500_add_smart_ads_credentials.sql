@@ -20,6 +20,7 @@ create index if not exists advertising_account_credentials_property_idx
 alter table public.advertising_account_credentials enable row level security;
 revoke all on table public.advertising_account_credentials from anon;
 revoke all on table public.advertising_account_credentials from authenticated;
+grant select, insert, update, delete on table public.advertising_account_credentials to service_role;
 
 create policy advertising_account_credentials_service_role
   on public.advertising_account_credentials
