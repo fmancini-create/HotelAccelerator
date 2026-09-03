@@ -105,6 +105,11 @@ grant select, insert, update, delete on table public.advertising_campaigns to au
 grant select, insert, update, delete on table public.advertising_campaign_metrics to authenticated;
 grant select, insert, update, delete on table public.advertising_recommendations to authenticated;
 
+grant select, insert, update, delete on table public.advertising_accounts to service_role;
+grant select, insert, update, delete on table public.advertising_campaigns to service_role;
+grant select, insert, update, delete on table public.advertising_campaign_metrics to service_role;
+grant select, insert, update, delete on table public.advertising_recommendations to service_role;
+
 create policy advertising_accounts_tenant_scoped on public.advertising_accounts
   for all to authenticated
   using ((property_id = (select public.auth_property_id())) or (select public.auth_is_super_admin()))
