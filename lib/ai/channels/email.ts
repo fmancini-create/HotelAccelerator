@@ -2,7 +2,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { parse } from "node-html-parser"
 import { runAutopilot } from "@/lib/ai/autopilot"
-import { sendGmailEmail } from "@/lib/gmail-client"
+import { sendGmailEmailWithServiceClient } from "@/lib/email/gmail-service-send"
 
 export interface EmailAiTask {
   conversationId: string
@@ -40,10 +40,9 @@ function replySubject(subject: string): string {
 /**
  * Run the AI assistant for a batch of freshly-received inbound emails.
  *
- * Called from `after()` in the Gmail webhook so it never consumes the tight
- * sync time budget. Delivery (autopilot mode) goes through the existing
- * sendGmailEmail helper, preserving threading. Draft mode (on_request) is
- * handled inside runAutopilot, which stores a draft for operator approval.
+ * This function is intentionally usable by both Gmail Pub/Sub and the polling
+ * fallback. It receives the service-role client from the caller so automatic
+ * replies never depend on an interactive user cookie/RLS session.
  */
 export async function processEmailAiTasks(
   supabase: SupabaseClient,
@@ -56,7 +55,7 @@ export async function processEmailAiTasks(
       const to = extractEmailAddress(task.fromHeader)
       if (!to) continue
 
-      await runAutopilot({
+      const outcome = await runAutopilot({
         supabase,
         propertyId,
         conversationId: task.conversationId,
@@ -68,7 +67,8 @@ export async function processEmailAiTasks(
             /\n/g,
             "<br>",
           )}</div>`
-          const sent = await sendGmailEmail(
+          const sent = await sendGmailEmailWithServiceClient(
+            supabase,
             channelId,
             to,
             replySubject(task.subject),
@@ -80,8 +80,23 @@ export async function processEmailAiTasks(
           return { externalId: sent.messageId }
         },
       })
+
+      console.info("[email-autopilot] processed", {
+        channelId,
+        propertyId,
+        conversationId: task.conversationId,
+        inboundExternalId: task.externalId ?? null,
+        action: outcome.action,
+        reason: outcome.reason ?? null,
+      })
     } catch (e) {
-      console.log(`[v0] email AI task failed: ${e instanceof Error ? e.message : String(e)}`)
+      console.error("[email-autopilot] task failed", {
+        channelId,
+        propertyId,
+        conversationId: task.conversationId,
+        inboundExternalId: task.externalId ?? null,
+        message: e instanceof Error ? e.message : String(e),
+      })
     }
   }
 }
