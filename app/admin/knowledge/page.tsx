@@ -7,6 +7,7 @@ import {
 } from "@/components/admin/knowledge/knowledge-bases-manager"
 import { KnowledgeGaps } from "@/components/admin/knowledge/knowledge-gaps"
 import { InternalKnowledgeSyncStatusCard } from "@/components/admin/knowledge/internal-knowledge-sync-status"
+import { AiAgentIdentityCard } from "@/components/admin/knowledge/ai-agent-identity-card"
 import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
@@ -79,17 +80,12 @@ export default async function KnowledgePage() {
           </p>
         </div>
 
+        <AiAgentIdentityCard />
+
         <KnowledgeBasesManager initialBases={initialBases} initialChannels={initialChannels} />
 
         {internalSyncDiagnostics ? <InternalKnowledgeSyncStatusCard diagnostics={internalSyncDiagnostics} /> : null}
 
-        {/*
-          L'anello: le basi si impostano qui sopra, poi l'esperienza delle
-          conversazioni le alimenta. Sta in questa pagina e non in una voce
-          separata perche' approvare una risposta E' un modo di curare le basi.
-          Compare solo se esiste almeno una base: senza basi non ci sono lacune
-          da rivedere, e una scheda vuota sembrerebbe un guasto.
-        */}
         {initialBases.length > 0 && (
           <KnowledgeGaps bases={initialBases.map((b) => ({ id: b.id, name: b.name }))} />
         )}
