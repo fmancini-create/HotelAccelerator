@@ -1,6 +1,6 @@
 # HotelAccelerator — Project Overview
 
-Ultimo aggiornamento: 2026-08-19
+Ultimo aggiornamento: 2026-09-04
 
 ## Missione
 
@@ -16,7 +16,7 @@ Questo documento descrive la visione del prodotto. Lo stato verificato delle sin
 | Santaddeo | RMS, pricing, connettori PMS, forecast e intelligence della domanda | Modulo integrabile e prodotto autonomo |
 | HotelProfitAI | Controllo di gestione, contabilità, fatture, banche e finanza | Modulo integrabile e prodotto autonomo |
 | ManuBot | Segnalazioni, manutenzioni e attività operative | Modulo integrabile e prodotto autonomo |
-| 4BID | Brand, sito corporate, commerciale e area documentale | Progetto collegato, non modulo operativo salvo decisione |
+| 4BID | Brand, sito corporate, commerciale, area documentale e tenant aziendale del team che gestisce la piattaforma | Progetto collegato + tenant `company` interno; non è un modulo venduto agli hotel |
 
 AutoExel, MyPetSenseAI, Ecomobility e altri esperimenti restano separati finché una decisione architetturale esplicita non ne approva l'integrazione.
 
@@ -30,6 +30,7 @@ AutoExel, MyPetSenseAI, Ecomobility e altri esperimenti restano separati finché
 - Ogni funzione comprende UI, dati, backend, autorizzazioni, errori, audit, test e monitoraggio.
 - Nessuna funzione è dichiarata completa senza evidenze.
 - Il prodotto deve restare comprensibile e governabile anche da un founder non tecnico che lavora con assistenti AI e v0.
+- Il team operativo della piattaforma è anagraficamente il team del tenant aziendale 4BID; l'appartenenza a 4BID non concede da sola privilegi globali o accesso ad altri tenant.
 
 ## Utenti principali
 
@@ -38,7 +39,8 @@ AutoExel, MyPetSenseAI, Ecomobility e altri esperimenti restano separati finché
 - booking e front office;
 - amministrazione e controllo di gestione;
 - manutentori e responsabili operativi;
-- consulenti e super-amministratori 4BID.
+- collaboratori 4BID, con privilegi globali separati quando necessari;
+- super-amministratori 4BID.
 
 ## Obiettivi
 
