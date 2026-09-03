@@ -87,8 +87,12 @@ create index if not exists advertising_campaigns_account_idx
   on public.advertising_campaigns(advertising_account_id);
 create index if not exists advertising_metrics_campaign_date_idx
   on public.advertising_campaign_metrics(campaign_id, metric_date desc);
+create index if not exists advertising_metrics_property_idx
+  on public.advertising_campaign_metrics(property_id);
 create index if not exists advertising_recommendations_property_status_idx
   on public.advertising_recommendations(property_id, status);
+create index if not exists advertising_recommendations_campaign_idx
+  on public.advertising_recommendations(campaign_id);
 
 alter table public.advertising_accounts enable row level security;
 alter table public.advertising_campaigns enable row level security;
