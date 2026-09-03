@@ -79,16 +79,15 @@ if (rese.size === 1) {
 /**
  * L'etichetta dell'esito.
  *
- * Una caduta sul gruppo NON deve chiamarsi come una persa dichiarata dal
- * centralino: sono due cose diverse e confonderle spaccia una deduzione nostra
- * per un dato certificato.
+ * Un timeout del gruppo e' diverso da una persa dichiarata dal provider, ma non
+ * deve sembrare un guasto del PBX: "Caduta al centralino" era fuorviante.
  */
 console.log("\nEtichetta dell'esito\n")
 const casiEsito: Array<{ nome: string; status: string; fonte: string; atteso: string }> = [
-  { nome: "caduta sul gruppo di squillo (dedotta)", status: "missed", fonte: "ring_group_timeout", atteso: "Caduta al centralino" },
+  { nome: "timeout del gruppo di squillo (dedotto)", status: "missed", fonte: "ring_group_timeout", atteso: "Non risposta dal gruppo" },
   { nome: "persa dichiarata dal centralino", status: "missed", fonte: "provider", atteso: "Senza risposta" },
-  // Controllo negativo: una chiamata riuscita non diventa "caduta" nemmeno se
-  // la fonte fosse per errore quella della deduzione.
+  // Controllo negativo: una chiamata riuscita non diventa persa nemmeno se la
+  // fonte fosse per errore quella della deduzione.
   { nome: "completata: resta completata", status: "completed", fonte: "provider", atteso: "Completata" },
   { nome: "completata con fonte dedotta: resta completata", status: "completed", fonte: "ring_group_timeout", atteso: "Completata" },
 ]
