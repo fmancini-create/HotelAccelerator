@@ -2,7 +2,9 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { parse } from "node-html-parser"
 import { runAutopilot } from "@/lib/ai/autopilot"
+import { getAiAgentIdentity } from "@/lib/ai/agent-identity"
 import { sendGmailEmailWithServiceClient } from "@/lib/email/gmail-service-send"
+import { appendSignatureHtml } from "@/lib/email/signature"
 
 export interface EmailAiTask {
   conversationId: string
@@ -95,6 +97,8 @@ export async function processEmailAiTasks(
   propertyId: string,
   tasks: EmailAiTask[],
 ): Promise<void> {
+  const agentIdentity = await getAiAgentIdentity(supabase, propertyId)
+
   for (const task of tasks) {
     const externalId = task.externalId?.trim()
     if (!externalId) {
@@ -125,7 +129,8 @@ export async function processEmailAiTasks(
         channelId,
         incomingText: toPlainText(task.body, task.contentType),
         send: async (text) => {
-          const html = `<div style="font-family: Arial, sans-serif; font-size: 14px;">${text.replace(/\n/g, "<br>")}</div>`
+          const bodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px;">${text.replace(/\n/g, "<br>")}</div>`
+          const html = appendSignatureHtml(bodyHtml, agentIdentity.signatureHtml)
           const sent = await sendGmailEmailWithServiceClient(
             supabase,
             channelId,
@@ -153,6 +158,7 @@ export async function processEmailAiTasks(
         inboundExternalId: externalId,
         action: outcome.action,
         reason: outcome.reason ?? null,
+        aiAgentName: agentIdentity.displayName,
       })
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
