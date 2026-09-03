@@ -6,10 +6,10 @@ import { sendGmailEmailWithServiceClient } from "@/lib/email/gmail-service-send"
 
 export interface EmailAiTask {
   conversationId: string
-  fromHeader: string // "Name <email>" or bare email
+  fromHeader: string
   subject: string
   threadId?: string
-  externalId?: string // inbound Gmail messageId, used as In-Reply-To
+  externalId?: string
   body: string
   contentType: "text" | "html"
 }
@@ -37,13 +37,58 @@ function replySubject(subject: string): string {
   return /^re:/i.test(s) ? s : `Re: ${s || "(nessun oggetto)"}`
 }
 
-/**
- * Run the AI assistant for a batch of freshly-received inbound emails.
- *
- * This function is intentionally usable by both Gmail Pub/Sub and the polling
- * fallback. It receives the service-role client from the caller so automatic
- * replies never depend on an interactive user cookie/RLS session.
- */
+async function claimTask(
+  supabase: SupabaseClient,
+  propertyId: string,
+  channelId: string,
+  externalId: string,
+): Promise<boolean> {
+  const { error } = await supabase.from("email_ai_delivery_claims").insert({
+    property_id: propertyId,
+    email_channel_id: channelId,
+    inbound_external_id: externalId,
+    status: "processing",
+    attempts: 1,
+    lease_until: new Date(Date.now() + 2 * 60_000).toISOString(),
+    updated_at: new Date().toISOString(),
+  })
+
+  if (!error) return true
+  if (error.code === "23505") return false
+  throw error
+}
+
+async function completeTask(
+  supabase: SupabaseClient,
+  channelId: string,
+  externalId: string,
+): Promise<void> {
+  await supabase
+    .from("email_ai_delivery_claims")
+    .update({ status: "completed", last_error: null, updated_at: new Date().toISOString() })
+    .eq("email_channel_id", channelId)
+    .eq("inbound_external_id", externalId)
+}
+
+async function releaseTask(
+  supabase: SupabaseClient,
+  channelId: string,
+  externalId: string,
+  errorMessage: string,
+): Promise<void> {
+  await supabase
+    .from("email_ai_delivery_claims")
+    .delete()
+    .eq("email_channel_id", channelId)
+    .eq("inbound_external_id", externalId)
+
+  console.warn("[email-autopilot] claim released for retry", {
+    channelId,
+    inboundExternalId: externalId,
+    error: errorMessage,
+  })
+}
+
 export async function processEmailAiTasks(
   supabase: SupabaseClient,
   channelId: string,
@@ -51,9 +96,26 @@ export async function processEmailAiTasks(
   tasks: EmailAiTask[],
 ): Promise<void> {
   for (const task of tasks) {
+    const externalId = task.externalId?.trim()
+    if (!externalId) {
+      console.warn("[email-autopilot] skipped task without inbound external id", {
+        channelId,
+        propertyId,
+        conversationId: task.conversationId,
+      })
+      continue
+    }
+
+    let claimed = false
     try {
+      claimed = await claimTask(supabase, propertyId, channelId, externalId)
+      if (!claimed) continue
+
       const to = extractEmailAddress(task.fromHeader)
-      if (!to) continue
+      if (!to) {
+        await completeTask(supabase, channelId, externalId)
+        continue
+      }
 
       const outcome = await runAutopilot({
         supabase,
@@ -63,17 +125,14 @@ export async function processEmailAiTasks(
         channelId,
         incomingText: toPlainText(task.body, task.contentType),
         send: async (text) => {
-          const html = `<div style="font-family: Arial, sans-serif; font-size: 14px;">${text.replace(
-            /\n/g,
-            "<br>",
-          )}</div>`
+          const html = `<div style="font-family: Arial, sans-serif; font-size: 14px;">${text.replace(/\n/g, "<br>")}</div>`
           const sent = await sendGmailEmailWithServiceClient(
             supabase,
             channelId,
             to,
             replySubject(task.subject),
             html,
-            task.externalId,
+            externalId,
             task.threadId,
           )
           if (!sent.success) throw new Error(sent.error ?? "Errore invio Gmail")
@@ -81,21 +140,29 @@ export async function processEmailAiTasks(
         },
       })
 
+      if (outcome.reason === "send_failed") {
+        await releaseTask(supabase, channelId, externalId, "send_failed")
+        continue
+      }
+
+      await completeTask(supabase, channelId, externalId)
       console.info("[email-autopilot] processed", {
         channelId,
         propertyId,
         conversationId: task.conversationId,
-        inboundExternalId: task.externalId ?? null,
+        inboundExternalId: externalId,
         action: outcome.action,
         reason: outcome.reason ?? null,
       })
     } catch (e) {
+      const message = e instanceof Error ? e.message : String(e)
+      if (claimed) await releaseTask(supabase, channelId, externalId, message)
       console.error("[email-autopilot] task failed", {
         channelId,
         propertyId,
         conversationId: task.conversationId,
-        inboundExternalId: task.externalId ?? null,
-        message: e instanceof Error ? e.message : String(e),
+        inboundExternalId: externalId,
+        message,
       })
     }
   }
