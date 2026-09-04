@@ -53,6 +53,8 @@ La migrazione `20260904093131_ai_virtual_user_per_knowledge_base.sql`:
 - crea il trigger automatico su `knowledge_bases`;
 - esegue il backfill delle basi gia esistenti.
 
+La migrazione `20260904094216_retire_tenant_wide_ai_name_default.sql` rimuove inoltre il default legacy `Sofia` da `ai_agent_settings.display_name`, senza cancellare colonne o dati.
+
 Le colonne `display_name` e `signature_html` introdotte precedentemente in `ai_agent_settings` restano temporaneamente solo per compatibilita di schema e non sono piu la sorgente operativa dell'identita IA. La loro rimozione futura richiedera una decisione/migrazione separata.
 
 ## Runtime e Inbox
@@ -73,7 +75,7 @@ La stessa identita viene mantenuta anche nei fallback e nel flusso di handoff ve
 
 `lib/ai/channels/email.ts` riceve da `runAutopilot` il contesto dell'utente virtuale della base primaria e applica **la firma di quella specifica IA** con `appendSignatureHtml`.
 
-Non esiste piu una firma tenant-wide `Sofia` applicata a tutte le basi.
+Non esiste piu un'identita tenant-wide `Sofia` usata dal runtime, e lo schema legacy non assegna piu quel nome come default.
 
 ## Sicurezza e isolamento tenant
 
