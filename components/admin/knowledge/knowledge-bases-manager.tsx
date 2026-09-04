@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { toast } from "@/components/ui/use-toast"
 import { AiSettingsCard, type KnowledgeBaseBehavior } from "./ai-settings-card"
+import { AiAgentIdentityCard } from "./ai-agent-identity-card"
 import { KnowledgeSources } from "./knowledge-sources"
 import { ChannelBasesAssignment, type ChannelRow } from "./channel-bases-assignment"
 import { Database, Plus, Loader2, Ban, Hand, Bot, Trash2 } from "lucide-react"
@@ -60,7 +61,10 @@ export function KnowledgeBasesManager({
       const summary: KnowledgeBaseSummary = { ...base, source_count: 0 }
       setBases((prev) => [...prev, summary])
       setSelectedId(summary.id)
-      toast({ title: "Base creata", description: "Configura il comportamento e aggiungi le fonti." })
+      toast({
+        title: "Base e utente virtuale creati",
+        description: "Configura nome, firma, comportamento e fonti della nuova IA.",
+      })
     } catch (err) {
       toast({
         title: "Errore",
@@ -83,7 +87,7 @@ export function KnowledgeBasesManager({
       const remaining = bases.filter((b) => b.id !== id)
       setBases(remaining)
       if (selectedId === id) setSelectedId(remaining[0]?.id ?? null)
-      toast({ title: "Base eliminata", description: "La base e le sue fonti sono state rimosse." })
+      toast({ title: "Base eliminata", description: "Base, fonti e relativo utente virtuale sono stati rimossi." })
     } catch (err) {
       toast({
         title: "Errore",
@@ -100,13 +104,12 @@ export function KnowledgeBasesManager({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Bases list */}
       <Card className="bg-card border-border">
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle className="text-foreground">Basi di conoscenza</CardTitle>
             <CardDescription>
-              Crea più basi (es. Reception, Ristorante, SPA) e collegale ai canali giusti.
+              Ogni base crea automaticamente il proprio utente virtuale IA. Collega poi le basi ai canali giusti.
             </CardDescription>
           </div>
           <Button onClick={createBase} disabled={creating} className="bg-primary text-primary-foreground shrink-0">
@@ -156,7 +159,6 @@ export function KnowledgeBasesManager({
         </CardContent>
       </Card>
 
-      {/* Selected base panel */}
       {selected && (
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-between gap-3">
@@ -174,8 +176,8 @@ export function KnowledgeBasesManager({
                 <AlertDialogHeader>
                   <AlertDialogTitle>Eliminare questa base?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Verranno rimosse la base &quot;{selected.name}&quot;, tutte le sue fonti indicizzate e i suoi
-                    collegamenti ai canali. L&apos;azione non è reversibile.
+                    Verranno rimossi la base &quot;{selected.name}&quot;, il suo utente virtuale IA, tutte le fonti
+                    indicizzate e i collegamenti ai canali. L&apos;azione non è reversibile.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -193,12 +195,16 @@ export function KnowledgeBasesManager({
             </AlertDialog>
           </div>
 
+          <AiAgentIdentityCard
+            key={`virtual-user-${selected.id}`}
+            knowledgeBaseId={selected.id}
+            knowledgeBaseName={selected.name}
+          />
           <AiSettingsCard base={selected} onSaved={onBaseSaved} />
           <KnowledgeSources key={selected.id} knowledgeBaseId={selected.id} />
         </div>
       )}
 
-      {/* Channel assignment */}
       <ChannelBasesAssignment channels={initialChannels} bases={baseOptions} />
     </div>
   )
