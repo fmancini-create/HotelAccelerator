@@ -4,13 +4,14 @@ on:
   push:
     branches:
       - fix/inbox-sent-folder-sidebar
+    paths:
+      - .github/workflows/tmp-patch-inbox-sent-sidebar.yml
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.head_commit.message != 'fix(inbox): add sent folder to sidebar'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
