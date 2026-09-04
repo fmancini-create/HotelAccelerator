@@ -3,19 +3,21 @@
 import type React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ArrowLeft, FolderOpen } from "lucide-react"
+import { ArrowLeft, FolderOpen, Send } from "lucide-react"
 import { OmnichannelCompose } from "@/components/admin/inbox/omnichannel-compose"
 
 /**
- * One user-facing Inbox, two internal data sources.
+ * One user-facing Inbox, multiple internal data sources.
  *
  * The operational conversation list stays DB-driven while email folders such as
  * Sent/Drafts are read directly from the provider. We deliberately keep that
- * technical separation without presenting it as two separate Inbox "modes".
+ * technical separation without presenting it as separate Inbox "modes".
  */
 export function InboxShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const emailFoldersOpen = pathname.startsWith("/admin/inbox/email")
+  const sentFolderOpen = pathname.startsWith("/admin/inbox/sent")
+  const mailboxViewOpen = emailFoldersOpen || sentFolderOpen
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -26,23 +28,39 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
 
         <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2 sm:px-4">
           <span className="truncate text-sm font-semibold">Inbox</span>
-          <Link
-            href={emailFoldersOpen ? "/admin/inbox" : "/admin/inbox/email"}
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            {emailFoldersOpen ? (
+
+          {mailboxViewOpen ? (
+            <Link
+              href="/admin/inbox"
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
               <ArrowLeft className="h-4 w-4" aria-hidden />
-            ) : (
-              <FolderOpen className="h-4 w-4" aria-hidden />
-            )}
-            <span>{emailFoldersOpen ? "Conversazioni" : "Cartelle email"}</span>
-          </Link>
+              <span>Conversazioni</span>
+            </Link>
+          ) : (
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Link
+                href="/admin/inbox/sent"
+                className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:px-3"
+              >
+                <Send className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Posta inviata</span>
+              </Link>
+              <Link
+                href="/admin/inbox/email"
+                className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:px-3"
+              >
+                <FolderOpen className="h-4 w-4" aria-hidden />
+                <span className="hidden sm:inline">Cartelle email</span>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
       <div
         data-inbox-mobile
-        data-inbox-view={emailFoldersOpen ? "email" : "operational"}
+        data-inbox-view={mailboxViewOpen ? "email" : "operational"}
         className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
       >
         {children}
@@ -53,7 +71,7 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <style>{`
-        /* The mailbox page uses a generic envelope icon in its local heading.
+        /* Mailbox pages can use a generic envelope icon in their local heading.
            The unified Inbox shell already supplies the context, so keep the
            heading text and remove the redundant provider-like mark. */
         [data-inbox-view="email"] > .flex.h-full.min-h-0.flex-col.bg-card
