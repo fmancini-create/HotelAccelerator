@@ -2,7 +2,9 @@
   if (window.__anna4bidLoaded) return
   window.__anna4bidLoaded = true
 
-  const script = document.currentScript || Array.from(document.scripts).find((s) => s.src && s.src.includes('/anna-chat.js'))
+  const script =
+    document.currentScript ||
+    Array.from(document.scripts).find((candidate) => candidate.src && candidate.src.includes('/anna-chat.js'))
   if (!script) return
 
   const publicKey = script.dataset.publicKey
@@ -15,18 +17,32 @@
   if (hiddenPrefixes.some((prefix) => window.location.pathname.startsWith(prefix))) return
 
   const product = script.dataset.product || '4BID'
+  const productKey = product.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const assistantNames = {
+    hotelaccelerator: 'Assistente HotelAccelerator',
+    hotelprofitai: 'Assistente HotelProfitAI',
+    manubot: 'Assistente ManuBot',
+    santaddeo: 'Assistente Santaddeo',
+  }
+  const assistantName = productKey === '4bid' ? 'Anna · 4BID' : assistantNames[productKey] || `Assistente ${product}`
+
   const scriptOrigin = new URL(script.src, window.location.href).origin
-  // hotelaccelerator.com is commonly redirected/canonicalized to www.
-  // A redirected CORS preflight can surface in browsers only as "Failed to fetch".
-  // Always call the canonical production host directly when the embed was loaded
-  // from either public HotelAccelerator hostname. Preview/development origins keep
-  // using their own origin so previews remain testable.
   const host =
     scriptOrigin === 'https://hotelaccelerator.com' || scriptOrigin === 'https://www.hotelaccelerator.com'
       ? 'https://www.hotelaccelerator.com'
       : scriptOrigin
   const apiUrl = `${host}/api/public/chat-widget/${encodeURIComponent(publicKey)}`
   const storageKey = `anna4bid:${publicKey}:conversation`
+
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>'"]/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;',
+    })[char])
+  }
 
   const root = document.createElement('div')
   root.id = 'anna-4bid-widget'
@@ -64,14 +80,17 @@
       .privacy{font-size:10px;color:#94a3b8;text-align:center;padding:0 10px 9px;background:white}
       @media(max-width:520px){:host{right:12px!important;bottom:12px!important}.panel{position:fixed;inset:12px;width:auto;height:auto;max-height:none;border-radius:16px}.launcher{width:56px;height:56px}}
     </style>
-    <section class="panel" aria-label="Chat con Anna" role="dialog" aria-hidden="true">
+    <section class="panel" aria-label="Chat con ${escapeHtml(assistantName)}" role="dialog" aria-hidden="true">
       <header class="header">
         <div class="avatar">A</div>
-        <div class="headtext"><div class="name">Anna · 4BID</div><div class="sub">Assistenza ${escapeHtml(product)}</div></div>
+        <div class="headtext">
+          <div class="name">${escapeHtml(assistantName)}</div>
+          <div class="sub">Assistenza ${escapeHtml(product)} · 4BID</div>
+        </div>
         <button class="close" type="button" aria-label="Chiudi chat">×</button>
       </header>
       <main class="messages" aria-live="polite"></main>
-      <div class="typing">Anna sta scrivendo…</div>
+      <div class="typing">${escapeHtml(assistantName)} sta scrivendo…</div>
       <div class="error"></div>
       <form class="composer">
         <textarea class="input" rows="1" maxlength="4000" placeholder="Scrivi un messaggio…" aria-label="Messaggio"></textarea>
@@ -79,7 +98,7 @@
       </form>
       <div class="privacy">La conversazione è gestita da 4BID tramite HotelAccelerator.</div>
     </section>
-    <button class="launcher" type="button" aria-label="Apri chat con Anna" title="Chat con Anna">
+    <button class="launcher" type="button" aria-label="Apri chat con ${escapeHtml(assistantName)}" title="Chat con ${escapeHtml(assistantName)}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3 1.7-5.1A8 8 0 1 1 21 15Z"/></svg>
     </button>`
 
@@ -99,10 +118,6 @@
   let starting = false
   let sending = false
 
-  function escapeHtml(value) {
-    return String(value || '').replace(/[&<>'"]/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]))
-  }
-
   function showError(message) {
     errorEl.textContent = message || 'Si è verificato un errore. Riprova.'
     errorEl.classList.add('show')
@@ -114,10 +129,6 @@
   }
 
   async function post(payload) {
-    // Use a CORS-safelisted content type. This keeps the public widget from
-    // requiring an OPTIONS preflight before every request; the route still
-    // parses the JSON body with request.json(). Credentials are intentionally
-    // omitted because the public widget is authenticated only by its public key.
     const response = await fetch(apiUrl, {
       method: 'POST',
       mode: 'cors',
@@ -150,10 +161,6 @@
         return existing
       }
 
-      // The customer message is rendered optimistically before the POST returns.
-      // Polling can see the persisted row while that same POST is still waiting
-      // for Anna. Reconcile that row with the pending bubble instead of appending
-      // a second copy.
       if (message.sender_type === 'customer') {
         const pending = findPendingCustomer(message.content)
         if (pending) {
@@ -192,8 +199,6 @@
       conversationId = data.conversation_id || ''
       if (!conversationId) throw new Error('Conversazione non disponibile')
       localStorage.setItem(storageKey, conversationId)
-      // The welcome message is persisted server-side. Do not render the copy
-      // returned by `start`: refreshMessages() will load that same stored row once.
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Impossibile aprire la chat')
     } finally {
@@ -233,7 +238,7 @@
   async function openPanel() {
     panel.classList.add('open')
     panel.setAttribute('aria-hidden', 'false')
-    launcher.setAttribute('aria-label', 'Chat con Anna aperta')
+    launcher.setAttribute('aria-label', `Chat con ${assistantName} aperta`)
     await startConversation()
     await refreshMessages()
     beginPolling()
@@ -243,16 +248,18 @@
   function closePanel() {
     panel.classList.remove('open')
     panel.setAttribute('aria-hidden', 'true')
+    launcher.setAttribute('aria-label', `Apri chat con ${assistantName}`)
     stopPolling()
   }
 
-  launcher.addEventListener('click', () => panel.classList.contains('open') ? closePanel() : openPanel())
+  launcher.addEventListener('click', () => (panel.classList.contains('open') ? closePanel() : openPanel()))
   close.addEventListener('click', closePanel)
 
   input.addEventListener('input', () => {
     input.style.height = 'auto'
     input.style.height = `${Math.min(input.scrollHeight, 110)}px`
   })
+
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
@@ -264,6 +271,7 @@
     event.preventDefault()
     const text = input.value.trim()
     if (!text || sending) return
+
     await startConversation()
     if (!conversationId) return
 
