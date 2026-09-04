@@ -15,7 +15,16 @@
   if (hiddenPrefixes.some((prefix) => window.location.pathname.startsWith(prefix))) return
 
   const product = script.dataset.product || '4BID'
-  const host = new URL(script.src, window.location.href).origin
+  const scriptOrigin = new URL(script.src, window.location.href).origin
+  // hotelaccelerator.com is commonly redirected/canonicalized to www.
+  // A redirected CORS preflight can surface in browsers only as "Failed to fetch".
+  // Always call the canonical production host directly when the embed was loaded
+  // from either public HotelAccelerator hostname. Preview/development origins keep
+  // using their own origin so previews remain testable.
+  const host =
+    scriptOrigin === 'https://hotelaccelerator.com' || scriptOrigin === 'https://www.hotelaccelerator.com'
+      ? 'https://www.hotelaccelerator.com'
+      : scriptOrigin
   const apiUrl = `${host}/api/public/chat-widget/${encodeURIComponent(publicKey)}`
   const storageKey = `anna4bid:${publicKey}:conversation`
 
@@ -105,9 +114,15 @@
   }
 
   async function post(payload) {
+    // Use a CORS-safelisted content type. This keeps the public widget from
+    // requiring an OPTIONS preflight before every request; the route still
+    // parses the JSON body with request.json(). Credentials are intentionally
+    // omitted because the public widget is authenticated only by its public key.
     const response = await fetch(apiUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
       body: JSON.stringify(payload),
     })
     const data = await response.json().catch(() => ({}))
