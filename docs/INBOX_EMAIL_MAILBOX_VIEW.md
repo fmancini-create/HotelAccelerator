@@ -1,6 +1,6 @@
 # Inbox — cartelle email nella Inbox unica
 
-Ultimo aggiornamento: 2026-09-01
+Ultimo aggiornamento: 2026-09-04
 
 ## Stato
 
@@ -13,6 +13,7 @@ HotelAccelerator espone una sola **Inbox** all'utente. La vista operativa omnica
 - non esiste piu' un selettore a due modalita' `Inbox omnicanale` / `Posta email`;
 - `Inbox` e' il contenitore unico;
 - `Cartelle email` e' una sottovista raggiungibile dalla Inbox;
+- nella sidebar della vista operativa, subito sotto `Risolti`, `Posta inviata` apre la vista Sent esistente senza diventare uno stato delle conversazioni;
 - dalla sottovista email si torna alle `Conversazioni` con una normale azione di navigazione;
 - `Nuovo messaggio` vive nel guscio comune della Inbox, sopra la colonna laterale, fuori dallo scroll delle cartelle;
 - nessun logo o branding Gmail viene mostrato nell'esperienza tenant: il provider resta un dettaglio tecnico del connettore.
