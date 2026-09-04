@@ -24,6 +24,7 @@ import {
   type StaffHandoffState,
 } from "./staff-handoff-state"
 import { getBasesForChannel, type AiMode } from "./knowledge-bases"
+import { getAiAgentIdentity, type AiAgentIdentity } from "./agent-identity"
 import { eUnaLacuna, registraLacuna } from "./gaps"
 import {
   trovaCandidatiPerNumero,
@@ -39,6 +40,11 @@ import {
 
 export type AiChannel = "telegram" | "whatsapp" | "email" | "chat"
 
+export interface AiDeliveryContext {
+  knowledgeBaseId: string
+  virtualUser: AiAgentIdentity
+}
+
 export interface RunAutopilotArgs {
   supabase: SupabaseClient
   propertyId: string
@@ -50,9 +56,10 @@ export interface RunAutopilotArgs {
   incomingText: string
   /**
    * Delivers the reply on the channel. Only invoked in `autopilot` mode.
-   * Should return the provider message id when available (for idempotency).
+   * The second argument is the virtual user owned by the primary knowledge base.
+   * Existing channel senders may ignore it; email uses it to render the right signature.
    */
-  send?: (text: string) => Promise<{ externalId?: string } | void>
+  send?: (text: string, context: AiDeliveryContext) => Promise<{ externalId?: string } | void>
   /**
    * Forza la modalita' ignorando quella della base primaria.
    *
@@ -80,7 +87,7 @@ export interface RunAutopilotResult {
  * Single source of truth for AI replies across every channel.
  *
  * Behavior is driven by the knowledge bases linked to the channel. The primary
- * base (position 0) sets the mode:
+ * base (position 0) sets both behavior and virtual operator identity:
  *   - mode 'disabled'  -> never acts
  *   - mode 'on_request'-> saves a DRAFT reply for an operator to approve
  *   - mode 'autopilot' -> sends the reply automatically (via `send`) and logs it
@@ -96,7 +103,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   }
 
   // Resolve the knowledge bases linked to this specific channel. The primary
-  // base (position 0) drives behavior; retrieval spans all linked bases.
+  // base (position 0) drives behavior and identity; retrieval spans all linked bases.
   const { primary, baseIds } = await getBasesForChannel(channelId, channel === "email" ? "email" : "messaging")
   if (!primary || baseIds.length === 0) {
     return { action: "skipped", reason: "no_base_linked" }
@@ -107,6 +114,12 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
   const mode = primary.mode === "disabled" ? "disabled" : (args.modeOverride ?? primary.mode)
   if (mode === "disabled") {
     return { action: "skipped", reason: "base_disabled" }
+  }
+
+  const virtualUser = await getAiAgentIdentity(supabase, propertyId, primary.id)
+  const deliveryContext: AiDeliveryContext = {
+    knowledgeBaseId: primary.id,
+    virtualUser,
   }
 
   const history = await loadHistory(supabase, conversationId, propertyId)
@@ -138,6 +151,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
           conversationId,
           channel,
           send,
+          deliveryContext,
           incomingText,
           state: collecting,
           contattoNoto,
@@ -162,6 +176,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
           conversationId,
           channel,
           send,
+          deliveryContext,
           incomingText,
           state,
           contattoNoto,
@@ -178,6 +193,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         conversationId,
         channel,
         send,
+        deliveryContext,
         testo: "Mi dispiace, al momento non riesco ad avviare la richiesta per lo staff. Può riprovare tra poco?",
         metadata: { ai_handoff_error: "state_unavailable" },
       })
@@ -246,6 +262,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         conversationId,
         channel,
         send,
+        deliveryContext,
         incomingText,
         state,
         contattoNoto,
@@ -258,6 +275,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         conversationId,
         channel,
         send,
+        deliveryContext,
         testo: "Mi dispiace, al momento non riesco a registrare la richiesta per lo staff. Può riprovare tra poco?",
         metadata: { ai_handoff_error: "start_failed" },
       })
@@ -275,7 +293,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
       const fallback = testoRipiego()
       let externalId: string | undefined
       try {
-        const sendResult = await send(fallback)
+        const sendResult = await send(fallback, deliveryContext)
         externalId = sendResult?.externalId
       } catch (err) {
         console.log(`[v0] autopilot fallback send failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -288,6 +306,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
           property_id: propertyId,
           conversation_id: conversationId,
           sender_type: "agent",
+          sender_name: virtualUser.displayName,
           content: fallback,
           content_type: "text",
           status: "sent",
@@ -301,6 +320,8 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
             ai_grounded: result.grounded,
             ai_reason: result.reason ?? null,
             ai_knowledge_base_id: primary.id,
+            ai_virtual_user_id: virtualUser.virtualUserId,
+            ai_virtual_user_name: virtualUser.displayName,
           },
         })
         .select("id")
@@ -410,6 +431,8 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     ai_reason: result.reason ?? null,
     ai_source_ids: result.usedChunks.map((c) => c.source_id),
     ai_knowledge_base_id: primary.id,
+    ai_virtual_user_id: virtualUser.virtualUserId,
+    ai_virtual_user_name: virtualUser.displayName,
     ...(handoffMeta ?? {}),
     ...(unioneMeta ?? {}),
   }
@@ -422,6 +445,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         property_id: propertyId,
         conversation_id: conversationId,
         sender_type: "agent",
+        sender_name: virtualUser.displayName,
         content: result.answer,
         content_type: "text",
         status: "draft",
@@ -443,7 +467,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
     if (!send) return { action: "skipped", reason: "no_sender" }
     let externalId: string | undefined
     try {
-      const sendResult = await send(result.answer)
+      const sendResult = await send(result.answer, deliveryContext)
       externalId = sendResult?.externalId
     } catch (err) {
       console.log(`[v0] autopilot send failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -456,6 +480,7 @@ export async function runAutopilot(args: RunAutopilotArgs): Promise<RunAutopilot
         property_id: propertyId,
         conversation_id: conversationId,
         sender_type: "agent",
+        sender_name: virtualUser.displayName,
         content: result.answer,
         content_type: "text",
         status: "sent",
@@ -497,7 +522,10 @@ function contattoDaIdentita(identita: Identita): HandoffContact {
   })
 }
 
-type AutopilotSender = (text: string) => Promise<{ externalId?: string } | void>
+type AutopilotSender = (
+  text: string,
+  context: AiDeliveryContext,
+) => Promise<{ externalId?: string } | void>
 
 async function inviaRispostaAutopilot(args: {
   supabase: SupabaseClient
@@ -505,12 +533,13 @@ async function inviaRispostaAutopilot(args: {
   conversationId: string
   channel: AiChannel
   send: AutopilotSender
+  deliveryContext: AiDeliveryContext
   testo: string
   metadata: Record<string, unknown>
 }): Promise<RunAutopilotResult> {
   let externalId: string | undefined
   try {
-    const sendResult = await args.send(args.testo)
+    const sendResult = await args.send(args.testo, args.deliveryContext)
     externalId = sendResult?.externalId
   } catch (err) {
     console.log(`[v0] invio risposta passaggio staff fallito: ${err instanceof Error ? err.message : String(err)}`)
@@ -523,6 +552,7 @@ async function inviaRispostaAutopilot(args: {
       property_id: args.propertyId,
       conversation_id: args.conversationId,
       sender_type: "agent",
+      sender_name: args.deliveryContext.virtualUser.displayName,
       content: args.testo,
       content_type: "text",
       status: "sent",
@@ -533,6 +563,9 @@ async function inviaRispostaAutopilot(args: {
         ai_generated: true,
         ai_autopilot: true,
         ...args.metadata,
+        ai_knowledge_base_id: args.deliveryContext.knowledgeBaseId,
+        ai_virtual_user_id: args.deliveryContext.virtualUser.virtualUserId,
+        ai_virtual_user_name: args.deliveryContext.virtualUser.displayName,
       },
     })
     .select("id")
@@ -559,11 +592,22 @@ async function proseguiPassaggioStaff(args: {
   conversationId: string
   channel: AiChannel
   send: AutopilotSender
+  deliveryContext: AiDeliveryContext
   incomingText: string
   state: StaffHandoffState
   contattoNoto: HandoffContact
 }): Promise<RunAutopilotResult> {
-  const { supabase, propertyId, conversationId, channel, send, incomingText, state, contattoNoto } = args
+  const {
+    supabase,
+    propertyId,
+    conversationId,
+    channel,
+    send,
+    deliveryContext,
+    incomingText,
+    state,
+    contattoNoto,
+  } = args
 
   if (isHandoffCancellation(incomingText)) {
     await cancelCollectingStaffHandoff(supabase, state)
@@ -573,6 +617,7 @@ async function proseguiPassaggioStaff(args: {
       conversationId,
       channel,
       send,
+      deliveryContext,
       testo: handoffCancelledMessage(),
       metadata: { ai_handoff: true, ai_handoff_status: "cancelled", ai_handoff_id: state.id },
     })
@@ -590,6 +635,7 @@ async function proseguiPassaggioStaff(args: {
       conversationId,
       channel,
       send,
+      deliveryContext,
       testo: handoffContactPrompt(aggiornato.contact),
       metadata: { ai_handoff: true, ai_handoff_status: "collecting", ai_handoff_id: aggiornato.id },
     })
@@ -611,6 +657,7 @@ async function proseguiPassaggioStaff(args: {
       conversationId,
       channel,
       send,
+      deliveryContext,
       testo: "Grazie, ho raccolto i dati. Al momento non riesco però a registrare la richiesta per lo staff: può riprovare tra poco?",
       metadata: {
         ai_handoff: true,
@@ -639,6 +686,7 @@ async function proseguiPassaggioStaff(args: {
     conversationId,
     channel,
     send,
+    deliveryContext,
     testo: `Grazie${nome ? ` ${nome}` : ""}. Ho passato la sua richiesta al nostro staff, che la ricontatterà al più presto.`,
     metadata: {
       ai_handoff: true,

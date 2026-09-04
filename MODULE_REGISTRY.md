@@ -1,6 +1,6 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-09-02
+Ultimo aggiornamento: 2026-09-04
 
 ## Regola di lettura
 
@@ -10,7 +10,7 @@ Stati ufficiali usati nel progetto:
 
 `Idea` · `Specifica` · `UI/mock` · `Codice` · `Demo` · `Tenant reale` · `Multi-tenant` · `Production-ready` · `Vendibile`
 
-Snapshot considerato per questo audit: `main` dopo la PR #349, con deploy HotelAccelerator di produzione verificato. Le funzioni di prodotti satellite restano al livello dimostrabile dal Core o dal codice presente in questo repository; non vengono promosse sulla base di descrizioni o vecchie chat.
+Snapshot considerato per questo audit: `main` dopo la PR #365; la PR #366 aggiunge la capability specifica degli utenti virtuali IA per knowledge base. Le funzioni di prodotti satellite restano al livello dimostrabile dal Core o dal codice presente in questo repository; non vengono promosse sulla base di descrizioni o vecchie chat.
 
 ## Registro sintetico
 
@@ -33,6 +33,7 @@ Snapshot considerato per questo audit: `main` dopo la PR #349, con deploy HotelA
 | KPI operatori | Risposte, conversazioni e attesa mediana opt-in per utente | Codice | PR #315. Calcolo self-only e filtri account/canale presenti; conversione, qualita e storico pre-attivazione non vengono inventati. |
 | Gestione conversazioni | Assegnazioni, stati, priorita, tag, note, SLA, template, ricerca, traduzione e allegati | Specifica | Diverse parti sono gia' in codice, ma la capability aggregata non e' stata ancora auditata end-to-end su schema, API, permessi ed errori. |
 | AI Inbox | Intenti, estrazione, riassunti, risposte, escalation, sentiment, upselling e knowledge base | Specifica | Handoff durevole e associazione basi/canali hanno codice; l'insieme del modulo richiede eval, privacy, guardrail e misure di qualita prima di essere promosso. |
+| Utenti virtuali IA per knowledge base | Provisioning automatico 1:1, nome e firma per base, identita della base primaria, attribuzione Inbox e firma email | Codice | PR #366. Migrazione additiva applicata e backfill delle 8 basi esistenti; trigger e cascade verificati su database. Typecheck Core e preview build sono verdi. Serve E2E reale con due identita distinte, firma email e isolamento fra tenant prima di `Tenant reale`. Vedere `docs/AI_AGENT_IDENTITY.md`. |
 | Assistente vocale 3CX | Voice Agent 4BID, route tenant, tool Core, fallback 820, codice cliente, journal e supporto shared-PBX | Codice | PR #322-#324, #329, #331 e #335. Il Voice Agent 4BID ha risposto in una chiamata reale; journal, trascrizione/recording e isolamento 4BID/Barronci vanno ancora provati insieme prima di promuovere l'intera capability a `Tenant reale`. Vedere `docs/3CX_VOICE_AI.md` e `docs/3CX_SHARED_PBX_ROUTING.md`. |
 | Telefonate -> calendario domanda | Trascrizione 3CX, estrazione richieste AI, data richiesta e recovery del rebuild | Codice | PR #314 e #320. Pipeline e marker durevole sono in main; serve una chiamata reale con transcript persistito e richiesta materializzata. |
 | HotelAccelerator Voice | Centralino proprietario/addon che possa sostituire o affiancare PBX esterni | Idea | PR #341. Registrata intenzionalmente senza sviluppo; priorita attuale e rendere affidabile 3CX + OpenAI Realtime + Core. |

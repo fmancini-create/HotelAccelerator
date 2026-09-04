@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-08-31
+Ultimo aggiornamento: 2026-09-04
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -207,6 +207,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata
 - Decisione: il caso normale resta un tenant per integrazione CRM. Se piu' tenant condividono eccezionalmente lo stesso PBX 3CX, il Core non tenta di dedurre il tenant dal DID, dal contatto o dall'interno: il `ReportCall` non espone il DID e l'integrazione CRM di 3CX e' globale al PBX. Il tenant condiviso dichiara quindi esplicitamente `shared_pbx_journal_property_id`; un endpoint voice autenticato crea un hint temporale per il chiamante e il journal puo' deviare dal tenant sorgente solo se mapping, chiamante e intervallo temporale coincidono.
 - Conseguenza: `telephony_call_route_hints` resta backend-only e non introduce un secondo webhook owner. Nei percorsi solo-bot che non producono `ReportCall`, il bridge voice crea una `phone_calls` tenant-scoped con la trascrizione live; se il provider invia successivamente il journal, la stessa riga viene arricchita invece di duplicata. Senza mapping o hint valido il flusso fallisce sul comportamento standard e non attraversa tenant.
+
+## ADR-032 — Ogni knowledge base possiede il proprio utente virtuale IA
+
+- Stato: accettata; sostituisce il modello di identita IA tenant-wide introdotto dalla PR #364.
+- Decisione: ogni riga `knowledge_bases` provisiona automaticamente una identita backend-only in `ai_virtual_users`, con nome e firma personalizzabili. La base primaria del canale determina anche l'utente virtuale che presenta e firma la risposta. Non viene creato alcun account Supabase Auth ne alcuna riga fittizia in `admin_users`.
+- Conseguenza: messaggi, draft, fallback e handoff IA sono attribuiti tramite `sender_name` e metadati dell'utente virtuale; le email usano la firma della stessa identita. Tenant e knowledge base devono coincidere in ogni lookup. Le vecchie colonne tenant-wide di `ai_agent_settings` restano temporaneamente solo per compatibilita di schema e potranno essere rimosse esclusivamente con una migrazione separata.
 
 ## Decisioni aperte
 
