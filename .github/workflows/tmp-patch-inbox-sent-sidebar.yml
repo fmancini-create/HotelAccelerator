@@ -30,26 +30,20 @@ jobs:
           path = Path('app/admin/inbox/page.tsx')
           text = path.read_text(encoding='utf-8')
 
-          old_folders = '''                  { id: "starred", label: "Speciali", icon: Star },
-                  { id: "resolved", label: "Risolti", icon: Archive },
-                  { id: "spam", label: "Spam", icon: AlertCircle },'''
-          new_folders = '''                  { id: "starred", label: "Speciali", icon: Star },
-                  { id: "resolved", label: "Risolti", icon: Archive },
-                  { id: "sent", label: "Posta inviata", icon: Send },
-                  { id: "spam", label: "Spam", icon: AlertCircle },'''
+          resolved = '{ id: "resolved", label: "Risolti", icon: Archive },'
+          sent = '{ id: "sent", label: "Posta inviata", icon: Send },'
+          click = 'onClick={() => setStatusFilter(item.id)}'
+          sent_click = 'onClick={() => item.id === "sent" ? router.push("/admin/inbox/sent") : setStatusFilter(item.id)}'
 
-          old_action = '''                    isActive={statusFilter === item.id}
-                    onClick={() => setStatusFilter(item.id)}'''
-          new_action = '''                    isActive={item.id !== "sent" && statusFilter === item.id}
-                    onClick={() => item.id === "sent" ? router.push("/admin/inbox/sent") : setStatusFilter(item.id)}'''
+          if text.count(resolved) != 1:
+              raise SystemExit(f'Expected one Risolti entry, found {text.count(resolved)}')
+          if text.count(sent) != 0:
+              raise SystemExit('Posta inviata sidebar entry already exists')
+          if text.count(click) != 1:
+              raise SystemExit(f'Expected one smart-folder click handler, found {text.count(click)}')
 
-          if text.count(old_folders) != 1:
-              raise SystemExit(f'Expected one smart-folder block, found {text.count(old_folders)}')
-          if text.count(old_action) != 1:
-              raise SystemExit(f'Expected one smart-folder action block, found {text.count(old_action)}')
-
-          text = text.replace(old_folders, new_folders, 1)
-          text = text.replace(old_action, new_action, 1)
+          text = text.replace(resolved, resolved + '\n' + ' ' * 18 + sent, 1)
+          text = text.replace(click, sent_click, 1)
           path.write_text(text, encoding='utf-8')
           PY
 
@@ -59,9 +53,5 @@ jobs:
           git config user.name "hotelaccelerator-bot"
           git config user.email "actions@users.noreply.github.com"
           git add app/admin/inbox/page.tsx
-          if git diff --cached --quiet; then
-            echo "No patch needed"
-            exit 0
-          fi
           git commit -m "fix(inbox): add sent folder to sidebar"
           git push origin HEAD:fix/inbox-sent-folder-sidebar
