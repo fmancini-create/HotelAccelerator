@@ -2,7 +2,6 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { parse } from "node-html-parser"
 import { runAutopilot } from "@/lib/ai/autopilot"
-import { getAiAgentIdentity } from "@/lib/ai/agent-identity"
 import { sendGmailEmailWithServiceClient } from "@/lib/email/gmail-service-send"
 import { appendSignatureHtml } from "@/lib/email/signature"
 
@@ -97,8 +96,6 @@ export async function processEmailAiTasks(
   propertyId: string,
   tasks: EmailAiTask[],
 ): Promise<void> {
-  const agentIdentity = await getAiAgentIdentity(supabase, propertyId)
-
   for (const task of tasks) {
     const externalId = task.externalId?.trim()
     if (!externalId) {
@@ -111,6 +108,7 @@ export async function processEmailAiTasks(
     }
 
     let claimed = false
+    let virtualUserName: string | null = null
     try {
       claimed = await claimTask(supabase, propertyId, channelId, externalId)
       if (!claimed) continue
@@ -128,9 +126,10 @@ export async function processEmailAiTasks(
         channel: "email",
         channelId,
         incomingText: toPlainText(task.body, task.contentType),
-        send: async (text) => {
+        send: async (text, context) => {
+          virtualUserName = context.virtualUser.displayName
           const bodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px;">${text.replace(/\n/g, "<br>")}</div>`
-          const html = appendSignatureHtml(bodyHtml, agentIdentity.signatureHtml)
+          const html = appendSignatureHtml(bodyHtml, context.virtualUser.signatureHtml)
           const sent = await sendGmailEmailWithServiceClient(
             supabase,
             channelId,
@@ -158,7 +157,7 @@ export async function processEmailAiTasks(
         inboundExternalId: externalId,
         action: outcome.action,
         reason: outcome.reason ?? null,
-        aiAgentName: agentIdentity.displayName,
+        aiAgentName: virtualUserName,
       })
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
