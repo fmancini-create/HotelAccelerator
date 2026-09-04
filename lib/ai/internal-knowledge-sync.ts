@@ -1,4 +1,4 @@
-import crypto from "crypto"
+import crypto, { type JsonWebKey as NodeJsonWebKey } from "crypto"
 import { z } from "zod"
 import { MAX_SOURCE_CHARS } from "@/lib/ai/config"
 
@@ -128,7 +128,7 @@ type GithubOidcClaims = {
   ref?: string
   event_name?: string
 }
-type GithubJwk = JsonWebKey & { kid?: string; alg?: string; use?: string }
+type GithubJwk = NodeJsonWebKey & { kid?: string; alg?: string; use?: string }
 
 type CachedJwks = { expiresAt: number; keys: GithubJwk[] }
 let cachedJwks: CachedJwks | null = null
