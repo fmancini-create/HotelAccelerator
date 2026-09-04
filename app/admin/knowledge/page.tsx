@@ -7,7 +7,6 @@ import {
 } from "@/components/admin/knowledge/knowledge-bases-manager"
 import { KnowledgeGaps } from "@/components/admin/knowledge/knowledge-gaps"
 import { InternalKnowledgeSyncStatusCard } from "@/components/admin/knowledge/internal-knowledge-sync-status"
-import { AiAgentIdentityCard } from "@/components/admin/knowledge/ai-agent-identity-card"
 import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
@@ -68,19 +67,17 @@ export default async function KnowledgePage() {
     <div className="min-h-full bg-muted">
       <AdminHeader
         title="Assistente IA"
-        subtitle="Crea basi di conoscenza distinte e collegale ai singoli canali"
+        subtitle="Crea basi di conoscenza distinte, ciascuna con il proprio utente virtuale, e collegale ai canali"
       />
       <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex items-start gap-3 rounded-lg border border-ha-brand-soft bg-ha-brand-soft p-4 text-ha-brand-soft-foreground">
           <Sparkles className="mt-0.5 h-5 w-5 shrink-0" />
           <p className="text-sm leading-relaxed">
-            Ogni base ha le proprie fonti e il proprio comportamento. Collega le basi ai canali (bot Telegram, numero
-            WhatsApp, account email): un canale può usarne più di una, e la base <strong>primaria</strong> decide come
-            l&apos;IA risponde.
+            Ogni base ha le proprie fonti, il proprio comportamento e il proprio <strong>utente virtuale IA</strong> con
+            nome e firma personalizzabili. Un canale può usare più basi: la base <strong>primaria</strong> decide sia
+            come l&apos;IA risponde sia con quale identità si presenta.
           </p>
         </div>
-
-        <AiAgentIdentityCard />
 
         <KnowledgeBasesManager initialBases={initialBases} initialChannels={initialChannels} />
 
