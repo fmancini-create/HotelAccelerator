@@ -1,41 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-/**
- * Una sola destinazione dopo l'accesso.
- *
- * Prima erano due: "/admin/dashboard" per l'amministratore di una struttura e
- * "/super-admin" per chi amministra la piattaforma, cioe' due cruscotti gemelli
- * da tenere allineati a mano. Ora il cruscotto e' uno e mostra in cima la vista
- * d'insieme a chi ne ha diritto, per cui non c'e' piu' niente da smistare qui.
- *
- * Il tipo resta un letterale invece di `string`: se un domani qualcuno rimettera'
- * una seconda destinazione, dovra' farlo di proposito e non per distrazione.
- */
-export type AuthorizeResult = { authorized: true; destination: "/admin/dashboard" } | { authorized: false }
+export type AuthorizeResult =
+  | { authorized: true; destination: "/admin/dashboard" | "/super-admin" }
+  | { authorized: false }
 
 /**
- * Shared authorization gate applied AFTER a successful Supabase sign-in
- * (password or OAuth). It decides where the authenticated user may go:
+ * Decide il contesto iniziale dopo il login senza confondere i due ruoli.
  *
- *  - row in `admin_users` (matched by auth user id) -> tenant admin
- *  - else row in `platform_collaborators` (matched by email) with
- *    role 'super_admin' and is_active = true -> super admin
- *  - otherwise NOT authorized (caller must sign the user out)
- *
- * Works with both the browser and the server Supabase clients.
+ * Un utente registrato come amministratore di tenant continua ad atterrare
+ * nell'area operativa della struttura, anche se possiede anche privilegi di
+ * piattaforma: da li' puo' usare il cambio-contesto esplicito. Un collaboratore
+ * esclusivamente Super Admin atterra invece direttamente in `/super-admin`.
  */
 export async function authorizeUser(
   supabase: SupabaseClient,
   user: { id: string; email?: string | null },
 ): Promise<AuthorizeResult> {
-  // Tenant admin?
   const { data: adminUser } = await supabase.from("admin_users").select("id").eq("id", user.id).maybeSingle()
 
   if (adminUser) {
     return { authorized: true, destination: "/admin/dashboard" }
   }
 
-  // Super admin?
   if (user.email) {
     const { data: collaborator } = await supabase
       .from("platform_collaborators")
@@ -44,15 +30,12 @@ export async function authorizeUser(
       .maybeSingle()
 
     if (collaborator && collaborator.role === "super_admin" && collaborator.is_active) {
-      // Best-effort last login update (non-blocking for the auth decision).
       await supabase
         .from("platform_collaborators")
         .update({ last_login_at: new Date().toISOString() })
         .eq("id", collaborator.id)
 
-      // Stessa porta dell'amministratore di struttura: il cruscotto e' unico e
-      // decide da se' cosa mostrare in base al ruolo.
-      return { authorized: true, destination: "/admin/dashboard" }
+      return { authorized: true, destination: "/super-admin" }
     }
   }
 
