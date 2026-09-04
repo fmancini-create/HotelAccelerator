@@ -5,6 +5,7 @@ import Script from "next/script"
 import { Analytics } from "@vercel/analytics/next"
 import { LanguageProvider } from "@/lib/language-context"
 import { ConsentAwareAnalytics } from "@/components/cms/consent-aware-analytics"
+import { YandexTenantContext } from "@/components/analytics/yandex-tenant-context"
 
 interface RootClientLayoutProps {
   children: React.ReactNode
@@ -71,7 +72,14 @@ export default function RootClientLayout({ children, inter, playfair, isTenantSi
         `}</style>
 
         <LanguageProvider>{children}</LanguageProvider>
-        {isTenantSite ? <ConsentAwareAnalytics /> : <Analytics />}
+        {isTenantSite ? (
+          <ConsentAwareAnalytics />
+        ) : (
+          <>
+            <YandexTenantContext />
+            <Analytics />
+          </>
+        )}
       </body>
     </html>
   )
