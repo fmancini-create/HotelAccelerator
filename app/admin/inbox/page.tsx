@@ -2836,6 +2836,7 @@ export default function InboxPage() {
                   { id: "pending", label: "Urgenti", icon: AlertCircle },
                   { id: "starred", label: "Speciali", icon: Star },
                   { id: "resolved", label: "Risolti", icon: Archive },
+                  { id: "sent", label: "Posta inviata", icon: Send },
                   { id: "spam", label: "Spam", icon: AlertCircle },
                 ].map((item) => (
                   <NavFolder
@@ -2844,7 +2845,7 @@ export default function InboxPage() {
                     label={item.label}
                     icon={item.icon}
                     isActive={statusFilter === item.id}
-                    onClick={() => setStatusFilter(item.id)}
+                    onClick={() => item.id === "sent" ? router.push("/admin/inbox/sent") : setStatusFilter(item.id)}
                   />
                 ))}
                 {/* Le bozze in sospeso non sono uno stato del messaggio ma una
