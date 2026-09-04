@@ -1,0 +1,66 @@
+name: Temporary Inbox Sent Sidebar Patch
+
+on:
+  push:
+    branches:
+      - fix/inbox-sent-folder-sidebar
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'fix(inbox): add sent folder to sidebar'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/inbox-sent-folder-sidebar
+          fetch-depth: 0
+
+      - name: Add Posta inviata below Risolti
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/admin/inbox/page.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old_folders = '''                  { id: "starred", label: "Speciali", icon: Star },
+                  { id: "resolved", label: "Risolti", icon: Archive },
+                  { id: "spam", label: "Spam", icon: AlertCircle },'''
+          new_folders = '''                  { id: "starred", label: "Speciali", icon: Star },
+                  { id: "resolved", label: "Risolti", icon: Archive },
+                  { id: "sent", label: "Posta inviata", icon: Send },
+                  { id: "spam", label: "Spam", icon: AlertCircle },'''
+
+          old_action = '''                    isActive={statusFilter === item.id}
+                    onClick={() => setStatusFilter(item.id)}'''
+          new_action = '''                    isActive={item.id !== "sent" && statusFilter === item.id}
+                    onClick={() => item.id === "sent" ? router.push("/admin/inbox/sent") : setStatusFilter(item.id)}'''
+
+          if text.count(old_folders) != 1:
+              raise SystemExit(f'Expected one smart-folder block, found {text.count(old_folders)}')
+          if text.count(old_action) != 1:
+              raise SystemExit(f'Expected one smart-folder action block, found {text.count(old_action)}')
+
+          text = text.replace(old_folders, new_folders, 1)
+          text = text.replace(old_action, new_action, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name "hotelaccelerator-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add app/admin/inbox/page.tsx
+          if git diff --cached --quiet; then
+            echo "No patch needed"
+            exit 0
+          fi
+          git commit -m "fix(inbox): add sent folder to sidebar"
+          git push origin HEAD:fix/inbox-sent-folder-sidebar
