@@ -2,12 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import useSWR from "swr"
 import { ChevronDown, LogOut, MoreHorizontal, ShieldCheck } from "lucide-react"
 
 import { TenantSwitcher } from "@/components/admin/tenant-switcher"
 import { HotelAcceleratorLogo, HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
+import { isImmersiveAdminPage } from "@/components/platform/platform-chrome-routes"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -27,7 +28,6 @@ import {
   visibleEntries,
   type NavEntry,
 } from "@/lib/platform/nav"
-import { isImmersiveAdminPage } from "@/components/platform/platform-chrome-routes"
 
 type PlatformMe = {
   role: "super_admin" | "tenant_admin" | "member" | "none"
@@ -73,13 +73,7 @@ const NAV_ACCENT_DOT: Record<string, string> = {
   "/admin/tracking/sites": "bg-ha-module-automation",
 }
 
-/**
- * Header dell'AREA TENANT.
- *
- * Non contiene alcuna destinazione /super-admin. Per un utente che possiede
- * anche il ruolo di super admin, il passaggio di contesto e' un pulsante
- * esplicito "Piattaforma", separato dalla navigazione del tenant.
- */
+/** Header esclusivo dell'area di un singolo tenant. */
 export function TenantHeader() {
   const pathname = usePathname() || ""
   const immersive = isImmersiveAdminPage(pathname)
@@ -88,6 +82,21 @@ export function TenantHeader() {
   const { data: modulesData } = useSWR<ActiveModules>("/api/platform/modules", modulesFetcher, {
     revalidateOnFocus: false,
   })
+
+  const viewer = {
+    isAdmin: me?.isAdmin,
+    isPlatformAdmin: me?.role === "super_admin",
+    areas: me?.areas,
+    activeModules: modulesData?.activeModules,
+    canManageUsers: me?.canManageUsers,
+  }
+  const primaryNav = visibleEntries(OPERATIVE_PRIMARY, viewer)
+  const secondaryNav = visibleEntries(OPERATIVE_SECONDARY, viewer)
+  const settingsNav = visibleEntries(SETTINGS_ENTRIES, viewer)
+  const secondaryActive = secondaryNav.some((item) => isActive(item, pathname))
+  const settingsActive =
+    pathname.startsWith(SETTINGS_HUB_HREF) || settingsNav.some((item) => isActive(item, pathname))
+  const isPlatformAdmin = me?.role === "super_admin"
 
   if (isAuthPage(pathname)) {
     return (
@@ -100,25 +109,6 @@ export function TenantHeader() {
       </header>
     )
   }
-
-  const viewer = useMemo(
-    () => ({
-      isAdmin: me?.isAdmin,
-      isPlatformAdmin: me?.role === "super_admin",
-      areas: me?.areas,
-      activeModules: modulesData?.activeModules,
-      canManageUsers: me?.canManageUsers,
-    }),
-    [me, modulesData?.activeModules],
-  )
-
-  const primaryNav = useMemo(() => visibleEntries(OPERATIVE_PRIMARY, viewer), [viewer])
-  const secondaryNav = useMemo(() => visibleEntries(OPERATIVE_SECONDARY, viewer), [viewer])
-  const settingsNav = useMemo(() => visibleEntries(SETTINGS_ENTRIES, viewer), [viewer])
-  const secondaryActive = secondaryNav.some((item) => isActive(item, pathname))
-  const settingsActive =
-    pathname.startsWith(SETTINGS_HUB_HREF) || settingsNav.some((item) => isActive(item, pathname))
-  const isPlatformAdmin = me?.role === "super_admin"
 
   const handleSignOut = async () => {
     if (signingOut) return
@@ -162,16 +152,16 @@ export function TenantHeader() {
 
         <nav className="hidden lg:flex items-center gap-0.5 h-full" aria-label="Navigazione tenant">
           {primaryNav.map((item) => {
-            const active = isActive(item, pathname)
             const Icon = item.icon
-            const dot = active ? NAV_ACCENT_DOT[item.href] : undefined
+            const selected = isActive(item, pathname)
+            const dot = selected ? NAV_ACCENT_DOT[item.href] : undefined
             return (
               <Link
                 key={item.id}
                 href={item.href}
                 className={[
                   "flex items-center gap-1.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors",
-                  active ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-foreground hover:bg-muted",
+                  selected ? "bg-ha-brand-soft text-ha-brand-soft-foreground" : "text-foreground hover:bg-muted",
                 ].join(" ")}
               >
                 {dot && <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />}
@@ -200,9 +190,7 @@ export function TenantHeader() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-64">
             <div className="lg:hidden">
-              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Area tenant
-              </DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">Area tenant</DropdownMenuLabel>
               {primaryNav.map((item) => {
                 const Icon = item.icon
                 return (
@@ -217,9 +205,7 @@ export function TenantHeader() {
               <DropdownMenuSeparator />
             </div>
             {secondaryNav.length > 0 && (
-              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Altre sezioni tenant
-              </DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">Altre sezioni tenant</DropdownMenuLabel>
             )}
             {secondaryNav.map((item) => {
               const Icon = item.icon
@@ -252,9 +238,7 @@ export function TenantHeader() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-72">
-              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                Configurazione del tenant
-              </DropdownMenuLabel>
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">Configurazione del tenant</DropdownMenuLabel>
               {settingsNav.map((item) => {
                 const Icon = item.icon
                 return (
@@ -310,12 +294,8 @@ export function TenantHeader() {
                 <DropdownMenuSeparator />
               </>
             )}
-            <DropdownMenuItem asChild>
-              <Link href="/admin/profile" className="cursor-pointer">Il mio profilo</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href={SETTINGS_HUB_HREF} className="cursor-pointer">Impostazioni tenant</Link>
-            </DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/admin/profile" className="cursor-pointer">Il mio profilo</Link></DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href={SETTINGS_HUB_HREF} className="cursor-pointer">Impostazioni tenant</Link></DropdownMenuItem>
             {isPlatformAdmin && (
               <DropdownMenuItem asChild>
                 <Link href="/super-admin" className="flex items-center gap-2 cursor-pointer font-medium">
