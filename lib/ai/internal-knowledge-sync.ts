@@ -22,15 +22,17 @@ const SHA256 = /^[A-Fa-f0-9]{64}$/
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 const GITHUB_OIDC_ISSUER = "https://token.actions.githubusercontent.com"
 const GITHUB_OIDC_JWKS = `${GITHUB_OIDC_ISSUER}/.well-known/jwks`
+const GITHUB_OWNER = "fmancini-create"
+const GITHUB_OWNER_ID = "245582481"
 export const GITHUB_KNOWLEDGE_SYNC_AUDIENCE = "hotelaccelerator-knowledge-sync"
 
-type RepositoryBinding = { repository: string; ref: string }
+type RepositoryBinding = { repository: string; repositoryId: string; ref: string }
 
 const BUILTIN_REPOSITORY_BINDINGS: Partial<Record<InternalKnowledgeProductKey, RepositoryBinding>> = {
-  autoexel: { repository: "fmancini-create/v0-autoexel", ref: "refs/heads/main" },
-  mypetsenseai: { repository: "fmancini-create/v0-mypetsenseai-v2", ref: "refs/heads/MyPetSense" },
-  daynext: { repository: "fmancini-create/daynext-it", ref: "refs/heads/main" },
-  "risparmio-compulsivo": { repository: "fmancini-create/v0-risparmio-compulsivo", ref: "refs/heads/main" },
+  autoexel: { repository: "fmancini-create/v0-autoexel", repositoryId: "1106032365", ref: "refs/heads/main" },
+  mypetsenseai: { repository: "fmancini-create/v0-mypetsenseai-v2", repositoryId: "1125793606", ref: "refs/heads/MyPetSense" },
+  daynext: { repository: "fmancini-create/daynext-it", repositoryId: "1346440130", ref: "refs/heads/main" },
+  "risparmio-compulsivo": { repository: "fmancini-create/v0-risparmio-compulsivo", repositoryId: "1126019148", ref: "refs/heads/main" },
 }
 
 const repositoryAuthorizationSchema = z.object({
@@ -120,7 +122,9 @@ type GithubOidcClaims = {
   exp?: number
   nbf?: number
   repository?: string
+  repository_id?: string
   repository_owner?: string
+  repository_owner_id?: string
   ref?: string
   event_name?: string
 }
@@ -151,7 +155,12 @@ function audienceIncludes(aud: string | string[] | undefined, expected: string):
   return typeof aud === "string" ? aud === expected : Array.isArray(aud) && aud.includes(expected)
 }
 
-/** Verifica un token OIDC emesso da GitHub Actions per uno specifico prodotto. */
+/**
+ * Verifica un token OIDC emesso da GitHub Actions per uno specifico prodotto.
+ * Non dipende dal formato di `sub`: dal 15 luglio 2026 GitHub usa subject
+ * immutabili con owner/repository ID per i nuovi repository. Verifichiamo
+ * direttamente le claim firmate repository_id/owner_id + ref.
+ */
 export async function verifyGithubActionsKnowledgeToken(
   token: string,
   productKey: InternalKnowledgeProductKey,
@@ -171,9 +180,9 @@ export async function verifyGithubActionsKnowledgeToken(
   if (!audienceIncludes(claims.aud, GITHUB_KNOWLEDGE_SYNC_AUDIENCE)) return false
   if (!claims.exp || claims.exp <= nowSeconds - 30) return false
   if (claims.nbf && claims.nbf > nowSeconds + 30) return false
-  if (claims.repository !== binding.repository || claims.repository_owner !== "fmancini-create") return false
+  if (claims.repository !== binding.repository || claims.repository_id !== binding.repositoryId) return false
+  if (claims.repository_owner !== GITHUB_OWNER || claims.repository_owner_id !== GITHUB_OWNER_ID) return false
   if (claims.ref !== binding.ref) return false
-  if (claims.sub !== `repo:${binding.repository}:ref:${binding.ref}`) return false
   if (claims.event_name !== "push" && claims.event_name !== "workflow_dispatch") return false
 
   try {
