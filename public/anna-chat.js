@@ -130,16 +130,50 @@
     return data
   }
 
+  function updateLastSeen(message) {
+    if (message?.stored_at && message.stored_at > lastSeen) lastSeen = message.stored_at
+  }
+
+  function findPendingCustomer(content) {
+    return Array.from(messagesEl.querySelectorAll('[data-pending="true"]')).find(
+      (element) => element.textContent === content,
+    )
+  }
+
   function appendMessage(message) {
-    if (!message || !message.content) return
-    if (message.id && messagesEl.querySelector(`[data-message-id="${CSS.escape(String(message.id))}"]`)) return
+    if (!message || !message.content) return null
+
+    if (message.id) {
+      const existing = messagesEl.querySelector(`[data-message-id="${CSS.escape(String(message.id))}"]`)
+      if (existing) {
+        updateLastSeen(message)
+        return existing
+      }
+
+      // The customer message is rendered optimistically before the POST returns.
+      // Polling can see the persisted row while that same POST is still waiting
+      // for Anna. Reconcile that row with the pending bubble instead of appending
+      // a second copy.
+      if (message.sender_type === 'customer') {
+        const pending = findPendingCustomer(message.content)
+        if (pending) {
+          pending.dataset.messageId = String(message.id)
+          delete pending.dataset.pending
+          updateLastSeen(message)
+          return pending
+        }
+      }
+    }
+
     const bubble = document.createElement('div')
     bubble.className = `bubble ${message.sender_type === 'customer' ? 'customer' : message.sender_type === 'system' ? 'system' : 'agent'}`
-    if (message.id) bubble.dataset.messageId = message.id
+    if (message.id) bubble.dataset.messageId = String(message.id)
+    if (message.pending) bubble.dataset.pending = 'true'
     bubble.textContent = message.content
     messagesEl.appendChild(bubble)
-    if (message.stored_at && message.stored_at > lastSeen) lastSeen = message.stored_at
+    updateLastSeen(message)
     messagesEl.scrollTop = messagesEl.scrollHeight
+    return bubble
   }
 
   async function startConversation() {
@@ -158,7 +192,8 @@
       conversationId = data.conversation_id || ''
       if (!conversationId) throw new Error('Conversazione non disponibile')
       localStorage.setItem(storageKey, conversationId)
-      if (data.welcome_message) appendMessage({ sender_type: 'system', content: data.welcome_message })
+      // The welcome message is persisted server-side. Do not render the copy
+      // returned by `start`: refreshMessages() will load that same stored row once.
     } catch (error) {
       showError(error instanceof Error ? error.message : 'Impossibile aprire la chat')
     } finally {
@@ -237,13 +272,18 @@
     clearError()
     input.value = ''
     input.style.height = 'auto'
-    appendMessage({ sender_type: 'customer', content: text })
+
+    const optimisticId = `local-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    appendMessage({ id: optimisticId, sender_type: 'customer', content: text, pending: true })
 
     try {
       const data = await post({ action: 'send', conversation_id: conversationId, message: text })
+      if (data.message) appendMessage(data.message)
       if (data.ai === 'risposta') typing.classList.add('show')
       window.setTimeout(refreshMessages, 500)
     } catch (error) {
+      const optimistic = messagesEl.querySelector(`[data-message-id="${CSS.escape(optimisticId)}"]`)
+      if (optimistic?.dataset.pending === 'true') optimistic.remove()
       showError(error instanceof Error ? error.message : 'Invio non riuscito')
       input.value = text
     } finally {
