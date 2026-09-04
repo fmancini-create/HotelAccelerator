@@ -8,7 +8,7 @@
   const instanceId = `anna-4bid-${publicKey}`
   if (document.getElementById(instanceId)) return
 
-  const blockedPrefixes = (script.getAttribute("data-exclude-paths") || "/admin,/super-admin,/login,/register,/onboarding")
+  const blockedPrefixes = (script.getAttribute("data-exclude-paths") || "/admin,/super-admin,/dashboard,/login,/register,/signup,/onboarding,/account,/settings,/app,/widget,/api")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
