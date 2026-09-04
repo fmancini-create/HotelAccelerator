@@ -3,8 +3,10 @@ import { indexSource } from "@/lib/ai/ingest"
 import {
   contentSha256,
   getAuthorizedInternalKnowledgeRepository,
+  getBuiltinInternalKnowledgeRepository,
   internalKnowledgeSyncSchema,
   isMissingInternalKnowledgeSyncSchema,
+  verifyGithubActionsKnowledgeToken,
   verifyInternalKnowledgeSyncSignature,
 } from "@/lib/ai/internal-knowledge-sync"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -27,12 +29,6 @@ function response(body: Record<string, unknown>, status: number) {
 }
 
 export async function POST(request: NextRequest) {
-  const syncSecret = process.env.INTERNAL_KNOWLEDGE_SYNC_SECRET
-  if (!syncSecret || syncSecret.length < 32) {
-    console.error("[internal-knowledge-sync] configurazione segreto mancante o non valida")
-    return response({ error: "Sincronizzazione interna non configurata" }, 503)
-  }
-
   let rawBody: string
   try {
     rawBody = await request.text()
@@ -41,17 +37,6 @@ export async function POST(request: NextRequest) {
   }
   if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
     return response({ error: "Richiesta troppo grande" }, 413)
-  }
-
-  const signatureValid = verifyInternalKnowledgeSyncSignature({
-    rawBody,
-    timestamp: request.headers.get("x-internal-knowledge-timestamp"),
-    signature: request.headers.get("x-internal-knowledge-signature"),
-    secret: syncSecret,
-  })
-  if (!signatureValid) {
-    console.warn("[internal-knowledge-sync] firma rifiutata")
-    return response({ error: "Non autorizzato" }, 401)
   }
 
   let body: unknown
@@ -65,14 +50,48 @@ export async function POST(request: NextRequest) {
   if (contentSha256(parsed.data.content) !== parsed.data.content_sha256.toLowerCase()) {
     return response({ error: "Impronta del contenuto non valida" }, 400)
   }
-  const authorizedRepository = getAuthorizedInternalKnowledgeRepository(
-    parsed.data.product_key,
-    process.env.INTERNAL_KNOWLEDGE_SYNC_REPOSITORIES,
-  )
-  if (!authorizedRepository) {
-    console.error("[internal-knowledge-sync] repository autorizzato non configurato", { product: parsed.data.product_key })
-    return response({ error: "Sincronizzazione interna non configurata" }, 503)
+
+  // I repository storici possono continuare a usare la firma HMAC. I nuovi
+  // satelliti usano invece un token OIDC effimero emesso da GitHub Actions:
+  // nessun segreto condiviso deve essere copiato nei repository prodotto.
+  const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? null
+  let authorizedRepository: string | null = null
+
+  if (bearer) {
+    const oidcValid = await verifyGithubActionsKnowledgeToken(bearer, parsed.data.product_key)
+    if (!oidcValid) {
+      console.warn("[internal-knowledge-sync] GitHub OIDC rifiutato", { product: parsed.data.product_key })
+      return response({ error: "Non autorizzato" }, 401)
+    }
+    authorizedRepository = getBuiltinInternalKnowledgeRepository(parsed.data.product_key)?.repository ?? null
+  } else {
+    const syncSecret = process.env.INTERNAL_KNOWLEDGE_SYNC_SECRET
+    if (!syncSecret || syncSecret.length < 32) {
+      console.error("[internal-knowledge-sync] configurazione segreto HMAC mancante o non valida")
+      return response({ error: "Sincronizzazione interna non configurata" }, 503)
+    }
+
+    const signatureValid = verifyInternalKnowledgeSyncSignature({
+      rawBody,
+      timestamp: request.headers.get("x-internal-knowledge-timestamp"),
+      signature: request.headers.get("x-internal-knowledge-signature"),
+      secret: syncSecret,
+    })
+    if (!signatureValid) {
+      console.warn("[internal-knowledge-sync] firma HMAC rifiutata")
+      return response({ error: "Non autorizzato" }, 401)
+    }
+
+    authorizedRepository = getAuthorizedInternalKnowledgeRepository(
+      parsed.data.product_key,
+      process.env.INTERNAL_KNOWLEDGE_SYNC_REPOSITORIES,
+    )
+    if (!authorizedRepository) {
+      console.error("[internal-knowledge-sync] repository autorizzato non configurato", { product: parsed.data.product_key })
+      return response({ error: "Sincronizzazione interna non configurata" }, 503)
+    }
   }
+
   if (authorizedRepository !== parsed.data.repository) {
     console.warn("[internal-knowledge-sync] repository rifiutato", { product: parsed.data.product_key })
     return response({ error: "Non autorizzato" }, 403)
