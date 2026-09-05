@@ -6,6 +6,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { LanguageProvider } from "@/lib/language-context"
 import { ConsentAwareAnalytics } from "@/components/cms/consent-aware-analytics"
 import { YandexTenantContext } from "@/components/analytics/yandex-tenant-context"
+import { SuiteAnalyticsTracker } from "@/components/analytics/suite-analytics-tracker"
 
 interface RootClientLayoutProps {
   children: React.ReactNode
@@ -32,7 +33,6 @@ export default function RootClientLayout({ children, inter, playfair, isTenantSi
           `}
         </Script>
 
-        {/* Yandex.Metrika counter */}
         <Script id="yandex-metrika" strategy="afterInteractive">
           {`
             (function(m,e,t,r,i,k,a){
@@ -58,8 +58,7 @@ export default function RootClientLayout({ children, inter, playfair, isTenantSi
               alt=""
             />
           </div>
-        </noscript>
-        {/* /Yandex.Metrika counter */}</>}
+        </noscript></>}
       </head>
       <body
         className={`${inter.className} antialiased safe-area-top safe-area-bottom`}
@@ -72,6 +71,7 @@ export default function RootClientLayout({ children, inter, playfair, isTenantSi
         `}</style>
 
         <LanguageProvider>{children}</LanguageProvider>
+        <SuiteAnalyticsTracker />
         {isTenantSite ? (
           <ConsentAwareAnalytics />
         ) : (
