@@ -21,6 +21,8 @@ type RawPhoneCall = {
   duration_seconds: number | null
   contact_id: string | null
   user_id: string | null
+  callback_status: string | null
+  callback_visible_after: string | null
 }
 
 type DashboardPhoneCall = {
@@ -32,33 +34,12 @@ type DashboardPhoneCall = {
   duration_seconds: number | null
   contact_id: string | null
   user_id: string | null
+  callback_status: string | null
+  callback_visible_after: string | null
 }
 
 type ContactLabel = { id: string; name: string | null; company: string | null }
 type UserLabel = { id: string; name: string | null }
-
-function callbackState(calls: Array<{ number: string | null; status: string | null; started_at: string | null }>) {
-  const completedAt = new Map<string, number>()
-  const callbacks: string[] = []
-
-  // Calls arrive newest first. At each missed call, completedAt already contains
-  // any successful contact with the same number that happened AFTER it.
-  for (const call of calls) {
-    const number = call.number ?? ""
-    const at = call.started_at ? new Date(call.started_at).getTime() : 0
-    if (!number || !at) continue
-
-    if (call.status === "completed") {
-      const previous = completedAt.get(number) ?? 0
-      if (at > previous) completedAt.set(number, at)
-      continue
-    }
-
-    if (call.status === "missed" && !completedAt.has(number)) callbacks.push(number)
-  }
-
-  return new Set(callbacks)
-}
 
 export async function GET(request: NextRequest) {
   const identity = await getCallerIdentity(request)
@@ -196,7 +177,9 @@ export async function GET(request: NextRequest) {
     try {
       const { data, error } = await sb
         .from("phone_calls")
-        .select("id,direction,status,counterpart_number,started_at,duration_seconds,contact_id,user_id")
+        .select(
+          "id,direction,status,counterpart_number,started_at,duration_seconds,contact_id,user_id,callback_status,callback_visible_after",
+        )
         .eq("property_id", propertyId)
         .order("started_at", { ascending: false, nullsFirst: false })
         .limit(60)
@@ -211,6 +194,8 @@ export async function GET(request: NextRequest) {
         duration_seconds: call.duration_seconds,
         contact_id: call.contact_id,
         user_id: call.user_id,
+        callback_status: call.callback_status,
+        callback_visible_after: call.callback_visible_after,
       }))
 
       const contactIds = [...new Set(rows.map((call) => call.contact_id).filter(Boolean))] as string[]
@@ -227,12 +212,18 @@ export async function GET(request: NextRequest) {
         ((contacts.data ?? []) as ContactLabel[]).map((contact) => [contact.id, contact]),
       )
       const userById = new Map<string, string | null>(
-        ((users.data ?? []) as UserLabel[]).map((user) => [user.id, user.name]),
+        ((users.data ?? []) as UserLabel[]).map((user) => [user.id, user.name ?? null]),
       )
-      const callbackNumbers = callbackState(rows)
+      const now = Date.now()
 
       const mapped = rows.map((call) => {
         const contact = call.contact_id ? contactById.get(call.contact_id) : null
+        const visible = call.callback_visible_after ? new Date(call.callback_visible_after).getTime() <= now : false
+        const needsCallback =
+          call.direction === "inbound" &&
+          (call.callback_status === "pending" || call.callback_status === "in_progress") &&
+          visible
+
         return {
           id: call.id,
           direction: call.direction,
@@ -242,7 +233,7 @@ export async function GET(request: NextRequest) {
           durationSeconds: call.duration_seconds,
           contactName: contact?.name ?? contact?.company ?? null,
           handledBy: call.user_id ? userById.get(call.user_id) ?? null : null,
-          needsCallback: call.direction === "inbound" && call.status === "missed" && !!call.number && callbackNumbers.has(call.number),
+          needsCallback,
         }
       })
 

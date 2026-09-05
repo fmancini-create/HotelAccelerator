@@ -26,7 +26,7 @@ export function numeroLeggibile(n: string | null): string {
    * "0+3197010241328". Quello zero e' il prefisso con cui il centralino prende
    * la linea esterna, non parte del numero: lasciandolo, il numero mostrato non
    * e' richiamabile e un olandese (+31) sembrava un numero italiano che inizia
-   * per zero. Va togliato PRIMA di levare i simboli, perche' dopo il "+"
+   * per zero. Va tolto PRIMA di levare i simboli, perche' dopo il "+"
    * sparisce e "0+41..." diventerebbe "041...", indistinguibile da un prefisso
    * urbano italiano.
    */
@@ -48,14 +48,15 @@ export function numeroLeggibile(n: string | null): string {
 }
 
 /**
- * L'etichetta dell'esito.
+ * L'etichetta dell'esito deve descrivere cio' che sa l'operatore, non far
+ * sembrare guasto il PBX. `ring_group_timeout` e' una deduzione nostra: il
+ * gruppo ha raggiunto il proprio timeout senza una risposta umana. Non significa
+ * che il centralino sia caduto o abbia avuto un errore tecnico.
  *
- * "Caduta al centralino" e non "Senza risposta" quando l'esito e' DEDOTTO dal
- * timeout del gruppo di squillo: il centralino non l'ha dichiarata persa, e dare
- * alle due cose la stessa etichetta spaccerebbe una nostra deduzione per un dato
- * certificato.
+ * Manteniamo visibile la differenza rispetto a una mancata risposta dichiarata
+ * direttamente dal provider, ma con un testo operativo e non allarmistico.
  */
 export function etichettaEsito(status: string, statusSource: string): string {
   if (status !== "missed") return "Completata"
-  return statusSource === "ring_group_timeout" ? "Caduta al centralino" : "Senza risposta"
+  return statusSource === "ring_group_timeout" ? "Non risposta dal gruppo" : "Senza risposta"
 }
