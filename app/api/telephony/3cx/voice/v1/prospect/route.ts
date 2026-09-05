@@ -14,6 +14,7 @@ import {
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { captureSharedPbxVoiceExchange, touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
 import { normalizeVoiceCallerAliases } from "@/lib/telephony/voice-request"
+import { resolveProspectQualification } from "@/lib/telephony/prospect-qualification"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -138,12 +139,30 @@ export async function POST(request: NextRequest) {
       crmToolKey: route?.crm_tool_key,
     })
 
+    // La qualifica commerciale non e' piu' affidata solo al prompt del modello.
+    // Se la risposta non sta gia' proponendo un operatore, chiediamo in modo
+    // deterministico UNA sola informazione mancante per turno: prima nome e
+    // cognome, poi email. Dati gia' noti o domande rifiutate non si ripetono.
+    const qualification = response.transfer.required
+      ? null
+      : await resolveProspectQualification({
+          propertyId: auth.propertyId,
+          callerNumber: parsed.data.caller_number,
+          history: parsed.data.history,
+          question: parsed.data.question,
+          currentSpeech: response.speech,
+        })
+
+    const speech = qualification?.prompt
+      ? `${response.speech.trim()} ${qualification.prompt}`.trim()
+      : response.speech
+
     await captureSharedPbxVoiceExchange({
       targetPropertyId: auth.propertyId,
       callerNumber: parsed.data.caller_number,
       history: parsed.data.history,
       question: parsed.data.question,
-      responseSpeech: response.speech,
+      responseSpeech: speech,
       agentLabel: route?.agent_label ?? product.label,
     })
 
@@ -155,15 +174,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           ...response,
+          speech,
           transfer: { ...response.transfer, required: false },
           audience: "prospect",
+          qualification: { requested: null },
           request_id: requestId,
         },
         { headers: NO_STORE },
       )
     }
 
-    return NextResponse.json({ ...response, audience: "prospect", request_id: requestId }, { headers: NO_STORE })
+    return NextResponse.json(
+      {
+        ...response,
+        speech,
+        audience: "prospect",
+        qualification: {
+          requested: qualification?.stage ?? null,
+          name_known: qualification?.nameKnown ?? false,
+          email_known: qualification?.emailKnown ?? false,
+        },
+        request_id: requestId,
+      },
+      { headers: NO_STORE },
+    )
   } catch (error) {
     console.error("[3cx-prospect] query failed", {
       requestId,
