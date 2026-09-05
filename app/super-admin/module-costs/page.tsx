@@ -3,7 +3,7 @@
 import { useState } from "react"
 import useSWR from "swr"
 import Link from "next/link"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, UserRoundSearch } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -96,7 +96,29 @@ export default function ModuleCostsPage() {
           </p>
         </header>
 
-        <OpenAICostsPanel />
+        <div className="space-y-4 mb-8">
+          <OpenAICostsPanel />
+
+          <Card className="border-ha-brand/30">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <UserRoundSearch className="h-5 w-5 text-ha-brand" aria-hidden />
+                HotelAccelerator Scout
+              </CardTitle>
+              <CardDescription>
+                Scout non usa il costo mensile fisso: ha attivazione una tantum, crediti a consumo, costo provider storico e moltiplicatore dedicato.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-neutral-600">
+                Gestisci costo per enrichment, ricarico, crediti inclusi, saldi tenant e margine.
+              </p>
+              <Button asChild>
+                <Link href="/super-admin/scout-billing">Apri economics Scout</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
 
         <section aria-labelledby="module-costs-title">
           <div className="mb-4">
