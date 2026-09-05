@@ -22,6 +22,11 @@ type RechargePaymentSource = {
   stripe_payment_method_id: string
 }
 
+type RechargeSettings = RechargePaymentSource & {
+  enabled: boolean
+  status: "disabled" | "ready" | "action_required" | "error"
+}
+
 function paymentStateError(status: string) {
   const code = status === "requires_action" ? "authentication_required" : "card_declined"
   return Object.assign(new Error(`SCOUT_AUTO_RECHARGE_${status.toUpperCase()}`), { code })
@@ -55,10 +60,12 @@ async function finalizeSuccessfulAttempt(
     .eq("property_id", params.propertyId)
   if (attemptError) throw attemptError
 
+  // Do not force status back to ready here. The tenant may have disabled
+  // auto-recharge while a PaymentIntent was already in flight. Reconciliation
+  // must finish accounting for the existing payment without re-enabling consent.
   const { error: settingsError } = await db
     .from("scout_auto_recharge_settings")
     .update({
-      status: "ready",
       last_success_at: now,
       last_payment_intent_id: params.paymentIntentId,
       last_error_code: null,
@@ -67,6 +74,26 @@ async function finalizeSuccessfulAttempt(
     })
     .eq("property_id", params.propertyId)
   if (settingsError) throw settingsError
+}
+
+async function cancelUnchargedAttempt(
+  db: SupabaseClient,
+  params: { propertyId: string; attemptId: string },
+) {
+  const now = new Date().toISOString()
+  const { error } = await db
+    .from("scout_auto_recharge_attempts")
+    .update({
+      status: "failed",
+      error_code: "disabled_by_tenant_before_charge",
+      completed_at: now,
+      updated_at: now,
+    })
+    .eq("id", params.attemptId)
+    .eq("property_id", params.propertyId)
+    .is("stripe_payment_intent_id", null)
+  if (error) throw error
+  return { triggered: false, cancelled: true }
 }
 
 async function markChargeFailure(
@@ -108,7 +135,7 @@ async function chargeAttempt(
   params: {
     propertyId: string
     attempt: RechargeAttempt
-    paymentSource: RechargePaymentSource
+    paymentSource: RechargePaymentSource | null
   },
 ) {
   const stripe = getStripe()
@@ -144,6 +171,10 @@ async function chargeAttempt(
         })
       }
       throw new Error(`SCOUT_AUTO_RECHARGE_${existing.status.toUpperCase()}`)
+    }
+
+    if (!params.paymentSource?.stripe_customer_id || !params.paymentSource.stripe_payment_method_id) {
+      throw Object.assign(new Error("SCOUT_AUTO_RECHARGE_PAYMENT_METHOD_MISSING"), { code: "card_declined" })
     }
 
     const paymentIntent = await stripe.paymentIntents.create(
@@ -216,15 +247,20 @@ export async function maybeAutoRechargeScout(db: SupabaseClient, propertyId: str
   const billing = await getScoutTenantBillingState(db, propertyId)
   if (!billing.active || !billing.pricingConfigured || !billing.creditPriceCents) return { triggered: false }
 
-  const { data: settings, error: settingsError } = await db
+  const { data: settingsData, error: settingsError } = await db
     .from("scout_auto_recharge_settings")
-    .select("stripe_customer_id,stripe_payment_method_id")
+    .select("enabled,status,stripe_customer_id,stripe_payment_method_id")
     .eq("property_id", propertyId)
     .maybeSingle()
   if (settingsError) throw settingsError
 
-  const paymentSource = settings as RechargePaymentSource | null
-  if (!paymentSource?.stripe_customer_id || !paymentSource?.stripe_payment_method_id) return { triggered: false }
+  const settings = settingsData as RechargeSettings | null
+  const paymentSource = settings?.stripe_customer_id && settings?.stripe_payment_method_id
+    ? {
+        stripe_customer_id: settings.stripe_customer_id,
+        stripe_payment_method_id: settings.stripe_payment_method_id,
+      }
+    : null
 
   const { data: pending, error: pendingError } = await db
     .from("scout_auto_recharge_attempts")
@@ -237,12 +273,23 @@ export async function maybeAutoRechargeScout(db: SupabaseClient, propertyId: str
   if (pendingError) throw pendingError
 
   if (pending) {
+    const attempt = pending as RechargeAttempt
+
+    // Once Stripe has an intent, reconciliation must finish even if consent was
+    // disabled meanwhile: an external charge may already exist. Before an intent
+    // exists, current tenant consent is authoritative and no charge may start.
+    if (!attempt.stripe_payment_intent_id && (!settings?.enabled || settings.status !== "ready")) {
+      return cancelUnchargedAttempt(db, { propertyId, attemptId: attempt.id })
+    }
+
     return chargeAttempt(db, {
       propertyId,
-      attempt: pending as RechargeAttempt,
+      attempt,
       paymentSource,
     })
   }
+
+  if (!settings?.enabled || settings.status !== "ready" || !paymentSource) return { triggered: false }
 
   const { data, error } = await db.rpc("scout_claim_auto_recharge", {
     p_property_id: propertyId,
