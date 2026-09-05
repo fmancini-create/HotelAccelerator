@@ -1,4 +1,5 @@
 import "server-only"
+import { interpretScoutSearch } from "@/lib/crm/scout-search"
 
 const APOLLO_BASE_URL = "https://api.apollo.io/api/v1"
 const REQUEST_TIMEOUT_MS = 15_000
@@ -133,14 +134,15 @@ export async function searchApolloPeople(input: {
   page: number
   perPage: number
 }) {
-  const keywordTags = organizationKeywordTags(input.keywords)
+  const { providerInput } = interpretScoutSearch(input)
+  const keywordTags = organizationKeywordTags(providerInput.keywords)
   const payload = await apolloPost("/mixed_people/api_search", {
     q_organization_keyword_tags: keywordTags.length ? keywordTags : undefined,
-    person_titles: input.titles.length ? input.titles : undefined,
-    person_seniorities: input.seniorities.length ? input.seniorities : undefined,
-    organization_locations: input.organizationLocations.length ? input.organizationLocations : undefined,
-    page: input.page,
-    per_page: input.perPage,
+    person_titles: providerInput.titles.length ? providerInput.titles : undefined,
+    person_seniorities: providerInput.seniorities.length ? providerInput.seniorities : undefined,
+    organization_locations: providerInput.organizationLocations.length ? providerInput.organizationLocations : undefined,
+    page: providerInput.page,
+    per_page: providerInput.perPage,
   })
   const root = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
   const people = Array.isArray(root.people) ? root.people.map(normalizePerson).filter(Boolean) as ApolloPerson[] : []
@@ -150,8 +152,8 @@ export async function searchApolloPeople(input: {
       : {}
   return {
     people,
-    page: Number(pagination.page ?? root.page ?? input.page),
-    perPage: Number(pagination.per_page ?? root.per_page ?? input.perPage),
+    page: Number(pagination.page ?? root.page ?? providerInput.page),
+    perPage: Number(pagination.per_page ?? root.per_page ?? providerInput.perPage),
     totalEntries: Number(pagination.total_entries ?? root.total_entries ?? people.length),
     totalPages: Number(pagination.total_pages ?? root.total_pages ?? 1),
   }
