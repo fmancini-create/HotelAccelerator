@@ -1,43 +1,68 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { AlertCircle, ChevronLeft, ChevronRight, Loader2, RefreshCw, Search, Send } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import {
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Mail,
+  MessageCircle,
+  RefreshCw,
+  Search,
+  Send,
+} from "lucide-react"
 import { format } from "date-fns"
 import { it } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
-type Mailbox = {
-  id: string
-  email: string | null
-  name: string | null
-  reconnectRequired?: boolean
-}
+const PAGE_SIZE = 50
 
-type GmailThread = {
-  id: string
-  subject: string
-  snippet: string
-  from: { name: string; email: string }
-  internalDate: number
-  date: string
-  messagesCount: number
-}
+const CHANNELS = [
+  { value: "all", label: "Tutti i canali" },
+  { value: "email", label: "Email" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "telegram", label: "Telegram" },
+  { value: "chat", label: "Chat" },
+  { value: "messenger", label: "Messenger" },
+  { value: "instagram", label: "Instagram" },
+  { value: "x", label: "X" },
+  { value: "linkedin", label: "LinkedIn" },
+] as const
 
-type GmailMessage = {
+type SentItem = {
   id: string
-  subject: string
-  from: { name: string; email: string }
-  to: string
+  conversationId: string
+  channel: string
+  subject: string | null
+  recipientName: string | null
+  recipientDetail: string | null
   content: string
-  content_type: string
-  snippet: string
-  sender_type: "customer" | "agent"
-  internalDate: number
-  gmail_internal_date: string
+  preview: string
+  contentType: string
+  sentAt: string
+  senderName: string | null
+  status: string | null
 }
 
-function sanitizeEmailHtml(html: string) {
+function channelLabel(channel: string) {
+  return CHANNELS.find((item) => item.value === channel)?.label || channel
+}
+
+function ChannelIcon({ channel, className = "h-4 w-4" }: { channel: string; className?: string }) {
+  if (channel === "email") return <Mail className={className} aria-hidden />
+  if (channel === "telegram") return <Send className={className} aria-hidden />
+  return <MessageCircle className={className} aria-hidden />
+}
+
+function formatSentDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ""
+  return format(date, "dd MMM yyyy, HH:mm", { locale: it })
+}
+
+function sanitizeHtml(html: string) {
   return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, "")
@@ -45,23 +70,16 @@ function sanitizeEmailHtml(html: string) {
     .replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"')
 }
 
-function MessageBody({ message }: { message: GmailMessage }) {
-  const content = message.content || message.snippet || ""
-  const isHtml = message.content_type === "text/html" || /<[a-z][\s\S]*>/i.test(content)
+function SentBody({ item }: { item: SentItem }) {
+  const isHtml = item.contentType === "html" || item.contentType === "text/html" || /<[a-z][\s\S]*>/i.test(item.content)
 
-  if (!content.trim()) {
-    return <p className="text-sm italic text-muted-foreground">(Nessun contenuto)</p>
-  }
+  if (!item.content.trim()) return <p className="text-sm italic text-muted-foreground">(Nessun contenuto)</p>
+  if (!isHtml) return <div className="whitespace-pre-wrap break-words text-sm leading-6">{item.content}</div>
 
-  if (!isHtml) {
-    return <div className="whitespace-pre-wrap break-words text-sm leading-6">{content}</div>
-  }
-
-  const document = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>html,body{margin:0;padding:0;background:#fff;color:#202124;font-family:Arial,sans-serif;font-size:14px;line-height:1.5}img{max-width:100%;height:auto}table{max-width:100%}a{color:#1a73e8}</style></head><body>${sanitizeEmailHtml(content)}</body></html>`
-
+  const document = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base target="_blank"><style>html,body{margin:0;padding:0;background:#fff;color:#202124;font-family:Arial,sans-serif;font-size:14px;line-height:1.5}img{max-width:100%;height:auto}table{max-width:100%}a{color:#1a73e8}</style></head><body>${sanitizeHtml(item.content)}</body></html>`
   return (
     <iframe
-      title={`Contenuto email ${message.id}`}
+      title={`Messaggio inviato ${item.id}`}
       srcDoc={document}
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       className="h-[420px] w-full border-0 bg-white"
@@ -69,146 +87,58 @@ function MessageBody({ message }: { message: GmailMessage }) {
   )
 }
 
-function formatThreadDate(value: number) {
-  if (!value || Number.isNaN(value)) return ""
-  return format(new Date(value), "dd MMM yyyy, HH:mm", { locale: it })
-}
-
 export default function SentInboxPage() {
-  const [mailboxes, setMailboxes] = useState<Mailbox[]>([])
-  const [mailboxId, setMailboxId] = useState("")
-  const [threads, setThreads] = useState<GmailThread[]>([])
-  const [selectedThread, setSelectedThread] = useState<GmailThread | null>(null)
-  const [messages, setMessages] = useState<GmailMessage[]>([])
+  const [items, setItems] = useState<SentItem[]>([])
+  const [selected, setSelected] = useState<SentItem | null>(null)
+  const [channel, setChannel] = useState("all")
   const [search, setSearch] = useState("")
   const [appliedSearch, setAppliedSearch] = useState("")
-  const [pageToken, setPageToken] = useState<string | null>(null)
-  const [previousTokens, setPreviousTokens] = useState<Array<string | null>>([])
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null)
+  const [offset, setOffset] = useState(0)
+  const [count, setCount] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [threadLoading, setThreadLoading] = useState(false)
   const [error, setError] = useState("")
-  const requestRef = useRef(0)
 
-  const currentMailbox = mailboxes.find((mailbox) => mailbox.id === mailboxId) || null
-
-  const loadMailboxes = useCallback(async () => {
-    try {
-      const response = await fetch("/api/gmail/channels", { cache: "no-store" })
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error || "Impossibile leggere le caselle email")
-
-      const next = (data.channels || []) as Mailbox[]
-      setMailboxes(next)
-      setMailboxId((current) => (current && next.some((mailbox) => mailbox.id === current) ? current : next[0]?.id || ""))
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Impossibile leggere le caselle email")
-      setLoading(false)
-    }
-  }, [])
-
-  const loadThreads = useCallback(async () => {
-    if (!mailboxId) {
-      setThreads([])
-      setLoading(false)
-      return
-    }
-
-    const requestId = ++requestRef.current
+  const loadSent = useCallback(async () => {
     setLoading(true)
     setError("")
-
     try {
-      const params = new URLSearchParams({ channelId: mailboxId, labelId: "SENT" })
-      if (pageToken) params.set("pageToken", pageToken)
-      if (appliedSearch.trim()) params.set("q", appliedSearch.trim())
-
-      const response = await fetch(`/api/gmail/threads?${params}`, { cache: "no-store" })
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(offset), channel })
+      if (appliedSearch) params.set("search", appliedSearch)
+      const response = await fetch(`/api/inbox/sent?${params}`, { cache: "no-store" })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data.error || "Impossibile leggere la posta inviata")
-      if (requestId !== requestRef.current) return
+      if (!response.ok) throw new Error(data.error || "Impossibile leggere i messaggi inviati")
 
-      setThreads(data.threads || [])
-      setNextPageToken(data.nextPageToken || null)
+      const next = (data.items || []) as SentItem[]
+      setItems(next)
+      setCount(Number(data.count || 0))
+      setHasMore(Boolean(data.hasMore))
+      setSelected((current) => current && next.some((item) => item.id === current.id) ? current : null)
     } catch (reason) {
-      if (requestId !== requestRef.current) return
-      setThreads([])
-      setNextPageToken(null)
-      setError(reason instanceof Error ? reason.message : "Impossibile leggere la posta inviata")
+      setItems([])
+      setCount(0)
+      setHasMore(false)
+      setSelected(null)
+      setError(reason instanceof Error ? reason.message : "Impossibile leggere i messaggi inviati")
     } finally {
-      if (requestId === requestRef.current) setLoading(false)
+      setLoading(false)
     }
-  }, [mailboxId, pageToken, appliedSearch])
-
-  const openThread = useCallback(
-    async (thread: GmailThread) => {
-      if (!mailboxId) return
-      setSelectedThread(thread)
-      setMessages([])
-      setThreadLoading(true)
-      setError("")
-
-      try {
-        const response = await fetch(
-          `/api/gmail/threads/${encodeURIComponent(thread.id)}?channelId=${encodeURIComponent(mailboxId)}`,
-          { cache: "no-store" },
-        )
-        const data = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(data.error || "Impossibile aprire il messaggio inviato")
-        setMessages(data.messages || [])
-      } catch (reason) {
-        setError(reason instanceof Error ? reason.message : "Impossibile aprire il messaggio inviato")
-      } finally {
-        setThreadLoading(false)
-      }
-    },
-    [mailboxId],
-  )
+  }, [appliedSearch, channel, offset])
 
   useEffect(() => {
-    void loadMailboxes()
-  }, [loadMailboxes])
-
-  useEffect(() => {
-    setPageToken(null)
-    setPreviousTokens([])
-    setSelectedThread(null)
-    setMessages([])
-  }, [mailboxId])
-
-  useEffect(() => {
-    void loadThreads()
-  }, [loadThreads])
-
-  useEffect(() => {
-    const interval = window.setInterval(() => void loadThreads(), 30_000)
-    return () => window.clearInterval(interval)
-  }, [loadThreads])
+    void loadSent()
+  }, [loadSent])
 
   const applySearch = () => {
-    setPageToken(null)
-    setPreviousTokens([])
-    setSelectedThread(null)
-    setMessages([])
-    setAppliedSearch(search)
+    setOffset(0)
+    setSelected(null)
+    setAppliedSearch(search.trim())
   }
 
-  const nextPage = () => {
-    if (!nextPageToken) return
-    setPreviousTokens((current) => [...current, pageToken])
-    setPageToken(nextPageToken)
-    setSelectedThread(null)
-    setMessages([])
-  }
-
-  const previousPage = () => {
-    if (!previousTokens.length) return
-    const copy = [...previousTokens]
-    const previous = copy.pop() ?? null
-    setPreviousTokens(copy)
-    setPageToken(previous)
-    setSelectedThread(null)
-    setMessages([])
+  const changeChannel = (value: string) => {
+    setChannel(value)
+    setOffset(0)
+    setSelected(null)
   }
 
   return (
@@ -217,41 +147,29 @@ export default function SentInboxPage() {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Send className="h-5 w-5 text-primary" aria-hidden />
-            <h1 className="text-lg font-semibold">Posta inviata</h1>
+            <h1 className="text-lg font-semibold">Inviati</h1>
           </div>
           <p className="hidden text-xs text-muted-foreground md:block">
-            Messaggi inviati dalla casella collegata. Non vengono conteggiati come messaggi cliente nella Inbox operativa.
+            Tutti i messaggi inviati da HotelAccelerator, riuniti in un’unica vista indipendentemente dal canale.
           </p>
         </div>
 
         <label className="ml-auto flex min-w-0 items-center gap-2 text-sm">
-          <span className="hidden text-muted-foreground sm:inline">Account</span>
+          <span className="hidden text-muted-foreground sm:inline">Canale</span>
           <select
-            value={mailboxId}
-            onChange={(event) => setMailboxId(event.target.value)}
-            className="h-9 max-w-[300px] rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
-            aria-label="Seleziona account email"
+            value={channel}
+            onChange={(event) => changeChannel(event.target.value)}
+            className="h-9 max-w-[220px] rounded-md border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+            aria-label="Filtra per canale"
           >
-            {mailboxes.length === 0 ? <option value="">Nessuna casella</option> : null}
-            {mailboxes.map((mailbox) => (
-              <option key={mailbox.id} value={mailbox.id}>
-                {mailbox.email || mailbox.name || mailbox.id}
-              </option>
-            ))}
+            {CHANNELS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
         </label>
 
-        <Button variant="ghost" size="icon" onClick={() => void loadThreads()} aria-label="Aggiorna posta inviata" title="Aggiorna">
+        <Button variant="ghost" size="icon" onClick={() => void loadSent()} aria-label="Aggiorna messaggi inviati" title="Aggiorna">
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </Button>
       </div>
-
-      {currentMailbox?.reconnectRequired ? (
-        <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900" role="alert">
-          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
-          Questa casella richiede una nuova autorizzazione dalle impostazioni Email.
-        </div>
-      ) : null}
 
       {error ? (
         <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive" role="alert">
@@ -266,10 +184,8 @@ export default function SentInboxPage() {
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") applySearch()
-            }}
-            placeholder="Cerca nella posta inviata"
+            onKeyDown={(event) => event.key === "Enter" && applySearch()}
+            placeholder="Cerca nei messaggi inviati"
             className="pl-9"
           />
         </div>
@@ -277,56 +193,71 @@ export default function SentInboxPage() {
       </div>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <section className={`${selectedThread ? "hidden md:flex" : "flex"} min-w-0 flex-1 flex-col border-r md:max-w-[470px]`}>
+        <section className={`${selected ? "hidden md:flex" : "flex"} min-w-0 flex-1 flex-col border-r md:max-w-[520px]`}>
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             {loading ? (
               <div className="flex flex-1 items-center justify-center p-8 text-muted-foreground">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento posta inviata…
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Caricamento inviati…
               </div>
-            ) : threads.length === 0 ? (
+            ) : items.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-muted-foreground">
                 <Send className="h-8 w-8" aria-hidden />
                 <p className="font-medium">Nessun messaggio inviato</p>
-                <p className="text-sm">La cartella mostra i thread con etichetta SENT della casella selezionata.</p>
+                <p className="text-sm">Non risultano invii HotelAccelerator con i filtri selezionati.</p>
               </div>
-            ) : (
-              threads.map((thread) => (
-                <button
-                  key={thread.id}
-                  type="button"
-                  onClick={() => void openThread(thread)}
-                  className={`border-b px-4 py-3 text-left transition-colors hover:bg-muted/60 ${selectedThread?.id === thread.id ? "bg-primary/5" : ""}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <Send className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="truncate text-sm font-semibold">{thread.subject || "(nessun oggetto)"}</p>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{formatThreadDate(thread.internalDate)}</span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{thread.snippet || "Nessuna anteprima"}</p>
-                      {thread.messagesCount > 1 ? (
-                        <p className="mt-1 text-xs text-muted-foreground">{thread.messagesCount} messaggi nel thread</p>
-                      ) : null}
+            ) : items.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setSelected(item)}
+                className={`border-b px-4 py-3 text-left transition-colors hover:bg-muted/60 ${selected?.id === item.id ? "bg-primary/5" : ""}`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 rounded-md bg-muted p-1.5 text-muted-foreground">
+                    <ChannelIcon channel={item.channel} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="truncate text-sm font-semibold">
+                        {item.recipientName || item.recipientDetail || "Destinatario"}
+                      </p>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{formatSentDate(item.sentAt)}</span>
                     </div>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                      <span className="shrink-0 rounded-full border px-2 py-0.5">{channelLabel(item.channel)}</span>
+                      {item.subject ? <span className="truncate">{item.subject}</span> : null}
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{item.preview || "Nessuna anteprima"}</p>
+                    {item.senderName ? <p className="mt-1 text-xs text-muted-foreground">Inviato da {item.senderName}</p> : null}
                   </div>
-                </button>
-              ))
-            )}
+                </div>
+              </button>
+            ))}
           </div>
 
-          <div className="flex shrink-0 items-center justify-between border-t px-3 py-2">
-            <Button variant="ghost" size="sm" onClick={previousPage} disabled={!previousTokens.length || loading}>
+          <div className="flex shrink-0 items-center justify-between border-t px-3 py-2 text-xs text-muted-foreground">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setOffset(Math.max(0, offset - PAGE_SIZE)); setSelected(null) }}
+              disabled={offset === 0 || loading}
+            >
               <ChevronLeft className="mr-1 h-4 w-4" /> Precedenti
             </Button>
-            <Button variant="ghost" size="sm" onClick={nextPage} disabled={!nextPageToken || loading}>
-              Successive <ChevronRight className="ml-1 h-4 w-4" />
+            <span>{count > 0 ? `${offset + 1}-${Math.min(offset + items.length, count)} di ${count}` : "0 messaggi"}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setOffset(offset + PAGE_SIZE); setSelected(null) }}
+              disabled={!hasMore || loading}
+            >
+              Successivi <ChevronRight className="ml-1 h-4 w-4" />
             </Button>
           </div>
         </section>
 
-        <section className={`${selectedThread ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col overflow-hidden`}>
-          {!selectedThread ? (
+        <section className={`${selected ? "flex" : "hidden md:flex"} min-w-0 flex-1 flex-col overflow-hidden`}>
+          {!selected ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center text-muted-foreground">
               <Send className="h-8 w-8" aria-hidden />
               <p className="font-medium">Seleziona un messaggio inviato</p>
@@ -334,46 +265,28 @@ export default function SentInboxPage() {
           ) : (
             <>
               <div className="flex shrink-0 items-center gap-3 border-b px-4 py-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="md:hidden"
-                  onClick={() => {
-                    setSelectedThread(null)
-                    setMessages([])
-                  }}
-                  aria-label="Torna alla lista"
-                >
+                <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setSelected(null)} aria-label="Torna alla lista">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <div className="min-w-0">
-                  <h2 className="truncate font-semibold">{selectedThread.subject || "(nessun oggetto)"}</h2>
-                  <p className="text-xs text-muted-foreground">{formatThreadDate(selectedThread.internalDate)}</p>
+                <span className="rounded-md bg-muted p-2 text-muted-foreground"><ChannelIcon channel={selected.channel} /></span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="truncate font-semibold">{selected.subject || selected.recipientName || "Messaggio inviato"}</h2>
+                  <p className="truncate text-xs text-muted-foreground">
+                    A: {selected.recipientName || selected.recipientDetail || "destinatario"}
+                    {selected.recipientName && selected.recipientDetail ? ` · ${selected.recipientDetail}` : ""}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right text-xs text-muted-foreground">
+                  <p>{channelLabel(selected.channel)}</p>
+                  <p>{formatSentDate(selected.sentAt)}</p>
                 </div>
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                {threadLoading ? (
-                  <div className="flex items-center justify-center p-10 text-muted-foreground">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Apertura messaggio…
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {messages.map((message) => (
-                      <article key={message.id} className="rounded-lg border bg-background p-4 shadow-sm">
-                        <div className="mb-4 border-b pb-3 text-sm">
-                          <div className="flex flex-wrap items-baseline justify-between gap-2">
-                            <p className="font-semibold">{message.from.name || message.from.email || "Mittente"}</p>
-                            <span className="text-xs text-muted-foreground">{formatThreadDate(message.internalDate)}</span>
-                          </div>
-                          <p className="mt-1 break-all text-xs text-muted-foreground">Da: {message.from.email}</p>
-                          <p className="mt-1 break-all text-xs text-muted-foreground">A: {message.to || "—"}</p>
-                        </div>
-                        <MessageBody message={message} />
-                      </article>
-                    ))}
-                  </div>
-                )}
+                <div className="mx-auto max-w-4xl rounded-lg border bg-background p-4 shadow-sm">
+                  {selected.senderName ? <p className="mb-3 text-xs text-muted-foreground">Inviato da {selected.senderName}</p> : null}
+                  <SentBody item={selected} />
+                </div>
               </div>
             </>
           )}
