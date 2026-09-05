@@ -103,4 +103,35 @@ describe("platform customer intelligence", () => {
     expect(segments.find((item) => item.id === "prospects-hot")?.count).toBe(1)
     expect(segments.find((item) => item.id === "prospects-followup")?.count).toBe(1)
   })
+
+  it("turns satellite telemetry into actionable health segments", () => {
+    const base = account()
+    const telemetryAccount = account({
+      profile: { ...base.profile, churn_risk_score: 72 },
+      products: [
+        { ...base.products[0], usage_score: 18, last_activity_at: new Date(Date.now() - 16 * 86400000).toISOString() },
+        {
+          ...base.products[0],
+          product_key: "hotelprofitai",
+          external_tenant_id: "hpa-1",
+          usage_score: 35,
+          onboarding_status: "integration_missing",
+        },
+        {
+          ...base.products[0],
+          product_key: "manubot",
+          external_tenant_id: "mb-1",
+          usage_score: 10,
+          onboarding_status: "configured_idle",
+        },
+      ],
+    })
+
+    const segments = buildSystemSegments([telemetryAccount], [])
+    expect(segments.find((item) => item.id === "health-churn-high")?.count).toBe(1)
+    expect(segments.find((item) => item.id === "health-snt-low-usage")?.count).toBe(1)
+    expect(segments.find((item) => item.id === "health-hpa-onboarding")?.count).toBe(1)
+    expect(segments.find((item) => item.id === "health-mb-idle")?.count).toBe(1)
+    expect(segments.find((item) => item.id === "health-stale")?.count).toBe(1)
+  })
 })
