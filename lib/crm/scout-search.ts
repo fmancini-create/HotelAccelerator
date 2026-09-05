@@ -230,10 +230,13 @@ function normalizeLocations(values: string[]) {
 }
 
 export function interpretScoutSearch(input: ScoutSearchInput) {
+  const titles = expandTerms(input.titles, TITLE_CLUSTERS, 12)
   const interpreted: ScoutInterpretedSearch = {
-    organizationKeywords: expandTerms(splitTerms(input.keywords), INDUSTRY_CLUSTERS, 20),
-    titles: expandTerms(input.titles, TITLE_CLUSTERS, 24),
-    seniorities: dedupe(input.seniorities, 10),
+    organizationKeywords: expandTerms(splitTerms(input.keywords), INDUSTRY_CLUSTERS, 12),
+    titles,
+    // Explicit roles are more precise than Apollo's seniority taxonomy. Keeping the hidden
+    // default seniority filter here caused valid roles such as RSPP/HSE to disappear entirely.
+    seniorities: titles.length ? [] : dedupe(input.seniorities, 10),
     organizationLocations: normalizeLocations(input.organizationLocations),
   }
 
