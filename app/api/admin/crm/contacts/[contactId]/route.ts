@@ -105,7 +105,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         } else {
           validGroupIds = []
         }
-        if (validGroupIds.length === 0) visibilityScope = "private"
+        if ((validGroupIds ?? []).length === 0) visibilityScope = "private"
       } else {
         validGroupIds = []
       }
