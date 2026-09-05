@@ -3,7 +3,7 @@ import { z } from "zod"
 import { getStripe } from "@/lib/stripe"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
-import { getScoutTenantBillingState } from "@/lib/scout/billing"
+import { getScoutTenantBillingState, STRIPE_EUR_MINIMUM_CHARGE_CENTS } from "@/lib/scout/billing"
 
 const bodySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("activation") }),
@@ -34,9 +34,9 @@ export async function POST(request: NextRequest) {
       if (billing.active) {
         return NextResponse.json({ error: "Scout è già attivo per questo tenant." }, { status: 409 })
       }
-      if (billing.activationFeeCents === null || billing.activationFeeCents <= 0) {
+      if (billing.activationFeeCents === null || billing.activationFeeCents < STRIPE_EUR_MINIMUM_CHARGE_CENTS) {
         return NextResponse.json(
-          { error: "Il prezzo di attivazione Scout non è ancora configurato." },
+          { error: "Il prezzo di attivazione Scout non è ancora configurato correttamente." },
           { status: 503 },
         )
       }
@@ -63,6 +63,12 @@ export async function POST(request: NextRequest) {
       }
       unitAmount = billing.creditPriceCents
       quantity = body.quantity
+      if (unitAmount * quantity < STRIPE_EUR_MINIMUM_CHARGE_CENTS) {
+        return NextResponse.json(
+          { error: `L'acquisto minimo è di ${billing.minimumPurchaseCredits} crediti Scout.` },
+          { status: 400 },
+        )
+      }
       kind = "scout_credits"
       name = "Crediti HotelAccelerator Scout"
       description = `${quantity} crediti per le operazioni a consumo di Scout.`
