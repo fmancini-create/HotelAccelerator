@@ -6,6 +6,7 @@ import { findCustomerProductCode, resolveExternalTenantCode } from "@/lib/custom
 import type { SuiteProductKey } from "@/lib/customer-codes/product"
 import { CENTRAL_SUPPORT_SLUG } from "@/lib/telephony/voice-support"
 import {
+  preserveInboxUnreadCount,
   toInboxConversationStatus,
   toInboxSenderType,
   type SupportFederationSender,
@@ -82,12 +83,6 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
   const lastMessageAt = snapshot.messages.map((message) => message.created_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? now
 
   const { data: existingConversation } = await supabase.from("conversations").select("unread_count").eq("id", conversationId).eq("property_id", hubPropertyId).maybeSingle()
-  const incomingMessageIds = snapshot.messages.map((message) => deterministicUuid(`message:suite-support:${snapshot.product}:${snapshot.threadId}:${message.id}`))
-  const { data: existingMessages } = incomingMessageIds.length > 0
-    ? await supabase.from("messages").select("id").in("id", incomingMessageIds)
-    : { data: [] as Array<{ id: string }> }
-  const existingIds = new Set(((existingMessages ?? []) as Array<{ id: string }>).map((row) => row.id))
-  const newlyArrivedCustomerMessages = snapshot.messages.filter((message, index) => message.sender === "customer" && !existingIds.has(incomingMessageIds[index])).length
 
   const metadata = {
     support_federation: {
@@ -105,7 +100,6 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     },
   }
 
-  const nextUnread = Math.max(0, Number(existingConversation?.unread_count || 0) + newlyArrivedCustomerMessages)
   const { error: conversationError } = await supabase.from("conversations").upsert({
     id: conversationId,
     property_id: hubPropertyId,
@@ -115,7 +109,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     external_thread_id: externalThreadId,
     contact_name: snapshot.reporter?.name || snapshot.reporter?.email || code.code,
     last_message_at: lastMessageAt,
-    unread_count: nextUnread,
+    unread_count: preserveInboxUnreadCount(existingConversation?.unread_count),
     updated_at: now,
     metadata,
   }, { onConflict: "id" })
@@ -228,7 +222,7 @@ export async function createHotelAcceleratorSupportReport(input: {
     external_thread_id: `suite-support:hotelaccelerator:${threadId}`,
     contact_name: input.actorName || input.actorEmail || customerCode,
     last_message_at: now,
-    unread_count: 1,
+    unread_count: 0,
     metadata,
   })
   if (conversationError) throw databaseWriteError("conversation_insert_failed", conversationError)
