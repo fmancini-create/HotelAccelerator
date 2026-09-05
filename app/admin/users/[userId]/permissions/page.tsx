@@ -8,6 +8,7 @@ import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
 import { AreaPermissionsMatrix } from "@/components/admin/area-permissions-matrix"
 import { AutoLogoutPicker } from "@/components/admin/auto-logout-picker"
+import { CallVisibilityPicker, type CallAccessValue } from "@/components/admin/call-visibility-picker"
 import type { GruppoConTempo } from "@/lib/auth/auto-logout"
 
 interface ChannelPermission {
@@ -28,6 +29,17 @@ interface TargetUser {
   is_tenant_admin: boolean
 }
 
+type Choice = { id: string; name?: string | null; email?: string | null }
+
+const DEFAULT_CALL_ACCESS: CallAccessValue = {
+  inherit: true,
+  visibility_scope: "own",
+  can_read_transcripts: true,
+  can_listen_recordings: false,
+  selected_user_ids: [],
+  selected_group_ids: [],
+}
+
 const CHANNEL_ICONS: Record<string, typeof Mail> = {
   email: Mail,
   whatsapp: MessageSquare,
@@ -41,10 +53,12 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
   const [user, setUser] = useState<TargetUser | null>(null)
   const [permissions, setPermissions] = useState<ChannelPermission[]>([])
   const [areas, setAreas] = useState<string[]>([])
-  // Disconnessione automatica: il valore scelto sulla persona (null = segui i
-  // gruppi) e i tempi dei suoi gruppi, che servono a spiegare cosa vale davvero.
   const [autoLogout, setAutoLogout] = useState<number | null>(null)
   const [gruppiTempo, setGruppiTempo] = useState<GruppoConTempo[]>([])
+  const [callAccess, setCallAccess] = useState<CallAccessValue>(DEFAULT_CALL_ACCESS)
+  const [callUsers, setCallUsers] = useState<Choice[]>([])
+  const [callGroups, setCallGroups] = useState<Choice[]>([])
+  const [inheritedCallLabel, setInheritedCallLabel] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -71,7 +85,25 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       setAreas(data.areas || [])
       setAutoLogout(data.autoLogout?.valoreUtente ?? null)
       setGruppiTempo(data.autoLogout?.gruppi ?? [])
-    } catch (e) {
+
+      const ca = data.callAccess || {}
+      const base = ca.explicit || ca.defaults || {}
+      setCallAccess({
+        inherit: !ca.explicit,
+        visibility_scope: base.visibility_scope || "own",
+        can_read_transcripts: base.can_read_transcripts !== false,
+        can_listen_recordings: base.can_listen_recordings === true,
+        selected_user_ids: ca.explicit?.selected_user_ids || [],
+        selected_group_ids: ca.explicit?.selected_group_ids || [],
+      })
+      setCallUsers((ca.users || []).filter((u: Choice) => u.id !== userId))
+      setCallGroups(ca.groups || [])
+      setInheritedCallLabel(
+        ca.inherited
+          ? `Regola ereditata: ${ca.inherited.visibility_scope === "all" ? "tutte" : ca.inherited.visibility_scope === "groups" ? "miei gruppi" : "solo mie"}.`
+          : null,
+      )
+    } catch {
       setError("Errore nel caricamento dei permessi")
     } finally {
       setLoading(false)
@@ -88,11 +120,9 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
     setPermissions((prev) =>
       prev.map((p) => {
         if (p.channel_id !== channelId || p.channel_type !== channelType) return p
-        // Disabling the assignment switches everything off.
         if (field === "assigned" && !value) {
           return { ...p, assigned: false, can_receive: false, can_send: false, receives_notifications: false }
         }
-        // Turning on any capability implies the channel is assigned.
         if (field !== "assigned" && value) {
           return { ...p, assigned: true, [field]: true }
         }
@@ -109,7 +139,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       const res = await fetch(`/api/admin/users/${userId}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions, areas, autoLogoutMinutes: autoLogout }),
+        body: JSON.stringify({ permissions, areas, autoLogoutMinutes: autoLogout, callAccess }),
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
@@ -117,7 +147,8 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
         return
       }
       setSaved(true)
-    } catch (e) {
+      await loadData()
+    } catch {
       setError("Errore nel salvataggio")
     } finally {
       setSaving(false)
@@ -139,7 +170,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title={`Permessi: ${displayName}`}
-          subtitle="Assegna le aree della piattaforma e i canali per questo utente"
+          subtitle="Assegna aree, canali e perimetro dei dati visibili a questo utente"
           actions={
             <div className="flex gap-2">
               <Link href="/admin/users">
@@ -170,30 +201,39 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
 
         {user?.is_tenant_admin && (
           <div className="mt-6 rounded-lg border border-ha-info-soft bg-ha-info-soft px-4 py-3 text-sm text-ha-info-soft-foreground">
-            Questo utente è un amministratore del tenant e ha accesso completo a tutti i canali, a
-            prescindere dalle assegnazioni qui sotto.
+            Questo utente è un amministratore del tenant: vede tutte le chiamate e tutti i dati del tenant.
           </div>
         )}
 
         {!user?.is_tenant_admin && (
-          <div className="mt-6">
-            <AreaPermissionsMatrix
-              value={areas}
-              onChange={(next) => {
-                setSaved(false)
-                setAreas(next)
-              }}
-              disabled={saving}
-            />
-          </div>
+          <>
+            <div className="mt-6">
+              <AreaPermissionsMatrix
+                value={areas}
+                onChange={(next) => {
+                  setSaved(false)
+                  setAreas(next)
+                }}
+                disabled={saving}
+              />
+            </div>
+
+            <div className="mt-6">
+              <CallVisibilityPicker
+                value={callAccess}
+                users={callUsers}
+                groups={callGroups}
+                inheritedLabel={inheritedCallLabel}
+                disabled={saving}
+                onChange={(next) => {
+                  setSaved(false)
+                  setCallAccess(next)
+                }}
+              />
+            </div>
+          </>
         )}
 
-        {/*
-          Fuori dal blocco riservato ai non amministratori: un amministratore ha
-          piu' accesso, non meno, quindi il suo computer lasciato aperto e' il
-          caso piu' rischioso. Nasconderglielo sarebbe esattamente il contrario
-          di una protezione.
-        */}
         <div className="mt-6">
           <AutoLogoutPicker
             ambito="utente"
@@ -214,8 +254,7 @@ export default function UserPermissionsPage({ params }: { params: Promise<{ user
         <div className="mt-3 space-y-4">
           {permissions.length === 0 && (
             <div className="bg-card rounded-xl border p-8 text-center text-muted-foreground">
-              Nessun canale configurato per questa struttura. Aggiungi un canale (Email, WhatsApp, ...) per
-              poterlo assegnare.
+              Nessun canale configurato per questa struttura. Aggiungi un canale (Email, WhatsApp, ...) per poterlo assegnare.
             </div>
           )}
 
