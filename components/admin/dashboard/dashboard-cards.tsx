@@ -79,6 +79,15 @@ export function DashboardCard({ panel, dati }: { panel: DashboardPanel; dati: Da
         </Guscio>
       )
 
+    case "my-commercial-performance":
+      return (
+        <Guscio panel={panel}>
+          <p className="text-sm text-muted-foreground">
+            I risultati commerciali personali sono mostrati nel riepilogo dedicato della dashboard utente e richiedono accesso all'area CRM.
+          </p>
+        </Guscio>
+      )
+
     case "backlog":
       return (
         <Guscio panel={panel}>
