@@ -6,6 +6,7 @@ import {
   type KnowledgeBaseSummary,
 } from "@/components/admin/knowledge/knowledge-bases-manager"
 import { KnowledgeGaps } from "@/components/admin/knowledge/knowledge-gaps"
+import { PmsLearningControlCenter } from "@/components/admin/knowledge/pms-learning-control-center"
 import { InternalKnowledgeSyncStatusCard } from "@/components/admin/knowledge/internal-knowledge-sync-status"
 import { EmailAiResponsePolicyCard } from "@/components/admin/knowledge/email-ai-response-policy-card"
 import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
@@ -64,31 +65,31 @@ export default async function KnowledgePage() {
     }
   }
 
+  const baseOptions = initialBases.map((b) => ({ id: b.id, name: b.name }))
+
   return (
     <div className="min-h-full bg-muted">
       <AdminHeader
         title="Assistente IA"
-        subtitle="Crea basi di conoscenza distinte, ciascuna con il proprio utente virtuale, e collegale ai canali"
+        subtitle="Conoscenza, apprendimento dai canali e padronanza operativa del PMS"
       />
-      <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex items-start gap-3 rounded-lg border border-ha-brand-soft bg-ha-brand-soft p-4 text-ha-brand-soft-foreground">
           <Sparkles className="mt-0.5 h-5 w-5 shrink-0" />
           <p className="text-sm leading-relaxed">
-            Ogni base ha le proprie fonti, il proprio comportamento e il proprio <strong>utente virtuale IA</strong> con
-            nome e firma personalizzabili. Un canale può usare più basi: la base <strong>primaria</strong> decide sia
-            come l&apos;IA risponde sia con quale identità si presenta.
+            Da qui governi ciò che l&apos;IA sa e ciò che sta imparando. Le conversazioni possono diventare fonti solo dopo approvazione umana; le procedure PMS vengono osservate senza salvare i valori digitati e restano separate dall&apos;autonomia operativa.
           </p>
         </div>
+
+        <PmsLearningControlCenter bases={baseOptions} />
+
+        {initialBases.length > 0 ? <KnowledgeGaps bases={baseOptions} /> : null}
 
         <KnowledgeBasesManager initialBases={initialBases} initialChannels={initialChannels} />
 
         <EmailAiResponsePolicyCard />
 
         {internalSyncDiagnostics ? <InternalKnowledgeSyncStatusCard diagnostics={internalSyncDiagnostics} /> : null}
-
-        {initialBases.length > 0 && (
-          <KnowledgeGaps bases={initialBases.map((b) => ({ id: b.id, name: b.name }))} />
-        )}
       </div>
     </div>
   )
