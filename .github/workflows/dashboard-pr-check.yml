@@ -49,6 +49,9 @@ jobs:
       - name: Test sales attribution rules
         run: pnpm vitest run tests/sales-attribution.test.ts
 
+      - name: Test global communication alerts
+        run: pnpm vitest run tests/global-communication-alerts.test.ts
+
       - name: Test suite directory email guard
         run: pnpm vitest run tests/suite-directory-email.test.ts
 
