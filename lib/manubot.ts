@@ -12,25 +12,26 @@
  * IMPORTANTE: il JWT identifica l'account tecnico, mentre la company da usare
  * per la singola property viene inviata separatamente con
  * `X-ManuBot-Company-Id`. ManuBot valida lo scope server-side e tratta
- * l'account super_admin come tenant-scoped solo per quella richiesta. In questo
- * modo non tocchiamo `profiles.company_id` / `active_company_id` e non esiste
- * stato globale condiviso tra richieste concorrenti di tenant diversi.
+ * l'account super_admin come tenant-scoped solo per quella richiesta.
  */
 
 import { decryptManubotPassword } from "@/lib/manubot/credential-secrets"
 import { validateManubotSupabaseUrlForEnvironment } from "@/lib/manubot/environment-guard"
 import { ManubotUpstreamError, upstreamErrorFromResponse } from "@/lib/manubot/upstream-error"
 
-/**
- * Legge una variabile ambiente obbligatoria.
- * Lancia un errore controllato (senza mai esporre il valore) se mancante.
- */
 function requireEnv(name: string): string {
   const value = process.env[name]
   if (!value || value.trim() === "") {
     throw new Error(`Configurazione Manubot mancante: variabile ambiente ${name} non impostata`)
   }
   return value
+}
+
+export interface ManubotTaskPhoto {
+  url: string
+  filename: string
+  size: number
+  type: string
 }
 
 export interface ManubotTask {
@@ -53,13 +54,28 @@ export interface ManubotTask {
   assets?: { name: string; location: string } | null
 }
 
+/**
+ * Contratto reale del form task ManuBot (settembre 2026).
+ * Gli array sono la fonte di verita' per assegnazioni/asset multipli; i campi
+ * singolari restano per retrocompatibilita' con il backend ManuBot.
+ */
 export interface ManubotCreateTaskPayload {
   title: string
   description?: string | null
   priority: "low" | "medium" | "high" | "critical"
   assigned_to?: string | null
+  operator_group_id?: string | null
+  assignee_ids?: string[]
+  group_ids?: string[]
   asset_id?: string | null
-  scheduled_date?: string | null
+  asset_ids?: string[]
+  asset_category_id?: string | null
+  property_id?: string | null
+  photos?: ManubotTaskPhoto[]
+  requires_completion_photo?: boolean
+  procedure_ids?: string[]
+  expected_resolution_minutes: number
+  client_request_id?: string
 }
 
 export interface ManubotTeamMember {
@@ -74,9 +90,44 @@ export interface ManubotAsset {
   name: string
   location: string
   category?: string
+  property_id?: string | null
 }
 
-// Mapping priorità HotelAccelerator → Manubot
+export interface ManubotAssetCategory {
+  id: string
+  name: string
+  icon?: string | null
+  color?: string | null
+}
+
+export interface ManubotOperatorGroup {
+  id: string
+  name: string
+  color?: string | null
+  member_count?: number | null
+}
+
+export interface ManubotPropertyOption {
+  id: string
+  name: string
+  type?: string | null
+}
+
+export interface ManubotProcedureOption {
+  id: string
+  title: string
+}
+
+export interface ManubotTaskFormData {
+  operators: Array<{ id: string; full_name: string | null }>
+  assets: ManubotAsset[]
+  priorities: Array<Record<string, unknown>>
+  assetCategories: ManubotAssetCategory[]
+  operatorGroups: ManubotOperatorGroup[]
+  properties: ManubotPropertyOption[]
+  procedures: ManubotProcedureOption[]
+}
+
 export const HA_TO_MANUBOT_PRIORITY: Record<string, ManubotCreateTaskPayload["priority"]> = {
   low: "low",
   normal: "medium",
@@ -84,7 +135,6 @@ export const HA_TO_MANUBOT_PRIORITY: Record<string, ManubotCreateTaskPayload["pr
   urgent: "critical",
 }
 
-// Mapping status HotelAccelerator → Manubot
 export const HA_TO_MANUBOT_STATUS: Record<string, ManubotTask["status"]> = {
   open: "pending",
   in_progress: "in_progress",
@@ -92,7 +142,6 @@ export const HA_TO_MANUBOT_STATUS: Record<string, ManubotTask["status"]> = {
   cancelled: "cancelled",
 }
 
-// Mapping status Manubot → HotelAccelerator
 export const MANUBOT_TO_HA_STATUS: Record<string, string> = {
   pending: "open",
   in_progress: "in_progress",
@@ -100,7 +149,6 @@ export const MANUBOT_TO_HA_STATUS: Record<string, string> = {
   cancelled: "cancelled",
 }
 
-// Mapping priorità Manubot → HotelAccelerator
 export const MANUBOT_TO_HA_PRIORITY: Record<string, string> = {
   low: "low",
   medium: "normal",
@@ -122,9 +170,6 @@ export class ManubotClient {
     return requireEnv("MANUBOT_BASE_URL")
   }
 
-  /**
-   * Login con credenziali Manubot — ottiene un JWT Supabase
-   */
   async login(email: string, password: string): Promise<string> {
     const res = await fetch(
       `${this.supabaseUrl}/auth/v1/token?grant_type=password`,
@@ -135,13 +180,9 @@ export class ManubotClient {
           "apikey": requireEnv("MANUBOT_SUPABASE_ANON_KEY"),
         },
         body: JSON.stringify({ email, password }),
-      }
+      },
     )
     if (!res.ok) {
-      // Prima il body grezzo veniva concatenato nel messaggio senza filtri e
-      // senza status. Ora lo status è un campo dell'errore e il body passa da
-      // `redactSecrets`: `isLoginPhase` serve perché Supabase risponde 400 (non
-      // 401) alle credenziali non valide.
       throw await upstreamErrorFromResponse("login", "/auth/v1/token", res, {
         isLoginPhase: true,
       })
@@ -151,54 +192,87 @@ export class ManubotClient {
     return this.accessToken!
   }
 
-  private authHeaders() {
+  private authHeaders(json = true): Record<string, string> {
     if (!this.accessToken) throw new Error("Non autenticato su Manubot")
     if (!this.companyId) {
       throw new Error("Configurazione Manubot tenant incompleta: manubot_company_id mancante")
     }
-    return {
-      "Content-Type": "application/json",
+    const headers: Record<string, string> = {
       Authorization: `Bearer ${this.accessToken}`,
       "X-ManuBot-Company-Id": this.companyId,
+    }
+    if (json) headers["Content-Type"] = "application/json"
+    return headers
+  }
+
+  /** Crea uno o piu' task con il contratto nativo ManuBot. */
+  async createTask(payload: ManubotCreateTaskPayload, idempotencyKey?: string): Promise<ManubotTask> {
+    const headers = this.authHeaders()
+    if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey
+
+    const res = await fetch(`${this.baseUrl}/tasks/create`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) throw await upstreamErrorFromResponse("tasks/create", "/tasks/create", res)
+
+    const data = await res.json()
+    const task = data?.task ?? (Array.isArray(data?.tasks) ? data.tasks[0] : data)
+    if (!task?.id) throw new Error("ManuBot non ha restituito l'id del task creato")
+    return task as ManubotTask
+  }
+
+  /** Dati esatti usati dal form nativo ManuBot. */
+  async getTaskFormData(): Promise<ManubotTaskFormData> {
+    const res = await fetch(`${this.baseUrl}/new-task-data`, {
+      headers: this.authHeaders(),
+      cache: "no-store",
+    })
+    if (!res.ok) throw await upstreamErrorFromResponse("new-task-data", "/new-task-data", res)
+    const data = await res.json()
+    return {
+      operators: data?.operators || [],
+      assets: data?.assets || [],
+      priorities: data?.priorities || [],
+      assetCategories: data?.assetCategories || [],
+      operatorGroups: data?.operatorGroups || [],
+      properties: data?.properties || [],
+      procedures: data?.procedures || [],
     }
   }
 
   /**
-   * Crea un task su Manubot
+   * Carica le foto nello stesso storage e con gli stessi limiti del form nativo
+   * ManuBot: max 5, JPEG/PNG/WebP, 10 MB ciascuna e 25 MB complessivi.
    */
-  async createTask(payload: ManubotCreateTaskPayload): Promise<ManubotTask> {
-    const res = await fetch(`${this.baseUrl}/tasks/create`, {
+  async uploadTaskPhotos(files: File[]): Promise<ManubotTaskPhoto[]> {
+    const form = new FormData()
+    files.forEach((file) => form.append("files", file))
+
+    const res = await fetch(`${this.baseUrl}/tasks/upload-photos`, {
       method: "POST",
-      headers: this.authHeaders(),
-      body: JSON.stringify(payload),
+      headers: this.authHeaders(false),
+      body: form,
     })
-    // Solo diagnostica: il comportamento in caso di successo è invariato.
-    if (!res.ok) throw await upstreamErrorFromResponse("tasks/create", "/tasks/create", res)
-    return res.json()
+    if (!res.ok) throw await upstreamErrorFromResponse("tasks/upload-photos", "/tasks/upload-photos", res)
+    const data = await res.json()
+    return Array.isArray(data?.photos) ? data.photos : []
   }
 
-  /**
-   * Aggiorna status/priorità/assegnatario di un task su Manubot
-   */
   async updateTask(
     taskId: string,
-    updates: Partial<Pick<ManubotTask, "status" | "priority" | "assigned_to" | "notes">>
+    updates: Partial<Pick<ManubotTask, "status" | "priority" | "assigned_to" | "notes">>,
   ): Promise<ManubotTask> {
     const res = await fetch(`${this.baseUrl}/tasks/${taskId}`, {
       method: "PATCH",
       headers: this.authHeaders(),
       body: JSON.stringify(updates),
     })
-    // Solo diagnostica: il comportamento in caso di successo è invariato.
-    // Il taskId NON entra nel path loggato: è un id di risorsa, non un segreto,
-    // ma tenere i path stabili rende i log aggregabili.
     if (!res.ok) throw await upstreamErrorFromResponse("tasks/update", "/tasks/{id}", res)
     return res.json()
   }
 
-  /**
-   * Lista task della company
-   */
   async getTasks(): Promise<ManubotTask[]> {
     const res = await fetch(`${this.baseUrl}/tasks`, {
       headers: this.authHeaders(),
@@ -208,23 +282,15 @@ export class ManubotClient {
     return Array.isArray(data) ? data : data.tasks || []
   }
 
-  /**
-   * Lista tecnici della company
-   */
   async getTeam(): Promise<ManubotTeamMember[]> {
     const res = await fetch(`${this.baseUrl}/team`, {
       headers: this.authHeaders(),
     })
     if (!res.ok) throw await upstreamErrorFromResponse("team", "/team", res)
     const data = await res.json()
-    // ManuBot oggi restituisce `members`; `team` resta accettato per
-    // compatibilità con eventuali deploy precedenti.
     return Array.isArray(data) ? data : data.members || data.team || []
   }
 
-  /**
-   * Lista impianti/asset
-   */
   async getAssets(): Promise<ManubotAsset[]> {
     const res = await fetch(`${this.baseUrl}/assets`, {
       headers: this.authHeaders(),
@@ -235,36 +301,20 @@ export class ManubotClient {
   }
 }
 
-/**
- * Factory: crea un ManubotClient autenticato con le credenziali della property
- * Usato dalle API routes interne
- */
 export async function getManubotClient(property: {
   manubot_email?: string | null
   manubot_password?: string | null
   manubot_supabase_url?: string | null
   manubot_company_id?: string | null
 }): Promise<ManubotClient> {
-  // DUAL-READ: `manubot_password` può essere salvata in chiaro (legacy) o
-  // cifrata `enc:v1:`. La decifriamo qui, in un unico punto centrale, così
-  // tutti i reader (admin/todos, todos/[id], team, assets) ricevono il valore
-  // utilizzabile senza doppia decifratura. Passthrough sui valori legacy.
   const decryptedPassword = decryptManubotPassword(property.manubot_password)
-
-  // Priorità alle credenziali della property; in assenza (null/vuota), usa le
-  // env di default. Nessun fallback hardcoded: se mancano sia property che env,
-  // errore controllato.
-  const email    = property.manubot_email || requireEnv("MANUBOT_DEFAULT_EMAIL")
-  const password = decryptedPassword      || requireEnv("MANUBOT_DEFAULT_PASSWORD")
+  const email = property.manubot_email || requireEnv("MANUBOT_DEFAULT_EMAIL")
+  const password = decryptedPassword || requireEnv("MANUBOT_DEFAULT_PASSWORD")
   const companyId = property.manubot_company_id?.trim() || null
   if (!companyId) {
     throw new Error("Configurazione Manubot tenant incompleta: manubot_company_id mancante")
   }
 
-  // GUARD PROD/DEV (Step B1): risolvi la URL effettiva (property o env) e
-  // validala PRIMA di creare il client e fare il login. In Production una URL
-  // che punta all'host DEV fa fallire qui, prima di qualunque chiamata esterna.
-  // `validate...` lancia ManubotEnvironmentError (messaggio con solo l'host).
   const resolvedSupabaseUrl = property.manubot_supabase_url || process.env.MANUBOT_SUPABASE_URL
   validateManubotSupabaseUrlForEnvironment(resolvedSupabaseUrl)
 
@@ -273,10 +323,6 @@ export async function getManubotClient(property: {
     await client.login(email, password)
     return client
   } catch (e: any) {
-    // NON rienvolgere un ManubotUpstreamError in un Error generico: si
-    // perderebbero `status` e `isLoginPhase`, cioè esattamente l'informazione
-    // che serve a distinguere "credenziali rifiutate" da "ManuBot non
-    // raggiungibile". Prima il re-wrap appiattiva tutto su un messaggio.
     if (e instanceof ManubotUpstreamError) throw e
     throw new Error(`Login Manubot fallito: ${e?.message ?? "errore sconosciuto"}`)
   }
