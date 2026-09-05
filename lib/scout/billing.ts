@@ -6,6 +6,7 @@ import { isModuleActive } from "@/lib/modules"
 export const SCOUT_MODULE_KEY = "scout"
 export const SCOUT_PROVIDER = "apollo"
 export const SCOUT_EMAIL_ENRICHMENT = "email_enrichment"
+export const STRIPE_EUR_MINIMUM_CHARGE_CENTS = 50
 
 export class ScoutBillingError extends Error {
   code: string
@@ -62,6 +63,12 @@ export function scoutCreditPriceCents(costMicroEur: number | null, multiplier: n
   if (costMicroEur === null || !Number.isFinite(costMicroEur) || costMicroEur < 0) return null
   if (!Number.isFinite(multiplier) || multiplier < 1) return null
   return Math.ceil((costMicroEur * multiplier) / 10_000)
+}
+
+export function effectiveScoutMinimumPurchase(configuredMinimum: number, creditPriceCents: number | null) {
+  const configured = Math.max(1, Math.trunc(configuredMinimum))
+  if (creditPriceCents === null || creditPriceCents <= 0) return configured
+  return Math.max(configured, Math.ceil(STRIPE_EUR_MINIMUM_CHARGE_CENTS / creditPriceCents))
 }
 
 export async function getScoutBillingSettings(db: SupabaseClient): Promise<ScoutBillingSettings> {
@@ -135,7 +142,7 @@ export async function getScoutTenantBillingState(
     availableCredits: Math.max(0, balance - reservedCredits),
     activationFeeCents: settings.activationFeeCents,
     activationIncludedCredits: settings.activationIncludedCredits,
-    minimumPurchaseCredits: settings.minimumPurchaseCredits,
+    minimumPurchaseCredits: effectiveScoutMinimumPurchase(settings.minimumPurchaseCredits, creditPriceCents),
     creditPriceCents,
     pricingConfigured: Boolean(providerCost && creditPriceCents !== null && creditPriceCents > 0),
   }
