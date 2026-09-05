@@ -10,6 +10,22 @@ function response(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } })
 }
 
+async function activateExistingWorkspace(base: string, key: string, hotelId: string) {
+  const activation = await fetch(`${base}/api/integrations/reviews/federated/activate`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      "X-4BID-Reviews-Provision-Key": key,
+    },
+    body: JSON.stringify({ hotelId }),
+  })
+  if (!activation.ok) {
+    const body = await activation.json().catch(() => null) as { error?: string } | null
+    throw new Error(body?.error || `reviews_activation_failed_${activation.status}`)
+  }
+}
+
 export async function POST(request: NextRequest) {
   const product = getSuiteProduct(request.headers.get("x-4bid-product"))
   if (!product || (product.key !== "hotelaccelerator" && product.key !== "manubot")) {
@@ -56,6 +72,10 @@ export async function POST(request: NextRequest) {
 
   if (!customerAccountId) return response({ error: "customer_account_not_linked" }, 404)
 
+  const provisionKey = process.env.REVIEWS_FEDERATION_PROVISION_KEY?.trim()
+  const santaddeoBase = process.env.SANTADDEO_APP_URL?.trim() || "https://www.santaddeo.com"
+  if (!provisionKey) return response({ error: "reviews_provisioning_not_configured" }, 503)
+
   const { data: existing, error: existingError } = await sb
     .from("suite_tenant_links")
     .select("external_tenant_id")
@@ -64,12 +84,19 @@ export async function POST(request: NextRequest) {
     .maybeSingle()
   if (existingError) throw existingError
   if (existing?.external_tenant_id) {
+    try {
+      await activateExistingWorkspace(santaddeoBase, provisionKey, existing.external_tenant_id)
+    } catch (error) {
+      console.error("[reviews-workspace] existing Santaddeo activation failed", {
+        product: product.key,
+        externalTenantId,
+        santaddeoHotelId: existing.external_tenant_id,
+        error: error instanceof Error ? error.message : "unknown",
+      })
+      return response({ error: "reviews_workspace_activation_failed" }, 502)
+    }
     return response({ santaddeoHotelId: existing.external_tenant_id, provisioned: false })
   }
-
-  const provisionKey = process.env.REVIEWS_FEDERATION_PROVISION_KEY?.trim()
-  const santaddeoBase = process.env.SANTADDEO_APP_URL?.trim() || "https://www.santaddeo.com"
-  if (!provisionKey) return response({ error: "reviews_provisioning_not_configured" }, 503)
 
   const provision = await fetch(`${santaddeoBase}/api/integrations/reviews/federated/provision`, {
     method: "POST",
