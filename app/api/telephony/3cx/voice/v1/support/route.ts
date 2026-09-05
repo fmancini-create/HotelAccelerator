@@ -131,15 +131,17 @@ export async function POST(request: NextRequest) {
 
   // Dopo l'identificazione il flow puo' chiedere la domanda in un secondo
   // turno: non chiamiamo il modello inutilmente e non salviamo il codice.
+  // Diciamo pero' esplicitamente quale struttura/azienda abbiamo riconosciuto:
+  // il chiamante puo' accorgersi subito di avere digitato la licenza sbagliata.
   if (!parsed.data.question) {
     return NextResponse.json(
       {
         ok: true,
-        customer: { recognized: true },
+        customer: { recognized: true, property_name: customer.propertyName },
         product: { key: product.key, label: product.label },
         agent: { key: product.key, label: route?.agent_label ?? product.label },
         crm_tool: { key: route?.crm_tool_key ?? "customer_code_lookup", executed: true },
-        speech: "Codice cliente verificato. Mi dica come posso aiutarla.",
+        speech: `Licenza verificata: risulta associata a ${customer.propertyName}. Mi dica come posso aiutarla.`,
         handoff: { action: "none", destination: null, mode: null },
         transfer: { required: false, destination: route?.fallback_destination ?? VOICE_4BID_FALLBACK_EXTENSION, reason: "none" },
         request_id: requestId,
@@ -186,7 +188,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ...response,
-        customer: { recognized: true },
+        customer: { recognized: true, property_name: customer.propertyName },
         speech,
         transfer: shouldRecord
           ? { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" }
@@ -202,7 +204,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         ...serviceErrorVoiceResponse(product, afterHoursHandoff.destination ?? VOICE_4BID_FALLBACK_EXTENSION, "provider_error"),
-        customer: { recognized: true },
+        customer: { recognized: true, property_name: customer.propertyName },
         speech: shouldRecord ? afterHoursHandoff.speech : "Non riesco a completare la richiesta. La metto in contatto con un operatore.",
         transfer: shouldRecord
           ? { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" }
