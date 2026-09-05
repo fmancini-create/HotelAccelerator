@@ -15,30 +15,18 @@ export async function GET(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const db = createServiceClient()
-  const { data, error } = await db
-    .from("scout_auto_recharge_queue")
-    .select("property_id,attempts")
-    .is("locked_at", null)
-    .order("requested_at", { ascending: true })
-    .limit(50)
+  const { data, error } = await db.rpc("scout_claim_auto_recharge_queue_batch", {
+    p_limit: 50,
+    p_stale_after_minutes: 15,
+  })
 
-  if (error) return NextResponse.json({ error: "queue_read_failed" }, { status: 500 })
+  if (error) return NextResponse.json({ error: "queue_claim_failed" }, { status: 500 })
 
   let processed = 0
   let recharged = 0
   let failed = 0
 
   for (const row of data ?? []) {
-    const now = new Date().toISOString()
-    const { data: locked, error: lockError } = await db
-      .from("scout_auto_recharge_queue")
-      .update({ locked_at: now, attempts: Number(row.attempts || 0) + 1 })
-      .eq("property_id", row.property_id)
-      .is("locked_at", null)
-      .select("property_id")
-      .maybeSingle()
-
-    if (lockError || !locked) continue
     processed += 1
 
     try {
@@ -60,5 +48,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: failed === 0, queued: data?.length ?? 0, processed, recharged, failed })
+  return NextResponse.json({ success: failed === 0, claimed: data?.length ?? 0, processed, recharged, failed })
 }
