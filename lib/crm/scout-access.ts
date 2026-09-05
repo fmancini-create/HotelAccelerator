@@ -175,6 +175,10 @@ export async function recordScoutUsage(db: SupabaseClient, input: {
       credits_used: Number(creditsUsed.toFixed(4)),
       provider_unit_cost_micros: economics?.unitCostMicros ?? null,
       provider_cost_micros: economics?.providerCostMicros ?? null,
+      provider_currency: economics?.providerCurrency ?? null,
+      customer_currency: economics?.customerCurrency ?? null,
+      fx_rate_provider_to_customer: economics?.fxRate ?? null,
+      provider_cost_customer_micros: economics?.providerCostCustomerMicros ?? null,
       price_multiplier: economics?.multiplier ?? null,
       customer_value_micros: economics?.customerValueMicros ?? null,
       prospect_id: input.prospectId || null,
@@ -182,7 +186,11 @@ export async function recordScoutUsage(db: SupabaseClient, input: {
       error_message: input.errorMessage?.slice(0, 1000) || null,
       metadata: {
         ...(input.metadata ?? {}),
-        ...(economics ? { billing_currency: economics.currency } : {}),
+        ...(economics ? {
+          provider_currency: economics.providerCurrency,
+          commercial_currency: economics.customerCurrency,
+          fx_rate_provider_to_customer: economics.fxRate,
+        } : {}),
       },
     })
     if (error) console.error("[scout] usage audit failed", error)
