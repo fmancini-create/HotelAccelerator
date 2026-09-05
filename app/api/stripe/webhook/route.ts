@@ -5,6 +5,7 @@ import { registraAcquistoWidget } from "@/lib/chat-widgets/quota"
 import { getFattureInCloudClient } from "@/lib/fattureincloud"
 import { getPlanById, formatPrice } from "@/lib/stripe-products"
 import { incrementExtraNumbers } from "@/lib/whatsapp/quota"
+import { addScoutCredits } from "@/lib/scout/billing"
 import type Stripe from "stripe"
 
 export const runtime = "nodejs"
@@ -78,6 +79,83 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function handleScoutCheckout(
+  supabase: ReturnType<typeof createServiceClient>,
+  session: Stripe.Checkout.Session,
+  propertyId: string,
+  kind: "scout_activation" | "scout_credits",
+  quantityRaw: string | undefined,
+) {
+  if (session.payment_status !== "paid") {
+    throw new Error(`Scout checkout ${session.id} completed without paid status`)
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("scout_checkout_events")
+    .select("stripe_session_id")
+    .eq("stripe_session_id", session.id)
+    .maybeSingle()
+  if (existingError) throw existingError
+  if (existing) {
+    console.log(`[Stripe Webhook] Scout checkout ${session.id} already fulfilled`)
+    return
+  }
+
+  const quantity = Math.max(0, Number.parseInt(quantityRaw || "0", 10) || 0)
+  const amountCents = Math.max(0, session.amount_total || 0)
+
+  if (kind === "scout_activation") {
+    const { error: entitlementError } = await supabase.from("tenant_modules").upsert(
+      {
+        property_id: propertyId,
+        module_key: "scout",
+        status: "active",
+        plan: "scout_paid",
+        activated_at: new Date().toISOString(),
+        deactivated_at: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "property_id,module_key" },
+    )
+    if (entitlementError) throw entitlementError
+
+    if (quantity > 0) {
+      await addScoutCredits(supabase, {
+        propertyId,
+        credits: quantity,
+        eventType: "activation_bonus",
+        idempotencyKey: `stripe:${session.id}:activation-bonus`,
+        stripeSessionId: session.id,
+        metadata: { amountCents },
+      })
+    }
+  } else {
+    if (quantity <= 0) throw new Error(`Scout checkout ${session.id} has invalid credit quantity`)
+    await addScoutCredits(supabase, {
+      propertyId,
+      credits: quantity,
+      eventType: "purchase",
+      idempotencyKey: `stripe:${session.id}:credits`,
+      stripeSessionId: session.id,
+      metadata: { amountCents },
+    })
+  }
+
+  const { error: eventError } = await supabase.from("scout_checkout_events").insert({
+    stripe_session_id: session.id,
+    property_id: propertyId,
+    kind: kind === "scout_activation" ? "activation" : "credits",
+    quantity,
+    amount_cents: amountCents,
+    metadata: { payment_intent: session.payment_intent ?? null },
+  })
+  if (eventError && eventError.code !== "23505") throw eventError
+
+  console.log(
+    `[Stripe Webhook] Scout ${kind === "scout_activation" ? "activation" : "credits"} fulfilled for ${propertyId}: ${quantity} credits`,
+  )
+}
+
 async function handleCheckoutCompleted(
   supabase: ReturnType<typeof createServiceClient>,
   session: Stripe.Checkout.Session,
@@ -125,6 +203,11 @@ async function handleCheckoutCompleted(
         await stripe.customers.update(customer.id, { metadata: fiscalMetadata })
       }
     }
+  }
+
+  if ((kind === "scout_activation" || kind === "scout_credits") && propertyId) {
+    await handleScoutCheckout(supabase, session, propertyId, kind, quantity)
+    return
   }
 
   // Extra WhatsApp number purchase: bump the property's quota so it can connect
