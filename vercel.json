@@ -27,6 +27,10 @@
     {
       "path": "/api/cron/whatsapp-platform-billing",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-suite-support",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
