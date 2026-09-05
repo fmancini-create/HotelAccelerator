@@ -1,4 +1,5 @@
-import { ShieldCheck } from "lucide-react"
+import Link from "next/link"
+import { BarChart3, ShieldCheck } from "lucide-react"
 
 import { PlatformOverviewPanel } from "@/components/platform/platform-overview-panel"
 
@@ -18,6 +19,20 @@ export default function SuperAdminIndexPage() {
           Vista aggregata di HotelAccelerator: tenant, ricavi, utenti, utilizzo e stato operativo. I dati di una singola struttura non vengono mescolati in questo cruscotto.
         </p>
       </header>
+
+      <Link
+        href="/super-admin/analytics"
+        className="mb-6 flex items-center justify-between rounded-xl border bg-background p-4 transition hover:border-foreground/20 hover:shadow-sm"
+      >
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-muted p-2"><BarChart3 className="h-5 w-5" aria-hidden /></div>
+          <div>
+            <div className="font-medium">Analytics della suite</div>
+            <div className="text-sm text-muted-foreground">Visitatori pubblici e attività back-end di tutte le piattaforme</div>
+          </div>
+        </div>
+        <span className="text-sm font-medium">Apri →</span>
+      </Link>
 
       <PlatformOverviewPanel />
     </div>
