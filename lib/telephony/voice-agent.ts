@@ -96,7 +96,7 @@ async function loadLiveCommercialFacts(productKey: VoiceProductKey | undefined):
     if (!response.ok) return null
 
     const body = (await response.json().catch(() => null)) as { plans?: PublicHotelProfitPlan[] } | null
-    const plans = Array.isArray(body?.plans) ? body.plans : []
+    const plans = body && Array.isArray(body.plans) ? body.plans : []
     if (plans.length === 0) return null
 
     const labels = plans.flatMap((plan) => {
