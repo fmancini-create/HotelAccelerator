@@ -17,18 +17,31 @@ export function parseSentOffset(raw: string | null): number {
   return Math.floor(parsed)
 }
 
+function uniqueUuids(ids: string[]): string[] {
+  return Array.from(new Set(ids.filter((id) => UUID_RE.test(id))))
+}
+
 /**
  * Builds the PostgREST OR applied to the referenced conversations table for a
- * restricted user. Only concrete messaging-channel assignments are accepted.
+ * restricted user. This mirrors the operational Inbox rule: email is linked by
+ * `channel_id`; messaging providers may be linked by the current column or by
+ * the legacy metadata field.
  *
  * Chat is intentionally absent: the current Inbox cannot prove which embed
  * script owns a legacy chat conversation, so exposing it here would make Sent
  * less restrictive than the Inbox itself.
  */
-export function buildSentMessagingAccessFilter(access: AccessibleChannelIds): string | null {
-  const ids = Array.from(new Set(access.messagingChannelIds.filter((id) => UUID_RE.test(id))))
-  if (ids.length === 0) return null
+export function buildSentConversationAccessFilter(access: AccessibleChannelIds): string | null {
+  const emailIds = uniqueUuids(access.emailChannelIds)
+  const messagingIds = uniqueUuids(access.messagingChannelIds)
+  const clauses: string[] = []
 
-  const list = ids.join(",")
-  return `messaging_channel_id.in.(${list}),metadata->>messaging_channel_id.in.(${list})`
+  if (emailIds.length > 0) clauses.push(`channel_id.in.(${emailIds.join(",")})`)
+  if (messagingIds.length > 0) {
+    const list = messagingIds.join(",")
+    clauses.push(`messaging_channel_id.in.(${list})`)
+    clauses.push(`metadata->>messaging_channel_id.in.(${list})`)
+  }
+
+  return clauses.length > 0 ? clauses.join(",") : null
 }
