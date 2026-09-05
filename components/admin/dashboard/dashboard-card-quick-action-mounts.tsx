@@ -7,8 +7,8 @@ import { usePathname } from "next/navigation"
 import {
   DashboardCallQuickAction,
   DashboardMessageQuickAction,
-  DashboardTaskQuickAction,
 } from "@/components/admin/dashboard/dashboard-quick-actions"
+import { DashboardNativeTaskQuickAction } from "@/components/admin/dashboard/dashboard-native-task-quick-action"
 
 type Mounts = {
   messages: HTMLElement | null
@@ -30,9 +30,6 @@ function ensureMount(header: HTMLElement | null, key: string) {
   const existing = header.querySelector(selector) as HTMLElement | null
   if (existing) return existing
 
-  // Le intestazioni delle tre card hanno già il link "Apri/Vedi/Registro" a
-  // destra. Diamo spazio al titolo e inseriamo il + immediatamente prima del
-  // link, senza cambiare il componente della card o il suo comportamento.
   const title = header.firstElementChild as HTMLElement | null
   if (title) title.style.marginRight = "auto"
   header.style.gap = "0.5rem"
@@ -91,7 +88,7 @@ export function DashboardCardQuickActionMounts() {
     <>
       {mounts.messages && createPortal(<DashboardMessageQuickAction />, mounts.messages)}
       {mounts.tasks && createPortal(
-        <DashboardTaskQuickAction onCreated={() => window.location.reload()} />,
+        <DashboardNativeTaskQuickAction onCreated={() => window.location.reload()} />,
         mounts.tasks,
       )}
       {mounts.calls && createPortal(<DashboardCallQuickAction />, mounts.calls)}
