@@ -31,8 +31,6 @@ export interface FederatedSupportSnapshot {
 
 function deterministicUuid(value: string): string {
   const hex = createHash("sha256").update(value).digest("hex").slice(0, 32).split("")
-  // RFC-4122 compatible layout. The value is deterministic and only used as an
-  // internal idempotency key; it is not exposed as an authentication token.
   hex[12] = "5"
   hex[16] = ((Number.parseInt(hex[16], 16) & 0x3) | 0x8).toString(16)
   const raw = hex.join("")
@@ -48,17 +46,12 @@ async function getCentralSupportPropertyId() {
     .maybeSingle()
 
   if (error) throw error
-  if (!data || data.type !== "company" || data.is_active === false) {
-    throw new Error("central_support_hub_unavailable")
-  }
+  if (!data || data.type !== "company" || data.is_active === false) throw new Error("central_support_hub_unavailable")
   return data.id as string
 }
 
 export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot) {
-  const resolved = await resolveExternalTenantCode({
-    productKey: snapshot.product,
-    externalTenantId: snapshot.tenantRef,
-  })
+  const resolved = await resolveExternalTenantCode({ productKey: snapshot.product, externalTenantId: snapshot.tenantRef })
   if (!resolved) return { ok: false as const, error: "tenant_not_linked" as const }
 
   const hubPropertyId = await getCentralSupportPropertyId()
@@ -71,6 +64,24 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1) ?? now
+
+  const { data: existingConversation } = await supabase
+    .from("conversations")
+    .select("unread_count")
+    .eq("id", conversationId)
+    .eq("property_id", hubPropertyId)
+    .maybeSingle()
+
+  const incomingMessageIds = snapshot.messages.map((message) =>
+    deterministicUuid(`message:suite-support:${snapshot.product}:${snapshot.threadId}:${message.id}`),
+  )
+  const { data: existingMessages } = incomingMessageIds.length > 0
+    ? await supabase.from("messages").select("id").in("id", incomingMessageIds)
+    : { data: [] as Array<{ id: string }> }
+  const existingIds = new Set((existingMessages ?? []).map((row) => row.id))
+  const newlyArrivedCustomerMessages = snapshot.messages.filter((message, index) =>
+    message.sender === "customer" && !existingIds.has(incomingMessageIds[index]),
+  ).length
 
   const metadata = {
     support_federation: {
@@ -85,69 +96,56 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     },
   }
 
-  const { error: conversationError } = await supabase
-    .from("conversations")
-    .upsert(
-      {
-        id: conversationId,
-        property_id: hubPropertyId,
-        channel: "chat",
-        status: snapshot.status === "closed" ? "closed" : "open",
-        subject: `[${snapshot.product === "santaddeo" ? "Santaddeo" : "HotelProfitAI"}] ${snapshot.title}`.slice(0, 240),
-        external_thread_id: externalThreadId,
-        contact_name: resolved.code,
-        last_message_at: lastMessageAt,
-        updated_at: now,
-        metadata,
-      },
-      { onConflict: "id" },
-    )
-
+  const nextUnread = Math.max(0, Number(existingConversation?.unread_count || 0) + newlyArrivedCustomerMessages)
+  const { error: conversationError } = await supabase.from("conversations").upsert(
+    {
+      id: conversationId,
+      property_id: hubPropertyId,
+      channel: "chat",
+      status: snapshot.status === "closed" ? "closed" : "open",
+      subject: `[${snapshot.product === "santaddeo" ? "Santaddeo" : "HotelProfitAI"}] ${snapshot.title}`.slice(0, 240),
+      external_thread_id: externalThreadId,
+      contact_name: resolved.code,
+      last_message_at: lastMessageAt,
+      unread_count: nextUnread,
+      updated_at: now,
+      metadata,
+    },
+    { onConflict: "id" },
+  )
   if (conversationError) throw conversationError
 
   for (const message of snapshot.messages) {
     const externalMessageId = `suite-support:${snapshot.product}:${snapshot.threadId}:${message.id}`
     const messageId = deterministicUuid(`message:${externalMessageId}`)
     const createdAt = message.created_at || now
-    const { error: messageError } = await supabase
-      .from("messages")
-      .upsert(
-        {
-          id: messageId,
-          conversation_id: conversationId,
-          property_id: hubPropertyId,
-          sender_type: message.sender === "customer" ? "contact" : message.sender,
-          sender_id: null,
-          sender_name: message.sender_name ?? null,
-          content: message.content,
-          content_type: "text",
-          external_message_id: externalMessageId,
-          created_at: createdAt,
-          received_at: createdAt,
-          stored_at: now,
-          status: "delivered",
-          metadata: {
-            support_federation: {
-              product_key: snapshot.product,
-              external_thread_id: snapshot.threadId,
-              external_message_id: message.id,
-              sender: message.sender,
-            },
+    const { error: messageError } = await supabase.from("messages").upsert(
+      {
+        id: messageId,
+        conversation_id: conversationId,
+        property_id: hubPropertyId,
+        sender_type: message.sender === "customer" ? "contact" : message.sender,
+        sender_id: null,
+        sender_name: message.sender_name ?? null,
+        content: message.content,
+        content_type: "text",
+        external_message_id: externalMessageId,
+        created_at: createdAt,
+        received_at: createdAt,
+        stored_at: now,
+        status: "delivered",
+        metadata: {
+          support_federation: {
+            product_key: snapshot.product,
+            external_thread_id: snapshot.threadId,
+            external_message_id: message.id,
+            sender: message.sender,
           },
         },
-        { onConflict: "id" },
-      )
+      },
+      { onConflict: "id" },
+    )
     if (messageError) throw messageError
-  }
-
-  const customerMessages = snapshot.messages.filter((message) => message.sender === "customer").length
-  if (customerMessages > 0) {
-    const { error: unreadError } = await supabase
-      .from("conversations")
-      .update({ unread_count: customerMessages, last_message_at: lastMessageAt, updated_at: now })
-      .eq("id", conversationId)
-      .eq("property_id", hubPropertyId)
-    if (unreadError) throw unreadError
   }
 
   return { ok: true as const, conversationId, customerCode: resolved.code }
