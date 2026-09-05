@@ -13,6 +13,7 @@ Ultimo aggiornamento: 2026-09-05
 - Ricarica automatica opt-in con Stripe: `Codice` sul branch `feat/scout-paid-addon-credits`
 - Dashboard economics superadmin: `Codice` sul branch `feat/scout-paid-addon-credits`
 - Monitoraggio live dei crediti del provider nel superadmin: `Codice` sul branch `feat/scout-paid-addon-credits`
+- Integrazione fiscale target con HotelProfitAI hub unico: `Codice`, da verificare end-to-end con pagamento reale/test e FattureInCloud
 - Verifica con pagamento reale, autoricarica reale, webhook reale e migrazioni applicate: non ancora oltre `Codice`
 
 ## Nome canonico
@@ -92,6 +93,20 @@ Il costo provider e' salvato in micro-euro per non perdere precisione. Ogni vari
 
 Il costo monetario configurato e' una stima interna e non deve essere confuso con il numero di crediti tecnici effettivamente consumati dal piano del provider.
 
+### Hub fiscale 4BID
+
+Per Scout vale il contratto fiscale di suite:
+
+1. **Stripe e' il motore di incasso**, non il proprietario della fatturazione fiscale;
+2. **HotelProfitAI e' l'unico hub fiscale 4BID** per HotelAccelerator, Santaddeo, ManuBot, HotelProfitAI e le altre piattaforme 4BID;
+3. ogni incasso fatturabile deve produrre una **Stripe Invoice** con metadata stabili (`project`, tipo operazione e riferimenti dominio);
+4. HotelProfitAI riceve l'evento Stripe `invoice.paid`, identifica il prodotto e crea la fattura nell'account FattureInCloud di 4 Bid srl;
+5. la fattura elettronica resta in FattureInCloud pronta per il successivo invio **manuale** allo SDI;
+6. HotelAccelerator/Scout non deve creare direttamente documenti FattureInCloud e non deve inviare direttamente allo SDI;
+7. idempotenza fiscale e audit centralizzati restano di proprieta' HotelProfitAI tramite il ledger fiscale basato sullo Stripe Invoice ID.
+
+L'attivazione e l'acquisto manuale di crediti usano Stripe Checkout con `invoice_creation.enabled=true`. La ricarica automatica deve usare una Stripe Invoice pagata off-session, non un PaymentIntent isolato: in questo modo anche l'autoricarica percorre lo stesso evento fiscale `invoice.paid` consumato da HotelProfitAI.
+
 ### Ricarica automatica
 
 La ricarica automatica e' sempre **opt-in** e puo' essere modificata solo da un amministratore/owner del tenant. Gli operatori non amministratori possono vedere lo stato ma non possono salvare carte, attivare, modificare o disattivare l'autoricarica.
@@ -110,12 +125,14 @@ Flusso:
 2. HotelAccelerator conserva solo customer/payment-method ID Stripe e dati non sensibili della carta (brand, ultime 4 cifre, scadenza);
 3. quando il saldo Scout diminuisce, il database accoda un controllo autoricarica;
 4. un unico cron HotelAccelerator processa la coda ogni 5 minuti tramite claim atomico; eventuali lock lasciati da un crash sono recuperabili dopo 15 minuti;
-5. se `crediti_disponibili * prezzo_credito_corrente < soglia_euro`, viene creato un PaymentIntent off-session;
-6. il PaymentIntent usa una idempotency key legata al tentativo;
-7. dopo il pagamento riuscito vengono accreditati i crediti con ledger idempotente;
-8. se il pagamento richiede autenticazione o viene rifiutato, l'autoricarica viene sospesa e la UI lo segnala;
-9. se Stripe ha addebitato ma l'accredito DB fallisce, il tentativo resta riconciliabile e il retry recupera lo stesso PaymentIntent senza creare un secondo addebito;
-10. se il tenant disattiva l'autoricarica prima che esista un PaymentIntent, un tentativo gia' accodato viene annullato senza addebito; se il PaymentIntent esiste gia', il sistema completa solo la riconciliazione dello stesso pagamento senza riattivare il consenso.
+5. se `crediti_disponibili * prezzo_credito_corrente < soglia_euro`, viene creata una Stripe Invoice dedicata con metadata `project=hotelaccelerator` e `kind=scout_auto_recharge`;
+6. alla fattura viene aggiunta la riga per il pacchetto crediti e il documento viene finalizzato senza auto-advance;
+7. il consenso viene ricontrollato immediatamente prima del pagamento: se e' stato ritirato, la fattura non pagata viene chiusa e non avviene alcun addebito;
+8. la Stripe Invoice viene pagata off-session usando la carta salvata e una idempotency key legata al tentativo;
+9. Stripe emette `invoice.paid`; HotelProfitAI usa quell'evento per la fattura FattureInCloud, mentre HotelAccelerator accredita i crediti con ledger idempotente;
+10. se il pagamento richiede autenticazione o viene rifiutato, l'autoricarica viene sospesa e la UI lo segnala;
+11. se Stripe ha addebitato ma l'accredito DB fallisce, il tentativo resta riconciliabile tramite la stessa Stripe Invoice/PaymentIntent senza creare un secondo addebito;
+12. se esistesse un tentativo legacy creato col vecchio PaymentIntent isolato, viene solo riconciliato e segnalato come legacy: non viene creato un secondo charge.
 
 Non viene memorizzato alcun PAN/CVC nel database HotelAccelerator. I codici tecnici interni degli errori di pagamento restano server-side e non vengono esposti nell'API tenant.
 
@@ -144,7 +161,7 @@ Le operazioni a consumo usano una riserva atomica tenant-scoped. Il flusso e':
 6. se il provider completa, contabilizza il credito e il costo;
 7. doppi click e richieste concorrenti sullo stesso prospect non generano due consumi.
 
-Checkout e webhook usano idempotency key legate alla Stripe Checkout Session, cosi' una ridelivery del webhook non accredita due volte i crediti. La ricarica automatica aggiunge un secondo livello di idempotenza basato sul tentativo di ricarica e sul PaymentIntent. Il claim della coda usa `FOR UPDATE SKIP LOCKED` per evitare doppie lavorazioni concorrenti e consente il recupero dei lock stantii.
+Checkout e webhook usano idempotency key legate alla Stripe Checkout Session, cosi' una ridelivery del webhook non accredita due volte i crediti. La ricarica automatica aggiunge idempotenza basata sul tentativo e sugli identificativi Stripe Invoice/PaymentIntent. Il claim della coda usa `FOR UPDATE SKIP LOCKED` per evitare doppie lavorazioni concorrenti e consente il recupero dei lock stantii.
 
 ### Visibilita'
 
@@ -195,4 +212,4 @@ Prima del merge la modifica e' confinata al branch. Dopo l'applicazione delle mi
 
 Il white-label Scout puo' passare da `Specifica` a `Codice` solo quando una ricerca globale delle superfici tenant non trova il nome del provider in UI, CTA, errori o sorgenti visualizzate. La presenza del nome in codice server, migrazioni storiche, log interni e documentazione tecnica riservata non costituisce violazione.
 
-Il billing non passa oltre `Codice` finche' non sono verificati almeno: migrazioni su ambiente controllato, checkout Stripe reale/test, setup carta, autoricarica sotto soglia, rifiuto/3DS, disattivazione tra claim e addebito, recovery lock coda, reconciliation dopo pagamento, ridelivery webhook, tenant isolation, consumo/rimborso credito, pagamento fallito, documentazione fiscale, typecheck/test/build e preview UI mobile.
+Il billing non passa oltre `Codice` finche' non sono verificati almeno: migrazioni su ambiente controllato, checkout Stripe reale/test, setup carta, autoricarica sotto soglia, rifiuto/3DS, disattivazione tra claim e addebito, recovery lock coda, reconciliation dopo pagamento, ridelivery webhook, tenant isolation, consumo/rimborso credito, pagamento fallito, **Stripe Invoice Scout ricevuta da HotelProfitAI e trasformata una sola volta in fattura FattureInCloud senza invio automatico SDI**, typecheck/test/build e preview UI mobile.
