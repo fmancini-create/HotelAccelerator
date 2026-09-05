@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/sync-suite-support",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-suite-reviews-billing",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
