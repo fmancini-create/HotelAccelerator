@@ -71,6 +71,42 @@ alter table public.pms_usage_sessions enable row level security;
 revoke all on table public.pms_usage_sessions from anon, authenticated;
 grant select, insert, update, delete on table public.pms_usage_sessions to service_role;
 
+-- Il browser propone quanti secondi sono stati davvero in primo piano; il DB
+-- accetta al massimo il tempo trascorso lato server (+5s di tolleranza) e mai
+-- oltre 45s per heartbeat. Non e' una metrica di billing, ma non deve essere
+-- gonfiabile con una singola richiesta client.
+create or replace function public.heartbeat_pms_usage_session(
+  p_property_id uuid,
+  p_client_session_id uuid,
+  p_active_seconds integer
+)
+returns table(id uuid, active_seconds integer, last_heartbeat_at timestamptz)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_now timestamptz := now();
+  v_requested integer := greatest(0, least(coalesce(p_active_seconds, 0), 45));
+begin
+  return query
+  update public.pms_usage_sessions as s
+     set active_seconds = s.active_seconds + least(
+           v_requested,
+           greatest(0, least(45, floor(extract(epoch from (v_now - s.last_heartbeat_at)))::integer + 5))
+         ),
+         last_heartbeat_at = v_now,
+         updated_at = v_now
+   where s.property_id = p_property_id
+     and s.client_session_id = p_client_session_id
+     and s.ended_at is null
+  returning s.id, s.active_seconds, s.last_heartbeat_at;
+end;
+$$;
+
+revoke all on function public.heartbeat_pms_usage_session(uuid, uuid, integer) from public, anon, authenticated;
+grant execute on function public.heartbeat_pms_usage_session(uuid, uuid, integer) to service_role;
+
 -- Ora che la tabella esiste, il riferimento dalla traccia puo' essere vincolato.
 do $$
 begin
