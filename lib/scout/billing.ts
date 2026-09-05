@@ -36,22 +36,19 @@ export type ScoutProviderCost = {
   createdAt: string
 }
 
+/**
+ * Contratto tenant-safe. Non aggiungere qui costo provider, moltiplicatore,
+ * margine o economics interni: questo oggetto viene serializzato verso UI/API tenant.
+ */
 export type ScoutTenantBillingState = {
   active: boolean
   balance: number
   reservedCredits: number
   availableCredits: number
-  purchasedCredits: number
-  grantedCredits: number
-  consumedCredits: number
-  providerCostMicroEur: number
-  usageRetailValueCents: number
   activationFeeCents: number | null
   activationIncludedCredits: number
-  markupMultiplier: number
   minimumPurchaseCredits: number
   creditPriceCents: number | null
-  unitMarginMicroEur: number | null
   pricingConfigured: boolean
 }
 
@@ -120,7 +117,7 @@ export async function getScoutTenantBillingState(
     getCurrentScoutProviderCost(db),
     db
       .from("scout_credit_accounts")
-      .select("balance,reserved_credits,purchased_credits,granted_credits,consumed_credits,provider_cost_micro_eur,usage_retail_value_cents")
+      .select("balance,reserved_credits")
       .eq("property_id", propertyId)
       .maybeSingle(),
   ])
@@ -136,20 +133,10 @@ export async function getScoutTenantBillingState(
     balance,
     reservedCredits,
     availableCredits: Math.max(0, balance - reservedCredits),
-    purchasedCredits: Math.max(0, Math.trunc(asNumber(row?.purchased_credits))),
-    grantedCredits: Math.max(0, Math.trunc(asNumber(row?.granted_credits))),
-    consumedCredits: Math.max(0, Math.trunc(asNumber(row?.consumed_credits))),
-    providerCostMicroEur: Math.max(0, Math.trunc(asNumber(row?.provider_cost_micro_eur))),
-    usageRetailValueCents: Math.max(0, Math.trunc(asNumber(row?.usage_retail_value_cents))),
     activationFeeCents: settings.activationFeeCents,
     activationIncludedCredits: settings.activationIncludedCredits,
-    markupMultiplier: settings.markupMultiplier,
     minimumPurchaseCredits: settings.minimumPurchaseCredits,
     creditPriceCents,
-    unitMarginMicroEur:
-      providerCost && creditPriceCents !== null
-        ? Math.max(0, creditPriceCents * 10_000 - providerCost.costMicroEur)
-        : null,
     pricingConfigured: Boolean(providerCost && creditPriceCents !== null && creditPriceCents > 0),
   }
 }
