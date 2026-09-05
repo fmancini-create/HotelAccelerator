@@ -58,5 +58,5 @@ export function resolveSupportHandoff(input: {
 }
 
 export function invalidCustomerCodeSpeech() {
-  return `Non riesco a verificare il codice cliente. Digiti di nuovo le ${CUSTOMER_CODE_DIGITS} cifre del codice 4 B.`
+  return `Non riesco a verificare il codice cliente. Può digitare le ${CUSTOMER_CODE_DIGITS} cifre sulla tastiera del telefono oppure dirmele a voce, una cifra alla volta.`
 }
