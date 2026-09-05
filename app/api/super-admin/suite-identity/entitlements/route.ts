@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 import { getCallerIdentity } from "@/lib/auth/admin-access"
+import { getSuiteProduct } from "@/lib/customer-codes/product"
 import { createServiceClient } from "@/lib/supabase/server"
+import { syncSuiteProductModule } from "@/lib/suite-module-sync"
 
 const PRODUCTS = new Set(["hotelaccelerator", "santaddeo", "hotelprofitai", "manubot"])
 const STATUSES = new Set(["active", "trial", "inactive", "suspended", "cancelled"])
@@ -34,6 +36,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Scadenza non valida" }, { status: 400 })
   }
 
+  const product = getSuiteProduct(productKey)
+  if (!product) return NextResponse.json({ error: "Prodotto non valido" }, { status: 400 })
+
   const sb = createServiceClient()
   const { data: account, error: accountError } = await sb
     .from("customer_accounts")
@@ -62,8 +67,11 @@ export async function POST(request: NextRequest) {
     .single()
   if (error) throw error
 
-  // Account-level entitlement is intentionally separate from tenant_modules.
-  // Local product access keeps its existing owner/flow; provisioning aligns a
-  // local module only when a real cross-suite launch needs it.
+  await syncSuiteProductModule({
+    supabase: sb,
+    customerAccountId,
+    productKey: product.key,
+  })
+
   return NextResponse.json({ entitlement: data }, { headers: { "Cache-Control": "no-store" } })
 }
