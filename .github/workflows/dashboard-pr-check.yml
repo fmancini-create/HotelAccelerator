@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   verify-core-dashboard:
@@ -48,6 +49,22 @@ jobs:
           fi
           exit "$status"
 
+      - name: Publish typecheck diagnostics
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const log = fs.existsSync('/tmp/typecheck.log')
+              ? fs.readFileSync('/tmp/typecheck.log', 'utf8').slice(-12000)
+              : 'Typecheck failed without a captured log.'
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `<!-- temporary-typecheck-diagnostic -->\n### Typecheck diagnostic\n\n\`\`\`text\n${log}\n\`\`\``,
+            })
+
       - name: Test support federation timestamp contract
         run: pnpm vitest run lib/support-federation/__tests__/contract.test.ts
 
@@ -59,6 +76,9 @@ jobs:
 
       - name: Test HR tenant user provisioning
         run: pnpm vitest run tests/hr-user-provisioning.test.ts
+
+      - name: Test HR geofence map geometry
+        run: pnpm vitest run tests/hr-geofence-map.test.ts
 
       - name: Test dashboard local day boundaries
         run: pnpm vitest run tests/dashboard-local-day.test.ts
