@@ -6,6 +6,8 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { getManubotClient } from "@/lib/manubot"
 import { categorizeManubotError, logManubotError } from "@/lib/manubot/route-errors"
 import { loadManubotPropertyForCaller } from "@/lib/manubot/tenant-context"
+import { isModuleActive } from "@/lib/modules"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,6 +34,9 @@ export async function POST(request: NextRequest) {
         { status: resolved.status },
       )
     }
+
+    const active = await isModuleActive(createServiceClient(), resolved.property.id, "manubot")
+    if (!active) return NextResponse.json({ error: "module_inactive" }, { status: 404 })
 
     const formData = await request.formData()
     const files = formData.getAll("files").filter((value): value is File => value instanceof File)
