@@ -37,6 +37,9 @@ jobs:
       - name: Test support federation timestamp contract
         run: pnpm vitest run lib/support-federation/__tests__/contract.test.ts
 
+      - name: Test external contact qualification
+        run: pnpm vitest run lib/ai/__tests__/handoff-utils.test.ts
+
       - name: Test HR time-clock login gate
         run: pnpm vitest run tests/mobile-login-time-clock-gate.test.ts
 
