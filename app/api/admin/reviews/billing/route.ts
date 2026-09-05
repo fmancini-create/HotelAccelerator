@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
-import { getSuiteAddonEntitlementForTenant } from "@/lib/suite-addons/entitlements"
+import { isModuleActive } from "@/lib/modules"
+import { createServiceClient } from "@/lib/supabase/server"
+import { getSuiteAddonEntitlementForTenant, resolveSuiteCustomerAccountId } from "@/lib/suite-addons/entitlements"
 import { getReviewsBillingProfile, saveReviewsBillingProfile } from "@/lib/suite-addons/reviews-billing"
-import { resolveSuiteCustomerAccountId } from "@/lib/suite-addons/entitlements"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -23,11 +24,12 @@ export async function GET(request: NextRequest) {
   if ("error" in auth) return auth.error
   try {
     const accountId = await resolveSuiteCustomerAccountId({ productKey: "hotelaccelerator", externalTenantId: auth.propertyId })
-    const [profile, entitlement] = await Promise.all([
+    const [profile, entitlement, access] = await Promise.all([
       accountId ? getReviewsBillingProfile(accountId) : null,
       getSuiteAddonEntitlementForTenant({ productKey: "hotelaccelerator", externalTenantId: auth.propertyId, addonKey: "reviews" }),
+      isModuleActive(createServiceClient(), auth.propertyId, "reviews"),
     ])
-    return response({ profile, entitlement })
+    return response({ profile, entitlement, access })
   } catch (error) {
     console.error("[reviews-billing] HA read failed", error)
     return response({ error: "billing_read_failed" }, 500)
