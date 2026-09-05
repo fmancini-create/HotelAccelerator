@@ -12,6 +12,20 @@ Il prodotto e' guidato da un founder non tecnico che lavora con assistenti AI e 
 - Preferire pochi passi verificabili a grandi riscritture.
 - Se due soluzioni soddisfano lo stesso bisogno, preferire quella piu' semplice da mantenere e osservare nel lungo periodo.
 
+## Regola fondamentale UI — a prova di bambino
+
+Ogni interfaccia deve essere semplice, autoesplicativa e comprensibile al primo colpo anche da un utente non tecnico. Questa regola e' parte della Definition of Done.
+
+- Una schermata deve far capire subito: dove sono, cosa posso fare, cosa succede se clicco e qual e' il prossimo passo.
+- Preferire linguaggio comune a gergo tecnico. Se un termine tecnico e' necessario, tradurlo o spiegarlo vicino al punto d'uso.
+- Ogni CTA deve descrivere l'azione reale (`Trova nuovi prospect`, `Apri contatto e procedi`, `Salva e continua`) e non usare etichette vaghe come `Vai`, `Gestisci`, `Procedi` senza contesto.
+- Ridurre decisioni simultanee, campi e opzioni non indispensabili. Mostrare prima il percorso principale, poi eventuali impostazioni avanzate.
+- KPI, punteggi e stati devono spiegare cosa significano e, soprattutto, quale azione suggeriscono all'utente.
+- Empty state, errori e loading devono dire in linguaggio semplice cosa sta succedendo e cosa puo' fare l'utente dopo.
+- Non usare il colore come unica informazione: stato e priorita' devono avere anche un'etichetta testuale chiara.
+- I flussi principali devono essere utilizzabili senza manuale, formazione o conoscenza preventiva del prodotto.
+- Prima di considerare una UI completata, verificare mobile, accessibilita', leggibilita' e comprensione del flusso da parte di un utente non tecnico.
+
 ## Metodo obbligatorio
 
 Prima di modificare codice:
