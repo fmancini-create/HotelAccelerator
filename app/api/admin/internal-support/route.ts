@@ -5,13 +5,36 @@ import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { createServiceClient } from "@/lib/supabase/server"
 import { retrieveContext } from "@/lib/ai/retrieval"
 import { createHotelAcceleratorSupportReport } from "@/lib/support-federation/core"
+import {
+  SUPPORT_ATTACHMENT_BUCKET,
+  SUPPORT_ATTACHMENT_MAX_BYTES,
+  SUPPORT_ATTACHMENT_MAX_FILES,
+  validateOwnedSupportAttachments,
+  type StoredSupportAttachment,
+} from "@/lib/support-attachments"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
+const attachmentSchema = z.object({
+  id: z.string().trim().min(1).max(200),
+  name: z.string().trim().min(1).max(255),
+  mime_type: z.string().trim().min(1).max(160),
+  size_bytes: z.number().int().positive().max(SUPPORT_ATTACHMENT_MAX_BYTES),
+  storage_path: z.string().trim().min(1).max(1000),
+  bucket: z.literal(SUPPORT_ATTACHMENT_BUCKET),
+})
+
 const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("ask"), question: z.string().trim().min(2).max(3000), current_path: z.string().trim().max(500).nullable().optional() }),
-  z.object({ action: z.literal("report"), type: z.enum(["suggestion", "bug"]), title: z.string().trim().min(2).max(160), description: z.string().trim().min(3).max(10000), current_path: z.string().trim().max(500).nullable().optional() }),
+  z.object({
+    action: z.literal("report"),
+    type: z.enum(["suggestion", "bug"]),
+    title: z.string().trim().min(2).max(160),
+    description: z.string().trim().min(3).max(10000),
+    current_path: z.string().trim().min(1).max(500),
+    attachments: z.array(attachmentSchema).max(SUPPORT_ATTACHMENT_MAX_FILES).default([]),
+  }),
 ])
 
 async function resolveHotelAcceleratorInternalBaseIds(): Promise<string[]> {
@@ -51,6 +74,10 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Richiesta non valida" }, { status: 400 })
 
   if (parsed.data.action === "report") {
+    const attachments = parsed.data.attachments as StoredSupportAttachment[]
+    const attachmentError = validateOwnedSupportAttachments(attachments, identity.propertyId, identity.userId)
+    if (attachmentError) return NextResponse.json({ error: attachmentError }, { status: 400 })
+
     try {
       const label = await propertyLabel(identity.propertyId)
       const result = await createHotelAcceleratorSupportReport({
@@ -60,8 +87,10 @@ export async function POST(request: NextRequest) {
         title: parsed.data.title,
         description: parsed.data.description,
         currentPath: parsed.data.current_path,
+        actorUserId: identity.userId,
         actorName: identity.fullName,
         actorEmail: identity.email,
+        attachments,
       })
       return NextResponse.json({ ok: true, conversation_id: result.conversationId })
     } catch (error) {
