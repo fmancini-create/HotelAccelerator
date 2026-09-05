@@ -14,22 +14,29 @@ function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } })
 }
 
-async function caller(request: NextRequest): Promise<SuiteTaskSourceProduct | null> {
+async function caller(request: NextRequest): Promise<
+  | { ok: true; product: SuiteTaskSourceProduct }
+  | { ok: false; status: number; error: string }
+> {
   const product = getSuiteProduct(request.headers.get("x-4bid-product"))
-  if (!product || !["santaddeo", "hotelprofitai"].includes(product.key)) return null
+  if (!product || !["santaddeo", "hotelprofitai"].includes(product.key)) {
+    return { ok: false, status: 400, error: "invalid_product" }
+  }
 
   const auth = await authenticateRegistryClient(
     product.key,
     request.headers.get("x-4bid-registry-key"),
     request.headers.get("authorization"),
   )
-  if (!auth.ok) return null
-  return product.key as SuiteTaskSourceProduct
+  if (!auth.configured) return { ok: false, status: 503, error: "registry_not_configured" }
+  if (!auth.ok) return { ok: false, status: 401, error: "unauthorized" }
+  return { ok: true, product: product.key as SuiteTaskSourceProduct }
 }
 
 export async function POST(request: NextRequest) {
-  const sourceProduct = await caller(request)
-  if (!sourceProduct) return json({ error: "unauthorized" }, 401)
+  const auth = await caller(request)
+  if (!auth.ok) return json({ error: auth.error }, auth.status)
+  const sourceProduct = auth.product
 
   const body = (await request.json().catch(() => null)) as { external_tenant_id?: unknown } | null
   const externalTenantId = typeof body?.external_tenant_id === "string" ? body.external_tenant_id.trim() : ""
