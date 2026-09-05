@@ -4,6 +4,7 @@ import { getAuthenticatedUserEmail } from "@/lib/auth-property"
 import { SuperAdminService } from "@/lib/platform-services"
 import { createServiceClient } from "@/lib/supabase/server"
 import { handleServiceError } from "@/lib/errors"
+import { getApolloCreditUsageStats } from "@/lib/integrations/apollo/client"
 import {
   getCurrentScoutProviderCost,
   getScoutBillingSettings,
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
   try {
     await requireSuperAdmin(request)
     const db = createServiceClient()
-    const [settings, currentCost, historyResult, accountsResult] = await Promise.all([
+    const [settings, currentCost, historyResult, accountsResult, providerUsage] = await Promise.all([
       getScoutBillingSettings(db),
       getCurrentScoutProviderCost(db),
       db
@@ -73,6 +74,12 @@ export async function GET(request: NextRequest) {
         .from("scout_credit_accounts")
         .select("property_id,balance,reserved_credits,purchased_credits,granted_credits,consumed_credits,provider_cost_micro_eur,usage_retail_value_cents,updated_at,properties(name,slug)")
         .order("updated_at", { ascending: false }),
+      getApolloCreditUsageStats()
+        .then((stats) => ({ available: true as const, stats, error: null }))
+        .catch((error: unknown) => {
+          console.error("Scout provider credit monitoring unavailable:", error)
+          return { available: false as const, stats: null, error: "Monitoraggio crediti provider temporaneamente non disponibile." }
+        }),
     ])
     if (historyResult.error) throw historyResult.error
     if (accountsResult.error) throw accountsResult.error
@@ -104,6 +111,7 @@ export async function GET(request: NextRequest) {
       history: historyResult.data ?? [],
       accounts,
       totals,
+      providerUsage,
     })
   } catch (error) {
     return handleServiceError(error)
