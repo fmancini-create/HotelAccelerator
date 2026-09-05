@@ -11,7 +11,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
 
-    // Verify group belongs to property
     const { data: group } = await supabase
       .from("user_groups")
       .select("id, auto_logout_minutes")
@@ -19,22 +18,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .eq("property_id", propertyId)
       .single()
 
-    if (!group) {
-      return NextResponse.json({ error: "Gruppo non trovato" }, { status: 404 })
-    }
+    if (!group) return NextResponse.json({ error: "Gruppo non trovato" }, { status: 404 })
 
-    const { data: permissions, error } = await supabase
-      .from("group_channel_permissions")
-      .select("*")
-      .eq("group_id", groupId)
+    const [{ data: permissions, error }, { data: areaRows }, { data: callRule }] = await Promise.all([
+      supabase.from("group_channel_permissions").select("*").eq("group_id", groupId),
+      supabase
+        .from("group_area_permissions")
+        .select("area_key")
+        .eq("property_id", propertyId)
+        .eq("group_id", groupId),
+      supabase
+        .from("group_call_access")
+        .select("visibility_scope, can_read_transcripts, can_listen_recordings")
+        .eq("property_id", propertyId)
+        .eq("group_id", groupId)
+        .maybeSingle(),
+    ])
 
     if (error) throw error
 
-    const { data: areaRows } = await supabase
-      .from("group_area_permissions")
-      .select("area_key")
-      .eq("property_id", propertyId)
-      .eq("group_id", groupId)
     const areas = (areaRows ?? [])
       .map((r: { area_key: string }) => r.area_key)
       .filter((k: string) => GRANTABLE_AREA_KEYS.has(k))
@@ -43,9 +45,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       permissions: permissions || [],
       areas,
       autoLogoutMinutes: (group as any).auto_logout_minutes ?? null,
+      callAccess: callRule
+        ? {
+            inherit: false,
+            visibility_scope: callRule.visibility_scope,
+            can_read_transcripts: callRule.can_read_transcripts !== false,
+            can_listen_recordings: callRule.can_listen_recordings === true,
+            selected_user_ids: [],
+            selected_group_ids: [],
+          }
+        : {
+            inherit: false,
+            visibility_scope: "own",
+            can_read_transcripts: true,
+            can_listen_recordings: false,
+            selected_user_ids: [],
+            selected_group_ids: [],
+          },
     })
   } catch (error: any) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
@@ -57,10 +75,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
     const body = await request.json()
+    const permissions = Array.isArray(body?.permissions) ? body.permissions : []
 
-    const { permissions } = body
-
-    // Verify group belongs to property
     const { data: group } = await supabase
       .from("user_groups")
       .select("id")
@@ -68,14 +84,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       .eq("property_id", propertyId)
       .single()
 
-    if (!group) {
-      return NextResponse.json({ error: "Gruppo non trovato" }, { status: 404 })
-    }
+    if (!group) return NextResponse.json({ error: "Gruppo non trovato" }, { status: 404 })
 
-    // Delete existing permissions
     await supabase.from("group_channel_permissions").delete().eq("group_id", groupId)
 
-    // Insert new permissions (only if at least one permission is true)
     const permissionsToInsert = permissions
       .filter((p: any) => p.can_read || p.can_write || p.can_manage)
       .map((p: any) => ({
@@ -90,11 +102,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     if (permissionsToInsert.length > 0) {
       const { error } = await supabase.from("group_channel_permissions").insert(permissionsToInsert)
-
       if (error) throw error
     }
 
-    // Area permissions for the group (only present when client sends `areas`).
     if (Array.isArray(body?.areas)) {
       const areaKeys: string[] = Array.from(
         new Set(
@@ -111,9 +121,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    // Disconnessione automatica per i membri del gruppo. Come sopra, il campo
-    // si tocca solo se inviato: `null` significa "il gruppo non impone nulla"
-    // ed e' diverso da "non inviato".
     if ("autoLogoutMinutes" in body) {
       const grezzo = (body as any).autoLogoutMinutes
       if (grezzo !== null && !tempoAmmesso(grezzo)) {
@@ -127,9 +134,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       if (logoutErr) throw logoutErr
     }
 
+    if (body?.callAccess) {
+      const callAccess = body.callAccess as any
+      const allowedScopes = new Set(["own", "groups", "all"])
+      const visibilityScope = allowedScopes.has(callAccess.visibility_scope) ? callAccess.visibility_scope : "own"
+      const { error: callErr } = await supabase.from("group_call_access").upsert(
+        {
+          property_id: propertyId,
+          group_id: groupId,
+          visibility_scope: visibilityScope,
+          can_read_transcripts: callAccess.can_read_transcripts !== false,
+          can_listen_recordings: callAccess.can_listen_recordings === true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "property_id,group_id" },
+      )
+      if (callErr) throw callErr
+    }
+
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
