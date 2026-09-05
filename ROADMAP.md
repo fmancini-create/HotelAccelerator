@@ -13,7 +13,7 @@ Snapshot verificato: repository `main` al 2026-09-05; le capability citate sotto
 ## P0/P1 correnti
 
 1. **WhatsApp fuori 24h / billing Meta** — base Coexistence e `Tenant reale`; riapertura 24h e billing centralizzato sono `Codice`. Chiudere extended credit line 4BID + allocation WABA + nuovo E2E reale dopo l'errore Meta `131042`.
-2. **3CX Voice** — il Voice Agent 4BID risponde su chiamata reale, ma la capability complessiva resta `Codice`: verificare journal, caller routing 4BID/Barronci, trascrizione, registrazione e transcript -> calendario domanda.
+2. **3CX Voice + telefonia provider-agnostic** — il Voice Agent 4BID risponde su chiamata reale; il layer PBX agnostico e `Codice` con PR #425. Verificare journal/transcript/recording 3CX e poi collaudare i nuovi adapter su impianti reali prima di promuoverli.
 3. **SSO suite** — grant Core -> satelliti e rientro sicuro satellite -> Core sono `Codice`; fare round-trip reale per Santaddeo, HotelProfitAI e ManuBot con tenant/entitlement verificati.
 4. **CRM workspace + Scout** — entrambi `Codice`; collaudare tenant reale con due workspace, permessi di gruppo, ricerca Scout, enrichment, import e coda commerciale senza leakage/costi duplicati.
 5. **HR** — workforce, geofence e documenti sono `Codice`; completare prova smartphone reale, fuori geofence, permessi GPS, documenti e ruoli.
@@ -118,6 +118,10 @@ Snapshot verificato: repository `main` al 2026-09-05; le capability citate sotto
 - [x] 3CX bridge, Voice Agent 4BID, fallback 820 e strumenti Core in `main` (`Codice`).
 - [x] Voice Agent 4BID risponde su chiamata reale.
 - [x] Routing shared-PBX, caller hints e mapping interni implementati (`Codice`, PR #323/#324/#329/#331/#335).
+- [x] Layer centralino provider-agnostic: scelta PBX, registry 9 provider, adapter, verifica, click-to-call e guide (`Codice`, PR #425).
+- [x] Un solo PBX attivo per tenant, switch atomico post-verifica, audit admin-only e protezioni SSRF (`Codice`, PR #425).
+- [ ] E2E su impianto reale per Wildix, NethVoice, VOIspeed, Yeastar e Asterisk/FreePBX; solo dopo promuovere i singoli adapter a `Tenant reale`.
+- [ ] Implementare/collaudare OAuth runtime per Teams Phone e Webex Calling e bridge persistente per Avaya IP Office.
 - [x] Trascrizioni telefoniche previste in UI/API e pipeline domanda (`Codice`, PR #314/#320).
 - [ ] Chiamata reale 4BID: verificare `phone_calls` nel tenant corretto, transcript, summary e recording se 3CX li fornisce.
 - [ ] Chiamata reale Barronci dallo stesso numero chiamante: verificare assenza di leakage.
@@ -182,7 +186,7 @@ Snapshot verificato: repository `main` al 2026-09-05; le capability citate sotto
 
 ## Idee registrate, non in sviluppo
 
-- **HotelAccelerator Voice** — `Idea`, PR #341: centralino/addon proprietario sopra infrastruttura telefonica specializzata. Non deve sottrarre capacita al consolidamento del Voice Agent 3CX attuale.
+- **HotelAccelerator Voice** — `Idea`, PR #341: centralino/addon proprietario sopra infrastruttura telefonica specializzata. Non deve sottrarre capacita al consolidamento del Voice Agent 3CX attuale e degli adapter PBX.
 
 ## Regola per nuove idee
 
