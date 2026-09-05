@@ -8,13 +8,6 @@ import {
   type ShadowStep,
 } from "@/lib/pms/shadow/procedures"
 
-/**
- * Le sequenze qui sotto non sono inventate a caso: ricalcano i gesti veri di uno
- * sportello (apri l'elenco arrivi, apri una scheda, compila una data, salva) e i
- * gesti che NON devono mai diventare automatici (un rimborso, una
- * cancellazione).
- */
-
 const apriArrivi: ShadowStep[] = [
   { action: "navigate", urlPath: "/prenotazioni/arrivi" },
   { action: "click", targetRole: "link", targetLabel: "Arrivi di oggi", urlPath: "/prenotazioni/arrivi" },
@@ -43,9 +36,6 @@ describe("chiaveProcedura", () => {
   })
 
   it("distingue due percorsi che differiscono solo dopo una barra", () => {
-    // Questo e' il motivo per cui il percorso non passa dal normalizzatore delle
-    // domande: quello mangia le barre e queste due pagine diventerebbero la
-    // stessa procedura.
     const a: ShadowStep[] = [{ action: "navigate", urlPath: "/prenotazioni/nuova" }]
     const b: ShadowStep[] = [{ action: "navigate", urlPath: "/prenotazioni/nuovo-ospite" }]
     expect(chiaveProcedura(a)).not.toBe(chiaveProcedura(b))
@@ -61,15 +51,8 @@ describe("chiaveProcedura", () => {
   })
 
   it("non cambia se cambia il contenuto digitato, solo la sua natura", () => {
-    // Il tipo ShadowStep non ha un campo per il valore: questa prova difende
-    // quella scelta. Due check-in con documenti diversi sono la stessa
-    // procedura, ed e' per questo che il valore non serve.
-    const conNatura: ShadowStep[] = [
-      { action: "fill", targetLabel: "Documento", valueKind: "text" },
-    ]
-    const conAltraNatura: ShadowStep[] = [
-      { action: "fill", targetLabel: "Documento", valueKind: "number" },
-    ]
+    const conNatura: ShadowStep[] = [{ action: "fill", targetLabel: "Documento", valueKind: "text" }]
+    const conAltraNatura: ShadowStep[] = [{ action: "fill", targetLabel: "Documento", valueKind: "number" }]
     expect(chiaveProcedura(conNatura)).not.toBe(chiaveProcedura(conAltraNatura))
   })
 })
@@ -88,8 +71,6 @@ describe("classificaRischio", () => {
   })
 
   it("un campo di tipo importo alza il rischio anche senza parole sospette", () => {
-    // Il PMS potrebbe chiamare il campo "Totale" o "Val.": la parola non aiuta,
-    // la natura del campo si'.
     const senzaParoleSospette: ShadowStep[] = [
       { action: "navigate", urlPath: "/scheda" },
       { action: "fill", targetLabel: "Totale", urlPath: "/scheda", valueKind: "money" },
@@ -110,8 +91,8 @@ describe("decidiStato", () => {
     expect(decidiStato({ occorrenze: soglia - 1, soglia, rischio: "basso" })).toBe("osservata")
   })
 
-  it("il rischio basso diventa autonomo alla soglia", () => {
-    expect(decidiStato({ occorrenze: soglia, soglia, rischio: "basso" })).toBe("autonoma")
+  it("anche il rischio basso diventa una proposta alla soglia, non autonomo", () => {
+    expect(decidiStato({ occorrenze: soglia, soglia, rischio: "basso" })).toBe("proposta")
   })
 
   it("il rischio medio alla soglia diventa una proposta, non un'azione", () => {
@@ -123,23 +104,15 @@ describe("decidiStato", () => {
   })
 
   it("una decisione umana di bloccare non si annulla con le ripetizioni", () => {
-    expect(
-      decidiStato({ occorrenze: 100, soglia, rischio: "basso", attuale: "bloccata" }),
-    ).toBe("bloccata")
+    expect(decidiStato({ occorrenze: 100, soglia, rischio: "basso", attuale: "bloccata" })).toBe("bloccata")
   })
 
-  it("una procedura sbloccata da una persona resta autonoma", () => {
-    expect(
-      decidiStato({ occorrenze: soglia, soglia, rischio: "medio", attuale: "autonoma" }),
-    ).toBe("autonoma")
+  it("una procedura gia' autorizzata esplicitamente resta autonoma", () => {
+    expect(decidiStato({ occorrenze: soglia, soglia, rischio: "medio", attuale: "autonoma" })).toBe("autonoma")
   })
 
   it("se il rischio si alza, una procedura autonoma torna a chiedere", () => {
-    // Il PMS cambia e la stessa sequenza inizia a toccare un importo: la
-    // sicurezza vince sull'abitudine.
-    expect(
-      decidiStato({ occorrenze: 100, soglia, rischio: "alto", attuale: "autonoma" }),
-    ).toBe("proposta")
+    expect(decidiStato({ occorrenze: 100, soglia, rischio: "alto", attuale: "autonoma" })).toBe("proposta")
   })
 })
 

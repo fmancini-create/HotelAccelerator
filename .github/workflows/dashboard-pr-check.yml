@@ -54,6 +54,9 @@ jobs:
           fi
           exit "$code"
 
+      - name: Test PMS learning governance
+        run: pnpm vitest run lib/pms/shadow/__tests__/procedures.test.ts lib/pms/shadow/__tests__/metrics.test.ts
+
       - name: Test support federation timestamp contract
         run: pnpm vitest run lib/support-federation/__tests__/contract.test.ts
 

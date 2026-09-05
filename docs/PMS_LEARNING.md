@@ -1,70 +1,103 @@
 # Apprendimento per osservazione nel PMS
 
-Ultimo aggiornamento: 2026-08-30
+Ultimo aggiornamento: 2026-09-06
 
 ## Stato ufficiale
 
 **Codice**.
 
-Il motore che riconosce le procedure (`lib/pms/shadow/procedures.ts`) e le tabelle di apprendimento esistevano gia', ma prima di questa modifica non erano alimentati dalla pagina PMS. La verifica sul database HotelAccelerator del 2026-08-30 ha misurato:
+La verifica sul database HotelAccelerator eseguita fra il 5 e il 6 settembre 2026 ha misurato:
 
-- 2 configurazioni browser PMS attive;
-- 1 sessione Browserbase in stato `running`;
+- 2 configurazioni browser PMS;
+- 2 righe di stato Browserbase, entrambe nello snapshot in stato `error`;
 - 0 righe in `pms_shadow_sessions`;
 - 0 righe in `pms_shadow_steps`;
 - 0 righe in `pms_observed_procedures`.
 
-Quindi l'interfaccia "Apprendimento agente" era collegata a un archivio reale ma la sorgente di osservazione non esisteva nel percorso operativo.
+Quindi l'architettura di apprendimento esiste realmente nel repository, ma non c'e' ancora evidenza di una procedura PMS reale appresa end-to-end. Il livello resta `Codice` e non viene promosso a `Tenant reale`.
 
-## Flusso implementato
+## Flusso operativo
 
-1. `/admin/crm/pms-sync/gestionale` apre la sessione Browserbase esistente.
-2. Finche' la sessione remota e' attiva, la pagina richiama periodicamente `/api/crm/pms-shadow/observer`.
-3. L'observer si collega server-side alla stessa sessione Browserbase e installa un osservatore nella pagina PMS.
-4. L'osservatore registra esclusivamente la forma delle azioni: navigazione, click, compilazione, selezione, submit e pressione di Invio.
-5. Le tracce vengono delimitate su submit oppure dopo un periodo di inattivita' e passano a `lib/pms/shadow/store.ts`.
-6. Lo store salva sessione e passi, calcola la chiave normalizzata, aggiorna il numero di ripetizioni e applica le regole di rischio/autonomia.
-7. `/admin/crm/pms-sync/apprendimento` legge le procedure reali tramite `/api/crm/pms-shadow/events`.
+1. `/admin/crm/pms-sync/gestionale` apre la sessione Browserbase tenant-aware.
+2. La pagina richiama periodicamente `/api/crm/pms-shadow/observer` finche' il browser remoto e' disponibile.
+3. L'observer installa un listener nella pagina PMS e registra soltanto la forma delle azioni: navigazione, click, compilazione, selezione, submit e Invio.
+4. I valori digitati non vengono letti o persistiti.
+5. Le tracce usano `peek -> persist -> ACK`: non vengono eliminate dalla coda prima della conferma database.
+6. Ogni traccia ha un `source_trace_id` idempotente; un ACK perso non incrementa due volte la stessa procedura.
+7. Lo store salva sessione e passi, riconosce la procedura e collega `pms_shadow_sessions.procedure_id` alla procedura osservata.
+8. La pagina `/admin/knowledge` (Assistente IA) mostra governance PMS e apprendimento dai canali nello stesso centro tenant.
+
+## Governance umana
+
+Apprendimento e autonomia sono separati.
+
+- una procedura nuova nasce `review_status=pending`;
+- raggiungere la soglia di ripetizione rende la procedura una `proposta`, non la rende autonoma;
+- l'admin tenant puo' approvare o rifiutare cio' che l'IA ha imparato;
+- il rifiuto porta la procedura a `bloccata`;
+- l'approvazione certifica la conoscenza ma non concede automaticamente il permesso di eseguire azioni nel PMS;
+- opzionalmente l'admin puo' associare una procedura approvata a una o piu basi di conoscenza. La fonte testuale generata contiene solo passaggi sanificati e viene indicizzata dal normale knowledge layer.
+
+Questa separazione evita che la semplice ripetizione di una procedura conferisca privilegi operativi all'IA.
+
+## Percentuale di sconoscenza
+
+La metrica esposta nel tenant e **sconoscenza PMS osservata**, non una pretesa percentuale assoluta di tutte le funzioni disponibili nel gestionale.
+
+Per ogni procedura osservata vengono combinate:
+
+- evidenza di ripetizione fino alla soglia configurata;
+- revisione umana (`approved=100%`, `pending=50%`, `rejected=0%`).
+
+Le procedure hanno lo stesso peso per evitare che una operazione molto frequente nasconda procedure rare ancora sconosciute. Con zero procedure il cruscotto mostra 100% di sconoscenza e specifica che il campione e' vuoto. Finche' il campione non raggiunge una consistenza minima, la UI indica esplicitamente che l'indicatore e' parziale.
+
+## Uso medio e attivita giornaliere
+
+`pms_usage_sessions` conserva lo storico dell'uso PMS per tenant e operatore.
+
+- il browser invia heartbeat ogni 30 secondi;
+- viene conteggiato solo il tempo della pagina PMS in primo piano;
+- il server limita ogni incremento al tempo realmente trascorso e a massimo 45 secondi per heartbeat;
+- il cruscotto mostra media minuti/sessione sugli ultimi 30 giorni, minuti di oggi e numero sessioni;
+- le attivita della giornata derivano da `pms_shadow_sessions` e vengono raggruppate per procedura e operatore nel fuso orario della struttura.
+
+Il fallback iframe diretto viene comunque misurato come tempo d'uso, ma e' marcato `observable=false`: il cruscotto evidenzia quei minuti perche' non possono alimentare l'apprendimento.
 
 ## Privacy e sicurezza
 
-Non vengono letti o salvati i valori digitati nei campi. In particolare:
-
 - nessun `input.value`, `textarea.value`, `innerHTML` o query string viene persistito;
 - per i campi si conserva solo la natura (`text`, `date`, `money`, `email`, `phone`, `secret`, ecc.);
-- le etichette che assomigliano a email, telefoni, codici numerici lunghi o importi vengono scartate;
-- il `property_id` deriva esclusivamente dall'identita' autenticata e dal tenant attivo;
+- etichette simili a email, telefoni, codici lunghi o importi vengono scartate;
+- `property_id` deriva dall'identita autenticata e dal tenant attivo;
 - il `connectUrl` Browserbase resta server-only;
-- le tabelle shadow restano accessibili soltanto dal backend service-role e mantengono RLS attiva.
+- tabelle shadow, usage e mapping procedure/KB hanno RLS attiva e accesso Data API revocato ad `anon` e `authenticated`; il backend usa `service_role`;
+- le decisioni PMS richiedono `requireTenantAdmin` server-side.
 
-## Identificazione PMS
+## Limiti noti
 
-L'apprendimento del browser usa `browser:<pms_browser_config_id>` come identificatore stabile. Non dipende dal registro dei connettori API (`pms_integrations`), in coerenza con ADR-017: il browser PMS e' agnostico dal provider.
+"Tutte le attivita" non e' ancora tecnicamente garantibile con un observer DOM generico. Non sono coperti in modo universale:
 
-## Concorrenza e consistenza
+- drag & drop, gesture proprietarie e scorciatoie diverse da Invio;
+- variazioni SPA che non producono una nuova navigazione documentale;
+- eventuali iframe interni cross-origin del PMS;
+- attivita eseguite nel fallback iframe diretto;
+- attivita contemporanee di piu operatori sulla stessa Live View Browserbase: lo stato browser corrente e' singleton per property e puo' rendere ambigua l'attribuzione dell'azione.
 
-Lo store aggiorna `occurrences` con compare-and-swap e retry. Due operatori che completano contemporaneamente la stessa procedura non devono perdere una ripetizione. Se il salvataggio dei passi o l'aggiornamento della procedura fallisce, la sessione parziale viene eliminata per non mostrare una traccia come appresa quando non e' stata conteggiata.
+L'ultimo punto richiede una decisione architetturale prima di `Tenant reale`: sessione Browserbase per operatore (raccomandata per attribuzione corretta e lavoro concorrente) oppure lock esplicito a un solo operatore per volta.
 
-## Regole di autonomia
+## Gate prima di Tenant reale
 
-Le regole restano quelle del motore esistente:
+1. una procedura reale produce righe tenant-scoped in sessioni, passi e procedure;
+2. retry/ACK perso non duplica `occurrences`;
+3. stessa procedura ripetuta aggiorna una sola procedura;
+4. nessun valore digitato o dato ospite appare nelle tabelle shadow;
+5. approvazione/rifiuto e associazione KB funzionano su un tenant reale;
+6. uso medio e attivita giornata coincidono con una sessione manualmente cronometrata;
+7. navigazioni interne/reconnect non perdono tracce;
+8. viene scelta e collaudata la strategia multi-operatore Browserbase.
 
-- soglia predefinita: 5 osservazioni della stessa sequenza;
-- rischio basso: puo' diventare `autonoma` alla soglia;
-- rischio medio: diventa `proposta` e richiede una decisione umana;
-- rischio alto (denaro, cancellazioni, rimborsi, tariffe, ecc.): non diventa autonomo per semplice ripetizione;
-- una procedura `bloccata` da una persona non viene riabilitata automaticamente.
-
-## Limiti prima di Tenant reale
-
-Questa modifica non promuove l'apprendimento a **Tenant reale** finche' non viene eseguito un collaudo end-to-end su una struttura reale che dimostri almeno:
-
-1. una procedura svolta nel PMS produce righe tenant-scoped in `pms_shadow_sessions` e `pms_shadow_steps`;
-2. la stessa procedura ripetuta incrementa una sola riga in `pms_observed_procedures`;
-3. nessun valore digitato o dato ospite compare nelle tabelle shadow;
-4. il percorso continua a funzionare dopo navigazioni interne e riconnessioni Browserbase;
-5. il fallback iframe continua a permettere il lavoro quando Browserbase non e' disponibile, dichiarando pero' che in quel caso non e' possibile osservare l'attivita'.
+Il workflow di pull request esegue inoltre typecheck e test dedicati a governance, metrica di conoscenza e aggregazione delle attivita PMS prima del merge.
 
 ## Rollback
 
-Il rollback applicativo consiste nel rimuovere il polling di `/api/crm/pms-shadow/observer` dalla pagina PMS e la route observer. Le tabelle e le procedure apprese possono restare nel database senza interferire con il browser PMS o con i connettori API. Non eliminare i Context Browserbase durante questo rollback: contengono il login persistente del tenant e sono indipendenti dall'apprendimento.
+La migrazione e' additiva. Il rollback applicativo puo' disattivare observer, tracker d'uso e pannello PMS mantenendo intatti i Context Browserbase. Le nuove tabelle possono restare inutilizzate; non eliminare i Context perche' conservano il login persistente del tenant e sono indipendenti dall'apprendimento.
