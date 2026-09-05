@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
     const rawSort = searchParams.get("sort") as InboxSort | null
     const sort: InboxSort | undefined =
       rawSort && ALLOWED_SORTS.includes(rawSort) ? rawSort : undefined
+    const aiReplied = searchParams.get("ai_replied") === "true"
 
     // Resolve per-user channel access. Admins (super_admin / tenant admin) see
     // everything; restricted users only see conversations of their assigned channels.
@@ -82,7 +83,7 @@ export async function GET(request: NextRequest) {
     const limite = risolviLimite(searchParams.get("limit"))
 
     const options: ConversationListOptions = {
-      status: (searchParams.get("status") as any) || "open",
+      status: aiReplied ? "all" : (searchParams.get("status") as any) || "open",
       channel: (searchParams.get("channel") as any) || undefined,
       subchannel_id: searchParams.get("subchannel_id") || undefined,
       limit: limite.applicato,
@@ -92,6 +93,7 @@ export async function GET(request: NextRequest) {
       // caricata. Restano dentro `propertyId` e dentro `access`: chiedere un id
       // di un'altra struttura o di un canale non assegnato non restituisce nulla.
       ids: searchParams.get("ids")?.split(",").filter(Boolean) || undefined,
+      ai_replied: aiReplied || undefined,
       filter: (searchParams.get("filter") as any) || undefined,
       mode,
       gmail_label: gmailLabel || undefined,

@@ -23,6 +23,7 @@ import {
   FileText,
   AlertCircle,
   Zap,
+  Sparkles,
   Settings,
   Tag,
   Edit3,
@@ -158,6 +159,9 @@ interface Conversation {
   last_message_at: string
   unread_count: number
   is_starred: boolean
+  ai_last_replied_at?: string | null
+  ai_last_message_id?: string | null
+  ai_last_virtual_user_name?: string | null
   /**
    * Conversation metadata passed straight through by the repository. Carries
    * `staff_handoff` when the AI assistant promised the guest a callback: that
@@ -223,10 +227,19 @@ interface Message {
   content: string
   sender_type: "customer" | "agent" | "system"
   sender_id: string | null
+  sender_name?: string | null
   content_type: string
   created_at: string
+  stored_at?: string | null
   received_at?: string
-  status?: "received" | "read" | "replied"
+  status?: "received" | "read" | "replied" | "sent" | "draft" | "failed"
+  metadata?: {
+    ai_generated?: boolean
+    ai_autopilot?: boolean
+    ai_draft?: boolean
+    ai_virtual_user_name?: string | null
+    ai_virtual_user_id?: string | null
+  } | null
   attachments: any[]
   channel?: string
 }
@@ -1465,7 +1478,8 @@ export default function InboxPage() {
 
     try {
       const queryParams = new URLSearchParams()
-      if (statusFilter) queryParams.set("status", statusFilter)
+      if (statusFilter === "ai-replied") queryParams.set("ai_replied", "true")
+      else if (statusFilter) queryParams.set("status", statusFilter)
       // Unified inbox: only constrain by channel when a specific one is selected.
       if (channelFilter && channelFilter !== "all") queryParams.set("channel", channelFilter)
       if (subchannelFilter !== "all") queryParams.set("subchannel_id", subchannelFilter)
@@ -2833,6 +2847,7 @@ export default function InboxPage() {
               <>
                 {[
                   { id: "open", label: "Da fare", icon: Inbox },
+                  { id: "ai-replied", label: "Risposte da IA", icon: Sparkles },
                   { id: "pending", label: "Urgenti", icon: AlertCircle },
                   { id: "starred", label: "Speciali", icon: Star },
                   { id: "resolved", label: "Risolti", icon: Archive },
@@ -3379,8 +3394,17 @@ export default function InboxPage() {
                       ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">Posta in arrivo</span>
+                    {selectedConversation?.ai_last_replied_at && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800"
+                        title={`Ultima risposta IA: ${formatInboxTimestampFull(selectedConversation.ai_last_replied_at)}`}
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        IA ha risposto{selectedConversation.ai_last_virtual_user_name ? ` · ${selectedConversation.ai_last_virtual_user_name}` : ""}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -3411,8 +3435,20 @@ export default function InboxPage() {
                             <div className="flex items-start justify-between gap-2 min-w-0">
                               <div className="flex items-center gap-2 min-w-0 flex-wrap">
                                 <span className="font-semibold text-sm text-[#202124] truncate">
-                                  {message.sender_type === "agent" ? "Tu" : message.from?.name || message.from?.email?.split("@")[0]}
+                                  {message.sender_type === "agent"
+                                    ? message.metadata?.ai_generated === true && message.status === "sent"
+                                      ? message.metadata?.ai_virtual_user_name || message.sender_name || "Assistente IA"
+                                      : message.sender_name || "Tu"
+                                    : message.from?.name || message.from?.email?.split("@")[0]}
                                 </span>
+                                {message.sender_type === "agent" && message.metadata?.ai_generated === true && message.status === "sent" && (
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800"
+                                    title="Messaggio generato e inviato automaticamente dall IA"
+                                  >
+                                    <Sparkles className="h-3 w-3" /> Risposta IA
+                                  </span>
+                                )}
                                 <span className="text-xs text-muted-foreground truncate">
                                   {"<"}{message.from?.email || ""}{">"} 
                                 </span>
@@ -3904,7 +3940,7 @@ export default function InboxPage() {
               ) : conversations.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                   <Inbox className="h-10 w-10 mb-3 text-muted-foreground" />
-                  <p className="text-sm">Nessun messaggio da gestire</p>
+                  <p className="text-sm">{statusFilter === "ai-replied" ? "Nessuna conversazione gestita dall IA" : "Nessun messaggio da gestire"}</p>
                 </div>
               ) : (
                 <>
@@ -3985,6 +4021,15 @@ export default function InboxPage() {
                           operator must be able to see it at a glance: the
                           promise is only kept if someone picks this up.
                         */}
+                        {conv.ai_last_replied_at && (
+                          <span
+                            className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800"
+                            title={`IA ha risposto${conv.ai_last_virtual_user_name ? ` come ${conv.ai_last_virtual_user_name}` : ""} · ${formatInboxTimestampFull(conv.ai_last_replied_at)}`}
+                          >
+                            <Sparkles className="h-3 w-3" />
+                            Risposta IA
+                          </span>
+                        )}
                         {conv.metadata?.staff_handoff && (
                           <span
                             className="flex-shrink-0 rounded bg-ha-warning-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ha-warning-soft-foreground"

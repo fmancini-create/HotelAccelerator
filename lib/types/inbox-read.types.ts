@@ -71,6 +71,11 @@ export interface ConversationListItem {
   created_at: string
   unread_count: number
 
+  // Durable marker: at least one AI-generated reply was actually sent.
+  ai_last_replied_at?: string | null
+  ai_last_message_id?: string | null
+  ai_last_virtual_user_name?: string | null
+
   // Related entities - minimal fields
   contact: ConversationContact | null
   assigned: ConversationAssignee | null
@@ -115,12 +120,15 @@ export interface MessageItem {
   content: string
   sender_type: "customer" | "agent" | "staff" | "system"
   sender_id: string | null
+  sender_name?: string | null
   created_at: string
+  stored_at?: string | null
+  content_type?: string | null
   metadata: Record<string, unknown>
   gmail_id?: string | null
   gmail_internal_date?: string | null
   received_at?: string | null
-  status?: "received" | "read" | "replied"
+  status?: "received" | "read" | "replied" | "sent" | "draft" | "failed"
 }
 
 export interface ConversationDetail {
@@ -188,6 +196,8 @@ export interface ConversationListOptions {
    * d'accesso restano invariati.
    */
   ids?: string[]
+  /** Only conversations where the AI actually sent at least one reply. */
+  ai_replied?: boolean
   filter?: "all" | "action_needed" | "high_priority"
   mode?: "smart" | "gmail"
   gmail_label?: GmailLabel
