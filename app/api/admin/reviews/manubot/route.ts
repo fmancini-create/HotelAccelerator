@@ -11,8 +11,6 @@ import { createServiceClient } from "@/lib/supabase/server"
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-const PRIORITIES = new Set(["low", "normal", "high", "urgent"])
-
 function response(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } })
 }
@@ -59,12 +57,11 @@ export async function POST(request: NextRequest) {
   const description = typeof body.description === "string" ? body.description.trim() : ""
   const responsible = typeof body.responsible === "string" ? body.responsible.trim() : ""
   const expectedResolutionMinutes = Number(body.expectedResolutionMinutes ?? 60)
-  const priority = typeof body.priority === "string" && PRIORITIES.has(body.priority)
-    ? (body.priority as "low" | "normal" | "high" | "urgent")
-    : "normal"
+  const priority = typeof body.priority === "string" ? body.priority.trim() : ""
 
   if (!reviewId) return response({ error: "review_required" }, 400)
   if (!title || title.length > 240) return response({ error: "invalid_title" }, 400)
+  if (!priority) return response({ error: "priority_required" }, 400)
   if (!responsible || (!responsible.startsWith("operator:") && !responsible.startsWith("group:"))) {
     return response({ error: "responsible_required" }, 400)
   }
@@ -77,6 +74,18 @@ export async function POST(request: NextRequest) {
   const reviewContext = body.review && typeof body.review === "object" ? (body.review as Record<string, unknown>) : {}
 
   try {
+    const form = await getSuiteManubotTaskFormData("hotelaccelerator", auth.propertyId)
+    if (!form) return response({ error: "suite_customer_not_linked" }, 404)
+    if (!form.context.active) {
+      return response(
+        { error: form.context.status === "inactive" ? "addon_inactive" : "addon_configuration_required" },
+        form.context.status === "inactive" ? 403 : 409,
+      )
+    }
+    if (form.taskData?.priorities?.some((item) => item.name === priority) !== true) {
+      return response({ error: "invalid_priority", available_priorities: form.taskData?.priorities || [] }, 400)
+    }
+
     const created = await createSuiteManubotTask({
       sourceProduct: "hotelaccelerator",
       externalTenantId: auth.propertyId,
@@ -100,7 +109,7 @@ export async function POST(request: NextRequest) {
     if (message === "local_module_not_provisioned" || message === "manubot_tenant_not_linked" || message === "addon_configuration_required") {
       return response({ error: "addon_configuration_required" }, 409)
     }
-    if (message === "responsible_required" || message === "invalid_expected_resolution_minutes") {
+    if (message === "responsible_required" || message === "invalid_expected_resolution_minutes" || message === "priority_required") {
       return response({ error: message }, 400)
     }
     console.error("[reviews] ManuBot task failed", { error: message })
