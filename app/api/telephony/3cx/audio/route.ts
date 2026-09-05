@@ -79,13 +79,18 @@ export async function GET(request: NextRequest) {
       const inspection = await inspectThreeCxAudio(resolved.config, QUEUE_4BID)
       return NextResponse.json({
         ...basePayload(resolved.source),
-        xapi: { ok: true, pbx_version: inspection.pbxVersion },
+        xapi: {
+          ok: true,
+          pbx_version: inspection.pbxVersion,
+          scope: inspection.accessScope,
+          system_moh_access: inspection.systemMusicOnHoldAccessible,
+        },
         queue: inspection.queue,
         system_music_on_hold: inspection.systemMusicOnHold,
         transfer_music: {
           status: inspection.transferMusicConfigured ? "configured" : "ready_to_configure",
           configured_file: inspection.queue?.onHoldFile ?? null,
-          candidate_file: inspection.systemMusicOnHold,
+          candidate_file: inspection.transferMusicCandidate,
         },
       })
     } catch (error) {
@@ -131,6 +136,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       queue: inspection.queue,
       system_music_on_hold: inspection.systemMusicOnHold,
+      xapi_scope: inspection.accessScope,
       transfer_music: {
         status: inspection.transferMusicConfigured ? "configured" : "not_configured",
         configured_file: inspection.queue?.onHoldFile ?? null,
