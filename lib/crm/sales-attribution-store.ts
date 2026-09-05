@@ -28,8 +28,7 @@ export async function syncPipelineSalesAttribution(
   if (existingError) throw existingError
 
   // Una correzione amministrativa esplicita non viene mai sovrascritta da una
-  // successiva modifica della pipeline. L'importo viene comunque riallineato se
-  // cambia nella fonte CRM, a meno che l'admin lo abbia valorizzato manualmente.
+  // successiva modifica della pipeline.
   const lockedByAdmin = Boolean(existing?.verified_by) || existing?.attribution_source === "manual"
   if (lockedByAdmin) return
 
@@ -41,12 +40,15 @@ export async function syncPipelineSalesAttribution(
     (Boolean(action?.quoteValueWasSet) && Boolean(row.quoted_rate_cents && row.quoted_rate_cents > 0))
   const won = row.stage === "confermata"
   const lost = row.stage === "persa"
+  const explicitlyNotWon = row.stage !== null && row.stage !== "confermata"
 
   if (!existing && !quoteAction && !won && !lost) return
 
   const userId = existing?.user_id ?? (quoteAction || won ? quoteActor : null)
   const quoteSentAt = existing?.quote_sent_at ?? (quoteAction ? now : null)
-  const closedAt = won ? row.stage_set_at ?? now : lost ? null : existing?.closed_at ?? null
+  // Se una trattativa precedentemente vinta viene riaperta o marcata persa,
+  // smette subito di contare fra le chiuse. Il preventivo resta invece storico.
+  const closedAt = won ? row.stage_set_at ?? now : explicitlyNotWon ? null : existing?.closed_at ?? null
   const amountCents = row.quoted_rate_cents && row.quoted_rate_cents > 0 ? row.quoted_rate_cents : existing?.amount_cents ?? null
 
   const shouldConfirm = Boolean(userId && (quoteAction || won || existing?.verification_status === "confirmed"))
@@ -67,7 +69,7 @@ export async function syncPipelineSalesAttribution(
       verification_status: verificationStatus,
       evidence: {
         operator_match: quoteAction ? "pipeline_quote_actor" : won ? "pipeline_stage_set_by" : "pipeline_existing",
-        close_signal: won ? "human_stage_confirmed" : lost ? "human_stage_lost" : "none",
+        close_signal: won ? "human_stage_confirmed" : lost ? "human_stage_lost" : explicitlyNotWon ? "human_stage_reopened" : "none",
         quote_signal: quoteAction ? "human_pipeline_action" : quoteSentAt ? "existing" : "none",
       },
       scanned_at: now,
