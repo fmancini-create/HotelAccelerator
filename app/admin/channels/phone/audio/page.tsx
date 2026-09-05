@@ -11,7 +11,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 type AudioStatus = {
   queue_number?: string
   connection_source?: "direct" | "shared" | "none"
-  xapi?: { ok: boolean; pbx_version?: string | null; error?: string }
+  xapi?: {
+    ok: boolean
+    pbx_version?: string | null
+    scope?: "system" | "department"
+    system_moh_access?: boolean
+    error?: string
+  }
   queue?: { id: number; number: string; name: string | null; onHoldFile: string | null } | null
   system_music_on_hold?: string | null
   transfer_music?: { status: string; configured_file?: string | null; candidate_file?: string | null }
@@ -74,6 +80,7 @@ export default function PhoneAudioExperiencePage() {
 
   const transferConfigured = status?.transfer_music?.status === "configured"
   const xapiReady = status?.xapi?.ok === true
+  const departmentScope = status?.xapi?.scope === "department"
 
   return (
     <div className="min-h-full bg-background">
@@ -102,7 +109,9 @@ export default function PhoneAudioExperiencePage() {
                   <CardTitle>Collegamento amministrativo 3CX</CardTitle>
                   <CardDescription>Serve la Configuration API per applicare in automatico le impostazioni del PBX.</CardDescription>
                 </div>
-                <Badge variant={xapiReady ? "default" : "secondary"}>{loading ? "Verifica…" : xapiReady ? "XAPI pronta" : "XAPI da abilitare"}</Badge>
+                <Badge variant={xapiReady ? "default" : "secondary"}>
+                  {loading ? "Verifica…" : xapiReady ? (departmentScope ? "XAPI pronta · 4BID" : "XAPI pronta") : "XAPI da verificare"}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-3 text-sm">
@@ -110,13 +119,22 @@ export default function PhoneAudioExperiencePage() {
                 <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Lettura centralino…</div>
               ) : xapiReady ? (
                 <>
-                  <p>PBX rilevato{status?.xapi?.pbx_version ? ` · versione ${status.xapi.pbx_version}` : ""}. Connessione: {status?.connection_source === "shared" ? "PBX condiviso" : "diretta"}.</p>
+                  <p>
+                    PBX rilevato{status?.xapi?.pbx_version ? ` · versione ${status.xapi.pbx_version}` : ""}. Connessione: {status?.connection_source === "shared" ? "PBX condiviso" : "diretta"}. Scope: {departmentScope ? "dipartimento 4BID" : "sistema"}.
+                  </p>
+                  {departmentScope && status?.xapi?.system_moh_access === false ? (
+                    <p className="text-muted-foreground">
+                      Il Service Principal è correttamente limitato a 4BID: può lavorare sulla coda del reparto anche se 3CX nasconde le impostazioni Music on Hold globali.
+                    </p>
+                  ) : null}
                   <Button variant="outline" size="sm" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" />Aggiorna verifica</Button>
                 </>
               ) : (
                 <>
-                  <p className="font-medium">Per farmi configurare 3CX automaticamente manca un solo passaggio:</p>
-                  <p className="text-muted-foreground">In 3CX vai in Integrations → API, crea o modifica il Service Principal di HotelAccelerator, abilita sia <strong>Call Control API</strong> sia <strong>3CX Configuration API Access</strong>, assegna ruolo <strong>System Owner</strong>, quindi salva Client ID e API key in Canali → Telefono IP.</p>
+                  <p className="font-medium">Controlla i permessi del Service Principal:</p>
+                  <p className="text-muted-foreground">
+                    In 3CX → Integrations → API abilita <strong>3CX Configuration API Access</strong>. Per limitarlo a 4BID usa <strong>Dipartimento 4BID + Proprietario</strong> e assicurati che la coda <strong>820</strong> appartenga allo stesso dipartimento. Usa <strong>System Owner</strong> solo se vuoi accesso globale al PBX.
+                  </p>
                   {status?.xapi?.error ? <p className="text-destructive">{status.xapi.error}</p> : null}
                 </>
               )}
@@ -160,6 +178,9 @@ export default function PhoneAudioExperiencePage() {
             <CardContent className="space-y-4 text-sm">
               {status?.queue ? <p>Coda rilevata: <strong>{status.queue.name || status.queue.number}</strong>. File attuale: {status.queue.onHoldFile || "nessuno"}.</p> : <p className="text-muted-foreground">La coda verrà verificata appena la Configuration API sarà disponibile.</p>}
               {status?.system_music_on_hold ? <p>Musica disponibile nel PBX: <strong>{status.system_music_on_hold}</strong>.</p> : null}
+              {!status?.system_music_on_hold && status?.transfer_music?.candidate_file ? (
+                <p className="text-muted-foreground">File candidato per la coda: <strong>{status.transfer_music.candidate_file}</strong>.</p>
+              ) : null}
               <Button onClick={() => void configureTransferMusic()} disabled={!xapiReady || saving || transferConfigured}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Headphones className="mr-2 h-4 w-4" />}
                 {transferConfigured ? "Musica già applicata" : "Configura musica di attesa sulla 820"}
