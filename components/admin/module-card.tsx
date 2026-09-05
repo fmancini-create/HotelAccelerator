@@ -163,7 +163,9 @@ export function ModuleCard({
         </CardDescription>
         {isPaid && (
           <div className="mt-3 text-sm font-medium">
-            {module.monthlyPriceCents === null ? (
+            {module.key === "reviews" ? (
+              <span>€0,50 per sistemazione/mese · minimo €5 · annuale -20%</span>
+            ) : module.monthlyPriceCents === null ? (
               <span className="text-muted-foreground">Prezzo da definire</span>
             ) : hasDiscount && module.discountedMonthlyPriceCents !== null && module.discountedMonthlyPriceCents !== undefined ? (
               <div className="flex flex-wrap items-baseline gap-2">
@@ -179,16 +181,23 @@ export function ModuleCard({
             )}
           </div>
         )}
-        {hasDiscount && !module.active && module.monthlyPriceCents === null && (
+        {hasDiscount && !module.active && module.monthlyPriceCents === null && module.key !== "reviews" && (
           <p className="mt-1 text-xs text-ha-success-soft-foreground">
             Sconto cliente 4BID del {module.crossSellDiscountPercent}% applicato quando il prezzo viene definito.
           </p>
         )}
-        {isPaid && !module.active && (
+        {isPaid && !module.active && module.key === "reviews" ? (
+          <a
+            href="/admin/settings/reviews"
+            className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Configura e acquista
+          </a>
+        ) : isPaid && !module.active ? (
           <p className="mt-1 text-xs text-muted-foreground">
             Modulo a pagamento. L&apos;attivazione self-service sara&apos; disponibile a breve.
           </p>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   )
