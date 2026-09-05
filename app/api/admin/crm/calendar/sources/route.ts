@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
         permission: source.permission,
         provider: source.provider,
         isPersonal: source.source_kind === "personal" && source.owner_user_id === identity.userId,
+        supportsAttachments: source.auth_mode === "oauth",
       })),
       canManageShared: identity.isSuperAdmin || identity.isTenantAdmin,
       isSuperAdmin: identity.isSuperAdmin,

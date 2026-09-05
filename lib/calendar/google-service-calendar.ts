@@ -1,6 +1,7 @@
 import "server-only"
 
 import crypto from "node:crypto"
+import type { CalendarAttendee, CalendarAttachment, CalendarEventInput } from "@/lib/calendar/google-user-calendar"
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token"
 const GOOGLE_API = "https://www.googleapis.com/calendar/v3"
@@ -87,6 +88,23 @@ async function googleJson<T>(url: string, init?: RequestInit): Promise<T> {
   return json as T
 }
 
+function mapAttendees(items: any[]): CalendarAttendee[] {
+  return (items || []).map((attendee: any) => ({
+    email: String(attendee.email || ""),
+    displayName: attendee.displayName ? String(attendee.displayName) : null,
+    responseStatus: attendee.responseStatus ? String(attendee.responseStatus) : null,
+  })).filter((attendee: CalendarAttendee) => attendee.email)
+}
+
+function mapAttachments(items: any[]): CalendarAttachment[] {
+  return (items || []).map((attachment: any) => ({
+    fileUrl: String(attachment.fileUrl || ""),
+    title: String(attachment.title || "Allegato"),
+    mimeType: attachment.mimeType ? String(attachment.mimeType) : null,
+    fileId: attachment.fileId ? String(attachment.fileId) : null,
+  })).filter((attachment: CalendarAttachment) => attachment.fileUrl)
+}
+
 export async function listServiceCalendarEvents(calendarId: string, fromIso: string, toIso: string) {
   const params = new URLSearchParams({
     timeMin: fromIso,
@@ -109,32 +127,14 @@ export async function listServiceCalendarEvents(calendarId: string, fromIso: str
       end: event.end?.dateTime || event.end?.date || null,
       allDay: Boolean(event.start?.date && !event.start?.dateTime),
       htmlLink: isPrivate ? null : event.htmlLink || null,
+      attendees: isPrivate ? [] : mapAttendees(event.attendees || []),
+      attachments: isPrivate ? [] : mapAttachments(event.attachments || []),
+      recurringEventId: event.recurringEventId ? String(event.recurringEventId) : null,
     }
   })
 }
 
-export async function createServiceCalendarEvent(
-  calendarId: string,
-  input: { summary: string; description?: string | null; location?: string | null; startIso: string; endIso: string; timeZone?: string },
-) {
-  const timeZone = input.timeZone || "Europe/Rome"
-  return googleJson<any>(`${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`, {
-    method: "POST",
-    body: JSON.stringify({
-      summary: input.summary,
-      description: input.description || undefined,
-      location: input.location || undefined,
-      start: { dateTime: input.startIso, timeZone },
-      end: { dateTime: input.endIso, timeZone },
-    }),
-  })
-}
-
-export async function updateServiceCalendarEvent(
-  calendarId: string,
-  eventId: string,
-  input: { summary?: string; description?: string | null; location?: string | null; startIso?: string; endIso?: string; timeZone?: string },
-) {
+function eventBody(input: Partial<CalendarEventInput>) {
   const timeZone = input.timeZone || "Europe/Rome"
   const body: Record<string, unknown> = {}
   if (input.summary !== undefined) body.summary = input.summary
@@ -142,16 +142,30 @@ export async function updateServiceCalendarEvent(
   if (input.location !== undefined) body.location = input.location || ""
   if (input.startIso !== undefined) body.start = { dateTime: input.startIso, timeZone }
   if (input.endIso !== undefined) body.end = { dateTime: input.endIso, timeZone }
+  if (input.attendees !== undefined) body.attendees = input.attendees.map((attendee) => ({ email: attendee.email }))
+  if (input.recurrence !== undefined) body.recurrence = input.recurrence
+  return body
+}
 
-  return googleJson<any>(
-    `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
-    { method: "PATCH", body: JSON.stringify(body) },
-  )
+function mutationUrl(calendarId: string, eventId?: string) {
+  const base = `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events`
+  return `${eventId ? `${base}/${encodeURIComponent(eventId)}` : base}?sendUpdates=all`
+}
+
+export async function createServiceCalendarEvent(calendarId: string, input: CalendarEventInput) {
+  return googleJson<any>(mutationUrl(calendarId), {
+    method: "POST",
+    body: JSON.stringify(eventBody(input)),
+  })
+}
+
+export async function updateServiceCalendarEvent(calendarId: string, eventId: string, input: Partial<CalendarEventInput>) {
+  return googleJson<any>(mutationUrl(calendarId, eventId), {
+    method: "PATCH",
+    body: JSON.stringify(eventBody(input)),
+  })
 }
 
 export async function deleteServiceCalendarEvent(calendarId: string, eventId: string) {
-  await googleJson<void>(
-    `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
-    { method: "DELETE" },
-  )
+  await googleJson<void>(mutationUrl(calendarId, eventId), { method: "DELETE" })
 }

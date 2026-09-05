@@ -16,6 +16,7 @@ type TokenBundle = {
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 const GOOGLE_API = "https://www.googleapis.com/calendar/v3"
+const GOOGLE_DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3/files"
 
 function googleClientConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID
@@ -26,8 +27,6 @@ function googleClientConfig() {
 
 export function getCalendarOAuthRedirectUri() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  // Reuse the Google callback already registered for Gmail in Google Cloud.
-  // The shared callback forwards calendar states to the CRM calendar handler.
   return `${baseUrl}/api/channels/email/oauth/callback`
 }
 
@@ -41,6 +40,7 @@ export function buildGoogleCalendarOAuthUrl(state: string) {
       "openid",
       "email",
       "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/drive.file",
     ].join(" "),
     state,
     access_type: "offline",
@@ -162,6 +162,19 @@ export async function listGoogleCalendars(accessToken: string): Promise<RemoteCa
   }))
 }
 
+export type CalendarAttendee = {
+  email: string
+  displayName?: string | null
+  responseStatus?: string | null
+}
+
+export type CalendarAttachment = {
+  fileUrl: string
+  title: string
+  mimeType: string | null
+  fileId?: string | null
+}
+
 export type CalendarEventInput = {
   summary: string
   description?: string | null
@@ -169,6 +182,9 @@ export type CalendarEventInput = {
   startIso: string
   endIso: string
   timeZone?: string
+  attendees?: CalendarAttendee[]
+  attachments?: CalendarAttachment[]
+  recurrence?: string[]
 }
 
 export type CalendarEvent = {
@@ -180,6 +196,39 @@ export type CalendarEvent = {
   end: string | null
   allDay: boolean
   htmlLink: string | null
+  attendees: CalendarAttendee[]
+  attachments: CalendarAttachment[]
+  recurringEventId: string | null
+}
+
+function mapCalendarEvent(ev: any): CalendarEvent {
+  const isPrivate = ev.visibility === "private"
+  return {
+    id: String(ev.id || ""),
+    title: isPrivate ? "Occupato" : String(ev.summary || "Occupato"),
+    description: isPrivate ? null : ev.description ? String(ev.description) : null,
+    location: isPrivate ? null : ev.location ? String(ev.location) : null,
+    start: ev.start?.dateTime || ev.start?.date || null,
+    end: ev.end?.dateTime || ev.end?.date || null,
+    allDay: Boolean(ev.start?.date && !ev.start?.dateTime),
+    htmlLink: isPrivate ? null : ev.htmlLink || null,
+    attendees: isPrivate
+      ? []
+      : (ev.attendees || []).map((attendee: any) => ({
+          email: String(attendee.email || ""),
+          displayName: attendee.displayName ? String(attendee.displayName) : null,
+          responseStatus: attendee.responseStatus ? String(attendee.responseStatus) : null,
+        })).filter((attendee: CalendarAttendee) => attendee.email),
+    attachments: isPrivate
+      ? []
+      : (ev.attachments || []).map((attachment: any) => ({
+          fileUrl: String(attachment.fileUrl || ""),
+          title: String(attachment.title || "Allegato"),
+          mimeType: attachment.mimeType ? String(attachment.mimeType) : null,
+          fileId: attachment.fileId ? String(attachment.fileId) : null,
+        })).filter((attachment: CalendarAttachment) => attachment.fileUrl),
+    recurringEventId: ev.recurringEventId ? String(ev.recurringEventId) : null,
+  }
 }
 
 export async function listGoogleCalendarEvents(accessToken: string, calendarId: string, fromIso: string, toIso: string) {
@@ -191,33 +240,10 @@ export async function listGoogleCalendarEvents(accessToken: string, calendarId: 
     maxResults: "2500",
   })
   const json = await googleJson<any>(accessToken, `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`)
-  return (json.items || []).map((ev: any): CalendarEvent => ({
-    id: String(ev.id || ""),
-    title: ev.visibility === "private" ? "Occupato" : String(ev.summary || "Occupato"),
-    description: ev.visibility === "private" ? null : ev.description ? String(ev.description) : null,
-    location: ev.visibility === "private" ? null : ev.location ? String(ev.location) : null,
-    start: ev.start?.dateTime || ev.start?.date || null,
-    end: ev.end?.dateTime || ev.end?.date || null,
-    allDay: Boolean(ev.start?.date && !ev.start?.dateTime),
-    htmlLink: ev.visibility === "private" ? null : ev.htmlLink || null,
-  }))
+  return (json.items || []).map(mapCalendarEvent)
 }
 
-export async function createGoogleCalendarEvent(accessToken: string, calendarId: string, input: CalendarEventInput) {
-  const timeZone = input.timeZone || "Europe/Rome"
-  return googleJson<any>(accessToken, `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`, {
-    method: "POST",
-    body: JSON.stringify({
-      summary: input.summary,
-      description: input.description || undefined,
-      location: input.location || undefined,
-      start: { dateTime: input.startIso, timeZone },
-      end: { dateTime: input.endIso, timeZone },
-    }),
-  })
-}
-
-export async function updateGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string, input: Partial<CalendarEventInput>) {
+function eventBody(input: Partial<CalendarEventInput>) {
   const timeZone = input.timeZone || "Europe/Rome"
   const body: Record<string, unknown> = {}
   if (input.summary !== undefined) body.summary = input.summary
@@ -225,14 +251,76 @@ export async function updateGoogleCalendarEvent(accessToken: string, calendarId:
   if (input.location !== undefined) body.location = input.location || ""
   if (input.startIso !== undefined) body.start = { dateTime: input.startIso, timeZone }
   if (input.endIso !== undefined) body.end = { dateTime: input.endIso, timeZone }
-  return googleJson<any>(accessToken, `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
+  if (input.attendees !== undefined) body.attendees = input.attendees.map((attendee) => ({ email: attendee.email }))
+  if (input.attachments !== undefined) {
+    body.attachments = input.attachments.map((attachment) => ({
+      fileUrl: attachment.fileUrl,
+      title: attachment.title,
+      ...(attachment.mimeType ? { mimeType: attachment.mimeType } : {}),
+    }))
+  }
+  if (input.recurrence !== undefined) body.recurrence = input.recurrence
+  return body
+}
+
+function eventMutationUrl(calendarId: string, eventId?: string, supportsAttachments = false) {
+  const params = new URLSearchParams({ sendUpdates: "all" })
+  if (supportsAttachments) params.set("supportsAttachments", "true")
+  const base = `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events`
+  return `${eventId ? `${base}/${encodeURIComponent(eventId)}` : base}?${params.toString()}`
+}
+
+export async function createGoogleCalendarEvent(accessToken: string, calendarId: string, input: CalendarEventInput) {
+  return googleJson<any>(accessToken, eventMutationUrl(calendarId, undefined, input.attachments !== undefined), {
+    method: "POST",
+    body: JSON.stringify(eventBody(input)),
+  })
+}
+
+export async function updateGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string, input: Partial<CalendarEventInput>) {
+  return googleJson<any>(accessToken, eventMutationUrl(calendarId, eventId, input.attachments !== undefined), {
     method: "PATCH",
-    body: JSON.stringify(body),
+    body: JSON.stringify(eventBody(input)),
   })
 }
 
 export async function deleteGoogleCalendarEvent(accessToken: string, calendarId: string, eventId: string) {
-  await googleJson<void>(accessToken, `${GOOGLE_API}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`, {
-    method: "DELETE",
+  await googleJson<void>(accessToken, eventMutationUrl(calendarId, eventId), { method: "DELETE" })
+}
+
+export async function uploadGoogleDriveAttachment(accessToken: string, file: File): Promise<CalendarAttachment> {
+  const boundary = `hotelaccelerator_${crypto.randomUUID()}`
+  const metadata = JSON.stringify({ name: file.name })
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
+    `--${boundary}\r\nContent-Type: ${file.type || "application/octet-stream"}\r\n\r\n`,
+    await file.arrayBuffer(),
+    `\r\n--${boundary}--`,
+  ])
+  const params = new URLSearchParams({
+    uploadType: "multipart",
+    fields: "id,name,mimeType,webViewLink",
   })
+  const response = await fetch(`${GOOGLE_DRIVE_UPLOAD_API}?${params}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+    },
+    body,
+    cache: "no-store",
+  })
+  const json = await response.json()
+  if (!response.ok || !json.id || !json.webViewLink) {
+    const message = String(json?.error?.message || json?.error_description || `google_drive_${response.status}`)
+    if (/insufficient authentication scopes/i.test(message)) throw new Error("google_drive_reconnect_required")
+    if (/has not been used|is disabled|accessnotconfigured/i.test(message)) throw new Error("google_drive_api_disabled")
+    throw new Error(message)
+  }
+  return {
+    fileUrl: String(json.webViewLink),
+    title: String(json.name || file.name),
+    mimeType: json.mimeType ? String(json.mimeType) : file.type || null,
+    fileId: String(json.id),
+  }
 }
