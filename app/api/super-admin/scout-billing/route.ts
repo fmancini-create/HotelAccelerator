@@ -8,10 +8,14 @@ import {
   getCurrentScoutProviderCost,
   getScoutBillingSettings,
   scoutCreditPriceCents,
+  STRIPE_EUR_MINIMUM_CHARGE_CENTS,
 } from "@/lib/scout/billing"
 
 const settingsSchema = z.object({
-  activationFeeCents: z.number().int().min(0).nullable(),
+  activationFeeCents: z.union([
+    z.null(),
+    z.number().int().min(STRIPE_EUR_MINIMUM_CHARGE_CENTS),
+  ]),
   activationIncludedCredits: z.number().int().min(0).max(100000),
   markupMultiplier: z.number().min(1).max(100),
   minimumPurchaseCredits: z.number().int().min(1).max(100000),
