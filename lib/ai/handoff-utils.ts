@@ -64,6 +64,13 @@ export function mergeHandoffContacts(...contacts: Array<HandoffContact | null | 
   )
 }
 
+function looksLikeQuestionOrRequest(value: string, original: string): boolean {
+  if (/[?]/.test(original)) return true
+  const normalized = value.toLocaleLowerCase("it-IT").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  return /^(?:come|quanto|quale|quali|cosa|dove|quando|perche|chi|vorrei|voglio|desidero|posso|potrei|potete|avete|mi\s+interessa|mi\s+serve|spiegami|spiegatemi|dimmi|ditemi)\b/i.test(normalized)
+    || /\b(?:funziona|funzionano|costa|costano|prezzo|prezzi|prodotto|prodotti|informazioni|info|demo|assistenza|supporto)\b/i.test(normalized)
+}
+
 /**
  * Contact fields are deliberately extracted in code while a handoff is being
  * collected. The LLM can still help outside this flow, but once the guest is
@@ -99,7 +106,11 @@ export function extractContactDetails(message: string): HandoffContact {
   ])
   const words = remaining.split(/\s+/).filter(Boolean)
   const hasLikelyFullName =
-    !notAName.has(normalized) && words.length >= 2 && words.length <= 5 && words.every((word) => nameWord.test(word))
+    !looksLikeQuestionOrRequest(remaining, message)
+    && !notAName.has(normalized)
+    && words.length >= 2
+    && words.length <= 5
+    && words.every((word) => nameWord.test(word))
   const name = hasLikelyFullName ? splitFullName(remaining) : { firstName: null, lastName: null }
 
   return {
