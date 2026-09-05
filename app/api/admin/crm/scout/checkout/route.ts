@@ -10,6 +10,29 @@ const bodySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("credits"), quantity: z.number().int().min(1).max(100000) }),
 ])
 
+async function resolveExistingStripeCustomerId(
+  db: ReturnType<typeof createServiceClient>,
+  propertyId: string,
+): Promise<string | null> {
+  const [{ data: recharge }, { data: subscription }] = await Promise.all([
+    db
+      .from("scout_auto_recharge_settings")
+      .select("stripe_customer_id")
+      .eq("property_id", propertyId)
+      .maybeSingle(),
+    db
+      .from("stripe_subscriptions")
+      .select("stripe_customer_id")
+      .eq("property_id", propertyId)
+      .not("stripe_customer_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
+
+  return recharge?.stripe_customer_id || subscription?.stripe_customer_id || null
+}
+
 export async function POST(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
@@ -17,9 +40,14 @@ export async function POST(request: NextRequest) {
 
     const body = bodySchema.parse(await request.json())
     const db = createServiceClient()
-    const [{ data: property, error: propertyError }, billing] = await Promise.all([
-      db.from("properties").select("id,name,billing_email").eq("id", propertyId).single(),
+    const [{ data: property, error: propertyError }, billing, existingCustomerId] = await Promise.all([
+      db
+        .from("properties")
+        .select("id,name,billing_email")
+        .eq("id", propertyId)
+        .single(),
       getScoutTenantBillingState(db, propertyId),
+      resolveExistingStripeCustomerId(db, propertyId),
     ])
     if (propertyError || !property) return NextResponse.json({ error: "Struttura non trovata" }, { status: 404 })
 
@@ -74,8 +102,19 @@ export async function POST(request: NextRequest) {
       description = `${quantity} crediti per le operazioni a consumo di Scout.`
     }
 
+    const stripe = getStripe()
+    let customerId: string | null = null
+    if (existingCustomerId) {
+      try {
+        const customer = await stripe.customers.retrieve(existingCustomerId)
+        if (customer && !customer.deleted) customerId = customer.id
+      } catch (error) {
+        console.warn("[Scout Checkout] Stripe customer salvato non più utilizzabile:", existingCustomerId, error)
+      }
+    }
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || ""
-    const session = await getStripe().checkout.sessions.create({
+    const session = await stripe.checkout.sessions.create({
       mode: "payment",
       payment_method_types: ["card"],
       line_items: [
@@ -88,7 +127,21 @@ export async function POST(request: NextRequest) {
           quantity,
         },
       ],
-      customer_email: property.billing_email || undefined,
+      ...(customerId
+        ? {
+            customer: customerId,
+            // Stripe saves the business name/tax id/address collected by
+            // Checkout onto an existing Customer only when these updates are
+            // explicitly allowed. HPA reads this Customer during fiscal sync.
+            customer_update: { name: "auto", address: "auto" },
+          }
+        : {
+            // Payment-mode Checkout with post-purchase invoices already needs a
+            // Customer, but making creation explicit guarantees tax/business
+            // data is persisted for HotelProfitAI reconciliation.
+            customer_creation: "always",
+            customer_email: property.billing_email || undefined,
+          }),
       metadata: {
         propertyId,
         propertyName: property.name,
@@ -112,13 +165,13 @@ export async function POST(request: NextRequest) {
       custom_fields: [
         {
           key: "codice_sdi",
-          label: { type: "custom", custom: "Codice SDI (se disponibile)" },
+          label: { type: "custom", custom: "Codice SDI (usa 0000000 se fatturi via PEC)" },
           type: "text",
           optional: false,
         },
         {
           key: "pec",
-          label: { type: "custom", custom: "PEC (alternativa al Codice SDI)" },
+          label: { type: "custom", custom: "PEC (se usi 0000000 come Codice SDI)" },
           type: "text",
           optional: true,
         },
