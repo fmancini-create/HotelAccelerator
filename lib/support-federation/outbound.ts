@@ -65,7 +65,7 @@ export async function sendFederatedSupportReply(input: {
 
   const now = new Date().toISOString()
   const replyId = randomUUID()
-  let sourceMessageId = replyId
+  let sourceMessageId: string = replyId
 
   if (metadata.product_key !== "hotelaccelerator") {
     const config = callbackConfig(metadata.product_key)
