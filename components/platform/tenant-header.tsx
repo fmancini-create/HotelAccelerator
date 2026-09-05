@@ -130,6 +130,7 @@ export function TenantHeader() {
 
   return (
     <header
+      data-platform-header
       data-tenant-header
       data-immersive={immersive ? "true" : undefined}
       onMouseLeave={() => {

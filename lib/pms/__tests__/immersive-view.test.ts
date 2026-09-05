@@ -26,4 +26,11 @@ describe("viewport immersivo del PMS", () => {
     expect(immersiveRules).toContain(":focus-within")
     expect(immersiveRules).not.toContain(":hover")
   })
+
+  it("aggancia anche l'header tenant alle regole immersive del menu", () => {
+    const header = read("components/platform/tenant-header.tsx")
+    expect(header).toContain("data-platform-header")
+    expect(header).toContain("data-tenant-header")
+    expect(header).toContain('data-immersive={immersive ? "true" : undefined}')
+  })
 })
