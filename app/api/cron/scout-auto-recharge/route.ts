@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     try {
       const result = await maybeAutoRechargeScout(db, row.property_id)
-      if (result.triggered && "succeeded" in result && result.succeeded) recharged += 1
+      if (result?.triggered && "succeeded" in result && result.succeeded) recharged += 1
       const { error: deleteError } = await db
         .from("scout_auto_recharge_queue")
         .delete()
