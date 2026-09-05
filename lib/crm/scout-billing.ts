@@ -93,6 +93,11 @@ export function effectiveLeadUnitCostMicros(settings: ScoutBillingSettings, lead
   return Math.round((settings.providerCycleCostCents * 10_000) / leadCreditLimit)
 }
 
+/**
+ * Il fallback automatico legge solo snapshot BCE. Gli snapshot manuali sono
+ * usati esclusivamente quando l'override e ancora attivo nelle impostazioni:
+ * in questo modo, cancellando un override, non resta in vigore per 36 ore.
+ */
 export async function latestScoutFxRate(
   db: SupabaseClient,
   fromCurrency: string,
@@ -107,6 +112,7 @@ export async function latestScoutFxRate(
   const { data, error } = await db
     .from("platform_scout_fx_snapshots")
     .select("source,from_currency,to_currency,rate,reference_date,fetched_at")
+    .eq("source", "ecb")
     .eq("from_currency", from)
     .eq("to_currency", to)
     .order("reference_date", { ascending: false })
@@ -119,7 +125,7 @@ export async function latestScoutFxRate(
   const rate = Number(data.rate)
   if (!Number.isFinite(rate) || rate <= 0) return null
   return {
-    source: data.source === "manual_override" ? "manual_override" : "snapshot",
+    source: "snapshot",
     fromCurrency: from,
     toCurrency: to,
     rate,
