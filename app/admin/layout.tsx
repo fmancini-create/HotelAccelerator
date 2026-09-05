@@ -6,6 +6,7 @@ import { OperatorPresenceBeacon } from "@/components/admin/operator-presence-bea
 import { AutoLogoutWatchdog } from "@/components/admin/auto-logout-watchdog"
 import { InternalSupportAssistant } from "@/components/admin/internal-support-assistant"
 import { GlobalCommunicationAlerts } from "@/components/admin/global-communication-alerts"
+import { DashboardCardQuickActionMounts } from "@/components/admin/dashboard/dashboard-card-quick-action-mounts"
 
 export const metadata: Metadata = {
   title: {
@@ -27,6 +28,7 @@ export default function AdminLayout({
       <OperatorPresenceBeacon />
       <AutoLogoutWatchdog />
       <GlobalCommunicationAlerts />
+      <DashboardCardQuickActionMounts />
       <InternalSupportAssistant />
     </PlatformShell>
   )
