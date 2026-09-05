@@ -4,14 +4,15 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { resolveIdentity, normalizeExtension } from "@/lib/telephony/user-extension"
 
+type MembershipRow = {
+  user_id: string
+  role: string | null
+}
+
 /**
  * Assegnazione dell'interno telefonico alle persone del tenant attivo.
- *
- * Fonte autorevole: tenant_user_memberships. `admin_users.property_id` resta
- * solo il tenant primario legacy e non puo' rappresentare persone che lavorano
- * in piu' tenant (es. Villa I Barronci + 4BID).
+ * Fonte autorevole: tenant_user_memberships.
  */
-
 export async function GET(request: NextRequest) {
   try {
     await requireAreaApi("users", request)
@@ -31,7 +32,8 @@ export async function GET(request: NextRequest) {
     if (membershipsError) throw membershipsError
     if (rowsError) throw rowsError
 
-    const userIds = (memberships ?? []).map((membership) => String(membership.user_id))
+    const membershipRows = (memberships ?? []) as MembershipRow[]
+    const userIds = membershipRows.map((membership) => String(membership.user_id))
     const { data: users, error: usersError } = userIds.length
       ? await supabase
           .from("admin_users")
@@ -42,7 +44,7 @@ export async function GET(request: NextRequest) {
     if (usersError) throw usersError
 
     const membershipByUser = new Map(
-      (memberships ?? []).map((membership) => [String(membership.user_id), String(membership.role || "editor")]),
+      membershipRows.map((membership) => [String(membership.user_id), String(membership.role || "editor")]),
     )
     const byUser = new Map<string, { extension: string; can_call: boolean }>()
     for (const r of rows ?? []) {
@@ -88,8 +90,6 @@ export async function PUT(request: NextRequest) {
     }
 
     const supabase = createServiceClient()
-
-    // Isolamento tenant basato sulla membership, non sul tenant primario legacy.
     const { data: membership } = await supabase
       .from("tenant_user_memberships")
       .select("user_id")
