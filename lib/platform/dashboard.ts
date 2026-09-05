@@ -58,11 +58,19 @@ export const DASHBOARD_PANELS: DashboardPanel[] = [
   },
   {
     id: "my-performance",
-    title: "Le tue performance",
+    title: "Le tue performance operative",
     hint: "Risposte, conversazioni e tempo mediano di risposta misurati dal momento in cui il tenant ha attivato i KPI.",
     kind: "personal",
     module: "inbox",
     area: "inbox",
+  },
+  {
+    id: "my-commercial-performance",
+    title: "I tuoi risultati commerciali",
+    hint: "Trattative vinte, valore chiuso, budget e obiettivo extra basati soltanto su attribuzioni commerciali confermate.",
+    kind: "personal",
+    area: "crm",
+    href: "/admin/crm/pipeline",
   },
   {
     id: "my-shifts",
