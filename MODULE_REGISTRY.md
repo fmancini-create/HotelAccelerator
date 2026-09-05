@@ -1,6 +1,6 @@
 # HotelAccelerator — Module Registry
 
-Ultimo aggiornamento: 2026-09-04
+Ultimo aggiornamento: 2026-09-05
 
 ## Regola di lettura
 
@@ -10,14 +10,14 @@ Stati ufficiali usati nel progetto:
 
 `Idea` · `Specifica` · `UI/mock` · `Codice` · `Demo` · `Tenant reale` · `Multi-tenant` · `Production-ready` · `Vendibile`
 
-Snapshot considerato per questo audit: `main` dopo la PR #365; la PR #366 aggiunge la capability specifica degli utenti virtuali IA per knowledge base. Le funzioni di prodotti satellite restano al livello dimostrabile dal Core o dal codice presente in questo repository; non vengono promosse sulla base di descrizioni o vecchie chat.
+Snapshot considerato per questo audit: `main` con le capability fino alla PR #390 incluse. Le funzioni di prodotti satellite restano al livello dimostrabile dal Core o dal codice presente in questo repository; non vengono promosse sulla base di descrizioni o vecchie chat.
 
 ## Registro sintetico
 
 | Area | Funzioni incluse | Stato | Evidenza / limite residuo |
 |---|---|---|---|
 | Core e tenant | Strutture, utenti, ruoli, permessi, tenant context, cambio tenant, catalogo moduli, dashboard e superfici SuperAdmin | Codice | Auth e tenant context sono presenti con autorizzazione server-side sulle aree auditate. Serve una matrice di test sistematica su tutte le route prima di `Multi-tenant`. |
-| Dashboard utente personalizzata | Performance individuali, obiettivi, Inbox, task, chiamate e card configurabili dal tenant | Codice | Implementazione tenant-scoped presente; collaudo admin + collaboratore reale e migrazione/configurazione restano il gate prima di `Tenant reale`. Vedere `docs/PERSONALIZED_USER_DASHBOARD.md`. |
+| Dashboard utente personalizzata | Performance operative, risultati commerciali, obiettivi giornata/30 giorni, budget individuale, obiettivo extra, Inbox, task, chiamate e card configurabili dal tenant | Codice | PR #388 e #390. Le superfici sono tenant-scoped e i risultati commerciali richiedono area CRM; collaudo admin + collaboratore reale e recupero storico verificato restano il gate prima di `Tenant reale`. Vedere `docs/PERSONALIZED_USER_DASHBOARD.md`. |
 | Accesso suite | SSO Core -> Santaddeo/HotelProfitAI/ManuBot, grant monouso, entitlement e rientro satellite -> Core | Codice | PR #307 e #313. Registry tenant, grant a TTL e controlli server-to-server sono in main; serve round-trip reale coordinato con ciascun satellite. |
 | Registro codice cliente suite | Numero cliente centrale, prefissi HA/SNT/HPA/MB e tenant satellite standalone | Codice | PR #299 e #310. Il Core supporta anche clienti senza property HotelAccelerator; va verificata l'esposizione su ogni prodotto autonomo. |
 | Regola commerciale suite | Vantaggio cliente/cross-sell globale 4BID, configurazione SuperAdmin e ricalcolo server-side | Codice | PR #308 e #340. Il Core e' la sorgente della policy; resta da verificare che ogni satellite/preventivatore la consumi senza duplicarla. |
@@ -30,7 +30,8 @@ Snapshot considerato per questo audit: `main` dopo la PR #365; la PR #366 aggiun
 | Social | Facebook/Instagram, X e LinkedIn: OAuth, webhook e superfici Inbox/community | Codice | PR #306. Restano credenziali production, app review e scope effettivamente concessi dai provider. Nessun DM viene simulato dove il provider non lo consente. |
 | Inbox omnicanale | Composer unificato, rubrica tenant, rich text/allegati e canali attivi | Codice | PR #333, #334 e #347. Email, WhatsApp, Telegram e social hanno implementazioni concrete; Outlook, IMAP/SMTP, OTA e copertura completa restano da implementare/auditare. |
 | Presenza operatori | Heartbeat, presenza recente tenant-scoped e utilizzo in routing/dashboard | Codice | `OperatorPresenceBeacon`, `/api/admin/presence`, `operator_presence` e helper server esistono. Serve test multi-utente reale sistematico. |
-| KPI operatori | Risposte, conversazioni e attesa mediana opt-in per utente | Codice | PR #315. Calcolo self-only e filtri account/canale presenti; conversione, qualita e storico pre-attivazione non vengono inventati. |
+| KPI operatori | Risposte, conversazioni, attesa mediana, trattative vinte, valore chiuso/budget e obiettivo extra opt-in per utente | Codice | PR #315, #388 e #390. I KPI operativi restano self-only e filtrati; i KPI commerciali contano soltanto attribuzioni `confirmed`. Esiti IA, booking automatici e attribuzioni dubbie non vengono trasformati in merito. |
+| Attribuzione commerciale operatori | Read model separato, autore preventivo, chiusura, valore, confidenza, review admin, audit append-only e backfill Gmail | Codice | PR #390. `crm_operator_sales_attributions` e audit sono backend-only con FK tenant-aware. L'autore del preventivo prevale su chi cambia la fase; senza prova l'operatore resta `needs_review`. Serve backfill reale e verifica manuale prima di `Tenant reale`. Vedere `docs/OPERATOR_SALES_ATTRIBUTION.md`. |
 | Gestione conversazioni | Assegnazioni, stati, priorita, tag, note, SLA, template, ricerca, traduzione e allegati | Specifica | Diverse parti sono gia' in codice, ma la capability aggregata non e' stata ancora auditata end-to-end su schema, API, permessi ed errori. |
 | AI Inbox | Intenti, estrazione, riassunti, risposte, escalation, sentiment, upselling e knowledge base | Specifica | Handoff durevole e associazione basi/canali hanno codice; l'insieme del modulo richiede eval, privacy, guardrail e misure di qualita prima di essere promosso. |
 | Utenti virtuali IA per knowledge base | Provisioning automatico 1:1, nome e firma per base, identita della base primaria, attribuzione Inbox e firma email | Codice | PR #366. Migrazione additiva applicata e backfill delle 8 basi esistenti; trigger e cascade verificati su database. Typecheck Core e preview build sono verdi. Serve E2E reale con due identita distinte, firma email e isolamento fra tenant prima di `Tenant reale`. Vedere `docs/AI_AGENT_IDENTITY.md`. |
