@@ -38,7 +38,7 @@ begin
   if new.sender_type = 'agent'
      and new.status = 'sent'
      and ai_generated then
-    delivered_at := coalesce(new.sent_at, new.stored_at, new.created_at, now());
+    delivered_at := coalesce(new.stored_at, new.created_at, now());
     virtual_name := nullif(trim(coalesce(new.metadata ->> 'ai_virtual_user_name', new.sender_name, '')), '');
 
     update public.conversations
@@ -67,7 +67,7 @@ revoke all on function public.sync_conversation_ai_reply_marker() from public, a
 
 drop trigger if exists trg_sync_conversation_ai_reply_marker on public.messages;
 create trigger trg_sync_conversation_ai_reply_marker
-after insert or update of status, metadata on public.messages
+after insert or update on public.messages
 for each row
 execute function public.sync_conversation_ai_reply_marker();
 
@@ -79,13 +79,13 @@ with latest_ai as (
     m.property_id,
     m.conversation_id,
     m.id as message_id,
-    coalesce(m.sent_at, m.stored_at, m.created_at) as replied_at,
+    coalesce(m.stored_at, m.created_at) as replied_at,
     nullif(trim(coalesce(m.metadata ->> 'ai_virtual_user_name', m.sender_name, '')), '') as virtual_name
   from public.messages m
   where m.sender_type = 'agent'
     and m.status = 'sent'
     and lower(coalesce(m.metadata ->> 'ai_generated', 'false')) = 'true'
-  order by m.property_id, m.conversation_id, coalesce(m.sent_at, m.stored_at, m.created_at) desc, m.id desc
+  order by m.property_id, m.conversation_id, coalesce(m.stored_at, m.created_at) desc, m.id desc
 )
 update public.conversations c
    set ai_last_replied_at = a.replied_at,
