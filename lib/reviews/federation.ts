@@ -61,6 +61,54 @@ function santaddeoBaseUrl() {
   return process.env.SANTADDEO_APP_URL?.trim() || "https://www.santaddeo.com"
 }
 
+function bodyWithHotelId(body: string | undefined, hotelId: string) {
+  let parsed: Record<string, unknown> = {}
+  if (body?.trim()) {
+    try {
+      const value = JSON.parse(body)
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        parsed = value as Record<string, unknown>
+      }
+    } catch {
+      throw new ReviewsFederationError("invalid_json", 400)
+    }
+  }
+  return JSON.stringify({ ...parsed, hotelId })
+}
+
+async function forwardFederatedRequest(input: {
+  path: string
+  hotelId: string
+  origin: ReviewsOrigin
+  method?: "GET" | "POST" | "PATCH"
+  query?: URLSearchParams
+  queryKeys?: string[]
+  body?: string
+  timeoutMs?: number
+}) {
+  const method = input.method ?? "GET"
+  const url = new URL(input.path, santaddeoBaseUrl())
+  url.searchParams.set("hotelId", input.hotelId)
+  for (const key of input.queryKeys ?? []) {
+    const value = input.query?.get(key)
+    if (value) url.searchParams.set(key, value)
+  }
+
+  const upstream = await fetch(url, {
+    method,
+    cache: "no-store",
+    signal: AbortSignal.timeout(input.timeoutMs ?? 12_000),
+    headers: {
+      ...santaddeoAuthHeaders(input.origin),
+      ...(method === "GET" ? {} : { "Content-Type": "application/json" }),
+    },
+    ...(method === "GET" ? {} : { body: bodyWithHotelId(input.body, input.hotelId) }),
+  })
+
+  const payload = await upstream.json().catch(() => ({ error: "invalid_upstream_response" }))
+  return { status: upstream.status, payload }
+}
+
 async function resolveCustomerAccountId(productKey: ReviewsSourceProduct, externalTenantId: string) {
   const sb = createServiceClient()
 
@@ -223,19 +271,82 @@ export async function forwardReviewsList(input: {
   origin: ReviewsOrigin
   query?: URLSearchParams
 }) {
-  const url = new URL("/api/integrations/reviews/federated/list", santaddeoBaseUrl())
-  url.searchParams.set("hotelId", input.hotelId)
-  for (const key of ["page", "pageSize", "platform", "sentiment", "q", "sort"]) {
-    const value = input.query?.get(key)
-    if (value) url.searchParams.set(key, value)
-  }
-
-  const upstream = await fetch(url, {
-    method: "GET",
-    cache: "no-store",
-    signal: AbortSignal.timeout(8_000),
-    headers: santaddeoAuthHeaders(input.origin),
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/list",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    query: input.query,
+    queryKeys: [
+      "page",
+      "pageSize",
+      "platform",
+      "sentiment",
+      "minRating",
+      "maxRating",
+      "roomTypeId",
+      "q",
+      "sort",
+    ],
   })
-  const payload = await upstream.json().catch(() => ({ error: "invalid_upstream_response" }))
-  return { status: upstream.status, payload }
+}
+
+export async function forwardReviewsStats(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  query?: URLSearchParams
+}) {
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/stats",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    query: input.query,
+    queryKeys: ["platform", "sentiment", "minRating", "maxRating", "roomTypeId", "q"],
+  })
+}
+
+export async function forwardReviewsInsights(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  method: "GET" | "POST"
+  body?: string
+}) {
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/insights",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    method: input.method,
+    body: input.body,
+    timeoutMs: input.method === "POST" ? 65_000 : 12_000,
+  })
+}
+
+export async function forwardReviewReplyDraft(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  method: "POST" | "PATCH"
+  body?: string
+}) {
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/reply-draft",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    method: input.method,
+    body: input.body,
+    timeoutMs: input.method === "POST" ? 65_000 : 12_000,
+  })
+}
+
+export async function forwardReviewPublishReply(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  body?: string
+}) {
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/publish-reply",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    method: "POST",
+    body: input.body,
+    timeoutMs: 65_000,
+  })
 }
