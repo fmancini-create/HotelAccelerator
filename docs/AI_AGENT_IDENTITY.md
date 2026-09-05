@@ -71,6 +71,21 @@ Ogni messaggio IA salvato in `messages` porta:
 
 La stessa identita viene mantenuta anche nei fallback e nel flusso di handoff verso lo staff.
 
+### Visibilita delle risposte IA nell'Inbox
+
+Una conversazione viene considerata **gestita dall'IA** solo quando esiste almeno un messaggio `agent` con `status = sent` e `metadata.ai_generated = true`. Le bozze/suggerimenti IA non ancora inviati non fanno scattare il marcatore.
+
+La migrazione `20260905202500_track_ai_replied_conversations.sql` mantiene sulla conversazione un read model tenant-scoped (`ai_last_replied_at`, `ai_last_message_id`, `ai_last_virtual_user_name`) tramite trigger sui messaggi e backfill dello storico. L'indice parziale per `property_id` consente alla cartella smart `Risposte da IA` di filtrare senza scandire tutti i messaggi a ogni apertura.
+
+L'Inbox usa questo segnale per:
+
+- mostrare un badge `Risposta IA` immediatamente visibile nell'elenco conversazioni;
+- mostrare `IA ha risposto` e il nome dell'utente virtuale nel dettaglio;
+- attribuire ogni singolo messaggio automatico all'assistente virtuale invece di etichettarlo genericamente come `Tu`;
+- esporre la cartella `Risposte da IA` su tutti i canali, senza perdere i normali limiti di tenant e permessi canale.
+
+Il marcatore resta sulla conversazione anche se in seguito scrive nuovamente l'ospite o interviene un operatore: la cartella deve rappresentare tutte le conversazioni in cui l'IA ha realmente risposto, non soltanto quelle il cui ultimo messaggio e' dell'IA.
+
 ## Email autopilot
 
 `lib/ai/channels/email.ts` riceve da `runAutopilot` il contesto dell'utente virtuale della base primaria e applica **la firma di quella specifica IA** con `appendSignatureHtml`.
@@ -97,7 +112,8 @@ Prima di promuoverla a `Tenant reale` servono almeno queste prove su un tenant r
 3. collegare la base come primaria a un canale email e verificare nome + firma della risposta;
 4. verificare in Inbox che messaggi normali, fallback e handoff risultino attribuiti allo stesso utente virtuale;
 5. verificare che una seconda base dello stesso tenant usi un'identita diversa;
-6. verificare che un altro tenant non possa leggere o modificare l'identita.
+6. verificare che un altro tenant non possa leggere o modificare l'identita;
+7. verificare che `Risposte da IA` mostri soltanto conversazioni con una risposta IA realmente inviata e che una semplice bozza IA non compaia nella cartella.
 
 ## Rollback
 

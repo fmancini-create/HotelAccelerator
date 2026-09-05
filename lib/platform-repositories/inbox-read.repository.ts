@@ -116,7 +116,7 @@ export class InboxReadRepository {
   }
 
   async listConversations(propertyId: string, options: ConversationListOptions = {}): Promise<ConversationListItem[]> {
-    const { status = "open", channel, subchannel_id, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access, ids } = options
+    const { status = "open", channel, subchannel_id, limit = 50, offset = 0, search, mode = "smart", gmail_label, sort, access, ids, ai_replied } = options
 
     // Per-user channel access enforcement (restricted, non-admin users).
     // Build an OR filter so the user only sees conversations of their channels:
@@ -152,6 +152,9 @@ export class InboxReadRepository {
         last_message_at,
         created_at,
         unread_count,
+        ai_last_replied_at,
+        ai_last_message_id,
+        ai_last_virtual_user_name,
         booking_data,
         metadata,
         channel_id,
@@ -200,6 +203,13 @@ export class InboxReadRepository {
       } else if (status !== "all") {
         query = query.eq("status", status)
       }
+    }
+
+    // Smart folder: conversations where an AI reply was actually sent.
+    // This is ANDed with property_id and channel-access filters, so the marker
+    // never broadens tenant/user visibility.
+    if (ai_replied) {
+      query = query.not("ai_last_replied_at", "is", null)
     }
 
     // Apply ordering. Default:
@@ -455,6 +465,9 @@ export class InboxReadRepository {
         created_at,
         property_id,
         unread_count,
+        ai_last_replied_at,
+        ai_last_message_id,
+        ai_last_virtual_user_name,
         metadata,
         booking_data,
         gmail_thread_id,
@@ -474,7 +487,7 @@ export class InboxReadRepository {
 
     const { data: messages, error: msgError } = await this.supabase
       .from("messages")
-      .select("id, content, sender_type, sender_id, created_at, metadata, gmail_id, received_at, status")
+      .select("id, content, content_type, sender_type, sender_id, sender_name, created_at, stored_at, metadata, gmail_id, received_at, status")
       .eq("conversation_id", conversationId)
       .eq("property_id", propertyId)
       .order("received_at", { ascending: true, nullsFirst: false })
