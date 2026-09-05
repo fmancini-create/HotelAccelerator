@@ -12,11 +12,6 @@ const DashboardHeader = dynamic(
   { ssr: false, loading: () => <div className="h-16 border-b bg-white" /> },
 )
 
-const AiChatPanel = dynamic(
-  () => import("@/components/dashboard/ai-chat-panel").then((mod) => mod.AiChatPanel),
-  { ssr: false, loading: () => null },
-)
-
 interface AppLayoutProps {
   children: ReactNode
   initialData: {
@@ -96,10 +91,10 @@ export function AppLayout({ children, initialData }: AppLayoutProps) {
           {children}
         </div>
 
-        {/* AI Chat Panel - visible when a hotel is selected */}
-        {selectedHotel && (
-          <AiChatPanel hotelId={selectedHotel.id} hotelName={selectedHotel.name} />
-        )}
+        {/*
+          La chat AI vive nel root layout tramite GlobalChatWidget: una sola
+          istanza persistente per non perdere conversazione durante la navigazione.
+        */}
 
         {/* Footer */}
         <AppFooter />
