@@ -58,7 +58,18 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase()
 }
 
+function productAuthMode(product: SuiteSsoProduct): "oidc" | "static" | "missing" {
+  if (process.env.VERCEL_OIDC_TOKEN?.trim()) return "oidc"
+  if (REGISTRY_KEY_BY_PRODUCT[product]?.trim()) return "static"
+  return "missing"
+}
+
 function productHeaders(product: SuiteSsoProduct): Record<string, string> {
+  // Production-to-production calls use the short-lived Vercel project identity.
+  // Static per-product keys remain only as a recovery/local-development fallback.
+  const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim()
+  if (oidcToken) return { Authorization: `Bearer ${oidcToken}` }
+
   const key = REGISTRY_KEY_BY_PRODUCT[product]?.trim()
   return key ? { "X-4BID-Registry-Key": key } : {}
 }
@@ -119,7 +130,14 @@ async function fetchSatelliteUsers(link: LinkedProduct): Promise<SatelliteUser[]
     signal: AbortSignal.timeout(4_000),
     headers: productHeaders(link.product),
   })
-  if (!response.ok) throw new Error(`${link.product}_directory_${response.status}`)
+  if (!response.ok) {
+    console.warn("[suite-directory] satellite directory unavailable", {
+      product: link.product,
+      status: response.status,
+      auth_method: productAuthMode(link.product),
+    })
+    throw new Error(`${link.product}_directory_${response.status}`)
+  }
   const payload = (await response.json()) as { users?: SatelliteUser[] }
   return Array.isArray(payload.users) ? payload.users : []
 }
