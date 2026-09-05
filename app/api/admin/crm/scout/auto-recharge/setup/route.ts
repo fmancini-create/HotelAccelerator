@@ -1,21 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { requireAreaApi } from "@/lib/auth/area-access"
-import { getChannelAccess } from "@/lib/channel-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getStripe } from "@/lib/stripe"
+import { requireScoutBillingAdmin, ScoutBillingAccessDenied } from "@/lib/scout/access"
 
 export async function POST(request: NextRequest) {
   try {
     await requireAreaApi("crm", request)
-    const access = await getChannelAccess(request)
-    if (!access.isAdmin) {
-      return NextResponse.json({ error: "Solo un amministratore del tenant può configurare la carta." }, { status: 403 })
-    }
-
     const propertyId = await getAuthenticatedPropertyId(request)
     const db = createServiceClient()
+    const actorEmail = await requireScoutBillingAdmin(db, request, propertyId)
+
     const { data: property, error: propertyError } = await db
       .from("properties")
       .select("id,name,billing_email")
@@ -58,7 +55,7 @@ export async function POST(request: NextRequest) {
       enabled: false,
       status: "disabled",
       stripe_customer_id: customerId,
-      updated_by: access.email,
+      updated_by: actorEmail,
       updated_at: new Date().toISOString(),
     }, { onConflict: "property_id", ignoreDuplicates: false })
     if (settingsError) throw settingsError
@@ -81,6 +78,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: session.url })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
+    if (error instanceof ScoutBillingAccessDenied) return NextResponse.json({ error: error.message }, { status: 403 })
     console.error("Scout auto recharge setup failed:", error)
     return NextResponse.json({ error: "Impossibile avviare la configurazione della carta." }, { status: 500 })
   }
