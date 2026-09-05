@@ -70,6 +70,17 @@ export const NAV_ENTRIES: NavEntry[] = [
     primary: true,
   },
   {
+    id: "reviews",
+    href: "/admin/reviews",
+    label: "Recensioni",
+    description: "Leggi le recensioni della struttura e trasforma le criticita' in attivita' operative",
+    placement: "operative",
+    icon: Star,
+    module: "reviews",
+    adminOnly: true,
+    primary: true,
+  },
+  {
     id: "crm",
     href: "/admin/crm",
     label: "CRM",
@@ -291,7 +302,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   {
     id: "reviews-settings",
     href: "/admin/settings/reviews",
-    label: "Recensioni",
+    label: "Configurazione recensioni",
     description: "Configura le fonti del modulo Recensioni condiviso nella suite 4BID",
     placement: "settings",
     icon: Star,
