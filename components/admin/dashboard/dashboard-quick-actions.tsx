@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2, PhoneCall, Plus } from "lucide-react"
+import { Loader2, PhoneCall, Plus, Wrench } from "lucide-react"
 import { toast } from "sonner"
 
 import { OmnichannelCompose } from "@/components/admin/inbox/omnichannel-compose"
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useAdminAuth } from "@/lib/admin-hooks"
 
@@ -17,6 +18,19 @@ type QuickTaskUser = {
   id: string
   name: string | null
   email: string
+}
+
+type ManubotTeamMember = {
+  id: string
+  full_name: string
+  email: string
+  role: string
+}
+
+type ManubotAsset = {
+  id: string
+  name: string
+  location: string
 }
 
 type TodoPriority = "low" | "normal" | "high" | "urgent"
@@ -69,6 +83,13 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
   const [priority, setPriority] = useState<TodoPriority>("normal")
   const [dueDate, setDueDate] = useState("")
   const [assignee, setAssignee] = useState("")
+  const [manubotActive, setManubotActive] = useState(false)
+  const [sendToManubot, setSendToManubot] = useState(false)
+  const [manubotLoading, setManubotLoading] = useState(false)
+  const [manubotTeam, setManubotTeam] = useState<ManubotTeamMember[]>([])
+  const [manubotAssets, setManubotAssets] = useState<ManubotAsset[]>([])
+  const [manubotAssignee, setManubotAssignee] = useState("")
+  const [manubotAssetId, setManubotAssetId] = useState("")
 
   const reset = () => {
     setTitle("")
@@ -76,23 +97,71 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
     setPriority("normal")
     setDueDate("")
     setAssignee(adminUser?.id || "")
+    setSendToManubot(false)
+    setManubotTeam([])
+    setManubotAssets([])
+    setManubotAssignee("")
+    setManubotAssetId("")
   }
 
   useEffect(() => {
     if (!open) return
     setAssignee((current) => current || adminUser?.id || "")
 
-    // Per i membri non amministratori questa rotta risponde 403: in quel caso
-    // il task viene semplicemente assegnato a se stessi tramite adminUser.id.
-    fetch("/api/admin/users", { cache: "no-store" })
-      .then(async (res) => (res.ok ? res.json() : null))
-      .then((data) => setUsers((data?.users || []) as QuickTaskUser[]))
-      .catch(() => setUsers([]))
+    void Promise.all([
+      fetch("/api/admin/users", { cache: "no-store" })
+        .then(async (res) => (res.ok ? res.json() : null))
+        .then((data) => setUsers((data?.users || []) as QuickTaskUser[]))
+        .catch(() => setUsers([])),
+      fetch("/api/platform/modules", { cache: "no-store" })
+        .then(async (res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          const activeModules = Array.isArray(data?.activeModules) ? data.activeModules : []
+          const active = activeModules.includes("manubot")
+          setManubotActive(active)
+          if (!active) setSendToManubot(false)
+        })
+        .catch(() => {
+          setManubotActive(false)
+          setSendToManubot(false)
+        }),
+    ])
   }, [open, adminUser?.id])
+
+  useEffect(() => {
+    if (!open || !manubotActive || !sendToManubot) return
+    let cancelled = false
+    setManubotLoading(true)
+
+    void Promise.all([
+      fetch("/api/admin/manubot/team", { cache: "no-store" })
+        .then(async (res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!cancelled) setManubotTeam((data?.team || []) as ManubotTeamMember[])
+        })
+        .catch(() => {
+          if (!cancelled) setManubotTeam([])
+        }),
+      fetch("/api/admin/manubot/assets", { cache: "no-store" })
+        .then(async (res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!cancelled) setManubotAssets((data?.assets || []) as ManubotAsset[])
+        })
+        .catch(() => {
+          if (!cancelled) setManubotAssets([])
+        }),
+    ]).finally(() => {
+      if (!cancelled) setManubotLoading(false)
+    })
+
+    return () => { cancelled = true }
+  }, [open, manubotActive, sendToManubot])
 
   const submit = async () => {
     if (!title.trim() || saving) return
     setSaving(true)
+    const shouldSendToManubot = manubotActive && sendToManubot
+
     try {
       const res = await fetch("/api/admin/todos", {
         method: "POST",
@@ -104,12 +173,22 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
           assigned_to: assignee || adminUser?.id || null,
           due_date: dueDate || undefined,
           tags: [],
+          send_to_manubot: shouldSendToManubot,
+          manubot_assigned_to: shouldSendToManubot ? manubotAssignee || null : null,
+          manubot_asset_id: shouldSendToManubot ? manubotAssetId || null : null,
         }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Non è stato possibile creare l'attività")
 
-      toast.success("Attività creata")
+      if (shouldSendToManubot && data?.todo?.external_id) {
+        toast.success("Attività creata e inoltrata a ManuBot")
+      } else if (shouldSendToManubot) {
+        toast.warning("Attività creata in HotelAccelerator, ma l'inoltro a ManuBot non è riuscito")
+      } else {
+        toast.success("Attività creata")
+      }
+
       setOpen(false)
       reset()
       await onCreated?.()
@@ -201,13 +280,93 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                 </div>
               )}
             </div>
+
+            {manubotActive && (
+              <div className="rounded-xl border border-ha-brand/20 bg-ha-brand-soft/40 p-3.5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 gap-2.5">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background text-ha-brand shadow-sm">
+                      <Wrench className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <Label htmlFor="dashboard-quick-task-manubot" className="cursor-pointer text-sm font-semibold">Inoltra anche a ManuBot</Label>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        Crea la stessa attività nel modulo manutenzioni del tenant.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="dashboard-quick-task-manubot"
+                    checked={sendToManubot}
+                    onCheckedChange={(checked) => {
+                      setSendToManubot(checked)
+                      if (!checked) {
+                        setManubotAssignee("")
+                        setManubotAssetId("")
+                      }
+                    }}
+                    aria-label="Inoltra attività a ManuBot"
+                  />
+                </div>
+
+                {sendToManubot && (
+                  <div className="mt-3 border-t border-ha-brand/15 pt-3">
+                    {manubotLoading ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Carico team e impianti ManuBot…
+                      </div>
+                    ) : manubotTeam.length > 0 || manubotAssets.length > 0 ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {manubotTeam.length > 0 && (
+                          <div className="space-y-1.5">
+                            <Label>Tecnico ManuBot</Label>
+                            <Select value={manubotAssignee || "unassigned"} onValueChange={(value) => setManubotAssignee(value === "unassigned" ? "" : value)}>
+                              <SelectTrigger className="bg-background">
+                                <SelectValue placeholder="Opzionale" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Non assegnato</SelectItem>
+                                {manubotTeam.map((member) => (
+                                  <SelectItem key={member.id} value={member.id}>{member.full_name || member.email}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        {manubotAssets.length > 0 && (
+                          <div className="space-y-1.5">
+                            <Label>Impianto / asset</Label>
+                            <Select value={manubotAssetId || "unassigned"} onValueChange={(value) => setManubotAssetId(value === "unassigned" ? "" : value)}>
+                              <SelectTrigger className="bg-background">
+                                <SelectValue placeholder="Opzionale" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="unassigned">Nessun impianto</SelectItem>
+                                {manubotAssets.map((asset) => (
+                                  <SelectItem key={asset.id} value={asset.id}>{asset.name}{asset.location ? ` · ${asset.location}` : ""}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        L'attività verrà comunque inoltrata a ManuBot senza tecnico o impianto preassegnati.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>Annulla</Button>
             <Button type="button" onClick={() => void submit()} disabled={!title.trim() || saving}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Crea attività
+              {sendToManubot && manubotActive ? "Crea e inoltra" : "Crea attività"}
             </Button>
           </DialogFooter>
         </DialogContent>
