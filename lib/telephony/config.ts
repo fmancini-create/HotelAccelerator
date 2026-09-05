@@ -2,15 +2,16 @@ import "server-only"
 import { createServiceClient } from "@/lib/supabase/server"
 import { decryptSecretIfNeeded, encryptSecret } from "@/lib/crypto/secrets"
 import type { ThreeCxConfig } from "@/lib/telephony/threecx-client"
+import type { TelephonyProviderId } from "@/lib/telephony/providers"
+import type { ProviderRuntimeConfig } from "@/lib/telephony/adapters"
 
 /**
- * Lettura/scrittura della connessione 3CX di una struttura.
+ * Configurazione telefonica tenant-scoped.
  *
- * I segreti sono cifrati a riposo con ENCRYPTION_KEY (`enc:v1:`), come per
- * Telegram e WhatsApp, e in lettura si tollera il testo in chiaro legacy
- * (`decryptSecretIfNeeded`) per non rompere righe scritte prima della cifratura.
+ * `provider` non e piu sinonimo di 3CX: il Core mantiene un record per ogni
+ * provider configurato e un solo record attivo per tenant. I segreti restano
+ * cifrati a riposo con ENCRYPTION_KEY.
  */
-
 export type TelephonyRow = {
   id: string
   property_id: string
@@ -20,13 +21,9 @@ export type TelephonyRow = {
   client_secret_encrypted: string | null
   default_extension: string | null
   inbound_secret_encrypted: string | null
-  /** Credenziale dedicata agli strumenti vocali 3CX, distinta dal CRM. */
   voice_inbound_secret_encrypted: string | null
-  /**
-   * Raro caso di PBX condiviso: property che possiede il template/secret CRM
-   * globale di 3CX e che riceve materialmente il ReportCall.
-   */
   shared_pbx_journal_property_id: string | null
+  provider_config: Record<string, unknown> | null
   is_active: boolean
   last_check_at: string | null
   last_check_status: string | null
@@ -34,7 +31,6 @@ export type TelephonyRow = {
   updated_at: string | null
 }
 
-/** Nasconde un segreto lasciando solo le ultime 4 cifre (come gli altri canali). */
 export function maskSecret(value: string | null | undefined): string {
   if (!value) return ""
   const v = String(value)
@@ -42,52 +38,74 @@ export function maskSecret(value: string | null | undefined): string {
   return "••••••••" + v.slice(-4)
 }
 
-export async function loadTelephonyRow(propertyId: string): Promise<TelephonyRow | null> {
+export async function loadTelephonyRow(propertyId: string, provider: string = "3cx"): Promise<TelephonyRow | null> {
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from("telephony_integrations")
     .select("*")
     .eq("property_id", propertyId)
-    .eq("provider", "3cx")
+    .eq("provider", provider)
     .maybeSingle()
-
   if (error) throw error
   return (data as TelephonyRow | null) ?? null
 }
 
-/**
- * Config pronta per chiamare il centralino, o `null` se incompleta.
- *
- * Restituisce `null` invece di una config a metà: una chiamata con `clientSecret`
- * vuoto otterrebbe un 400 dal centralino e il messaggio d'errore parlerebbe di
- * credenziali rifiutate, quando il vero problema e' che non sono state inserite.
- */
-export function toThreeCxConfig(row: TelephonyRow | null): ThreeCxConfig | null {
+export async function loadActiveTelephonyRow(propertyId: string): Promise<TelephonyRow | null> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from("telephony_integrations")
+    .select("*")
+    .eq("property_id", propertyId)
+    .eq("is_active", true)
+    .maybeSingle()
+  if (error) throw error
+  return (data as TelephonyRow | null) ?? null
+}
+
+export async function loadTelephonyRows(propertyId: string): Promise<TelephonyRow[]> {
+  const supabase = createServiceClient()
+  const { data, error } = await supabase
+    .from("telephony_integrations")
+    .select("*")
+    .eq("property_id", propertyId)
+    .order("updated_at", { ascending: false })
+  if (error) throw error
+  return (data as TelephonyRow[] | null) ?? []
+}
+
+export function toProviderRuntimeConfig(row: TelephonyRow | null): ProviderRuntimeConfig | null {
   if (!row || !row.is_active) return null
-  const baseUrl = row.base_url?.trim()
-  const clientId = row.client_id?.trim()
-  const clientSecret = decryptSecretIfNeeded(row.client_secret_encrypted)
-  if (!baseUrl || !clientId || !clientSecret) return null
-  return { baseUrl, clientId, clientSecret }
+  const clientSecret = decryptSecretIfNeeded(row.client_secret_encrypted) || ""
+  return {
+    baseUrl: row.base_url?.trim() || "",
+    clientId: row.client_id?.trim() || "",
+    clientSecret,
+    defaultExtension: row.default_extension?.trim() || "",
+    providerConfig: row.provider_config && typeof row.provider_config === "object" ? row.provider_config : {},
+  }
 }
 
-/** Segreto che 3CX deve presentare quando chiama i nostri endpoint. */
+/** Compatibilita con le route 3CX esistenti. */
+export function toThreeCxConfig(row: TelephonyRow | null): ThreeCxConfig | null {
+  if (!row || row.provider !== "3cx" || !row.is_active) return null
+  const runtime = toProviderRuntimeConfig(row)
+  if (!runtime?.baseUrl || !runtime.clientId || !runtime.clientSecret) return null
+  return { baseUrl: runtime.baseUrl, clientId: runtime.clientId, clientSecret: runtime.clientSecret }
+}
+
 export function inboundSecretOf(row: TelephonyRow | null): string | null {
-  if (!row) return null
-  return decryptSecretIfNeeded(row.inbound_secret_encrypted)
+  return row ? decryptSecretIfNeeded(row.inbound_secret_encrypted) : null
 }
 
-/**
- * Segreto che 3CX presenta esclusivamente agli endpoint degli agenti vocali.
- *
- * Non deve avere fallback sul segreto CRM: una chiave rubata dal template CRM
- * non deve poter interrogare basi di conoscenza o risolvere codici cliente.
- */
 export function voiceInboundSecretOf(row: TelephonyRow | null): string | null {
-  if (!row) return null
-  return decryptSecretIfNeeded(row.voice_inbound_secret_encrypted)
+  return row ? decryptSecretIfNeeded(row.voice_inbound_secret_encrypted) : null
 }
 
 export function encryptForWrite(value: string | null | undefined): string | null {
   return encryptSecret(value)
+}
+
+export function providerIdOf(row: TelephonyRow | null): TelephonyProviderId | null {
+  if (!row) return null
+  return row.provider as TelephonyProviderId
 }
