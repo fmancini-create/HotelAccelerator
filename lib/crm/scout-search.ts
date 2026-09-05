@@ -14,6 +14,70 @@ export type ScoutInterpretedSearch = {
   organizationLocations: string[]
 }
 
+export type ScoutGuidedOption = {
+  id: string
+  label: string
+  searchTerm: string
+  description?: string
+}
+
+export const SCOUT_INDUSTRY_OPTIONS: ScoutGuidedOption[] = [
+  { id: "hospitality", label: "Hotel e strutture ricettive", searchTerm: "hotel" },
+  { id: "travel", label: "Agenzie di viaggio e tour operator", searchTerm: "agenzie di viaggio" },
+  { id: "restaurants", label: "Ristorazione e Food & Beverage", searchTerm: "ristorazione" },
+  { id: "wellness", label: "Spa e Wellness", searchTerm: "spa" },
+  {
+    id: "nautical",
+    label: "Nautica, yacht e cantieristica",
+    searchTerm: "settore nautico",
+    description: "Nautica, marine, yachting e cantieristica navale",
+  },
+  { id: "real-estate", label: "Immobiliare", searchTerm: "immobiliare" },
+  { id: "automotive", label: "Automotive e concessionari", searchTerm: "automotive" },
+  { id: "logistics", label: "Logistica e trasporti", searchTerm: "logistica" },
+  { id: "construction", label: "Edilizia e costruzioni", searchTerm: "edilizia" },
+  { id: "healthcare", label: "Sanità e medicale", searchTerm: "sanita" },
+  { id: "software", label: "Software, SaaS e IT", searchTerm: "software" },
+  { id: "manufacturing", label: "Industria e manifattura", searchTerm: "industria" },
+]
+
+export const SCOUT_ROLE_OPTIONS: ScoutGuidedOption[] = [
+  { id: "general-management", label: "Direzione generale / General Manager", searchTerm: "direttore generale" },
+  { id: "hotel-management", label: "Direzione struttura / Hotel Manager", searchTerm: "hotel manager" },
+  { id: "owner", label: "Titolare / Proprietario", searchTerm: "titolare" },
+  { id: "sales", label: "Commerciale / Vendite", searchTerm: "responsabile commerciale" },
+  { id: "marketing", label: "Marketing", searchTerm: "responsabile marketing" },
+  { id: "revenue", label: "Revenue Management", searchTerm: "revenue manager" },
+  { id: "operations", label: "Operations", searchTerm: "operations manager" },
+  { id: "procurement", label: "Acquisti / Procurement", searchTerm: "responsabile acquisti" },
+  { id: "hr", label: "Risorse umane", searchTerm: "responsabile risorse umane" },
+  { id: "finance", label: "Amministrazione / Finanza", searchTerm: "responsabile amministrativo" },
+  { id: "maintenance", label: "Manutenzione / Facility", searchTerm: "responsabile manutenzione" },
+  {
+    id: "workplace-safety",
+    label: "Sicurezza sul lavoro / HSE / RSPP",
+    searchTerm: "responsabile della sicurezza",
+    description: "Esclude la cybersecurity e amplia automaticamente HSE, EHS, QHSE e RSPP",
+  },
+  {
+    id: "cybersecurity",
+    label: "Cybersecurity / Information Security",
+    searchTerm: "responsabile della sicurezza informatica",
+  },
+  { id: "it", label: "IT / Sistemi informativi", searchTerm: "responsabile IT" },
+]
+
+export const SCOUT_LOCATION_OPTIONS: ScoutGuidedOption[] = [
+  { id: "it", label: "Italia", searchTerm: "Italy" },
+  { id: "fr", label: "Francia", searchTerm: "France" },
+  { id: "es", label: "Spagna", searchTerm: "Spain" },
+  { id: "de", label: "Germania", searchTerm: "Germany" },
+  { id: "gb", label: "Regno Unito", searchTerm: "United Kingdom" },
+  { id: "ch", label: "Svizzera", searchTerm: "Switzerland" },
+  { id: "at", label: "Austria", searchTerm: "Austria" },
+  { id: "us", label: "Stati Uniti", searchTerm: "United States" },
+]
+
 type SemanticCluster = {
   match: string[]
   expand: string[]
@@ -161,6 +225,10 @@ const TITLE_CLUSTERS: SemanticCluster[] = [
     expand: ["operations manager", "operations director", "COO", "head of operations"],
   },
   {
+    match: ["hotel manager", "direttore hotel", "direttore albergo", "direttore struttura"],
+    expand: ["hotel manager", "general manager", "resort manager", "property general manager"],
+  },
+  {
     match: ["direttore generale", "general manager", "direzione generale", "direttore"],
     expand: ["general manager", "managing director", "director", "CEO"],
   },
@@ -173,6 +241,11 @@ const TITLE_CLUSTERS: SemanticCluster[] = [
 const LOCATION_ALIASES = new Map<string, string>([
   ["italia", "Italy"],
   ["italy", "Italy"],
+  ["francia", "France"],
+  ["spagna", "Spain"],
+  ["germania", "Germany"],
+  ["svizzera", "Switzerland"],
+  ["austria", "Austria"],
   ["regno unito", "United Kingdom"],
   ["uk", "United Kingdom"],
   ["stati uniti", "United States"],
