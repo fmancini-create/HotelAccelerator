@@ -1,6 +1,6 @@
 # HR — timbratura al login: gate mobile e promemoria desktop
 
-Stato ufficiale della capability: **Codice**. Il gate mobile e' online dalla PR #381; il promemoria desktop viene sviluppato sul branch `feat/hr-desktop-timeclock-prompt`. Non promuovere a `Tenant reale` prima del collaudo autenticato con almeno un dipendente reale.
+Stato ufficiale della capability: **Codice**. Il gate mobile e' stato introdotto con la PR #381; il promemoria desktop e' tracciato dalla PR #383 (`feat/hr-desktop-timeclock-prompt`). Non promuovere a `Tenant reale` prima del collaudo autenticato con almeno un dipendente reale.
 
 ## Obiettivo
 
