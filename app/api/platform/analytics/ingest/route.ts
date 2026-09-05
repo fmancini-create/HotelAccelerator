@@ -11,6 +11,7 @@ import {
 
 const MAX_EVENTS = 50
 const MAX_BODY_BYTES = 64 * 1024
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function sameOrigin(request: NextRequest): boolean {
   const origin = request.headers.get("origin")
@@ -67,12 +68,13 @@ export async function POST(request: NextRequest) {
     }
 
     const verifiedBackend = platformKey === "hotelaccelerator" && surface === "backend" && identity
+    const suppliedEventId = text(raw.eventId, 100)
     events.push({
       platformKey,
       surface,
       eventType,
       eventName: text(raw.eventName, 160),
-      eventId: text(raw.eventId, 100) ?? undefined,
+      eventId: suppliedEventId && UUID.test(suppliedEventId) ? suppliedEventId : undefined,
       eventVersion: Number.isInteger(raw.eventVersion) ? raw.eventVersion : 1,
       occurredAt: text(raw.occurredAt, 60) ?? undefined,
       visitorId: verifiedBackend ? `user:${identity.userId}` : visitorId,
