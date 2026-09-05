@@ -14,7 +14,7 @@ const requestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("report"), type: z.enum(["suggestion", "bug"]), title: z.string().trim().min(2).max(160), description: z.string().trim().min(3).max(10000), current_path: z.string().trim().max(500).nullable().optional() }),
 ])
 
-async function resolveHotelAcceleratorInternalBaseIds() {
+async function resolveHotelAcceleratorInternalBaseIds(): Promise<string[]> {
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from("internal_knowledge_sync_sources")
@@ -26,7 +26,13 @@ async function resolveHotelAcceleratorInternalBaseIds() {
     console.warn("[internal-support] internal knowledge lookup unavailable", { code: error.code })
     return []
   }
-  return [...new Set((data ?? []).map((row: { knowledge_base_id: string | null }) => row.knowledge_base_id).filter((value): value is string => Boolean(value)))]
+
+  const rows = (data ?? []) as Array<{ knowledge_base_id: string | null }>
+  const ids: string[] = []
+  for (const row of rows) {
+    if (row.knowledge_base_id && !ids.includes(row.knowledge_base_id)) ids.push(row.knowledge_base_id)
+  }
+  return ids
 }
 
 async function propertyLabel(propertyId: string) {
