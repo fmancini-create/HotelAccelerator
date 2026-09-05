@@ -67,6 +67,9 @@ jobs:
       - name: Test operator rewards settings navigation
         run: pnpm vitest run lib/platform/__tests__/operator-rewards-nav.test.ts
 
+      - name: Test reviews navigation
+        run: pnpm vitest run lib/platform/__tests__/reviews-nav.test.ts
+
       - name: Test sales attribution rules
         run: pnpm vitest run tests/sales-attribution.test.ts
 
