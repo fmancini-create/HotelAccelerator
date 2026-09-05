@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname } from "next/navigation"
 
 const VISITOR_KEY = "ha-suite-analytics-visitor-v1"
 const SESSION_KEY = "ha-suite-analytics-session-v1"
@@ -32,7 +32,6 @@ function referrerPath(): string | null {
 
 export function SuiteAnalyticsTracker() {
   const pathname = usePathname()
-  const search = useSearchParams()
 
   useEffect(() => {
     if (!pathname) return
@@ -41,6 +40,7 @@ export function SuiteAnalyticsTracker() {
 
     const visitorId = id(localStorage, VISITOR_KEY)
     const sessionId = id(sessionStorage, SESSION_KEY)
+    const search = new URLSearchParams(window.location.search)
     const utm = (name: string) => search.get(name)?.slice(0, 300) || null
 
     const payload = {
@@ -78,7 +78,7 @@ export function SuiteAnalyticsTracker() {
       body: JSON.stringify(payload),
       keepalive: true,
     }).catch(() => undefined)
-  }, [pathname, search])
+  }, [pathname])
 
   return null
 }
