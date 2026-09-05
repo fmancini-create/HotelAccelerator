@@ -26,7 +26,7 @@ async function resolveHotelAcceleratorInternalBaseIds() {
     console.warn("[internal-support] internal knowledge lookup unavailable", { code: error.code })
     return []
   }
-  return [...new Set((data ?? []).map((row) => row.knowledge_base_id).filter(Boolean))] as string[]
+  return [...new Set((data ?? []).map((row: { knowledge_base_id: string | null }) => row.knowledge_base_id).filter((value): value is string => Boolean(value)))]
 }
 
 async function propertyLabel(propertyId: string) {
