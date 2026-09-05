@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import useSWR from "swr"
-import { AlertTriangle, Calculator, Coins, Loader2, RefreshCw, Save, TrendingUp } from "lucide-react"
+import { AlertTriangle, ArrowRight, Calculator, Coins, Loader2, RefreshCw, Save, TrendingUp } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,6 +15,7 @@ type Warning = { code: string; message: string; severity: "info" | "warning" | "
 type ScoutCostData = {
   settings: {
     currency: string
+    commercialCurrency: string
     providerPlanLabel: string | null
     providerCycleCostCents: number | null
     leadCreditUnitCostMicrosOverride: number | null
@@ -22,6 +23,17 @@ type ScoutCostData = {
     lowBalanceThresholdPct: number
     pricingSource: string
     priceVerifiedAt: string | null
+    fxSource: string
+    fxRateOverride: number | null
+  }
+  fx: {
+    available: boolean
+    source: string | null
+    fromCurrency: string
+    toCurrency: string
+    rate: number | null
+    referenceDate: string | null
+    fetchedAt: string | null
   }
   live: {
     available: boolean
@@ -35,10 +47,13 @@ type ScoutCostData = {
     unitCostMicros: number | null
     customerUnitPriceMicros: number | null
     providerCostMicros: number | null
+    providerCostCustomerMicros: number | null
     customerValueMicros: number | null
     marginMicros: number | null
     remainingProviderValueMicros: number | null
+    remainingProviderValueCustomerMicros: number | null
     trackedProviderCostMicros: number
+    trackedProviderCostCustomerMicros: number
     trackedCustomerValueMicros: number
     trackedMarginMicros: number
   }
@@ -53,18 +68,18 @@ type ScoutCostData = {
     propertyName: string
     credits: number
     providerCostMicros: number
+    providerCostCustomerMicros: number
     customerValueMicros: number
     marginMicros: number
   }>
   warnings: Warning[]
-  snapshots: Array<{
-    cycle_start: string | null
-    cycle_end: string | null
-    lead_credit_limit: number
-    lead_credit_consumed: number
-    lead_credit_remaining: number
-    fetched_at: string
+  fxSnapshots: Array<{
     source: string
+    from_currency: string
+    to_currency: string
+    rate: number
+    reference_date: string
+    fetched_at: string
   }>
 }
 
@@ -72,6 +87,8 @@ type Draft = {
   providerPlanLabel: string
   providerCycleCost: string
   leadCreditUnitCostOverride: string
+  commercialCurrency: string
+  fxRateOverride: string
   markupMultiplier: string
   lowBalanceThresholdPct: string
 }
@@ -83,7 +100,7 @@ async function fetcher(url: string): Promise<ScoutCostData> {
   return payload
 }
 
-function euro(value: number | null | undefined, currency = "EUR") {
+function money(value: number | null | undefined, currency = "EUR") {
   if (value === null || value === undefined || !Number.isFinite(value)) return "da definire"
   return new Intl.NumberFormat("it-IT", {
     style: "currency",
@@ -112,6 +129,13 @@ function parseMoney(value: string, multiplier: number): number | null | "invalid
   const parsed = Number(clean)
   if (!Number.isFinite(parsed) || parsed < 0) return "invalid"
   return Math.round(parsed * multiplier)
+}
+
+function parseOptionalPositive(value: string): number | null | "invalid" {
+  const clean = value.trim().replace(",", ".")
+  if (!clean) return null
+  const parsed = Number(clean)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : "invalid"
 }
 
 function formatDate(value: string | null) {
@@ -149,6 +173,8 @@ export function ScoutCostsPanel() {
       providerPlanLabel: data.settings.providerPlanLabel || "",
       providerCycleCost: inputMoney(data.settings.providerCycleCostCents, 100),
       leadCreditUnitCostOverride: inputMoney(data.settings.leadCreditUnitCostMicrosOverride, 1_000_000),
+      commercialCurrency: data.settings.commercialCurrency || "EUR",
+      fxRateOverride: data.settings.fxRateOverride ? String(data.settings.fxRateOverride).replace(".", ",") : "",
       markupMultiplier: String(data.settings.markupMultiplier).replace(".", ","),
       lowBalanceThresholdPct: String(data.settings.lowBalanceThresholdPct).replace(".", ","),
     })
@@ -168,10 +194,17 @@ export function ScoutCostsPanel() {
     if (!draft) return
     const providerCycleCostCents = parseMoney(draft.providerCycleCost, 100)
     const leadCreditUnitCostMicrosOverride = parseMoney(draft.leadCreditUnitCostOverride, 1_000_000)
+    const fxRateOverride = parseOptionalPositive(draft.fxRateOverride)
     const multiplier = Number(draft.markupMultiplier.replace(",", "."))
     const threshold = Number(draft.lowBalanceThresholdPct.replace(",", "."))
-    if (providerCycleCostCents === "invalid" || leadCreditUnitCostMicrosOverride === "invalid") {
-      toast.error("Controlla gli importi: devono essere numeri non negativi.")
+    const commercialCurrency = draft.commercialCurrency.trim().toUpperCase()
+
+    if (providerCycleCostCents === "invalid" || leadCreditUnitCostMicrosOverride === "invalid" || fxRateOverride === "invalid") {
+      toast.error("Controlla costo e cambio: devono essere numeri positivi o campi vuoti.")
+      return
+    }
+    if (!/^[A-Z]{3}$/.test(commercialCurrency)) {
+      toast.error("La valuta commerciale deve essere un codice ISO di 3 lettere, per esempio EUR.")
       return
     }
     if (!Number.isFinite(multiplier) || multiplier < 1 || multiplier > 100) {
@@ -192,14 +225,16 @@ export function ScoutCostsPanel() {
           providerPlanLabel: draft.providerPlanLabel.trim() || null,
           providerCycleCostCents,
           leadCreditUnitCostMicrosOverride,
+          commercialCurrency,
+          fxRateOverride,
           markupMultiplier: multiplier,
           lowBalanceThresholdPct: threshold,
-          pricingSource: leadCreditUnitCostMicrosOverride !== null ? "manual_override" : "manual_invoice",
+          pricingSource: leadCreditUnitCostMicrosOverride !== null ? "manual_override" : "contract",
         }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.error || "Salvataggio non riuscito")
-      toast.success("Costo Apollo e regole Scout aggiornati")
+      toast.success("Costo provider, cambio e prezzo Scout aggiornati")
       setDraft(null)
       await mutate()
     } catch (err) {
@@ -214,21 +249,21 @@ export function ScoutCostsPanel() {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="scout-costs-title" className="text-lg font-semibold text-neutral-900">
-            HotelAccelerator Scout · costi provider
+            HotelAccelerator Scout · costi provider e cambio
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-neutral-600">
-            I crediti e il ciclo vengono letti live da Apollo. Il costo monetario del piano viene invece verificato da fattura/contratto,
-            perché Apollo non lo restituisce nell&apos;API dei consumi. Il prezzo Scout viene calcolato automaticamente dal costo reale e dal moltiplicatore.
+            Il costo Apollo resta nella valuta del contratto. HotelAccelerator lo converte nella valuta commerciale con il cambio BCE
+            e solo dopo applica il moltiplicatore Scout. In questo modo costo, prezzo e margine non confondono USD ed EUR.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => mutate()} disabled={isLoading || isValidating}>
           {isValidating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-          Aggiorna Apollo
+          Aggiorna Apollo + cambio
         </Button>
       </div>
 
       {isLoading && (
-        <Card><CardContent className="flex items-center gap-2 p-5 text-sm text-neutral-600"><Loader2 className="h-4 w-4 animate-spin" />Leggo crediti e costi Scout...</CardContent></Card>
+        <Card><CardContent className="flex items-center gap-2 p-5 text-sm text-neutral-600"><Loader2 className="h-4 w-4 animate-spin" />Leggo crediti, costo e cambio...</CardContent></Card>
       )}
 
       {error && !data && (
@@ -244,7 +279,9 @@ export function ScoutCostsPanel() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
             <Badge variant={data.live.available ? "default" : "outline"}>{data.live.available ? "Apollo live" : "Ultimo snapshot"}</Badge>
-            <span>Ultima lettura {formatDate(data.live.fetchedAt)}</span>
+            <Badge variant={data.fx.available ? "default" : "outline"}>{data.fx.available ? `FX ${data.fx.source === "manual_override" ? "manuale" : "BCE"}` : "FX non disponibile"}</Badge>
+            <span>Apollo {formatDate(data.live.fetchedAt)}</span>
+            <span>· cambio {data.fx.referenceDate || "n/d"}</span>
             <span>· ciclo {data.live.cycle.start ? new Date(data.live.cycle.start).toLocaleDateString("it-IT") : "n/d"} → {data.live.cycle.end ? new Date(data.live.cycle.end).toLocaleDateString("it-IT") : "n/d"}</span>
           </div>
 
@@ -258,66 +295,101 @@ export function ScoutCostsPanel() {
             </div>
           )}
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             <Card><CardHeader className="pb-2"><CardDescription>Lead credits Apollo</CardDescription><CardTitle className="text-2xl">{decimals(data.live.lead.remaining)} / {decimals(data.live.lead.limit)}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">Usati {decimals(data.live.lead.consumed)} · residuo {remainingPct.toFixed(1)}%</p></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardDescription>Costo reale / credito</CardDescription><CardTitle className="text-2xl">{euro(microsToMoney(data.economics.unitCostMicros), data.settings.currency)}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">Da costo ciclo ÷ plafond, salvo override</p></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardDescription>Prezzo Scout / credito</CardDescription><CardTitle className="text-2xl">{euro(microsToMoney(data.economics.customerUnitPriceMicros), data.settings.currency)}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">Moltiplicatore ×{data.settings.markupMultiplier}</p></CardContent></Card>
-            <Card><CardHeader className="pb-2"><CardDescription>Uso attribuito ad HotelAccelerator</CardDescription><CardTitle className="text-2xl">{data.reconciliation.attributionPct.toFixed(1)}%</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">{decimals(data.reconciliation.trackedCredits)} su {decimals(data.reconciliation.providerConsumedCredits)} crediti provider</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Costo provider / credito</CardDescription><CardTitle className="text-2xl">{money(microsToMoney(data.economics.unitCostMicros), data.settings.currency)}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">Costo ciclo ÷ plafond</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Cambio {data.settings.currency} → {data.settings.commercialCurrency}</CardDescription><CardTitle className="text-2xl">{data.fx.rate ? data.fx.rate.toFixed(6) : "n/d"}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">1 {data.settings.currency} = {data.fx.rate ? data.fx.rate.toFixed(6) : "—"} {data.settings.commercialCurrency}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Prezzo Scout / credito</CardDescription><CardTitle className="text-2xl">{money(microsToMoney(data.economics.customerUnitPriceMicros), data.settings.commercialCurrency)}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">Cambio applicato prima di ×{data.settings.markupMultiplier}</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Uso attribuito ad HA</CardDescription><CardTitle className="text-2xl">{data.reconciliation.attributionPct.toFixed(1)}%</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">{decimals(data.reconciliation.trackedCredits)} / {decimals(data.reconciliation.providerConsumedCredits)} crediti</p></CardContent></Card>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
-            <Card><CardHeader className="pb-2"><CardDescription>Costo provider stimato · ciclo</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><Coins className="h-5 w-5 text-neutral-400" />{euro(microsToMoney(data.economics.providerCostMicros), data.settings.currency)}</CardTitle></CardHeader></Card>
-            <Card><CardHeader className="pb-2"><CardDescription>Valore Scout · ciclo</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><TrendingUp className="h-5 w-5 text-neutral-400" />{euro(microsToMoney(data.economics.customerValueMicros), data.settings.currency)}</CardTitle></CardHeader></Card>
-            <Card><CardHeader className="pb-2"><CardDescription>Margine teorico · ciclo</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><Calculator className="h-5 w-5 text-neutral-400" />{euro(microsToMoney(data.economics.marginMicros), data.settings.currency)}</CardTitle></CardHeader></Card>
+          <Card className="border-neutral-200 bg-neutral-50/70">
+            <CardContent className="flex flex-wrap items-center gap-2 p-4 text-sm text-neutral-700">
+              <span className="font-medium">Formula:</span>
+              <span>costo {data.settings.currency}</span><ArrowRight className="h-4 w-4" />
+              <span>cambio {data.fx.rate ? data.fx.rate.toFixed(6) : "n/d"}</span><ArrowRight className="h-4 w-4" />
+              <span>costo in {data.settings.commercialCurrency}</span><ArrowRight className="h-4 w-4" />
+              <span>× {data.settings.markupMultiplier}</span><ArrowRight className="h-4 w-4" />
+              <strong>prezzo Scout in {data.settings.commercialCurrency}</strong>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card><CardHeader className="pb-2"><CardDescription>Costo provider · ciclo</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><Coins className="h-5 w-5 text-neutral-400" />{money(microsToMoney(data.economics.providerCostMicros), data.settings.currency)}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">Valuta fattura Apollo</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Costo convertito · ciclo</CardDescription><CardTitle className="text-xl">{money(microsToMoney(data.economics.providerCostCustomerMicros), data.settings.commercialCurrency)}</CardTitle></CardHeader><CardContent><p className="text-xs text-neutral-500">Costo confrontabile col prezzo cliente</p></CardContent></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Valore Scout · ciclo</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><TrendingUp className="h-5 w-5 text-neutral-400" />{money(microsToMoney(data.economics.customerValueMicros), data.settings.commercialCurrency)}</CardTitle></CardHeader></Card>
+            <Card><CardHeader className="pb-2"><CardDescription>Margine teorico · ciclo</CardDescription><CardTitle className="flex items-center gap-2 text-xl"><Calculator className="h-5 w-5 text-neutral-400" />{money(microsToMoney(data.economics.marginMicros), data.settings.commercialCurrency)}</CardTitle></CardHeader></Card>
           </div>
 
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Regole economiche Scout</CardTitle>
               <CardDescription>
-                Inserisci il costo reale del ciclo Apollo. Se lasci vuoto l&apos;override per credito, HotelAccelerator divide automaticamente il costo per il plafond lead live. Ogni variazione viene storicizzata.
+                Il provider viene pagato in {data.settings.currency}; i tenant vengono valorizzati in {data.settings.commercialCurrency}. Lascia vuoto il cambio manuale per usare automaticamente il riferimento BCE.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {draft && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <div className="space-y-1.5"><Label htmlFor="scout-plan">Piano / riferimento</Label><Input id="scout-plan" value={draft.providerPlanLabel} onChange={(e) => setDraft({ ...draft, providerPlanLabel: e.target.value })} placeholder="Es. Apollo annuale" /></div>
-                <div className="space-y-1.5"><Label htmlFor="scout-cycle-cost">Costo ciclo Apollo</Label><div className="flex items-center gap-2"><Input id="scout-cycle-cost" inputMode="decimal" value={draft.providerCycleCost} onChange={(e) => setDraft({ ...draft, providerCycleCost: e.target.value })} placeholder="es. 99,00" /><span className="text-sm text-neutral-500">{data.settings.currency}</span></div></div>
-                <div className="space-y-1.5"><Label htmlFor="scout-unit-override">Costo/credito override</Label><div className="flex items-center gap-2"><Input id="scout-unit-override" inputMode="decimal" value={draft.leadCreditUnitCostOverride} onChange={(e) => setDraft({ ...draft, leadCreditUnitCostOverride: e.target.value })} placeholder="vuoto = automatico" /><span className="text-sm text-neutral-500">{data.settings.currency}</span></div></div>
-                <div className="space-y-1.5"><Label htmlFor="scout-markup">Moltiplicatore vendita</Label><Input id="scout-markup" inputMode="decimal" value={draft.markupMultiplier} onChange={(e) => setDraft({ ...draft, markupMultiplier: e.target.value })} /></div>
-                <div className="space-y-1.5"><Label htmlFor="scout-threshold">Alert crediti residui %</Label><Input id="scout-threshold" inputMode="decimal" value={draft.lowBalanceThresholdPct} onChange={(e) => setDraft({ ...draft, lowBalanceThresholdPct: e.target.value })} /></div>
-                <div className="md:col-span-2 xl:col-span-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                  <p className="text-xs text-neutral-500">Ultima verifica prezzo: {formatDate(data.settings.priceVerifiedAt)}</p>
-                  <Button onClick={save} disabled={saving}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Salva regole Scout</Button>
-                </div>
+              {draft && <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-1.5"><Label htmlFor="scout-plan">Piano / riferimento</Label><Input id="scout-plan" value={draft.providerPlanLabel} onChange={(e) => setDraft({ ...draft, providerPlanLabel: e.target.value })} placeholder="Piano mensile Apollo" /></div>
+                <div className="space-y-1.5"><Label htmlFor="scout-cycle-cost">Costo ciclo provider</Label><div className="flex items-center gap-2"><Input id="scout-cycle-cost" inputMode="decimal" value={draft.providerCycleCost} onChange={(e) => setDraft({ ...draft, providerCycleCost: e.target.value })} /><span className="text-sm text-neutral-500">{data.settings.currency}</span></div></div>
+                <div className="space-y-1.5"><Label htmlFor="scout-commercial-currency">Valuta commerciale</Label><Input id="scout-commercial-currency" maxLength={3} value={draft.commercialCurrency} onChange={(e) => setDraft({ ...draft, commercialCurrency: e.target.value.toUpperCase() })} /></div>
+                <div className="space-y-1.5"><Label htmlFor="scout-fx-override">Cambio manuale opzionale</Label><Input id="scout-fx-override" inputMode="decimal" value={draft.fxRateOverride} onChange={(e) => setDraft({ ...draft, fxRateOverride: e.target.value })} placeholder="vuoto = BCE" /><p className="text-xs text-neutral-500">{data.settings.commercialCurrency} per 1 {data.settings.currency}</p></div>
+                <div className="space-y-1.5"><Label htmlFor="scout-unit-cost">Costo/credito override</Label><Input id="scout-unit-cost" inputMode="decimal" value={draft.leadCreditUnitCostOverride} onChange={(e) => setDraft({ ...draft, leadCreditUnitCostOverride: e.target.value })} placeholder="vuoto = calcolo automatico" /></div>
+                <div className="space-y-1.5"><Label htmlFor="scout-multiplier">Moltiplicatore prezzo</Label><Input id="scout-multiplier" inputMode="decimal" value={draft.markupMultiplier} onChange={(e) => setDraft({ ...draft, markupMultiplier: e.target.value })} /></div>
+                <div className="space-y-1.5"><Label htmlFor="scout-threshold">Allarme credito residuo %</Label><Input id="scout-threshold" inputMode="decimal" value={draft.lowBalanceThresholdPct} onChange={(e) => setDraft({ ...draft, lowBalanceThresholdPct: e.target.value })} /></div>
+                <div className="flex items-end"><Button onClick={save} disabled={saving} className="w-full">{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{saving ? "Salvataggio" : "Salva regole"}</Button></div>
               </div>}
             </CardContent>
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
-              <CardHeader><CardTitle className="text-base">Riconciliazione HotelAccelerator ↔ Apollo</CardTitle><CardDescription>Serve a intercettare consumo Apollo esterno a Scout, retry anomali o vecchi eventi non metered.</CardDescription></CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between gap-4"><span className="text-neutral-600">Consumo Apollo nel ciclo</span><strong>{decimals(data.reconciliation.providerConsumedCredits)}</strong></div>
-                <div className="flex justify-between gap-4"><span className="text-neutral-600">Attribuito a Scout</span><strong>{decimals(data.reconciliation.trackedCredits)}</strong></div>
-                <div className="flex justify-between gap-4"><span className="text-neutral-600">Non attribuito</span><strong>{decimals(data.reconciliation.unattributedCredits)}</strong></div>
-                <div className="flex justify-between gap-4"><span className="text-neutral-600">Valore crediti ancora disponibili</span><strong>{euro(microsToMoney(data.economics.remainingProviderValueMicros), data.settings.currency)}</strong></div>
+              <CardHeader><CardTitle className="text-base">Riconciliazione HotelAccelerator ↔ Apollo</CardTitle><CardDescription>Controlla che i crediti consumati dal provider siano attribuiti a eventi Scout.</CardDescription></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4"><span>Consumati provider</span><strong>{decimals(data.reconciliation.providerConsumedCredits)}</strong></div>
+                <div className="flex justify-between gap-4"><span>Attribuiti a HotelAccelerator</span><strong>{decimals(data.reconciliation.trackedCredits)}</strong></div>
+                <div className="flex justify-between gap-4"><span>Non attribuiti</span><strong>{decimals(data.reconciliation.unattributedCredits)}</strong></div>
+                <div className="flex justify-between gap-4 border-t pt-2"><span>Copertura</span><strong>{data.reconciliation.attributionPct.toFixed(1)}%</strong></div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader><CardTitle className="text-base">Tutti i contatori Apollo</CardTitle><CardDescription>Monitoraggio del piano provider; Scout oggi usa il bucket lead/enrichment.</CardDescription></CardHeader>
-              <CardContent>
-                {buckets.length === 0 ? <p className="text-sm text-neutral-500">Nessun contatore disponibile.</p> : <div className="space-y-2 text-sm">
-                  {buckets.map(([key, item]) => <div key={key} className="grid grid-cols-[1fr_auto_auto] gap-4 border-b py-2 last:border-0"><span className="text-neutral-600">{bucketLabels[key] || key}</span><span className="tabular-nums">{decimals(item.consumed)} usati</span><span className="min-w-20 text-right font-medium tabular-nums">{decimals(item.leftOver)} rimasti</span></div>)}
-                </div>}
+              <CardHeader><CardTitle className="text-base">Bucket provider</CardTitle><CardDescription>Plafond e consumo del piano collegato.</CardDescription></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {buckets.length === 0 && <p className="text-neutral-500">Nessun bucket disponibile.</p>}
+                {buckets.slice(0, 8).map(([key, bucket]) => (
+                  <div key={key} className="flex items-center justify-between gap-4">
+                    <span>{bucketLabels[key] || key}</span>
+                    <span className="text-neutral-600">{decimals(bucket.consumed)} / {decimals(bucket.limit)} · residui {decimals(bucket.leftOver)}</span>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Costo e margine per tenant · ciclo Apollo</CardTitle><CardDescription>Attribuzione dai singoli eventi fatturabili Scout; gli importi storici restano congelati al prezzo valido nel momento dell&apos;uso.</CardDescription></CardHeader>
+            <CardHeader><CardTitle className="text-base">Costo e margine per tenant</CardTitle><CardDescription>Il costo provider è mostrato sia nella valuta originale sia convertito; valore e margine sono sempre nella valuta commerciale.</CardDescription></CardHeader>
             <CardContent>
-              {data.tenants.length === 0 ? <p className="text-sm text-neutral-500">Nessun consumo Scout attribuito nel ciclo corrente.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-neutral-500"><th className="py-2 pr-4 font-medium">Tenant</th><th className="py-2 px-3 text-right font-medium">Crediti</th><th className="py-2 px-3 text-right font-medium">Costo</th><th className="py-2 px-3 text-right font-medium">Valore</th><th className="py-2 pl-3 text-right font-medium">Margine</th></tr></thead><tbody>{data.tenants.map((tenant) => <tr key={tenant.propertyId} className="border-b last:border-0"><td className="py-2 pr-4 font-medium">{tenant.propertyName}</td><td className="py-2 px-3 text-right tabular-nums">{decimals(tenant.credits)}</td><td className="py-2 px-3 text-right tabular-nums">{euro(microsToMoney(tenant.providerCostMicros), data.settings.currency)}</td><td className="py-2 px-3 text-right tabular-nums">{euro(microsToMoney(tenant.customerValueMicros), data.settings.currency)}</td><td className="py-2 pl-3 text-right font-medium tabular-nums">{euro(microsToMoney(tenant.marginMicros), data.settings.currency)}</td></tr>)}</tbody></table></div>}
+              {data.tenants.length === 0 ? <p className="text-sm text-neutral-500">Nessun consumo Scout attribuito nel ciclo corrente.</p> : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-sm">
+                    <thead><tr className="border-b text-left text-neutral-500"><th className="py-2 pr-3 font-medium">Tenant</th><th className="py-2 pr-3 font-medium">Crediti</th><th className="py-2 pr-3 font-medium">Costo provider</th><th className="py-2 pr-3 font-medium">Costo convertito</th><th className="py-2 pr-3 font-medium">Valore Scout</th><th className="py-2 font-medium">Margine</th></tr></thead>
+                    <tbody>{data.tenants.map((tenant) => <tr key={tenant.propertyId} className="border-b last:border-0"><td className="py-2 pr-3 font-medium">{tenant.propertyName}</td><td className="py-2 pr-3">{decimals(tenant.credits)}</td><td className="py-2 pr-3">{money(microsToMoney(tenant.providerCostMicros), data.settings.currency)}</td><td className="py-2 pr-3">{money(microsToMoney(tenant.providerCostCustomerMicros), data.settings.commercialCurrency)}</td><td className="py-2 pr-3">{money(microsToMoney(tenant.customerValueMicros), data.settings.commercialCurrency)}</td><td className="py-2 font-medium">{money(microsToMoney(tenant.marginMicros), data.settings.commercialCurrency)}</td></tr>)}</tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-base">Storico cambio Scout</CardTitle><CardDescription>Ultimi riferimenti usati per convertire {data.settings.currency} in {data.settings.commercialCurrency}.</CardDescription></CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {data.fxSnapshots.length === 0 ? <p className="text-neutral-500">Il primo snapshot verrà creato al prossimo aggiornamento.</p> : data.fxSnapshots.slice(0, 8).map((snapshot, index) => (
+                <div key={`${snapshot.source}-${snapshot.reference_date}-${index}`} className="flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-0">
+                  <span>{snapshot.reference_date} · {snapshot.source === "manual_override" ? "manuale" : "BCE"}</span>
+                  <strong>1 {snapshot.from_currency} = {Number(snapshot.rate).toFixed(6)} {snapshot.to_currency}</strong>
+                </div>
+              ))}
             </CardContent>
           </Card>
         </div>
