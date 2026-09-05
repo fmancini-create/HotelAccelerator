@@ -1,46 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId, getDevBypass } from "@/lib/auth-property"
-import { getManubotClient, HA_TO_MANUBOT_PRIORITY } from "@/lib/manubot"
+import { getManubotClient, HA_TO_MANUBOT_PRIORITY, type ManubotTaskPhoto } from "@/lib/manubot"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { resolvePropertyIdForCaller } from "@/lib/auth/property-scope"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireAreaApi } from "@/lib/auth/area-access"
+import { isModuleActive } from "@/lib/modules"
 
-/**
- * GET /api/admin/todos — elenco dei todo del tenant.
- *
- * Il tenant si risolve con `resolvePropertyIdForCaller`, che accetta un
- * `?property_id=` esplicito. Prima si usava `getAuthenticatedPropertyId`, che
- * per un super admin senza tenant selezionato lanciava un Error finito nel
- * catch generico: la risposta era un 500 con il messaggio interno in chiaro,
- * quindi indistinguibile da un guasto del server. Ora quel caso è un 400
- * `property_required`, e un property_id inesistente un 404 invece di una lista
- * vuota ambigua.
- *
- * SOLA LETTURA: nessuna scrittura sul DB, nessuna chiamata a ManuBot (il push
- * dei task vive solo nella POST, che resta invariata).
- */
 export async function GET(request: NextRequest) {
   try {
-    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("todos", request)
-    // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (NODE_ENV=development
-    // + localhost/127.0.0.1, via getDevBypass). Mai su preview pubbliche/produzione.
-    if (await getDevBypass(request)) {
-      return NextResponse.json({ todos: [] })
-    }
+    if (await getDevBypass(request)) return NextResponse.json({ todos: [] })
 
     const identity = await getCallerIdentity(request)
-    if (!identity) {
-      return NextResponse.json({ error: "unauthorized", todos: [] }, { status: 401 })
-    }
+    if (!identity) return NextResponse.json({ error: "unauthorized", todos: [] }, { status: 401 })
     if (!identity.isSuperAdmin && !identity.isTenantAdmin) {
       return NextResponse.json({ error: "forbidden", todos: [] }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
-
     const scope = await resolvePropertyIdForCaller(identity, searchParams.get("property_id"))
     if (!scope.ok) {
       return NextResponse.json(
@@ -48,10 +27,8 @@ export async function GET(request: NextRequest) {
         { status: scope.status },
       )
     }
-    const propertyId = scope.propertyId
 
     const supabase = createServiceClient()
-
     const status = searchParams.get("status")
     const assignedTo = searchParams.get("assigned_to")
 
@@ -60,10 +37,10 @@ export async function GET(request: NextRequest) {
       .select(`
         id, title, description, status, priority,
         assigned_to, created_by, due_date,
-        external_id, external_source, external_url,
-        tags, created_at, updated_at, completed_at
+        external_id, external_source, external_url, external_data,
+        tags, attachments, created_at, updated_at, completed_at
       `)
-      .eq("property_id", propertyId)
+      .eq("property_id", scope.propertyId)
       .order("created_at", { ascending: false })
 
     if (status) query = query.eq("status", status)
@@ -71,24 +48,35 @@ export async function GET(request: NextRequest) {
 
     const { data: todos, error } = await query
     if (error) throw error
-
     return NextResponse.json({ todos })
   } catch (error: any) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
-    // Il messaggio originale resta nei log server: al client va una categoria
-    // generica, per non esporre dettagli interni o testi di Supabase.
     console.error("[v0] GET /api/admin/todos failed:", error?.message)
     return NextResponse.json({ error: "internal_error", todos: [] }, { status: 500 })
   }
 }
 
-// POST /api/admin/todos - Create a new todo
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim()))]
+}
+
+function photoArray(value: unknown): ManubotTaskPhoto[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      url: typeof item.url === "string" ? item.url : "",
+      filename: typeof item.filename === "string" ? item.filename : "allegato",
+      size: typeof item.size === "number" ? item.size : 0,
+      type: typeof item.type === "string" ? item.type : "application/octet-stream",
+    }))
+    .filter((item) => item.url.length > 0)
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Permesso di sezione: in "enforce" lancia 403, tradotto dal catch qui sotto.
     await requireAreaApi("todos", request)
-    // DEV BYPASS: risposta fittizia SOLO in sviluppo locale (via getDevBypass).
     if (await getDevBypass(request)) {
       const body = await request.json()
       return NextResponse.json({
@@ -99,6 +87,7 @@ export async function POST(request: NextRequest) {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         },
+        manubot_synced: body.send_to_manubot ? true : null,
       }, { status: 201 })
     }
 
@@ -107,13 +96,78 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
 
     const {
-      title, description, priority, assigned_to, due_date, tags,
-      send_to_manubot, manubot_asset_id, manubot_assigned_to,
+      title,
+      description,
+      priority,
+      assigned_to,
+      due_date,
+      tags,
+      send_to_manubot,
+      manubot_assigned_to,
+      manubot_group_id,
+      manubot_asset_id,
+      manubot_asset_category_id,
+      manubot_property_id,
+      manubot_requires_completion_photo,
+      manubot_expected_resolution_minutes,
     } = body
 
     if (!title?.trim()) {
       return NextResponse.json({ error: "Il titolo è obbligatorio" }, { status: 400 })
     }
+
+    const manubotAssigneeIds = stringArray(body.manubot_assignee_ids)
+    const manubotGroupIds = stringArray(body.manubot_group_ids)
+    const manubotAssetIds = stringArray(body.manubot_asset_ids)
+    const manubotProcedureIds = stringArray(body.manubot_procedure_ids)
+    const manubotPhotos = photoArray(body.manubot_photos)
+
+    if (send_to_manubot) {
+      const active = await isModuleActive(supabase, propertyId, "manubot")
+      if (!active) {
+        return NextResponse.json(
+          { error: "Il modulo ManuBot non è attivo per questo tenant." },
+          { status: 403 },
+        )
+      }
+
+      const hasResponsible =
+        manubotAssigneeIds.length > 0
+        || manubotGroupIds.length > 0
+        || (typeof manubot_assigned_to === "string" && manubot_assigned_to.trim())
+        || (typeof manubot_group_id === "string" && manubot_group_id.trim())
+      if (!hasResponsible) {
+        return NextResponse.json(
+          { error: "Per inoltrare a ManuBot assegna almeno un tecnico o un gruppo." },
+          { status: 400 },
+        )
+      }
+
+      const expected = Number(manubot_expected_resolution_minutes)
+      if (!Number.isInteger(expected) || expected < 5 || expected > 1440) {
+        return NextResponse.json(
+          { error: "Il tempo stimato ManuBot deve essere compreso tra 5 e 1440 minuti." },
+          { status: 400 },
+        )
+      }
+    }
+
+    const initialExternalData = send_to_manubot
+      ? {
+          manubot_sync_status: "pending",
+          requested_at: new Date().toISOString(),
+          manubot_options: {
+            assignee_ids: manubotAssigneeIds,
+            group_ids: manubotGroupIds,
+            asset_ids: manubotAssetIds,
+            asset_category_id: manubot_asset_category_id || null,
+            property_id: manubot_property_id || null,
+            procedure_ids: manubotProcedureIds,
+            expected_resolution_minutes: Number(manubot_expected_resolution_minutes),
+            requires_completion_photo: Boolean(manubot_requires_completion_photo),
+          },
+        }
+      : null
 
     const { data: todo, error } = await supabase
       .from("todos")
@@ -125,18 +179,18 @@ export async function POST(request: NextRequest) {
         assigned_to: assigned_to || null,
         due_date: due_date || null,
         tags: tags || [],
-        // `send_to_manubot` NON è una colonna di `todos` (misurato: PostgREST
-        // risponde "Could not find the 'send_to_manubot' column"), quindi
-        // includerla faceva fallire OGNI creazione di attività con un 500.
-        // L'intenzione di inoltrare resta registrata da `external_source`.
+        attachments: manubotPhotos,
         external_source: send_to_manubot ? "manubot" : null,
+        external_data: initialExternalData,
       })
       .select()
       .single()
 
     if (error) throw error
 
-    // Push verso Manubot con il client autenticato via JWT
+    let manubotSynced: boolean | null = send_to_manubot ? false : null
+    let manubotError: string | null = null
+
     if (send_to_manubot && todo) {
       try {
         const { data: property } = await supabase
@@ -146,36 +200,90 @@ export async function POST(request: NextRequest) {
           .single()
 
         const client = property ? await getManubotClient(property) : null
-        if (client) {
-          const manubotTask = await client.createTask({
+        if (!client) throw new Error("Configurazione ManuBot non disponibile")
+
+        const fallbackAssignee = typeof manubot_assigned_to === "string" && manubot_assigned_to.trim()
+          ? manubot_assigned_to.trim()
+          : null
+        const fallbackGroup = typeof manubot_group_id === "string" && manubot_group_id.trim()
+          ? manubot_group_id.trim()
+          : null
+        const fallbackAsset = typeof manubot_asset_id === "string" && manubot_asset_id.trim()
+          ? manubot_asset_id.trim()
+          : null
+
+        const assigneeIds = manubotAssigneeIds.length > 0
+          ? manubotAssigneeIds
+          : fallbackAssignee ? [fallbackAssignee] : []
+        const groupIds = manubotGroupIds.length > 0
+          ? manubotGroupIds
+          : fallbackGroup ? [fallbackGroup] : []
+        const assetIds = manubotAssetIds.length > 0
+          ? manubotAssetIds
+          : fallbackAsset ? [fallbackAsset] : []
+
+        const manubotTask = await client.createTask(
+          {
             title: todo.title,
             description: todo.description,
             priority: HA_TO_MANUBOT_PRIORITY[todo.priority] || "medium",
-            assigned_to: manubot_assigned_to || null,
-            asset_id: manubot_asset_id || null,
-            scheduled_date: todo.due_date || null,
-          })
-          // Salva external_id tornato da Manubot
-          await supabase
-            .from("todos")
-            .update({
-              external_id: manubotTask.id,
-              external_url: `https://manubot.it/tasks/${manubotTask.id}`,
-              external_data: { manubot_task_id: manubotTask.id, company_id: property?.manubot_company_id },
-            })
-            .eq("id", todo.id)
-          todo.external_id = manubotTask.id
+            assigned_to: assigneeIds[0] || null,
+            operator_group_id: groupIds[0] || null,
+            assignee_ids: assigneeIds,
+            group_ids: groupIds,
+            asset_id: assetIds[0] || null,
+            asset_ids: assetIds,
+            asset_category_id: manubot_asset_category_id || null,
+            property_id: manubot_property_id || null,
+            photos: manubotPhotos,
+            requires_completion_photo: Boolean(manubot_requires_completion_photo),
+            procedure_ids: manubotProcedureIds,
+            expected_resolution_minutes: Number(manubot_expected_resolution_minutes),
+            client_request_id: `ha-todo-${todo.id}`,
+          },
+          `ha-todo-${todo.id}`,
+        )
+
+        const syncedData = {
+          ...(initialExternalData || {}),
+          manubot_task_id: manubotTask.id,
+          company_id: property?.manubot_company_id,
+          manubot_sync_status: "synced",
+          synced_at: new Date().toISOString(),
         }
+        await supabase
+          .from("todos")
+          .update({
+            external_id: manubotTask.id,
+            external_url: `https://manubot.it/tasks/${manubotTask.id}`,
+            external_data: syncedData,
+          })
+          .eq("id", todo.id)
+
+        todo.external_id = manubotTask.id
+        todo.external_url = `https://manubot.it/tasks/${manubotTask.id}`
+        todo.external_data = syncedData
+        manubotSynced = true
       } catch (e: any) {
-        // Push silenzioso — il todo è già salvato localmente
-        console.error("[Manubot] push failed:", e.message)
+        manubotError = "manubot_sync_failed"
+        console.error("[Manubot] push failed:", e?.message)
+        const failedData = {
+          ...(initialExternalData || {}),
+          manubot_sync_status: "failed",
+          failed_at: new Date().toISOString(),
+        }
+        await supabase.from("todos").update({ external_data: failedData }).eq("id", todo.id)
+        todo.external_data = failedData
       }
     }
 
-    return NextResponse.json({ todo }, { status: 201 })
+    return NextResponse.json(
+      { todo, manubot_synced: manubotSynced, manubot_error: manubotError },
+      { status: 201 },
+    )
   } catch (error: any) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("[v0] POST /api/admin/todos failed:", error?.message)
+    return NextResponse.json({ error: "internal_error" }, { status: 500 })
   }
 }
