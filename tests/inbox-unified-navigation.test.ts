@@ -28,10 +28,20 @@ describe("unified Inbox navigation", () => {
     expect(shell).not.toContain("Posta email")
   })
 
-  it("does not expose Gmail branding in the unified Inbox shell", () => {
+  it("uses HotelAccelerator branding instead of Gmail branding in the Inbox", () => {
     const shell = source("components/admin/inbox/inbox-shell.tsx")
 
     expect(shell).not.toMatch(/GmailLogo|gmail-logo|gmail\.svg|gmail\.png/i)
-    expect(shell).toContain('data-inbox-view={emailFoldersOpen ? "email" : "operational"}')
+    expect(shell).toContain('/logo-ha-mark-64.png')
+    expect(shell).toContain('data-inbox-view={emailFoldersOpen ? "email" : sentOpen ? "sent" : "operational"}')
+  })
+
+  it("keeps the common Inbox toolbar compact", () => {
+    const shell = source("components/admin/inbox/inbox-shell.tsx")
+
+    expect(shell).toContain('data-inbox-toolbar')
+    expect(shell).toContain('min-h-11')
+    expect(shell).toContain('height: 2.25rem !important')
+    expect(shell).toContain('height: 3.25rem !important')
   })
 })
