@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { readActivePropertyOverride } from "@/lib/platform-context"
 
 export interface AccessibleGmailChannel {
   id: string
@@ -9,25 +10,61 @@ export interface AccessibleGmailChannel {
 }
 
 /**
- * Lists every active Gmail channel the current user is allowed to operate on.
+ * Lists every active Gmail channel the current user is allowed to operate on
+ * inside the CURRENT tenant context.
  *
  * Resolution order (tenant-aware, multi-tenant safe):
- *  1. super_admin       -> every active Gmail channel across the platform
- *  2. is_tenant_admin   -> every active Gmail channel of the admin's property_id
- *  3. user_channel_permissions + email_channel_assignments (explicit grants)
+ *  1. platform super_admin -> every active Gmail channel of the tenant selected
+ *     with the global tenant switcher (never every mailbox across the platform)
+ *  2. tenant admin/owner   -> every active Gmail channel of admin_users.property_id
+ *  3. restricted member   -> explicitly granted channels, intersected with the
+ *     member's property_id
  *
- * Returns an empty array if no channel is accessible.
+ * Returns an empty array if no tenant is selected or no channel is accessible.
  */
 export async function listAccessibleGmailChannels(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<AccessibleGmailChannel[]> {
-  const { data: adminUser, error: adminError } = await supabase
-    .from("admin_users")
-    .select("role, property_id, is_tenant_admin")
-    .eq("id", userId)
-    .maybeSingle()
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError || !user || user.id !== userId) return []
+
+  const [{ data: adminUser, error: adminError }, { data: collaborator, error: collaboratorError }] = await Promise.all([
+    supabase
+      .from("admin_users")
+      .select("role, property_id, is_tenant_admin")
+      .eq("id", userId)
+      .maybeSingle(),
+    user.email
+      ? supabase
+          .from("platform_collaborators")
+          .select("role, is_active")
+          .eq("email", user.email)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ])
+
   if (adminError) throw new Error(`Gmail channel authorization unavailable: ${adminError.code || "database"}`)
+  if (collaboratorError) {
+    throw new Error(`Gmail platform authorization unavailable: ${collaboratorError.code || "database"}`)
+  }
+
+  const isPlatformSuperAdmin = collaborator?.role === "super_admin" && collaborator.is_active === true
+  const activePropertyId = isPlatformSuperAdmin ? await readActivePropertyOverride() : null
+  const propertyId = isPlatformSuperAdmin ? activePropertyId : adminUser?.property_id ?? null
+
+  // A platform super admin without an explicitly selected tenant must never fall
+  // back to their legacy/admin_users property: that would silently show 4BID (or
+  // another tenant) while the global selector says something else.
+  if (!propertyId) return []
+
+  const isTenantAdmin =
+    adminUser?.is_tenant_admin === true ||
+    ["admin", "owner", "super_admin"].includes(String(adminUser?.role ?? ""))
 
   const mapRows = (rows: any[] | null | undefined): AccessibleGmailChannel[] =>
     (rows ?? []).map((r) => ({
@@ -38,39 +75,27 @@ export async function listAccessibleGmailChannels(
       lastSyncError: r.last_sync_error ?? null,
     }))
 
-  // 1. Super admin: every active Gmail channel
-  if (adminUser?.role === "super_admin") {
+  // Admins can operate every Gmail mailbox, but ONLY inside the resolved tenant.
+  if (isPlatformSuperAdmin || isTenantAdmin) {
     const { data, error } = await supabase
       .from("email_channels")
       .select("id, email_address, name, display_name, oauth_reconnect_required, last_sync_error")
       .eq("provider", "gmail")
       .eq("is_active", true)
+      .eq("property_id", propertyId)
       .order("email_address")
-    if (error) throw new Error(`Gmail channel list unavailable: ${error.code || "database"}`)
+    if (error) throw new Error(`Gmail tenant channel list unavailable: ${error.code || "database"}`)
     return mapRows(data)
   }
 
-  // 2. Tenant admin: every active Gmail channel of their property
-  if (adminUser?.is_tenant_admin && adminUser.property_id) {
-    const { data, error } = await supabase
-      .from("email_channels")
-      .select("id, email_address, name, display_name, oauth_reconnect_required, last_sync_error")
-      .eq("provider", "gmail")
-      .eq("is_active", true)
-      .eq("property_id", adminUser.property_id)
-      .order("email_address")
-    if (error) throw new Error(`Gmail tenant channel list unavailable: ${error.code || "database"}`)
-    const rows = mapRows(data)
-    if (rows.length > 0) return rows
-  }
-
-  // 3. Explicit per-user grants. Primary source is the generic
-  //    `channel_user_assignments` (channel_type='email'); legacy tables are kept
-  //    as fallback so nothing breaks before/while backfilling.
+  // Restricted member: explicit grants only. The generic assignment table is
+  // tenant-scoped at source; legacy grant tables are intersected with
+  // email_channels.property_id below so they cannot leak another tenant.
   const [genericResult, permsResult, assignsResult] = await Promise.all([
     supabase
       .from("channel_user_assignments")
       .select("channel_id")
+      .eq("property_id", propertyId)
       .eq("user_id", userId)
       .eq("channel_type", "email"),
     supabase.from("user_channel_permissions").select("channel_id").eq("user_id", userId),
@@ -80,13 +105,10 @@ export async function listAccessibleGmailChannels(
   if (permissionError) {
     throw new Error(`Gmail channel permissions unavailable: ${permissionError.code || "database"}`)
   }
-  const generic = genericResult.data
-  const perms = permsResult.data
-  const assigns = assignsResult.data
 
   const grantedIds = Array.from(
     new Set(
-      [...(generic ?? []), ...(perms ?? []), ...(assigns ?? [])]
+      [...(genericResult.data ?? []), ...(permsResult.data ?? []), ...(assignsResult.data ?? [])]
         .map((r: any) => r.channel_id)
         .filter(Boolean),
     ),
@@ -100,6 +122,7 @@ export async function listAccessibleGmailChannels(
     .in("id", grantedIds)
     .eq("provider", "gmail")
     .eq("is_active", true)
+    .eq("property_id", propertyId)
     .order("email_address")
   if (error) throw new Error(`Gmail assigned channel list unavailable: ${error.code || "database"}`)
 
@@ -107,12 +130,12 @@ export async function listAccessibleGmailChannels(
 }
 
 /**
- * Resolves the Gmail channel ID to operate on for the current user.
+ * Resolves the Gmail channel ID to operate on for the current user and tenant.
  *
- * If `requestedChannelId` is provided AND the user is allowed to access it,
- * that channel is used. Otherwise it falls back to the first accessible channel.
- * This keeps mailbox selection user-driven while remaining tenant-safe: a user
- * can never operate on a mailbox they don't have access to.
+ * If `requestedChannelId` is provided AND the user is allowed to access it in
+ * the active tenant, that channel is used. Otherwise it falls back to the first
+ * accessible channel of that same tenant. A requested ID from another tenant is
+ * therefore never opened, even by a platform super admin working in tenant mode.
  */
 export async function resolveGmailChannelId(
   supabase: SupabaseClient,
@@ -130,7 +153,7 @@ export async function resolveGmailChannelId(
     if (match) {
       return { channelId: match.id, reason: "requested" }
     }
-    // requested but not accessible -> fall through to default (never leak access)
+    // Requested but not accessible in the active tenant -> safe tenant-local fallback.
   }
 
   return { channelId: channels[0].id, reason: "default_first" }
