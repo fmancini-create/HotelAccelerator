@@ -12,11 +12,36 @@ function fromBase64Url(str: string): string {
   return Buffer.from(padded, "base64").toString()
 }
 
+function isCalendarOAuthState(state: string | null): state is string {
+  // Email OAuth state is a single base64url payload. Calendar OAuth state is
+  // HMAC-signed as <payload>.<signature>, so the dot safely distinguishes it.
+  return Boolean(state?.includes("."))
+}
+
+function forwardCalendarOAuth(
+  request: NextRequest,
+  state: string,
+  code: string | null,
+  error: string | null,
+) {
+  const target = new URL("/api/admin/crm/calendar/oauth/google/callback", request.url)
+  target.searchParams.set("state", state)
+  if (code) target.searchParams.set("code", code)
+  if (error) target.searchParams.set("error", error)
+  return NextResponse.redirect(target)
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const code = searchParams.get("code")
   const state = searchParams.get("state")
   const error = searchParams.get("error")
+
+  // Google Cloud already authorizes this callback for Gmail. Calendar OAuth
+  // intentionally reuses it, then gets forwarded to its dedicated handler.
+  if (isCalendarOAuthState(state)) {
+    return forwardCalendarOAuth(request, state, code, error)
+  }
 
   if (error) {
     return NextResponse.redirect(new URL(`/admin/channels/email?error=${encodeURIComponent(error)}`, request.url))
