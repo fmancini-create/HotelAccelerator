@@ -16,11 +16,22 @@ import { Textarea } from "@/components/ui/textarea"
 type Operator = { id: string; full_name: string | null }
 type OperatorGroup = { id: string; name: string; member_count?: number | null }
 type TaskData = {
-  active?: boolean
   operators?: Operator[]
   operatorGroups?: OperatorGroup[]
 }
-type AddonState = "loading" | "active" | "inactive" | "forbidden" | "unavailable"
+type AddonContext = {
+  status?: "active" | "inactive" | "configuration_required"
+  active?: boolean
+  reason?: string | null
+  task_data?: TaskData | null
+}
+type AddonState =
+  | "loading"
+  | "active"
+  | "inactive"
+  | "configuration_required"
+  | "forbidden"
+  | "unavailable"
 type Priority = "low" | "normal" | "high" | "urgent"
 
 type ConversationSnapshot = {
@@ -104,13 +115,9 @@ export function InboxManubotTaskEnhancer() {
   const loadTaskData = async () => {
     setAddonState("loading")
     try {
-      const res = await fetch("/api/admin/manubot/task-data", { cache: "no-store" })
-      const data = await res.json().catch(() => ({}))
-      if (res.status === 404 && data?.error === "module_inactive") {
-        setTaskData(null)
-        setAddonState("inactive")
-        return
-      }
+      const res = await fetch("/api/admin/manubot/addon-context", { cache: "no-store" })
+      const data = (await res.json().catch(() => ({}))) as AddonContext & { error?: string }
+
       if (res.status === 403 || res.status === 401) {
         setTaskData(null)
         setAddonState("forbidden")
@@ -121,8 +128,25 @@ export function InboxManubotTaskEnhancer() {
         setAddonState("unavailable")
         return
       }
-      setTaskData(data as TaskData)
-      setAddonState(data?.active === true ? "active" : "inactive")
+
+      if (data.status === "inactive") {
+        setTaskData(null)
+        setAddonState("inactive")
+        return
+      }
+      if (data.status === "configuration_required") {
+        setTaskData(null)
+        setAddonState("configuration_required")
+        return
+      }
+      if (data.status !== "active" || data.active !== true || !data.task_data) {
+        setTaskData(null)
+        setAddonState("unavailable")
+        return
+      }
+
+      setTaskData(data.task_data)
+      setAddonState("active")
     } catch {
       setTaskData(null)
       setAddonState("unavailable")
@@ -291,6 +315,10 @@ export function InboxManubotTaskEnhancer() {
           <Button asChild size="sm" variant="outline" className="h-7 text-xs">
             <Link href="/admin/modules?focus=manubot">Attiva ManuBot</Link>
           </Button>
+        </div>
+      ) : addonState === "configuration_required" ? (
+        <div className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
+          ManuBot risulta già previsto per questa struttura, ma il collegamento tecnico deve essere completato prima di creare ticket dalla Inbox.
         </div>
       ) : addonState === "unavailable" ? (
         <p className="text-xs text-muted-foreground">ManuBot momentaneamente non disponibile.</p>
