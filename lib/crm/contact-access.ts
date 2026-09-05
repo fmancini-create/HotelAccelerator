@@ -53,6 +53,14 @@ export function applyContactAccess<T>(query: T, access: ContactAccess): T {
   return (query as unknown as { or: (filter: string) => T }).or(clauses.join(","))
 }
 
+export function canReadContactRecord(contact: Record<string, unknown>, access: ContactAccess): boolean {
+  if (access.unrestricted) return true
+  const scope = String(contact.visibility_scope ?? "tenant")
+  if (scope === "tenant") return true
+  if (access.viewerUserId && String(contact.owner_user_id ?? "") === access.viewerUserId) return true
+  return scope === "groups" && access.groupContactIds.includes(String(contact.id ?? ""))
+}
+
 export function normalizeRequestedContactVisibility(
   source: unknown,
   requested: unknown,
