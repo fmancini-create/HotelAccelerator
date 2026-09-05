@@ -43,6 +43,17 @@ type LinkedProduct = {
   externalTenantId: string
 }
 
+type EntitlementRow = {
+  product_key: string
+  status: string
+  expires_at: string | null
+}
+
+type TenantLinkRow = {
+  product_key: string
+  external_tenant_id: string
+}
+
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase()
 }
@@ -76,9 +87,11 @@ async function customerContextForProperty(propertyId: string) {
   if (linksError) throw linksError
   if (entitlementsError) throw entitlementsError
 
+  const entitlementRows = (entitlements || []) as EntitlementRow[]
+  const linkRows = (links || []) as TenantLinkRow[]
   const now = Date.now()
   const activeProducts = new Set(
-    (entitlements || [])
+    entitlementRows
       .filter((row) =>
         ACTIVE_ENTITLEMENTS.has(row.status) &&
         (!row.expires_at || new Date(row.expires_at).getTime() >= now),
@@ -86,7 +99,7 @@ async function customerContextForProperty(propertyId: string) {
       .map((row) => row.product_key),
   )
 
-  const linkedProducts: LinkedProduct[] = (links || [])
+  const linkedProducts: LinkedProduct[] = linkRows
     .filter((row) => (SUITE_PRODUCTS as readonly string[]).includes(row.product_key) && activeProducts.has(row.product_key))
     .map((row) => ({
       product: row.product_key as SuiteSsoProduct,
