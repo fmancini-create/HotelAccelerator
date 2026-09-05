@@ -321,10 +321,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               .select("id")
               .eq("property_id", propertyId)
               .in("id", selectedUserIds)
-            const validIds = (validUsers ?? []).map((u: any) => String(u.id)).filter((id: string) => id !== userId)
+            const validIds: string[] = (validUsers ?? [])
+              .map((u: any) => String(u.id))
+              .filter((id: string) => id !== userId)
             if (validIds.length > 0) {
               const { error } = await supabase.from("user_call_access_users").insert(
-                validIds.map((target_user_id) => ({ property_id: propertyId, viewer_user_id: userId, target_user_id })),
+                validIds.map((target_user_id: string) => ({ property_id: propertyId, viewer_user_id: userId, target_user_id })),
               )
               if (error) throw error
             }
@@ -336,10 +338,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
               .select("id")
               .eq("property_id", propertyId)
               .in("id", selectedGroupIds)
-            const validIds = (validGroups ?? []).map((g: any) => String(g.id))
+            const validIds: string[] = (validGroups ?? []).map((g: any) => String(g.id))
             if (validIds.length > 0) {
               const { error } = await supabase.from("user_call_access_groups").insert(
-                validIds.map((target_group_id) => ({ property_id: propertyId, viewer_user_id: userId, target_group_id })),
+                validIds.map((target_group_id: string) => ({ property_id: propertyId, viewer_user_id: userId, target_group_id })),
               )
               if (error) throw error
             }
