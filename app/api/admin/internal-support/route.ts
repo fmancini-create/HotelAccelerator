@@ -30,7 +30,7 @@ async function resolveHotelAcceleratorInternalBaseIds() {
     .from("internal_knowledge_sync_sources")
     .select("knowledge_base_id")
     .eq("product_key", "hotel-accelerator")
-    .eq("status", "ready")
+    .eq("last_sync_status", "ready")
 
   if (error) {
     console.warn("[internal-support] internal knowledge lookup unavailable", { code: error.code })
