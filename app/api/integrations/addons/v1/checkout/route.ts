@@ -36,13 +36,13 @@ function returnUrls(productKey: "hotelaccelerator" | "manubot") {
   if (productKey === "manubot") {
     const base = process.env.MANUBOT_APP_URL?.trim() || "https://www.manubot.it"
     return {
-      success: `${base}/dashboard/settings/reviews?checkout=success`,
+      success: `${base}/dashboard/settings/reviews?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel: `${base}/dashboard/settings/reviews?checkout=cancelled`,
     }
   }
   const base = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://www.hotelaccelerator.com"
   return {
-    success: `${base}/admin/settings/reviews?checkout=success`,
+    success: `${base}/admin/settings/reviews?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel: `${base}/admin/settings/reviews?checkout=cancelled`,
   }
 }
