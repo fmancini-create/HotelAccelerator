@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
   federatedSupportProjectionSchema,
+  preserveInboxUnreadCount,
   toInboxConversationStatus,
   toInboxSenderType,
 } from "@/lib/support-federation/contract"
@@ -53,5 +54,12 @@ describe("federatedSupportProjectionSchema", () => {
     expect(toInboxSenderType("system")).toBe("system")
     expect(toInboxConversationStatus("open")).toBe("open")
     expect(toInboxConversationStatus("closed")).toBe("resolved")
+  })
+
+  it("preserves unread count because the message trigger owns increments", () => {
+    expect(preserveInboxUnreadCount(4)).toBe(4)
+    expect(preserveInboxUnreadCount("2")).toBe(2)
+    expect(preserveInboxUnreadCount(null)).toBe(0)
+    expect(preserveInboxUnreadCount(-1)).toBe(0)
   })
 })

@@ -16,6 +16,8 @@ I timestamp dei messaggi seguono RFC3339 e il Core accetta sia la forma UTC con 
 
 Gli ID di conversazioni e messaggi materializzati sono deterministici: retry, replay e recovery sync non devono creare duplicati.
 
+I valori del contratto esterno vengono adattati al modello Inbox reale: `customer | agent | system` restano gli stessi `sender_type`; lo stato esterno `closed` viene materializzato come `resolved`, perche' `conversations.status` non espone `closed`.
+
 ## Tracciamento autore e pagina
 
 Per ogni segnalazione di errore o miglioria devono restare associati:
@@ -52,6 +54,7 @@ Per il download, sia i backend locali sia HotelAccelerator verificano prima auto
 - La piattaforma satellite resta source of truth del thread e degli allegati locali.
 - HotelAccelerator possiede la proiezione Inbox e la copia privata degli allegati centrali.
 - Il producer satellite possiede il retry durevole delle proprie proiezioni immediate quando il Core non accetta o non raggiunge la richiesta.
+- Il trigger database `trigger_update_conversation`, tramite `update_conversation_on_message()`, e l'unico proprietario dell'incremento di `conversations.unread_count` quando viene inserito un nuovo messaggio `customer`. La federazione deve preservare il contatore esistente (0 per una nuova conversazione) e non incrementarlo in anticipo.
 - Una risposta inviata dalla Inbox 4BID viene prima salvata nel backend satellite attraverso `/api/integrations/support/v1/reply`; solo dopo viene materializzata nella Inbox centrale.
 - Nessun database satellite viene letto o scritto direttamente da HotelAccelerator.
 
@@ -105,6 +108,8 @@ Non sono richiesti nuovi segreti per gli allegati: signed upload e signed downlo
 
 Un payload respinto dal Core deve produrre un log strutturato con prodotto, status HTTP e soli path/codici degli errori di validazione, senza contenuti del messaggio, email, URL firmati o altri dati sensibili. Il producer registra l'esito della proiezione senza loggare segreti.
 
+Gli errori database nella materializzazione vengono identificati per fase e codice PostgreSQL (per esempio `message_upsert_failed:23514`) senza includere il contenuto della riga o altri dati sensibili.
+
 ## Rollback
 
 Le migrazioni sono additive. Il rollback applicativo consiste nel disabilitare/rimuovere upload, proiezione, retry e callback mantenendo intatti i thread locali e le colonne aggiunte. I bucket privati possono rimanere non pubblici senza compromettere le versioni precedenti.
@@ -113,4 +118,4 @@ Non eliminare automaticamente oggetti gia allegati durante un rollback: la cance
 
 ## Stato ufficiale
 
-**Codice**: l'estensione aggiunge autore, pagina reale e allegati privati alle segnalazioni di errore/miglioria di HotelAccelerator, Santaddeo e HotelProfitAI. Il bug emerso il 5 settembre 2026 su un feedback HotelProfitAI reale ha evidenziato una divergenza sul formato RFC3339 del timestamp e l'assenza di retry durevole HPA; entrambi vengono trattati senza promuovere lo stato. La promozione a `Tenant reale` richiede ancora un collaudo end-to-end autenticato con almeno una segnalazione reale e un allegato verificato sia nel backend locale sia nella Inbox 4BID.
+**Codice**: l'estensione aggiunge autore, pagina reale e allegati privati alle segnalazioni di errore/miglioria di HotelAccelerator, Santaddeo e HotelProfitAI. Il collaudo reale del 5 settembre 2026 su un feedback HotelProfitAI ha fatto emergere e correggere tre divergenze del contratto/materializzazione: timestamp RFC3339 con offset, mapping `sender_type`/stato verso i valori reali della Inbox e doppio incremento di `unread_count` rispetto al trigger DB. Il retry durevole HotelProfitAI ha recuperato la segnalazione senza duplicare conversazione o messaggio. La promozione a `Tenant reale` della feature completa richiede ancora un collaudo end-to-end autenticato con almeno una segnalazione reale e un allegato verificato sia nel backend locale sia nella Inbox 4BID.
