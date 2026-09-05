@@ -4,6 +4,15 @@ import type { NextRequest } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getAuthenticatedUserEmail, getDevBypass } from "@/lib/auth-property"
 
+export class ScoutBillingAccessDenied extends Error {
+  status = 403
+
+  constructor() {
+    super("Solo un amministratore del tenant può modificare le impostazioni economiche Scout.")
+    this.name = "ScoutBillingAccessDenied"
+  }
+}
+
 /** Financial settings must be authorized against the active tenant, not merely
  * against another admin_users row that happens to share the same email. */
 export async function requireScoutBillingAdmin(
@@ -35,11 +44,6 @@ export async function requireScoutBillingAdmin(
     member?.is_tenant_admin === true ||
     ["admin", "owner", "super_admin"].includes(String(member?.role ?? ""))
 
-  if (!allowed) {
-    const error = new Error("Solo un amministratore del tenant può modificare le impostazioni economiche Scout.")
-    Object.assign(error, { status: 403 })
-    throw error
-  }
-
+  if (!allowed) throw new ScoutBillingAccessDenied()
   return email
 }
