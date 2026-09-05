@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     const rows = memberships.map((membership: any) => {
       const id = String(membership.user_id)
       const identity = identityById.get(id) as any
-      const ownEvents = events.filter((event: any) => String(event.user_id || "") === id)
+      const ownEvents = events.filter((event: any) => String(event.user_id || "") === id && event.action !== "access_change")
       const count = (action: string) => ownEvents.filter((event: any) => event.action === action && event.success !== false).length
       const scout = accessById.get(id) as any
       const last = ownEvents[0] as any
@@ -83,9 +83,9 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Platform super-admins have no admin_users row. Keep their usage visible
-    // instead of silently losing it from the tenant report.
-    const systemEvents = events.filter((event: any) => !event.user_id)
+    // Platform super-admins have no admin_users row. Keep their real Scout usage
+    // visible instead of silently losing it from the tenant report.
+    const systemEvents = events.filter((event: any) => !event.user_id && event.action !== "access_change")
     const platformRows = Array.from(new Set(systemEvents.map((event: any) => String(event.actor_label || "Amministratore piattaforma"))))
       .map((label) => {
         const ownEvents = systemEvents.filter((event: any) => String(event.actor_label || "Amministratore piattaforma") === label)
