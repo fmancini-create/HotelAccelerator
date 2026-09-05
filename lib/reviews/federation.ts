@@ -39,27 +39,25 @@ function requestScopedVercelOidcToken(): string | null {
 }
 
 function santaddeoAuthHeaders(origin: ReviewsOrigin): Record<string, string> {
+  const headers: Record<string, string> = { "X-4BID-Origin": origin }
   const oidc = requestScopedVercelOidcToken()
-  if (oidc) {
-    return {
-      Authorization: `Bearer ${oidc}`,
-      "X-4BID-Origin": origin,
-    }
-  }
+  if (oidc) headers.Authorization = `Bearer ${oidc}`
 
+  // OIDC e' la credenziale primaria in produzione. Inviamo anche la registry
+  // key esistente, quando configurata, cosi' Santaddeo puo' usarla come fallback
+  // in preview/recovery dopo aver rifiutato intenzionalmente un token non-prod.
   const key = process.env.CUSTOMER_CODE_REGISTRY_KEY_SNT?.trim()
-  if (key) {
-    return {
-      "X-4BID-Registry-Key": key,
-      "X-4BID-Origin": origin,
-    }
+  if (key) headers["X-4BID-Registry-Key"] = key
+
+  if (!oidc && !key) {
+    throw new ReviewsFederationError(
+      "reviews_federation_auth_missing",
+      503,
+      "Autenticazione interna Santaddeo non disponibile",
+    )
   }
 
-  throw new ReviewsFederationError(
-    "reviews_federation_auth_missing",
-    503,
-    "Autenticazione interna Santaddeo non disponibile",
-  )
+  return headers
 }
 
 function santaddeoBaseUrl() {
