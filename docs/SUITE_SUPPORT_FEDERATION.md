@@ -49,6 +49,38 @@ Quando un satellite proietta il feedback in HotelAccelerator, genera URL sorgent
 
 Per il download, sia i backend locali sia HotelAccelerator verificano prima autorizzazione e appartenenza del record, poi emettono un URL firmato di breve durata. La Inbox 4BID mostra i link agli allegati direttamente nel messaggio insieme a `Segnalato da` e `Pagina`.
 
+## Risposte dalla Inbox 4BID
+
+La risposta operatore deve attraversare il backend del prodotto sorgente prima di essere registrata come messaggio consegnato nella Inbox centrale. In questo modo HotelAccelerator non puo mostrare `delivered` quando il satellite non ha ancora accettato la risposta.
+
+Per HotelProfitAI il callback `POST /api/integrations/support/v1/reply` usa Vercel OIDC come autenticazione primaria: il satellite accetta esclusivamente workload token del team 4BID, del progetto Vercel HotelAccelerator e dell'ambiente `production`. `CUSTOMER_CODE_REGISTRY_KEY_HPA` resta un fallback recovery e non e' piu un requisito per il percorso production ordinario.
+
+Ogni azione operatore HotelAccelerator genera un `reply_id` UUID. HotelProfitAI usa lo stesso valore come idempotency key: un replay del callback non crea una seconda notifica o un secondo messaggio sorgente.
+
+Per un utente autenticato del satellite, la risposta deve essere disponibile su due canali:
+
+1. **in piattaforma**, attraverso una notifica privata indirizzata al `user_id` originale della segnalazione/conversazione;
+2. **via email**, all'indirizzo del profilo corrente (con fallback allo snapshot email del feedback quando necessario).
+
+La consegna email ha stato persistente e viene ritentata dal cron supporto gia esistente ogni cinque minuti. Un errore SMTP non cancella la risposta in piattaforma e non introduce un secondo cron concorrente.
+
+Le notifiche private non usano `is_public`: la RLS del satellite consente la lettura solo al destinatario autenticato. I campi tecnici della consegna email non vengono esposti all'API notifiche del browser.
+
+## Contatti esterni e qualificazione IA
+
+Quando un interlocutore esterno chiede il passaggio a una persona o lascia una richiesta che deve diventare operativa, l'IA deve arrivare almeno a questi quattro dati prima di considerare completo il passaggio:
+
+- nome;
+- cognome;
+- email;
+- telefono.
+
+La raccolta e progressiva e deterministica: il workflow conserva i campi gia ricevuti e chiede soltanto quelli mancanti. I dati gia noti dal canale o dal CRM (per esempio email di una conversazione email o numero WhatsApp) vengono riutilizzati e non richiesti di nuovo.
+
+I campi raccolti restano in stato durevole nel workflow `conversation_staff_handoffs` e vengono copiati nella richiesta operativa verso lo staff/ManuBot. La conversazione conserva inoltre i metadata del passaggio, cosi un cambio pagina o un nuovo turno dell'LLM non azzera la qualificazione.
+
+Questa raccolta e finalizzata al contatto operativo; non implica consenso marketing, che resta separato.
+
 ## Ownership
 
 - La piattaforma satellite resta source of truth del thread e degli allegati locali.
@@ -56,6 +88,7 @@ Per il download, sia i backend locali sia HotelAccelerator verificano prima auto
 - Il producer satellite possiede il retry durevole delle proprie proiezioni immediate quando il Core non accetta o non raggiunge la richiesta.
 - Il trigger database `trigger_update_conversation`, tramite `update_conversation_on_message()`, e l'unico proprietario dell'incremento di `conversations.unread_count` quando viene inserito un nuovo messaggio `customer`. La federazione deve preservare il contatore esistente (0 per una nuova conversazione) e non incrementarlo in anticipo.
 - Una risposta inviata dalla Inbox 4BID viene prima salvata nel backend satellite attraverso `/api/integrations/support/v1/reply`; solo dopo viene materializzata nella Inbox centrale.
+- Per HotelProfitAI, il cron `retry-support-feedback` resta l'unico proprietario sia del retry delle proiezioni feedback sia del retry email delle risposte supporto.
 - Nessun database satellite viene letto o scritto direttamente da HotelAccelerator.
 
 ## Perimetro
@@ -93,12 +126,13 @@ Gli allegati centrali usano path deterministici nella fase di copia, quindi un r
 
 ## Configurazione
 
-Riutilizza le integrazioni server-to-server esistenti:
+Le credenziali statiche rimangono disponibili come recovery:
 
-- `CUSTOMER_CODE_REGISTRY_KEY_SNT`
-- `CUSTOMER_CODE_REGISTRY_KEY_HPA`
-- `CRON_SECRET`
-- URL prodotto gia definiti nel catalogo SSO della suite.
+- `CUSTOMER_CODE_REGISTRY_KEY_SNT`;
+- `CUSTOMER_CODE_REGISTRY_KEY_HPA`;
+- `CRON_SECRET`.
+
+Il percorso production HotelAccelerator -> HotelProfitAI usa invece il `VERCEL_OIDC_TOKEN` fornito dal runtime Vercel e verificato dal satellite contro progetto/team/ambiente attesi.
 
 I satelliti possono opzionalmente sovrascrivere l'endpoint Core con `SUPPORT_FEDERATION_URL`.
 
@@ -118,4 +152,4 @@ Non eliminare automaticamente oggetti gia allegati durante un rollback: la cance
 
 ## Stato ufficiale
 
-**Codice**: l'estensione aggiunge autore, pagina reale e allegati privati alle segnalazioni di errore/miglioria di HotelAccelerator, Santaddeo e HotelProfitAI. Il collaudo reale del 5 settembre 2026 su un feedback HotelProfitAI ha fatto emergere e correggere tre divergenze del contratto/materializzazione: timestamp RFC3339 con offset, mapping `sender_type`/stato verso i valori reali della Inbox e doppio incremento di `unread_count` rispetto al trigger DB. Il retry durevole HotelProfitAI ha recuperato la segnalazione senza duplicare conversazione o messaggio. La promozione a `Tenant reale` della feature completa richiede ancora un collaudo end-to-end autenticato con almeno una segnalazione reale e un allegato verificato sia nel backend locale sia nella Inbox 4BID.
+**Codice**: la federazione base ha gia superato il collaudo testuale reale HotelProfitAI -> Inbox 4BID. L'estensione di risposta bidirezionale, notifica privata/email e qualificazione completa dei contatti esterni e implementata a livello codice ma non va promossa oltre finche' una risposta reale da produzione non risulta contemporaneamente visibile in HotelProfitAI e consegnata per email al destinatario. La feature completa con allegati resta subordinata anche al collaudo end-to-end di un allegato reale.
