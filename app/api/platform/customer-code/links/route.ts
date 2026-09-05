@@ -3,6 +3,8 @@ import { z } from "zod"
 import { getCallerIdentity, adminUserIdPerDatabase } from "@/lib/auth/admin-access"
 import { getSuiteProduct } from "@/lib/customer-codes/product"
 import { linkExternalTenant } from "@/lib/customer-codes/registry"
+import { createServiceClient } from "@/lib/supabase/server"
+import { syncSuiteProductModule } from "@/lib/suite-module-sync"
 
 export const dynamic = "force-dynamic"
 
@@ -38,6 +40,12 @@ export async function POST(request: NextRequest) {
     })
     if (!result) return NextResponse.json({ error: "account_not_found" }, { status: 404 })
     if (result.conflict) return NextResponse.json({ error: "external_tenant_already_linked" }, { status: 409 })
+
+    await syncSuiteProductModule({
+      supabase: createServiceClient(),
+      customerAccountId: result.link.customerAccountId,
+      productKey: product.key,
+    })
 
     return NextResponse.json(
       {
