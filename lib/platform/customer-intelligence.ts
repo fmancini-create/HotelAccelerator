@@ -72,9 +72,10 @@ export type CrossSellOpportunity = {
 }
 
 const HOTEL_TYPES = new Set(["hotel_single", "hotel_group", "chain", "resort", "agriturismo", "bnb", "residence", "camping", "vacation_rental"])
+const ACTIVE_PRODUCT_STATUSES = new Set(["active", "trial", "onboarding"])
 
 export function hasActiveProduct(account: PlatformCustomerAccount, product: PlatformProductKey) {
-  return account.products.some((item) => item.product_key === product && ["active", "trial", "onboarding"].includes(item.status))
+  return account.products.some((item) => item.product_key === product && ACTIVE_PRODUCT_STATUSES.has(item.status))
 }
 
 export function activeProductCount(account: PlatformCustomerAccount) {
@@ -83,6 +84,10 @@ export function activeProductCount(account: PlatformCustomerAccount) {
 
 export function accountDisplayName(account: PlatformCustomerAccount) {
   return account.profile.display_name?.trim() || account.profile.legal_name?.trim() || `Cliente 4BID #${account.account_number}`
+}
+
+function productState(account: PlatformCustomerAccount, product: PlatformProductKey) {
+  return account.products.find((item) => item.product_key === product)
 }
 
 export function calculateCrossSell(account: PlatformCustomerAccount): CrossSellOpportunity[] {
@@ -163,10 +168,33 @@ export function buildSystemSegments(accounts: PlatformCustomerAccount[], prospec
   const complete = customers.filter((a) => activeProductCount(a) === PLATFORM_PRODUCT_KEYS.length)
   const newCustomers = customers.filter((a) => now - new Date(a.created_at).getTime() <= 30 * 86400000)
   const risk = customers.filter((a) => ["risk", "critical", "at_risk"].includes(a.profile.health_status) || a.profile.lifecycle_stage === "at_risk")
+  const highChurnRisk = customers.filter((a) => (a.profile.churn_risk_score ?? 0) >= 60)
   const renewal30 = customers.filter((a) => {
     const dates = [a.profile.next_renewal_at, ...a.products.map((p) => p.renewal_at || p.expires_at)].filter(Boolean) as string[]
     return dates.some((value) => { const d = new Date(value).getTime(); return d >= now && d <= now + 30 * 86400000 })
   })
+  const paymentRisk = customers.filter((a) => a.products.some((p) => p.status === "past_due"))
+
+  const santaddeoLowUsage = customers.filter((a) => {
+    const product = productState(a, "santaddeo")
+    return Boolean(product && ACTIVE_PRODUCT_STATUSES.has(product.status) && product.usage_score !== null && product.usage_score < 30)
+  })
+  const hotelProfitOnboardingBlocked = customers.filter((a) => {
+    const product = productState(a, "hotelprofitai")
+    if (!product || !ACTIVE_PRODUCT_STATUSES.has(product.status)) return false
+    const onboarding = product.onboarding_status?.toLowerCase() ?? ""
+    return product.status === "onboarding" || ["integration_missing", "setup_incomplete", "blocked", "error", "pending"].includes(onboarding)
+  })
+  const manuBotIdle = customers.filter((a) => {
+    const product = productState(a, "manubot")
+    if (!product || !ACTIVE_PRODUCT_STATUSES.has(product.status)) return false
+    return product.onboarding_status === "configured_idle" || (product.usage_score !== null && product.usage_score < 20)
+  })
+  const staleProducts = customers.filter((a) => a.products.some((product) => {
+    if (!ACTIVE_PRODUCT_STATUSES.has(product.status) || !product.last_activity_at) return false
+    const lastActivity = new Date(product.last_activity_at).getTime()
+    return Number.isFinite(lastActivity) && now - lastActivity >= 14 * 86400000
+  }))
 
   const segment = (id: string, category: PlatformSegment["category"], label: string, description: string, rows: PlatformCustomerAccount[]): PlatformSegment => ({
     id, category, label, description, count: rows.length, accountIds: rows.map((row) => row.id),
@@ -190,6 +218,12 @@ export function buildSystemSegments(accounts: PlatformCustomerAccount[], prospec
     segment("xsell-hpa", "Cross-sell", "Alta probabilità HotelProfitAI", "Potenziale controllo di gestione", cross("hotelprofitai", 50)),
     segment("xsell-mb", "Cross-sell", "Alta probabilità ManuBot", "Strutture con complessità manutentiva potenziale", cross("manubot", 55)),
     segment("health-risk", "Customer Health", "Clienti a rischio", "Health risk/critical o lifecycle at-risk", risk),
+    segment("health-churn-high", "Customer Health", "Rischio churn elevato", "Churn risk automatico ≥ 60", highChurnRisk),
+    segment("health-snt-low-usage", "Customer Health", "Santaddeo poco utilizzato", "RMS attivo con usage score sotto 30", santaddeoLowUsage),
+    segment("health-hpa-onboarding", "Customer Health", "HotelProfitAI da sbloccare", "Onboarding o integrazione HotelProfitAI incompleta", hotelProfitOnboardingBlocked),
+    segment("health-mb-idle", "Customer Health", "ManuBot inattivo", "ManuBot configurato ma senza attività significativa", manuBotIdle),
+    segment("health-stale", "Customer Health", "Prodotto inattivo da 14+ giorni", "Almeno un prodotto attivo senza attività recente", staleProducts),
     segment("renewal-30", "Rinnovi", "Rinnovi entro 30 giorni", "Scadenze prodotto/account nei prossimi 30 giorni", renewal30),
+    segment("renewal-payment-risk", "Rinnovi", "Pagamenti da recuperare", "Almeno un prodotto in stato past due", paymentRisk),
   ]
 }
