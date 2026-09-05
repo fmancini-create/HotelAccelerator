@@ -1,5 +1,6 @@
 import "server-only"
 
+import type Stripe from "stripe"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getStripe } from "@/lib/stripe"
 import { addScoutCredits, getScoutTenantBillingState } from "@/lib/scout/billing"
@@ -13,6 +14,7 @@ type RechargeAttempt = {
   recharge_credits: number
   amount_cents: number
   credit_price_cents: number
+  stripe_invoice_id: string | null
   stripe_payment_intent_id: string | null
   status: "claimed" | "processing"
 }
@@ -36,9 +38,67 @@ function isTerminalPaymentState(status: string) {
   return ["requires_action", "requires_payment_method", "canceled"].includes(status)
 }
 
+function paymentIntentIdFromInvoice(invoice: Stripe.Invoice): string | null {
+  const current = invoice as Stripe.Invoice & {
+    payments?: {
+      data?: Array<{
+        payment?: {
+          payment_intent?: string | { id?: string } | null
+        } | null
+      }>
+    }
+    payment_intent?: string | { id?: string } | null
+  }
+
+  const paymentRef = current.payments?.data?.find((item) => item.payment?.payment_intent)?.payment?.payment_intent
+  if (typeof paymentRef === "string") return paymentRef
+  if (paymentRef?.id) return paymentRef.id
+
+  // Compatibility with older Stripe API shapes. The project currently uses a
+  // recent SDK, but retaining this fallback makes reconciliation safe across an
+  // API-version transition.
+  const legacyRef = current.payment_intent
+  if (typeof legacyRef === "string") return legacyRef
+  return legacyRef?.id || null
+}
+
+function stripeErrorCode(error: unknown) {
+  if (typeof error !== "object" || error === null || !("code" in error)) return ""
+  return String((error as { code?: unknown }).code ?? "")
+}
+
+function isTerminalChargeError(error: unknown) {
+  return [
+    "authentication_required",
+    "card_declined",
+    "expired_card",
+    "incorrect_cvc",
+    "incorrect_number",
+    "insufficient_funds",
+    "payment_intent_authentication_failure",
+  ].includes(stripeErrorCode(error))
+}
+
+async function hasCurrentRechargeConsent(db: SupabaseClient, propertyId: string) {
+  const { data, error } = await db
+    .from("scout_auto_recharge_settings")
+    .select("enabled,status")
+    .eq("property_id", propertyId)
+    .maybeSingle()
+  if (error) throw error
+  return data?.enabled === true && data?.status === "ready"
+}
+
 async function finalizeSuccessfulAttempt(
   db: SupabaseClient,
-  params: { propertyId: string; attemptId: string; paymentIntentId: string; credits: number; amountCents: number },
+  params: {
+    propertyId: string
+    attemptId: string
+    stripeInvoiceId: string
+    paymentIntentId: string
+    credits: number
+    amountCents: number
+  },
 ) {
   await addScoutCredits(db, {
     propertyId: params.propertyId,
@@ -47,26 +107,35 @@ async function finalizeSuccessfulAttempt(
     idempotencyKey: `auto-recharge:${params.attemptId}:credits`,
     metadata: {
       autoRechargeAttemptId: params.attemptId,
+      stripeInvoiceId: params.stripeInvoiceId,
       stripePaymentIntentId: params.paymentIntentId,
       amountCents: params.amountCents,
+      fiscalHub: "hotelprofitai",
     },
   })
 
   const now = new Date().toISOString()
   const { error: attemptError } = await db
     .from("scout_auto_recharge_attempts")
-    .update({ status: "succeeded", completed_at: now, updated_at: now })
+    .update({
+      status: "succeeded",
+      stripe_invoice_id: params.stripeInvoiceId,
+      stripe_payment_intent_id: params.paymentIntentId,
+      completed_at: now,
+      updated_at: now,
+    })
     .eq("id", params.attemptId)
     .eq("property_id", params.propertyId)
   if (attemptError) throw attemptError
 
   // Do not force status back to ready here. The tenant may have disabled
-  // auto-recharge while a PaymentIntent was already in flight. Reconciliation
+  // auto-recharge while a Stripe payment was already in flight. Reconciliation
   // must finish accounting for the existing payment without re-enabling consent.
   const { error: settingsError } = await db
     .from("scout_auto_recharge_settings")
     .update({
       last_success_at: now,
+      last_stripe_invoice_id: params.stripeInvoiceId,
       last_payment_intent_id: params.paymentIntentId,
       last_error_code: null,
       last_error_at: null,
@@ -103,11 +172,16 @@ async function markChargeFailure(
   const code = params.error instanceof Error
     ? params.error.message.slice(0, 200)
     : "SCOUT_AUTO_RECHARGE_FAILED"
-  const stripeCode =
-    typeof params.error === "object" && params.error !== null && "code" in params.error
-      ? String((params.error as { code?: unknown }).code ?? "")
-      : ""
-  const actionRequired = ["authentication_required", "card_declined"].includes(stripeCode)
+  const stripeCode = stripeErrorCode(params.error)
+  const actionRequired = [
+    "authentication_required",
+    "card_declined",
+    "expired_card",
+    "incorrect_cvc",
+    "incorrect_number",
+    "insufficient_funds",
+    "payment_intent_authentication_failure",
+  ].includes(stripeCode)
   const failedAt = new Date().toISOString()
 
   await db
@@ -130,16 +204,79 @@ async function markChargeFailure(
   return { triggered: true, succeeded: false, actionRequired }
 }
 
+async function closeUnpaidStripeInvoice(stripe: ReturnType<typeof getStripe>, invoiceId: string) {
+  try {
+    const invoice = await stripe.invoices.retrieve(invoiceId)
+    if (invoice.status === "draft") {
+      await stripe.invoices.del(invoiceId)
+    } else if (invoice.status === "open") {
+      await stripe.invoices.voidInvoice(invoiceId)
+    }
+  } catch (error) {
+    console.error("[Scout auto recharge] unable to close unpaid Stripe invoice:", error)
+  }
+}
+
+async function persistPaymentRefs(
+  db: SupabaseClient,
+  params: { propertyId: string; attemptId: string; stripeInvoiceId?: string; paymentIntentId?: string },
+) {
+  const update: Record<string, string> = { updated_at: new Date().toISOString() }
+  if (params.stripeInvoiceId) update.stripe_invoice_id = params.stripeInvoiceId
+  if (params.paymentIntentId) update.stripe_payment_intent_id = params.paymentIntentId
+
+  const { error } = await db
+    .from("scout_auto_recharge_attempts")
+    .update(update)
+    .eq("id", params.attemptId)
+    .eq("property_id", params.propertyId)
+  if (error) throw error
+}
+
+async function reconcileLegacyPaymentIntent(
+  db: SupabaseClient,
+  params: { propertyId: string; attempt: RechargeAttempt },
+) {
+  if (!params.attempt.stripe_payment_intent_id) return null
+
+  const existing = await getStripe().paymentIntents.retrieve(params.attempt.stripe_payment_intent_id)
+  if (existing.status === "succeeded") {
+    // Legacy branch compatibility only: attempts created before the fiscal-hub
+    // hardening may have a naked PaymentIntent and no Stripe Invoice. Preserve
+    // accounting, but do not create a second charge. These must be surfaced for
+    // manual fiscal reconciliation in HotelProfitAI.
+    const legacyInvoiceId = `legacy-pi:${existing.id}`
+    await finalizeSuccessfulAttempt(db, {
+      propertyId: params.propertyId,
+      attemptId: params.attempt.id,
+      stripeInvoiceId: legacyInvoiceId,
+      paymentIntentId: existing.id,
+      credits: Number(params.attempt.recharge_credits),
+      amountCents: Number(params.attempt.amount_cents),
+    })
+    return { triggered: true, succeeded: true, reconciled: true, legacy: true, paymentIntentId: existing.id }
+  }
+  if (isTerminalPaymentState(existing.status)) {
+    return markChargeFailure(db, {
+      propertyId: params.propertyId,
+      attemptId: params.attempt.id,
+      error: paymentStateError(existing.status),
+    })
+  }
+  throw new Error(`SCOUT_AUTO_RECHARGE_${existing.status.toUpperCase()}`)
+}
+
 async function chargeAttempt(
   db: SupabaseClient,
   params: {
     propertyId: string
     attempt: RechargeAttempt
     paymentSource: RechargePaymentSource | null
+    consentGranted: boolean
   },
 ) {
   const stripe = getStripe()
-  const idempotencyKey = `scout-auto-recharge:${params.attempt.id}`
+  const idempotencyRoot = `scout-auto-recharge:${params.attempt.id}`
   const now = new Date().toISOString()
 
   await db
@@ -148,97 +285,194 @@ async function chargeAttempt(
     .eq("id", params.attempt.id)
     .eq("property_id", params.propertyId)
 
+  let stripeInvoiceId = params.attempt.stripe_invoice_id
   let paymentIntentId = params.attempt.stripe_payment_intent_id
 
   try {
-    if (paymentIntentId) {
-      const existing = await stripe.paymentIntents.retrieve(paymentIntentId)
-      if (existing.status === "succeeded") {
+    // Backwards-compatible reconciliation for an attempt created by the old
+    // implementation. Never create a new invoice/charge if a PaymentIntent
+    // already exists without an invoice.
+    if (paymentIntentId && !stripeInvoiceId) {
+      return reconcileLegacyPaymentIntent(db, { propertyId: params.propertyId, attempt: params.attempt })
+    }
+
+    let invoice: Stripe.Invoice | null = null
+    if (stripeInvoiceId) {
+      invoice = await stripe.invoices.retrieve(stripeInvoiceId, { expand: ["payments"] })
+
+      if (invoice.status === "paid") {
+        paymentIntentId = paymentIntentIdFromInvoice(invoice)
+        if (!paymentIntentId) {
+          throw new Error("SCOUT_AUTO_RECHARGE_PAID_INVOICE_WITHOUT_PAYMENT_INTENT")
+        }
+        await persistPaymentRefs(db, {
+          propertyId: params.propertyId,
+          attemptId: params.attempt.id,
+          stripeInvoiceId,
+          paymentIntentId,
+        })
         await finalizeSuccessfulAttempt(db, {
           propertyId: params.propertyId,
           attemptId: params.attempt.id,
-          paymentIntentId: existing.id,
+          stripeInvoiceId,
+          paymentIntentId,
           credits: Number(params.attempt.recharge_credits),
           amountCents: Number(params.attempt.amount_cents),
         })
-        return { triggered: true, succeeded: true, reconciled: true, paymentIntentId: existing.id }
+        return { triggered: true, succeeded: true, reconciled: true, stripeInvoiceId, paymentIntentId }
       }
-      if (isTerminalPaymentState(existing.status)) {
+
+      if (invoice.status === "void" || invoice.status === "uncollectible") {
         return markChargeFailure(db, {
           propertyId: params.propertyId,
           attemptId: params.attempt.id,
-          error: paymentStateError(existing.status),
+          error: Object.assign(new Error(`SCOUT_AUTO_RECHARGE_INVOICE_${invoice.status.toUpperCase()}`), {
+            code: "card_declined",
+          }),
         })
       }
-      throw new Error(`SCOUT_AUTO_RECHARGE_${existing.status.toUpperCase()}`)
+
+      // A draft/open invoice is not itself a charge. If consent was withdrawn
+      // before the actual payment attempt, close the invoice and stop here.
+      if (!params.consentGranted && !paymentIntentId) {
+        await closeUnpaidStripeInvoice(stripe, stripeInvoiceId)
+        return cancelUnchargedAttempt(db, { propertyId: params.propertyId, attemptId: params.attempt.id })
+      }
+    }
+
+    if (!params.consentGranted && !stripeInvoiceId && !paymentIntentId) {
+      return cancelUnchargedAttempt(db, { propertyId: params.propertyId, attemptId: params.attempt.id })
     }
 
     if (!params.paymentSource?.stripe_customer_id || !params.paymentSource.stripe_payment_method_id) {
       throw Object.assign(new Error("SCOUT_AUTO_RECHARGE_PAYMENT_METHOD_MISSING"), { code: "card_declined" })
     }
 
-    const paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: Number(params.attempt.amount_cents),
-        currency: "eur",
-        customer: params.paymentSource.stripe_customer_id,
-        payment_method: params.paymentSource.stripe_payment_method_id,
-        confirm: true,
-        off_session: true,
-        description: `Ricarica automatica HotelAccelerator Scout - ${params.attempt.recharge_credits} crediti`,
-        metadata: {
-          propertyId: params.propertyId,
-          project: "hotelaccelerator",
-          kind: "scout_auto_recharge",
-          attemptId: params.attempt.id,
-          quantity: String(params.attempt.recharge_credits),
-          unitAmountCents: String(params.attempt.credit_price_cents),
+    if (!invoice) {
+      invoice = await stripe.invoices.create(
+        {
+          customer: params.paymentSource.stripe_customer_id,
+          collection_method: "charge_automatically",
+          default_payment_method: params.paymentSource.stripe_payment_method_id,
+          auto_advance: false,
+          pending_invoice_items_behavior: "exclude",
+          description: `Ricarica automatica HotelAccelerator Scout - ${params.attempt.recharge_credits} crediti`,
+          metadata: {
+            propertyId: params.propertyId,
+            project: "hotelaccelerator",
+            kind: "scout_auto_recharge",
+            attemptId: params.attempt.id,
+            quantity: String(params.attempt.recharge_credits),
+            unitAmountCents: String(params.attempt.credit_price_cents),
+          },
         },
+        { idempotencyKey: `${idempotencyRoot}:invoice` },
+      )
+      stripeInvoiceId = invoice.id
+      await persistPaymentRefs(db, {
+        propertyId: params.propertyId,
+        attemptId: params.attempt.id,
+        stripeInvoiceId,
+      })
+    }
+
+    if (invoice.status === "draft") {
+      await stripe.invoiceItems.create(
+        {
+          customer: params.paymentSource.stripe_customer_id,
+          invoice: invoice.id,
+          amount: Number(params.attempt.amount_cents),
+          currency: "eur",
+          description: `Ricarica automatica HotelAccelerator Scout - ${params.attempt.recharge_credits} crediti`,
+          metadata: {
+            project: "hotelaccelerator",
+            kind: "scout_auto_recharge",
+            propertyId: params.propertyId,
+            attemptId: params.attempt.id,
+          },
+        },
+        { idempotencyKey: `${idempotencyRoot}:item` },
+      )
+
+      invoice = await stripe.invoices.finalizeInvoice(
+        invoice.id,
+        { auto_advance: false },
+        { idempotencyKey: `${idempotencyRoot}:finalize` },
+      )
+    }
+
+    // Consent is checked again immediately before Stripe is allowed to attempt
+    // payment. Creating/finalizing an invoice is not a charge; if the tenant
+    // disabled auto-recharge in the meantime, void it and do not pay.
+    if (!(await hasCurrentRechargeConsent(db, params.propertyId))) {
+      await closeUnpaidStripeInvoice(stripe, invoice.id)
+      return cancelUnchargedAttempt(db, { propertyId: params.propertyId, attemptId: params.attempt.id })
+    }
+
+    const paidInvoice = await stripe.invoices.pay(
+      invoice.id,
+      {
+        off_session: true,
+        payment_method: params.paymentSource.stripe_payment_method_id,
+        expand: ["payments"],
       },
-      { idempotencyKey },
+      { idempotencyKey: `${idempotencyRoot}:pay` },
     )
 
-    paymentIntentId = paymentIntent.id
-    const { error: persistIntentError } = await db
-      .from("scout_auto_recharge_attempts")
-      .update({ stripe_payment_intent_id: paymentIntent.id, updated_at: new Date().toISOString() })
-      .eq("id", params.attempt.id)
-      .eq("property_id", params.propertyId)
-    if (persistIntentError) {
-      // The Stripe idempotency key is based on attempt id. A retry can safely call
-      // paymentIntents.create again and Stripe will return this same intent.
-      throw persistIntentError
+    stripeInvoiceId = paidInvoice.id
+    paymentIntentId = paymentIntentIdFromInvoice(paidInvoice)
+
+    if (paidInvoice.status !== "paid") {
+      if (paymentIntentId) {
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+        if (isTerminalPaymentState(paymentIntent.status)) {
+          await closeUnpaidStripeInvoice(stripe, paidInvoice.id)
+          return markChargeFailure(db, {
+            propertyId: params.propertyId,
+            attemptId: params.attempt.id,
+            error: paymentStateError(paymentIntent.status),
+          })
+        }
+      }
+      throw new Error(`SCOUT_AUTO_RECHARGE_INVOICE_${String(paidInvoice.status || "unknown").toUpperCase()}`)
     }
 
-    if (paymentIntent.status !== "succeeded") {
-      if (isTerminalPaymentState(paymentIntent.status)) {
-        return markChargeFailure(db, {
-          propertyId: params.propertyId,
-          attemptId: params.attempt.id,
-          error: paymentStateError(paymentIntent.status),
-        })
-      }
-      throw new Error(`SCOUT_AUTO_RECHARGE_${paymentIntent.status.toUpperCase()}`)
+    if (!paymentIntentId) {
+      throw new Error("SCOUT_AUTO_RECHARGE_PAID_INVOICE_WITHOUT_PAYMENT_INTENT")
     }
+
+    await persistPaymentRefs(db, {
+      propertyId: params.propertyId,
+      attemptId: params.attempt.id,
+      stripeInvoiceId,
+      paymentIntentId,
+    })
 
     await finalizeSuccessfulAttempt(db, {
       propertyId: params.propertyId,
       attemptId: params.attempt.id,
-      paymentIntentId: paymentIntent.id,
+      stripeInvoiceId,
+      paymentIntentId,
       credits: Number(params.attempt.recharge_credits),
       amountCents: Number(params.attempt.amount_cents),
     })
 
-    return { triggered: true, succeeded: true, paymentIntentId: paymentIntent.id }
+    return { triggered: true, succeeded: true, stripeInvoiceId, paymentIntentId }
   } catch (error) {
-    // If Stripe returned an intent id, never start a replacement attempt: a DB
-    // failure or a still-processing intent must be reconciled with this same id.
-    if (paymentIntentId) {
-      console.error("[Scout auto recharge] payment intent exists; retry will reconcile:", error)
+    if (stripeInvoiceId && isTerminalChargeError(error)) {
+      await closeUnpaidStripeInvoice(stripe, stripeInvoiceId)
+      return markChargeFailure(db, { propertyId: params.propertyId, attemptId: params.attempt.id, error })
+    }
+
+    // Once a Stripe Invoice or legacy PaymentIntent exists, never create a
+    // replacement attempt. A retry must reconcile that same external object;
+    // this covers network/DB failures after Stripe may already have charged.
+    if (stripeInvoiceId || paymentIntentId) {
+      console.error("[Scout auto recharge] Stripe payment reference exists; retry will reconcile:", error)
       throw error
     }
 
-    console.error("[Scout auto recharge] charge failed before payment intent creation:", error)
+    console.error("[Scout auto recharge] charge failed before Stripe payment object creation:", error)
     return markChargeFailure(db, { propertyId: params.propertyId, attemptId: params.attempt.id, error })
   }
 }
@@ -261,10 +495,11 @@ export async function maybeAutoRechargeScout(db: SupabaseClient, propertyId: str
         stripe_payment_method_id: settings.stripe_payment_method_id,
       }
     : null
+  const consentGranted = settings?.enabled === true && settings.status === "ready"
 
   const { data: pending, error: pendingError } = await db
     .from("scout_auto_recharge_attempts")
-    .select("id,recharge_credits,amount_cents,credit_price_cents,stripe_payment_intent_id,status")
+    .select("id,recharge_credits,amount_cents,credit_price_cents,stripe_invoice_id,stripe_payment_intent_id,status")
     .eq("property_id", propertyId)
     .in("status", ["claimed", "processing"])
     .order("created_at", { ascending: true })
@@ -273,23 +508,15 @@ export async function maybeAutoRechargeScout(db: SupabaseClient, propertyId: str
   if (pendingError) throw pendingError
 
   if (pending) {
-    const attempt = pending as RechargeAttempt
-
-    // Once Stripe has an intent, reconciliation must finish even if consent was
-    // disabled meanwhile: an external charge may already exist. Before an intent
-    // exists, current tenant consent is authoritative and no charge may start.
-    if (!attempt.stripe_payment_intent_id && (!settings?.enabled || settings.status !== "ready")) {
-      return cancelUnchargedAttempt(db, { propertyId, attemptId: attempt.id })
-    }
-
     return chargeAttempt(db, {
       propertyId,
-      attempt,
+      attempt: pending as RechargeAttempt,
       paymentSource,
+      consentGranted,
     })
   }
 
-  if (!settings?.enabled || settings.status !== "ready" || !paymentSource) return { triggered: false }
+  if (!consentGranted || !paymentSource) return { triggered: false }
 
   const { data, error } = await db.rpc("scout_claim_auto_recharge", {
     p_property_id: propertyId,
@@ -315,6 +542,7 @@ export async function maybeAutoRechargeScout(db: SupabaseClient, propertyId: str
       recharge_credits: Number(claim.recharge_credits),
       amount_cents: Number(claim.amount_cents),
       credit_price_cents: billing.creditPriceCents,
+      stripe_invoice_id: null,
       stripe_payment_intent_id: null,
       status: "claimed",
     },
@@ -322,5 +550,6 @@ export async function maybeAutoRechargeScout(db: SupabaseClient, propertyId: str
       stripe_customer_id: claim.stripe_customer_id,
       stripe_payment_method_id: claim.stripe_payment_method_id,
     },
+    consentGranted: true,
   })
 }
