@@ -12,6 +12,62 @@ import {
   type PlatformProductState,
 } from "@/lib/platform/customer-intelligence"
 
+type CustomerAccountRow = {
+  id: string
+  account_number: number | string
+  property_id: string | null
+  created_at: string
+}
+
+type EntitlementRow = {
+  customer_account_id: string
+  product_key: string
+  status: string
+  activated_at: string | null
+  expires_at: string | null
+  source?: string | null
+}
+
+type TenantLinkRow = {
+  customer_account_id: string
+  product_key: string
+  external_tenant_id: string
+}
+
+type SnapshotRow = Record<string, unknown> & {
+  customer_account_id: string
+  product_key: string
+}
+
+type PropertyRow = {
+  id: string
+  name: string | null
+  slug: string | null
+  type: string | null
+  plan: string | null
+  subscription_status: string | null
+  monthly_price_cents: number | null
+  billing_company_name: string | null
+  billing_city: string | null
+  billing_province: string | null
+  trial_ends_at: string | null
+}
+
+type ProspectRow = {
+  id: string
+  sales_stage: string
+  lead_score: number
+  next_action_at: string | null
+  status: string
+  organization_name: string | null
+  full_name: string | null
+  job_title: string | null
+  country: string | null
+  region: string | null
+  city: string | null
+  created_at: string
+}
+
 const EDITABLE_PROFILE_FIELDS = new Set([
   "display_name",
   "legal_name",
@@ -114,9 +170,16 @@ export async function GET(request: NextRequest) {
       if (result.error) throw result.error
     }
 
+    const accountRows = (accountsRes.data ?? []) as CustomerAccountRow[]
+    const profileRows = (profilesRes.data ?? []) as PlatformCustomerProfile[]
+    const entitlementRows = (entitlementsRes.data ?? []) as EntitlementRow[]
+    const linkRows = (linksRes.data ?? []) as TenantLinkRow[]
+    const snapshotRows = (snapshotsRes.data ?? []) as SnapshotRow[]
+    const propertyRows = (propertiesRes.data ?? []) as PropertyRow[]
+
     // Il Super Admin CRM usa i prospect commerciali del tenant 4BID e nessun altro.
     // Il service client bypassa RLS: il filtro property_id deve quindi essere esplicito.
-    const fourBidPropertyId = fourBidRes.data?.id ?? null
+    const fourBidPropertyId = (fourBidRes.data as { id?: string } | null)?.id ?? null
     const scopedProspectsRes = fourBidPropertyId
       ? await db
           .from("crm_apollo_prospects")
@@ -127,39 +190,39 @@ export async function GET(request: NextRequest) {
           .order("created_at", { ascending: false })
       : { data: [], error: null }
     if (scopedProspectsRes.error) throw scopedProspectsRes.error
-    const scopedProspects = scopedProspectsRes.data ?? []
+    const scopedProspects = (scopedProspectsRes.data ?? []) as ProspectRow[]
 
-    const profiles = new Map(
-      (profilesRes.data ?? []).map((row) => [row.customer_account_id as string, row as PlatformCustomerProfile]),
+    const profiles = new Map<string, PlatformCustomerProfile>(
+      profileRows.map((row) => [row.customer_account_id, row]),
     )
 
     const links = new Map<string, Map<string, string>>()
-    for (const row of linksRes.data ?? []) {
+    for (const row of linkRows) {
       const current = links.get(row.customer_account_id) ?? new Map<string, string>()
       current.set(row.product_key, row.external_tenant_id)
       links.set(row.customer_account_id, current)
     }
 
-    const snapshots = new Map<string, Map<string, Record<string, unknown>>>()
-    for (const row of snapshotsRes.data ?? []) {
-      const current = snapshots.get(row.customer_account_id) ?? new Map<string, Record<string, unknown>>()
-      current.set(row.product_key, row as Record<string, unknown>)
+    const snapshots = new Map<string, Map<string, SnapshotRow>>()
+    for (const row of snapshotRows) {
+      const current = snapshots.get(row.customer_account_id) ?? new Map<string, SnapshotRow>()
+      current.set(row.product_key, row)
       snapshots.set(row.customer_account_id, current)
     }
 
-    const entitlements = new Map<string, Array<Record<string, unknown>>>()
-    for (const row of entitlementsRes.data ?? []) {
+    const entitlements = new Map<string, EntitlementRow[]>()
+    for (const row of entitlementRows) {
       const current = entitlements.get(row.customer_account_id) ?? []
-      current.push(row as Record<string, unknown>)
+      current.push(row)
       entitlements.set(row.customer_account_id, current)
     }
 
-    const properties = new Map((propertiesRes.data ?? []).map((row) => [row.id as string, row]))
+    const properties = new Map<string, PropertyRow>(propertyRows.map((row) => [row.id, row]))
 
-    const accounts: PlatformCustomerAccount[] = (accountsRes.data ?? []).map((row) => {
-      const property = row.property_id ? properties.get(row.property_id) : null
+    const accounts: PlatformCustomerAccount[] = accountRows.map((row) => {
+      const property = row.property_id ? properties.get(row.property_id) ?? null : null
       const storedProfile = profiles.get(row.id)
-      const profile = storedProfile ? { ...storedProfile } : emptyProfile(row.id)
+      const profile: PlatformCustomerProfile = storedProfile ? { ...storedProfile } : emptyProfile(row.id)
 
       if (!profile.display_name && property?.name) profile.display_name = property.name
       if (!profile.legal_name && property?.billing_company_name) profile.legal_name = property.billing_company_name
@@ -167,43 +230,55 @@ export async function GET(request: NextRequest) {
       if (!profile.province && property?.billing_province) profile.province = property.billing_province
 
       const accountEntitlements = entitlements.get(row.id) ?? []
-      const accountSnapshots = snapshots.get(row.id) ?? new Map<string, Record<string, unknown>>()
+      const accountSnapshots = snapshots.get(row.id) ?? new Map<string, SnapshotRow>()
       const accountLinks = links.get(row.id) ?? new Map<string, string>()
 
       const products: PlatformProductState[] = accountEntitlements
-        .filter((item) => (PLATFORM_PRODUCT_KEYS as readonly string[]).includes(String(item.product_key)))
+        .filter((item) => (PLATFORM_PRODUCT_KEYS as readonly string[]).includes(item.product_key))
         .map((item) => {
           const key = item.product_key as PlatformProductKey
-          const snapshot = accountSnapshots.get(key) ?? {}
+          const snapshot = accountSnapshots.get(key)
+          const snapshotValue = (field: string) => snapshot?.[field]
+          const rawMetrics = snapshotValue("metrics")
           return {
             product_key: key,
-            status: String(snapshot.status ?? item.status ?? "unknown"),
-            external_tenant_id: String(snapshot.external_tenant_id ?? accountLinks.get(key) ?? "") || null,
-            activated_at: typeof item.activated_at === "string" ? item.activated_at : null,
-            expires_at: typeof item.expires_at === "string" ? item.expires_at : null,
+            status: String(snapshotValue("status") ?? item.status ?? "unknown"),
+            external_tenant_id: String(snapshotValue("external_tenant_id") ?? accountLinks.get(key) ?? "") || null,
+            activated_at: item.activated_at,
+            expires_at: item.expires_at,
             plan:
-              typeof snapshot.plan === "string"
-                ? snapshot.plan
+              typeof snapshotValue("plan") === "string"
+                ? String(snapshotValue("plan"))
                 : key === "hotelaccelerator"
-                  ? String(property?.plan ?? "") || null
+                  ? property?.plan ?? null
                   : null,
             mrr_cents:
-              typeof snapshot.mrr_cents === "number"
-                ? snapshot.mrr_cents
+              typeof snapshotValue("mrr_cents") === "number"
+                ? Number(snapshotValue("mrr_cents"))
                 : key === "hotelaccelerator"
                   ? Number(property?.monthly_price_cents ?? 0)
                   : null,
-            usage_score: typeof snapshot.usage_score === "number" ? snapshot.usage_score : null,
-            health_score: typeof snapshot.health_score === "number" ? snapshot.health_score : null,
+            usage_score:
+              typeof snapshotValue("usage_score") === "number" ? Number(snapshotValue("usage_score")) : null,
+            health_score:
+              typeof snapshotValue("health_score") === "number" ? Number(snapshotValue("health_score")) : null,
             onboarding_status:
-              typeof snapshot.onboarding_status === "string" ? snapshot.onboarding_status : null,
+              typeof snapshotValue("onboarding_status") === "string"
+                ? String(snapshotValue("onboarding_status"))
+                : null,
             last_activity_at:
-              typeof snapshot.last_activity_at === "string" ? snapshot.last_activity_at : null,
-            renewal_at: typeof snapshot.renewal_at === "string" ? snapshot.renewal_at : null,
-            last_synced_at: typeof snapshot.last_synced_at === "string" ? snapshot.last_synced_at : null,
+              typeof snapshotValue("last_activity_at") === "string"
+                ? String(snapshotValue("last_activity_at"))
+                : null,
+            renewal_at:
+              typeof snapshotValue("renewal_at") === "string" ? String(snapshotValue("renewal_at")) : null,
+            last_synced_at:
+              typeof snapshotValue("last_synced_at") === "string"
+                ? String(snapshotValue("last_synced_at"))
+                : null,
             metrics:
-              snapshot.metrics && typeof snapshot.metrics === "object"
-                ? (snapshot.metrics as Record<string, unknown>)
+              rawMetrics && typeof rawMetrics === "object" && !Array.isArray(rawMetrics)
+                ? (rawMetrics as Record<string, unknown>)
                 : {},
           }
         })
@@ -355,11 +430,13 @@ export async function POST(request: NextRequest) {
     if (entitlementError) throw entitlementError
     if (linkError) throw linkError
 
-    const linkMap = new Map(
-      (links ?? []).map((row) => [`${row.customer_account_id}:${row.product_key}`, row.external_tenant_id]),
+    const entitlementRows = (entitlements ?? []) as EntitlementRow[]
+    const linkRows = (links ?? []) as TenantLinkRow[]
+    const linkMap = new Map<string, string>(
+      linkRows.map((row) => [`${row.customer_account_id}:${row.product_key}`, row.external_tenant_id]),
     )
     const now = new Date().toISOString()
-    const rows = (entitlements ?? [])
+    const rows = entitlementRows
       .filter((row) => (PLATFORM_PRODUCT_KEYS as readonly string[]).includes(row.product_key))
       .map((row) => ({
         customer_account_id: row.customer_account_id,
