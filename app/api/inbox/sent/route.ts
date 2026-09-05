@@ -101,9 +101,7 @@ export async function GET(request: NextRequest) {
 
     if (channel) query = query.eq("conversation.channel", channel)
     if (search) query = query.ilike("content", `%${search}%`)
-    if (accessFilter) {
-      query = query.or(accessFilter, { referencedTable: "conversation" })
-    }
+    if (accessFilter) query = query.or(accessFilter, { referencedTable: "conversation" })
 
     const { data, error, count } = await query
     if (error) throw error
@@ -129,6 +127,7 @@ export async function GET(request: NextRequest) {
         subject: conversation?.subject || null,
         recipientName,
         recipientDetail,
+        content: row.content || "",
         preview: buildPreview(row.content, conversation?.subject || null),
         contentType: row.content_type || "text",
         sentAt: row.stored_at || row.created_at,
