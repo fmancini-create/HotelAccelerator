@@ -1,14 +1,34 @@
 "use client"
 
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react"
 import { usePathname } from "next/navigation"
-import { Bug, HelpCircle, Lightbulb, Loader2, Send, Sparkles, X } from "lucide-react"
+import { Bug, FileText, HelpCircle, Lightbulb, Loader2, Paperclip, Send, Sparkles, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { createClient } from "@/lib/supabase/client"
 
 type ReportType = "suggestion" | "bug"
 interface GuideMessage { role: "user" | "assistant"; content: string }
+interface UploadedAttachment {
+  id: string
+  name: string
+  mime_type: string
+  size_bytes: number
+  storage_path: string
+  bucket: "support-private"
+}
+
+const MAX_FILES = 5
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+const MAX_TOTAL_BYTES = 25 * 1024 * 1024
+const ALLOWED_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/gif", "image/heic", "image/heif",
+  "application/pdf", "text/plain", "text/csv", "application/json", "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+])
+const FILE_ACCEPT = [...ALLOWED_TYPES].join(",")
 
 export function InternalSupportAssistant() {
   const pathname = usePathname()
@@ -19,9 +39,11 @@ export function InternalSupportAssistant() {
   const [reportType, setReportType] = useState<ReportType | null>(null)
   const [reportTitle, setReportTitle] = useState("")
   const [reportDescription, setReportDescription] = useState("")
+  const [reportFiles, setReportFiles] = useState<File[]>([])
   const [sendingReport, setSendingReport] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }) }, [messages, asking])
 
@@ -51,7 +73,64 @@ export function InternalSupportAssistant() {
     setReportType(type)
     setReportTitle("")
     setReportDescription("")
+    setReportFiles([])
     setNotice(null)
+  }
+
+  function selectFiles(event: ChangeEvent<HTMLInputElement>) {
+    const incoming = Array.from(event.target.files ?? [])
+    event.target.value = ""
+    const merged = [...reportFiles, ...incoming]
+    if (merged.length > MAX_FILES) {
+      setNotice(`Puoi allegare al massimo ${MAX_FILES} file.`)
+      return
+    }
+    for (const file of incoming) {
+      if (!ALLOWED_TYPES.has(file.type)) {
+        setNotice(`Tipo file non consentito: ${file.name}`)
+        return
+      }
+      if (file.size <= 0 || file.size > MAX_FILE_BYTES) {
+        setNotice(`${file.name} supera il limite di 10 MB.`)
+        return
+      }
+    }
+    if (merged.reduce((sum, file) => sum + file.size, 0) > MAX_TOTAL_BYTES) {
+      setNotice("Gli allegati superano il limite complessivo di 25 MB.")
+      return
+    }
+    setReportFiles(merged)
+    setNotice(null)
+  }
+
+  async function uploadReportFiles(): Promise<UploadedAttachment[]> {
+    if (reportFiles.length === 0) return []
+    const supabase = createClient()
+    if (!supabase) throw new Error("Storage allegati non disponibile")
+    const uploaded: UploadedAttachment[] = []
+
+    for (const file of reportFiles) {
+      const prepare = await fetch("/api/admin/internal-support/attachments/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, mime_type: file.type, size_bytes: file.size }),
+      })
+      const grant = await prepare.json().catch(() => ({})) as { error?: string; path?: string; token?: string; bucket?: "support-private" }
+      if (!prepare.ok || !grant.path || !grant.token || grant.bucket !== "support-private") {
+        throw new Error(grant.error || `Impossibile preparare ${file.name}`)
+      }
+      const { error } = await supabase.storage.from(grant.bucket).uploadToSignedUrl(grant.path, grant.token, file, { contentType: file.type })
+      if (error) throw new Error(`Caricamento non riuscito: ${file.name}`)
+      uploaded.push({
+        id: globalThis.crypto.randomUUID(),
+        name: file.name,
+        mime_type: file.type,
+        size_bytes: file.size,
+        storage_path: grant.path,
+        bucket: grant.bucket,
+      })
+    }
+    return uploaded
   }
 
   async function sendReport(event: FormEvent) {
@@ -60,10 +139,18 @@ export function InternalSupportAssistant() {
     setSendingReport(true)
     setNotice(null)
     try {
+      const attachments = await uploadReportFiles()
       const response = await fetch("/api/admin/internal-support", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "report", type: reportType, title: reportTitle.trim(), description: reportDescription.trim(), current_path: pathname }),
+        body: JSON.stringify({
+          action: "report",
+          type: reportType,
+          title: reportTitle.trim(),
+          description: reportDescription.trim(),
+          current_path: pathname || "/admin",
+          attachments,
+        }),
       })
       const payload = await response.json().catch(() => ({})) as { error?: string }
       if (!response.ok) throw new Error(payload.error || "Invio non riuscito")
@@ -71,6 +158,7 @@ export function InternalSupportAssistant() {
       setReportType(null)
       setReportTitle("")
       setReportDescription("")
+      setReportFiles([])
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Invio non riuscito")
     } finally { setSendingReport(false) }
@@ -89,9 +177,19 @@ export function InternalSupportAssistant() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {reportType ? <form onSubmit={sendReport} className="space-y-4">
-          <div><div className="flex items-center gap-2 font-semibold">{reportType === "bug" ? <Bug className="h-4 w-4 text-destructive" /> : <Lightbulb className="h-4 w-4 text-amber-600" />}{reportType === "bug" ? "Segnala errore" : "Segnala miglioria"}</div><p className="mt-1 text-xs text-muted-foreground">La segnalazione entra nella Inbox del supporto 4BID con tenant e pagina corrente già associati.</p></div>
+          <div><div className="flex items-center gap-2 font-semibold">{reportType === "bug" ? <Bug className="h-4 w-4 text-destructive" /> : <Lightbulb className="h-4 w-4 text-amber-600" />}{reportType === "bug" ? "Segnala errore" : "Segnala miglioria"}</div><p className="mt-1 text-xs text-muted-foreground">La segnalazione entra nella Inbox del supporto 4BID con utente, tenant e pagina corrente associati.</p></div>
           <Input value={reportTitle} onChange={(event) => setReportTitle(event.target.value)} placeholder={reportType === "bug" ? "Titolo del problema" : "Titolo della proposta"} maxLength={160} required />
-          <Textarea value={reportDescription} onChange={(event) => setReportDescription(event.target.value)} placeholder={reportType === "bug" ? "Cosa è successo? Cosa ti aspettavi?" : "Cosa vorresti migliorare e perché?"} rows={8} maxLength={10000} required />
+          <Textarea value={reportDescription} onChange={(event) => setReportDescription(event.target.value)} placeholder={reportType === "bug" ? "Cosa è successo? Cosa ti aspettavi?" : "Cosa vorresti migliorare e perché?"} rows={7} maxLength={10000} required />
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div><div className="text-sm font-medium">Allegati</div><div className="text-xs text-muted-foreground">Screenshot, PDF o documenti. Max 5 file, 10 MB ciascuno.</div></div>
+              <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={sendingReport || reportFiles.length >= MAX_FILES}><Paperclip className="mr-1.5 h-4 w-4" />Allega</Button>
+            </div>
+            <input ref={fileInputRef} type="file" multiple accept={FILE_ACCEPT} className="hidden" onChange={selectFiles} />
+            {reportFiles.length > 0 && <div className="mt-3 space-y-2">{reportFiles.map((file, index) => <div key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 rounded-md bg-muted/50 px-2 py-1.5 text-xs"><FileText className="h-4 w-4 shrink-0" /><span className="min-w-0 flex-1 truncate">{file.name}</span><span className="text-muted-foreground">{Math.max(1, Math.round(file.size / 1024))} KB</span><button type="button" className="rounded p-1 hover:bg-muted" onClick={() => setReportFiles((files) => files.filter((_, i) => i !== index))} disabled={sendingReport} aria-label={`Rimuovi ${file.name}`}><Trash2 className="h-3.5 w-3.5" /></button></div>)}</div>}
+          </div>
+          <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground"><strong>Pagina tracciata:</strong> {pathname || "/admin"}</div>
+          {notice && <div className="rounded-md bg-muted px-3 py-2 text-xs" role="status">{notice}</div>}
           <div className="flex gap-2"><Button type="button" variant="outline" className="flex-1" onClick={() => setReportType(null)} disabled={sendingReport}>Indietro</Button><Button type="submit" className="flex-1" disabled={sendingReport || !reportTitle.trim() || !reportDescription.trim()}>{sendingReport && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Invia</Button></div>
         </form> : <div className="space-y-4">
           {messages.length === 0 && <div className="rounded-xl border bg-muted/30 p-4 text-sm"><p className="font-medium">Come posso aiutarti?</p><p className="mt-1 text-muted-foreground">Chiedimi come usare la pagina, dove trovare una funzione o come completare un'operazione. Rispondo usando la documentazione interna sincronizzata.</p></div>}
