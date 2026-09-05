@@ -9,15 +9,16 @@ import { OmnichannelCompose } from "@/components/admin/inbox/omnichannel-compose
 /**
  * One user-facing Inbox, multiple internal data sources.
  *
- * The operational conversation list stays DB-driven while email folders such as
- * Sent/Drafts are read directly from the provider. We deliberately keep that
- * technical separation without presenting it as separate Inbox "modes".
+ * Operational conversations and the unified Sent projection are DB-driven.
+ * Native email folders (including the provider's own Sent/Drafts) are read
+ * directly from the provider under "Cartelle email" so they never pollute
+ * customer-message, unread or KPI semantics.
  */
 export function InboxShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const emailFoldersOpen = pathname.startsWith("/admin/inbox/email")
-  const sentFolderOpen = pathname.startsWith("/admin/inbox/sent")
-  const mailboxViewOpen = emailFoldersOpen || sentFolderOpen
+  const sentOpen = pathname.startsWith("/admin/inbox/sent")
+  const subviewOpen = emailFoldersOpen || sentOpen
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -29,7 +30,7 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2 sm:px-4">
           <span className="truncate text-sm font-semibold">Inbox</span>
 
-          {mailboxViewOpen ? (
+          {subviewOpen ? (
             <Link
               href="/admin/inbox"
               className="inline-flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -44,7 +45,7 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
                 className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:px-3"
               >
                 <Send className="h-4 w-4" aria-hidden />
-                <span className="hidden sm:inline">Posta inviata</span>
+                <span className="hidden sm:inline">Inviati</span>
               </Link>
               <Link
                 href="/admin/inbox/email"
@@ -60,7 +61,7 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
 
       <div
         data-inbox-mobile
-        data-inbox-view={mailboxViewOpen ? "email" : "operational"}
+        data-inbox-view={emailFoldersOpen ? "email" : sentOpen ? "sent" : "operational"}
         className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
       >
         {children}
@@ -71,9 +72,9 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <style>{`
-        /* Mailbox pages can use a generic envelope icon in their local heading.
-           The unified Inbox shell already supplies the context, so keep the
-           heading text and remove the redundant provider-like mark. */
+        /* The native mailbox page can use a generic envelope icon in its local
+           heading. The unified Inbox shell already supplies the context, so
+           remove only that redundant icon. Sent is NOT a mailbox page. */
         [data-inbox-view="email"] > .flex.h-full.min-h-0.flex-col.bg-card
           > .flex.flex-wrap.items-center.gap-3.border-b
           > .min-w-0
