@@ -110,7 +110,7 @@ export function HrGeofenceSettingsPanel() {
       setSettings(normalizeSettings(body.settings))
       setMessage(
         body.audit_recorded === false
-          ? "Sede e raggio salvati. Il log di audit non è stato registrato: l'amministratore della piattaforma è stato avvisato nei log."
+          ? "Sede e raggio salvati, ma il log di audit non è stato registrato."
           : "Sede, raggio e regole di timbratura salvati.",
       )
     } catch {
