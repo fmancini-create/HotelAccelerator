@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         project: "hotelaccelerator",
         kind: "scout_auto_recharge_setup",
       },
-      success_url: `${appUrl}/admin/crm/intelligence/scout?autoricarica=carta-salvata`,
+      success_url: `${appUrl}/admin/crm/intelligence/scout?autoricarica=carta-salvata&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/admin/crm/intelligence/scout?autoricarica=annullata`,
       locale: "it",
     })
