@@ -31,6 +31,13 @@ describe("Inbox full email mailbox", () => {
     expect(mailbox).toContain("extraSystemLabels.map")
   })
 
+  it("scopes platform super-admin Gmail mailboxes to the tenant selected in the global switcher", () => {
+    const resolver = source("lib/gmail-channel-resolver.ts")
+    expect(resolver).toContain("readActivePropertyOverride")
+    expect(resolver).toContain('.eq("property_id", propertyId)')
+    expect(resolver).not.toContain("Super admin: every active Gmail channel")
+  })
+
   it("does not import Sent or Draft messages as inbound customer conversations", () => {
     const fullSync = source("app/api/channels/email/sync/full/route.ts")
     expect(fullSync).toContain('labels.includes("SENT") || labels.includes("DRAFT")')
