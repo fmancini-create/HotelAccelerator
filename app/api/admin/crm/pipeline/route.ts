@@ -244,10 +244,11 @@ export async function PATCH(request: NextRequest) {
     const actorId = adminUserIdPerDatabase(identity?.adminUserId)
     const actionAt = new Date().toISOString()
     const modifiche: Record<string, unknown> = {}
-    let quoteValueWasSet = false
+    const stageWasTouched = Boolean(corpo && "fase" in corpo)
+    const quoteValueWasTouched = Boolean(corpo && "tariffa_cents" in corpo)
 
-    if (corpo && "fase" in corpo) {
-      const grezza = corpo.fase
+    if (stageWasTouched) {
+      const grezza = corpo?.fase
       if (grezza === null) {
         modifiche.stage = null
         modifiche.stage_set_by = null
@@ -264,8 +265,8 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    if (corpo && "tariffa_cents" in corpo) {
-      const grezza = corpo.tariffa_cents
+    if (quoteValueWasTouched) {
+      const grezza = corpo?.tariffa_cents
       if (grezza === null) {
         modifiche.quoted_rate_cents = null
       } else if (
@@ -275,7 +276,6 @@ export async function PATCH(request: NextRequest) {
         grezza <= 100_000_000
       ) {
         modifiche.quoted_rate_cents = grezza === 0 ? null : grezza
-        quoteValueWasSet = grezza > 0
       } else {
         return NextResponse.json(
           { error: "Tariffa non valida: attesi centesimi interi fra 0 e 100.000.000, oppure null." },
@@ -306,7 +306,8 @@ export async function PATCH(request: NextRequest) {
       await syncPipelineSalesAttribution(supabase, propertyId, data, {
         actorId,
         at: actionAt,
-        quoteValueWasSet,
+        stageWasTouched,
+        quoteValueWasTouched,
       })
     } catch (salesError) {
       // La pipeline è la fonte primaria e non va fatta fallire dopo un UPDATE
