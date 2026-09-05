@@ -9,8 +9,9 @@ export default async function PhoneChannelLayout({ children }: { children: React
 
   return (
     <>
-      <div className="border-b bg-background">
+      <div className="sticky top-0 z-[60] border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
         <div className="container flex flex-wrap items-center gap-2 py-3">
+          <span className="mr-1 text-xs font-medium text-muted-foreground">Telefono IP</span>
           <Button asChild variant="ghost" size="sm">
             <Link href="/admin/channels/phone">Configurazione telefono</Link>
           </Button>
