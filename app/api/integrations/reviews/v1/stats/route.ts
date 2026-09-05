@@ -1,0 +1,21 @@
+import { type NextRequest, NextResponse } from "next/server"
+
+import { forwardReviewsStats } from "@/lib/reviews/federation"
+import { resolveManubotCoreReviewsContext } from "@/lib/reviews/route-context"
+
+export const dynamic = "force-dynamic"
+export const runtime = "nodejs"
+
+export async function GET(request: NextRequest) {
+  const context = await resolveManubotCoreReviewsContext(request)
+  if (context.error) return context.error
+  const upstream = await forwardReviewsStats({
+    hotelId: context.workspace!.santaddeoHotelId,
+    origin: "manubot",
+    query: request.nextUrl.searchParams,
+  })
+  return NextResponse.json(upstream.payload, {
+    status: upstream.status,
+    headers: { "Cache-Control": "no-store" },
+  })
+}
