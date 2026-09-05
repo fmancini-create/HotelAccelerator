@@ -4,14 +4,12 @@ import { authenticateRegistryClient } from "@/lib/customer-codes/registry-auth"
 import { getSuiteProduct } from "@/lib/customer-codes/product"
 import {
   createSuiteManubotTask,
-  getSuiteManubotContext,
+  getSuiteManubotTaskFormData,
   type SuiteTaskSourceProduct,
 } from "@/lib/manubot/suite-task-hub"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
-
-const PRIORITIES = new Set(["low", "normal", "high", "urgent"])
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } })
@@ -50,7 +48,7 @@ export async function POST(request: NextRequest) {
   const externalTenantId = typeof body.external_tenant_id === "string" ? body.external_tenant_id.trim() : ""
   const idempotencyKey = typeof body.idempotency_key === "string" ? body.idempotency_key.trim() : ""
   const title = typeof body.title === "string" ? body.title.trim() : ""
-  const priority = typeof body.priority === "string" && PRIORITIES.has(body.priority) ? body.priority : "normal"
+  const priority = typeof body.priority === "string" ? body.priority.trim() : ""
   const assignment = body.assignment && typeof body.assignment === "object"
     ? (body.assignment as Record<string, unknown>)
     : {}
@@ -60,6 +58,7 @@ export async function POST(request: NextRequest) {
     return json({ error: "invalid_idempotency_key" }, 400)
   }
   if (!title || title.length > 240) return json({ error: "invalid_title" }, 400)
+  if (!priority) return json({ error: "priority_required" }, 400)
 
   const assigneeIds = strings(assignment.assignee_ids)
   const groupIds = strings(assignment.group_ids)
@@ -71,19 +70,25 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const context = await getSuiteManubotContext(auth.product, externalTenantId)
-    if (!context) return json({ error: "suite_customer_not_linked" }, 404)
-    if (!context.active) {
+    // La fonte di verita delle priorita e' SEMPRE il tenant ManuBot.
+    const form = await getSuiteManubotTaskFormData(auth.product, externalTenantId)
+    if (!form) return json({ error: "suite_customer_not_linked" }, 404)
+    if (!form.context.active) {
       return json(
         {
-          error: context.status === "inactive" ? "addon_inactive" : "addon_configuration_required",
+          error: form.context.status === "inactive" ? "addon_inactive" : "addon_configuration_required",
           addon: "manubot",
-          status: context.status,
-          reason: context.reason,
-          activation_url: context.activationUrl,
+          status: form.context.status,
+          reason: form.context.reason,
+          activation_url: form.context.activationUrl,
         },
-        context.status === "inactive" ? 403 : 409,
+        form.context.status === "inactive" ? 403 : 409,
       )
+    }
+
+    const validPriority = form.taskData?.priorities?.some((item) => item.name === priority) === true
+    if (!validPriority) {
+      return json({ error: "invalid_priority", available_priorities: form.taskData?.priorities || [] }, 400)
     }
 
     const created = await createSuiteManubotTask({
@@ -92,7 +97,7 @@ export async function POST(request: NextRequest) {
       idempotencyKey,
       title,
       description: typeof body.description === "string" ? body.description : null,
-      priority: priority as "low" | "normal" | "high" | "urgent",
+      priority,
       assigneeIds,
       groupIds,
       assetIds: strings(assignment.asset_ids),
@@ -119,7 +124,7 @@ export async function POST(request: NextRequest) {
     }, 201)
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown"
-    if (message === "responsible_required" || message === "invalid_expected_resolution_minutes") {
+    if (message === "responsible_required" || message === "invalid_expected_resolution_minutes" || message === "priority_required") {
       return json({ error: message }, 400)
     }
     console.error("[suite-manubot] create task failed", { sourceProduct: auth.product, error: message })
