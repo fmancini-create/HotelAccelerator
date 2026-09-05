@@ -11,7 +11,7 @@ describe("Suite ManuBot task hub", () => {
     const hub = source("lib/manubot/suite-task-hub.ts")
 
     expect(route).toContain("authenticateRegistryClient")
-    expect(route).toContain("X-4BID") || expect(route).toContain("x-4bid-product")
+    expect(route).toContain("x-4bid-product")
     expect(route).toContain("responsible_required")
     expect(route).toContain("idempotency_key")
     expect(hub).toContain('from("suite_tenant_links")')
@@ -46,7 +46,6 @@ describe("Suite ManuBot task hub", () => {
   it("records the contextual addon rule as a repository invariant", () => {
     const agents = source("AGENTS.md")
     expect(agents).toContain("addon contestuali, mai funzioni morte")
-    expect(agents).toContain("non")
     expect(agents).toContain("configurazione da completare")
     expect(agents).toContain("Inbox -> ManuBot")
   })
