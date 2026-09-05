@@ -22,6 +22,15 @@ type RechargePaymentSource = {
   stripe_payment_method_id: string
 }
 
+function paymentStateError(status: string) {
+  const code = status === "requires_action" ? "authentication_required" : "card_declined"
+  return Object.assign(new Error(`SCOUT_AUTO_RECHARGE_${status.toUpperCase()}`), { code })
+}
+
+function isTerminalPaymentState(status: string) {
+  return ["requires_action", "requires_payment_method", "canceled"].includes(status)
+}
+
 async function finalizeSuccessfulAttempt(
   db: SupabaseClient,
   params: { propertyId: string; attemptId: string; paymentIntentId: string; credits: number; amountCents: number },
@@ -127,6 +136,13 @@ async function chargeAttempt(
         })
         return { triggered: true, succeeded: true, reconciled: true, paymentIntentId: existing.id }
       }
+      if (isTerminalPaymentState(existing.status)) {
+        return markChargeFailure(db, {
+          propertyId: params.propertyId,
+          attemptId: params.attempt.id,
+          error: paymentStateError(existing.status),
+        })
+      }
       throw new Error(`SCOUT_AUTO_RECHARGE_${existing.status.toUpperCase()}`)
     }
 
@@ -164,6 +180,13 @@ async function chargeAttempt(
     }
 
     if (paymentIntent.status !== "succeeded") {
+      if (isTerminalPaymentState(paymentIntent.status)) {
+        return markChargeFailure(db, {
+          propertyId: params.propertyId,
+          attemptId: params.attempt.id,
+          error: paymentStateError(paymentIntent.status),
+        })
+      }
       throw new Error(`SCOUT_AUTO_RECHARGE_${paymentIntent.status.toUpperCase()}`)
     }
 
@@ -177,9 +200,8 @@ async function chargeAttempt(
 
     return { triggered: true, succeeded: true, paymentIntentId: paymentIntent.id }
   } catch (error) {
-    // If Stripe returned an intent id, never mark this attempt failed: a DB failure
-    // after charging must be reconciled with the same idempotency key, not replaced
-    // by a new attempt and a second charge.
+    // If Stripe returned an intent id, never start a replacement attempt: a DB
+    // failure or a still-processing intent must be reconciled with this same id.
     if (paymentIntentId) {
       console.error("[Scout auto recharge] payment intent exists; retry will reconcile:", error)
       throw error
