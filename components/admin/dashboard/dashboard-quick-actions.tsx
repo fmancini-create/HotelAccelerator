@@ -14,12 +14,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useAdminAuth } from "@/lib/admin-hooks"
 
-type QuickTaskUser = {
-  id: string
-  name: string | null
-  email: string
-}
-
+type QuickTaskUser = { id: string; name: string | null; email: string }
 type ManubotOperator = { id: string; full_name: string | null }
 type ManubotGroup = { id: string; name: string; member_count?: number | null }
 type ManubotAsset = { id: string; name: string; location?: string | null; property_id?: string | null }
@@ -101,8 +96,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
 
   const selectedAsset = useMemo(() => {
     if (!manubotTarget.startsWith("asset:")) return null
-    const id = manubotTarget.slice("asset:".length)
-    return manubotData?.assets.find((asset) => asset.id === id) ?? null
+    return manubotData?.assets.find((asset) => asset.id === manubotTarget.slice("asset:".length)) ?? null
   }, [manubotData, manubotTarget])
 
   const reset = () => {
@@ -112,6 +106,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
     setDueDate("")
     setAssignee(adminUser?.id || "")
     setSendToManubot(false)
+    setManubotActive(false)
     setManubotLoading(false)
     setManubotError("")
     setManubotData(null)
@@ -126,61 +121,58 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
 
   useEffect(() => {
     if (!open) return
+    let cancelled = false
     setAssignee((current) => current || adminUser?.id || "")
+    setManubotLoading(true)
+    setManubotError("")
 
     void Promise.all([
       fetch("/api/admin/users", { cache: "no-store" })
         .then(async (res) => (res.ok ? res.json() : null))
-        .then((data) => setUsers((data?.users || []) as QuickTaskUser[]))
-        .catch(() => setUsers([])),
-      fetch("/api/platform/modules", { cache: "no-store" })
-        .then(async (res) => (res.ok ? res.json() : null))
-        .then((data) => {
-          const modules = Array.isArray(data?.activeModules) ? data.activeModules : []
-          const active = modules.includes("manubot")
+        .then((data) => { if (!cancelled) setUsers((data?.users || []) as QuickTaskUser[]) })
+        .catch(() => { if (!cancelled) setUsers([]) }),
+      fetch("/api/admin/manubot/task-data", { cache: "no-store" })
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}))
+          if (cancelled) return
+
+          const active = data?.active === true
           setManubotActive(active)
-          if (!active) setSendToManubot(false)
+          if (!active) {
+            setSendToManubot(false)
+            setManubotData(null)
+            return
+          }
+
+          if (!res.ok) {
+            setManubotError(data.message || data.error || "ManuBot non disponibile")
+            setManubotData(null)
+            return
+          }
+
+          const taskData = data as ManubotTaskData
+          setManubotData({
+            operators: taskData.operators || [],
+            operatorGroups: taskData.operatorGroups || [],
+            assets: taskData.assets || [],
+            assetCategories: taskData.assetCategories || [],
+            properties: taskData.properties || [],
+            procedures: taskData.procedures || [],
+          })
+          if ((taskData.properties || []).length === 1) setManubotPropertyId(taskData.properties[0].id)
         })
         .catch(() => {
-          setManubotActive(false)
-          setSendToManubot(false)
-        }),
-    ])
-  }, [open, adminUser?.id])
-
-  useEffect(() => {
-    if (!open || !manubotActive || !sendToManubot || manubotData || manubotLoading) return
-    let cancelled = false
-    setManubotLoading(true)
-    setManubotError("")
-
-    fetch("/api/admin/manubot/task-data", { cache: "no-store" })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(data.message || data.error || "ManuBot non disponibile")
-        return data as ManubotTaskData
-      })
-      .then((data) => {
-        if (cancelled) return
-        setManubotData({
-          operators: data.operators || [],
-          operatorGroups: data.operatorGroups || [],
-          assets: data.assets || [],
-          assetCategories: data.assetCategories || [],
-          properties: data.properties || [],
-          procedures: data.procedures || [],
+          if (!cancelled) {
+            setManubotActive(false)
+            setSendToManubot(false)
+            setManubotData(null)
+          }
         })
-        if ((data.properties || []).length === 1) setManubotPropertyId(data.properties[0].id)
-      })
-      .catch((error) => {
-        if (!cancelled) setManubotError(error instanceof Error ? error.message : "ManuBot non disponibile")
-      })
-      .finally(() => {
-        if (!cancelled) setManubotLoading(false)
-      })
+        .finally(() => { if (!cancelled) setManubotLoading(false) }),
+    ])
 
     return () => { cancelled = true }
-  }, [open, manubotActive, sendToManubot, manubotData, manubotLoading])
+  }, [open, adminUser?.id])
 
   const onManubotTargetChange = (value: string) => {
     const next = value === "none" ? "" : value
@@ -208,8 +200,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
       toast.error("Ogni foto ManuBot può pesare al massimo 10 MB")
       return
     }
-    const total = next.reduce((sum, file) => sum + file.size, 0)
-    if (total > MANUBOT_MAX_TOTAL_BYTES) {
+    if (next.reduce((sum, file) => sum + file.size, 0) > MANUBOT_MAX_TOTAL_BYTES) {
       toast.error("Le foto ManuBot possono pesare al massimo 25 MB complessivi")
       return
     }
@@ -228,12 +219,10 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
 
   const parsedResponsible = () => {
     if (manubotResponsible.startsWith("operator:")) {
-      const id = manubotResponsible.slice("operator:".length)
-      return { assigneeIds: [id], groupIds: [] as string[] }
+      return { assigneeIds: [manubotResponsible.slice("operator:".length)], groupIds: [] as string[] }
     }
     if (manubotResponsible.startsWith("group:")) {
-      const id = manubotResponsible.slice("group:".length)
-      return { assigneeIds: [] as string[], groupIds: [id] }
+      return { assigneeIds: [] as string[], groupIds: [manubotResponsible.slice("group:".length)] }
     }
     return { assigneeIds: [] as string[], groupIds: [] as string[] }
   }
@@ -252,13 +241,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
     if (!title.trim() || saving) return false
     if (!sendToManubot) return true
     const minutes = Number(expectedResolutionMinutes)
-    return Boolean(
-      manubotData
-      && manubotResponsible
-      && Number.isInteger(minutes)
-      && minutes >= 5
-      && minutes <= 1440,
-    )
+    return Boolean(manubotData && manubotResponsible && Number.isInteger(minutes) && minutes >= 5 && minutes <= 1440)
   })()
 
   const submit = async () => {
@@ -266,6 +249,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
       if (sendToManubot && !manubotResponsible) toast.error("Scegli un responsabile ManuBot")
       return
     }
+
     setSaving(true)
     try {
       const shouldSendToManubot = manubotActive && sendToManubot
@@ -321,31 +305,17 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
       <QuickPlusButton label="Nuova attività" onClick={() => setOpen(true)} />
       <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next && !saving) reset() }}>
         <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Nuova attività</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Nuova attività</DialogTitle></DialogHeader>
 
           <div className="space-y-4 py-1">
             <div className="space-y-1.5">
               <Label htmlFor="dashboard-quick-task-title">Titolo</Label>
-              <Input
-                id="dashboard-quick-task-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder="Cosa c'è da fare?"
-                autoFocus
-              />
+              <Input id="dashboard-quick-task-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Cosa c'è da fare?" autoFocus />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="dashboard-quick-task-description">Descrizione</Label>
-              <Textarea
-                id="dashboard-quick-task-description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                placeholder="Dettagli opzionali"
-                rows={3}
-              />
+              <Textarea id="dashboard-quick-task-description" value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Dettagli opzionali" rows={3} />
             </div>
 
             <div className={`grid gap-3 ${users.length > 0 ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
@@ -390,9 +360,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                     </div>
                     <div>
                       <Label htmlFor="dashboard-task-manubot" className="cursor-pointer text-sm font-semibold">Inoltra anche a ManuBot</Label>
-                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                        Usa direttamente operatori, asset, procedure e allegati del modulo ManuBot del tenant.
-                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">Usa operatori, asset, procedure e allegati reali del ManuBot di questo tenant.</p>
                     </div>
                   </div>
                   <Switch
@@ -414,13 +382,9 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                 {sendToManubot && (
                   <div className="mt-4 border-t border-ha-brand/15 pt-4">
                     {manubotLoading ? (
-                      <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Carico configurazione ManuBot…
-                      </div>
+                      <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Carico configurazione ManuBot…</div>
                     ) : manubotError ? (
-                      <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-                        {manubotError}
-                      </div>
+                      <div className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">{manubotError}</div>
                     ) : manubotData ? (
                       <div className="space-y-4">
                         <div className="grid gap-3 sm:grid-cols-2">
@@ -431,9 +395,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                               <SelectContent>
                                 <SelectItem value="none">Seleziona responsabile</SelectItem>
                                 {manubotData.operators.map((operator) => (
-                                  <SelectItem key={`operator-${operator.id}`} value={`operator:${operator.id}`}>
-                                    {operator.full_name || "Operatore ManuBot"}
-                                  </SelectItem>
+                                  <SelectItem key={`operator-${operator.id}`} value={`operator:${operator.id}`}>{operator.full_name || "Operatore ManuBot"}</SelectItem>
                                 ))}
                                 {manubotData.operatorGroups.map((group) => (
                                   <SelectItem key={`group-${group.id}`} value={`group:${group.id}`} disabled={group.member_count === 0}>
@@ -451,14 +413,10 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                               <SelectContent>
                                 <SelectItem value="none">Nessun asset specifico</SelectItem>
                                 {manubotData.assets.map((asset) => (
-                                  <SelectItem key={`asset-${asset.id}`} value={`asset:${asset.id}`}>
-                                    {asset.name}{asset.location ? ` · ${asset.location}` : ""}
-                                  </SelectItem>
+                                  <SelectItem key={`asset-${asset.id}`} value={`asset:${asset.id}`}>{asset.name}{asset.location ? ` · ${asset.location}` : ""}</SelectItem>
                                 ))}
                                 {manubotData.assetCategories.map((category) => (
-                                  <SelectItem key={`category-${category.id}`} value={`category:${category.id}`}>
-                                    Categoria · {category.name}
-                                  </SelectItem>
+                                  <SelectItem key={`category-${category.id}`} value={`category:${category.id}`}>Categoria · {category.name}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -493,16 +451,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                           <div className="space-y-1.5">
                             <Label htmlFor="dashboard-manubot-resolution">Tempo stimato *</Label>
                             <div className="relative">
-                              <Input
-                                id="dashboard-manubot-resolution"
-                                type="number"
-                                min={5}
-                                max={1440}
-                                step={5}
-                                value={expectedResolutionMinutes}
-                                onChange={(event) => setExpectedResolutionMinutes(event.target.value)}
-                                className="bg-background pr-12"
-                              />
+                              <Input id="dashboard-manubot-resolution" type="number" min={5} max={1440} step={5} value={expectedResolutionMinutes} onChange={(event) => setExpectedResolutionMinutes(event.target.value)} className="bg-background pr-12" />
                               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">min</span>
                             </div>
                           </div>
@@ -519,10 +468,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                         </div>
 
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <Paperclip className="h-4 w-4 text-ha-brand" />
-                            <Label htmlFor="dashboard-manubot-photos">Foto / allegati ManuBot</Label>
-                          </div>
+                          <div className="flex items-center gap-2"><Paperclip className="h-4 w-4 text-ha-brand" /><Label htmlFor="dashboard-manubot-photos">Foto / allegati ManuBot</Label></div>
                           <Input
                             id="dashboard-manubot-photos"
                             type="file"
@@ -534,9 +480,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                               event.currentTarget.value = ""
                             }}
                           />
-                          <p className="text-[11px] text-muted-foreground">
-                            Stessi limiti del form ManuBot: fino a 5 immagini JPEG/PNG/WebP, max 10 MB ciascuna e 25 MB totali.
-                          </p>
+                          <p className="text-[11px] text-muted-foreground">Stessi limiti del form ManuBot: fino a 5 immagini JPEG/PNG/WebP, max 10 MB ciascuna e 25 MB totali.</p>
 
                           {photos.length > 0 && (
                             <div className="grid gap-2 sm:grid-cols-2">
@@ -545,12 +489,7 @@ export function DashboardTaskQuickAction({ onCreated }: { onCreated?: () => void
                                   <ImagePlus className="h-3.5 w-3.5 shrink-0 text-ha-brand" />
                                   <span className="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span>
                                   <span className="shrink-0 text-muted-foreground">{(file.size / 1024 / 1024).toFixed(1)} MB</span>
-                                  <button
-                                    type="button"
-                                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                                    aria-label={`Rimuovi ${file.name}`}
-                                    onClick={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}
-                                  >
+                                  <button type="button" className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label={`Rimuovi ${file.name}`} onClick={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}>
                                     <X className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
@@ -596,7 +535,6 @@ export function DashboardCallQuickAction({ onStarted }: { onStarted?: () => void
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || "Non è stato possibile avviare la telefonata")
-
       toast.success(data.message || "Telefonata avviata")
       setNumber("")
       setOpen(false)
@@ -630,9 +568,7 @@ export function DashboardCallQuickAction({ onStarted }: { onStarted?: () => void
                 }
               }}
             />
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Squilla prima il tuo interno; quando rispondi, il centralino compone il numero indicato.
-            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">Squilla prima il tuo interno; quando rispondi, il centralino compone il numero indicato.</p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={calling}>Annulla</Button>
