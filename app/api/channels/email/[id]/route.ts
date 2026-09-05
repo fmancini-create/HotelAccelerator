@@ -39,7 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const propertyId = await getAuthenticatedPropertyId(request)
     const access = await getChannelAccess(request)
 
-    if (!(await canAccessEmailChannel(access, propertyId, id))) {
+    if (!(await canAccessEmailChannel(access, propertyId, id, "read"))) {
       return NextResponse.json({ error: "Accesso negato", code: "FORBIDDEN" }, { status: 403 })
     }
 
@@ -62,14 +62,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const propertyId = await getAuthenticatedPropertyId(request)
     const access = await getChannelAccess(request)
 
-    if (!(await canAccessEmailChannel(access, propertyId, id))) {
+    if (!(await canAccessEmailChannel(access, propertyId, id, "manage"))) {
       return NextResponse.json({ error: "Accesso negato", code: "FORBIDDEN" }, { status: 403 })
     }
 
     const body = await request.json()
     const { email_address, display_name, is_active, assigned_users, color } = body
 
-    // Non-admins cannot reassign their mailbox to other users: keep self only.
     let resolvedAssignedUsers: string[] = assigned_users || []
     if (!access.isAdmin) {
       resolvedAssignedUsers = access.adminUserId ? [access.adminUserId] : []
@@ -96,7 +95,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
     const propertyId = await getAuthenticatedPropertyId(request)
     const access = await getChannelAccess(request)
 
-    if (!(await canAccessEmailChannel(access, propertyId, id))) {
+    if (!(await canAccessEmailChannel(access, propertyId, id, "manage"))) {
       return NextResponse.json({ error: "Accesso negato", code: "FORBIDDEN" }, { status: 403 })
     }
 
@@ -115,7 +114,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const propertyId = await getAuthenticatedPropertyId(request)
     const access = await getChannelAccess(request)
 
-    if (!(await canAccessEmailChannel(access, propertyId, id))) {
+    if (!(await canAccessEmailChannel(access, propertyId, id, "manage"))) {
       return NextResponse.json({ error: "Accesso negato", code: "FORBIDDEN" }, { status: 403 })
     }
 

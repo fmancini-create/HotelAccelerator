@@ -6,7 +6,6 @@ import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
 import { decryptChannelSecrets } from "@/lib/email/channel-secrets"
 
-// Send email via OAuth (Gmail or Outlook API)
 export async function POST(request: NextRequest) {
   try {
     const { channel_id, property_id, to, subject, body, reply_to_message_id } = await request.json()
@@ -15,26 +14,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Parametri mancanti" }, { status: 400 })
     }
 
-    // `property_id` e `channel_id` arrivano dalla RICHIESTA, quindi sono
-    // falsificabili. Finche' questa rotta si affidava solo alle politiche del
-    // database, non c'era isolamento: la politica su `email_channels` era
-    // aperta a ogni utente autenticato (provato: un membro del tenant A
-    // leggeva i canali del tenant B, token OAuth inclusi).
-    //
-    // Il controllo giusto ESISTEVA GIA' ed e' usato dalle rotte sorelle
-    // (`sync`, `labels`): semplicemente questa non lo chiamava. E' il caso
-    // classico del presidio scritto, verde e mai invocato.
-    //
-    // Qui pesa piu' che altrove: senza controllo si invia posta a nome della
-    // casella di un altro cliente.
     const access = await getChannelAccess(request)
-    if (!(await canAccessEmailChannel(access, property_id, channel_id))) {
+    if (!(await canAccessEmailChannel(access, property_id, channel_id, "write"))) {
       return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
     }
 
     const supabase = await createClient()
-
-    // Get channel with OAuth credentials
     const { data: rawChannel, error: channelError } = await supabase
       .from("email_channels")
       .select("*")
@@ -46,14 +31,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Canale non trovato" }, { status: 404 })
     }
 
-    // DUAL-READ: tollera segreti legacy in chiaro e valori cifrati `enc:v1:...`.
     const channel = decryptChannelSecrets(rawChannel)
-
     if (!channel.oauth_access_token || !channel.provider) {
       return NextResponse.json({ error: "Canale non configurato con OAuth" }, { status: 400 })
     }
 
-    // Check token expiry and refresh if needed
     if (channel.oauth_expiry && new Date(channel.oauth_expiry) < new Date()) {
       const refreshResponse = await fetch(
         `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/channels/email/oauth/refresh`,
@@ -68,7 +50,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Token scaduto. Ricollegare l'account." }, { status: 401 })
       }
 
-      // Re-fetch channel
       const { data: refreshedChannel } = await supabase
         .from("email_channels")
         .select("oauth_access_token")
@@ -78,8 +59,6 @@ export async function POST(request: NextRequest) {
       channel.oauth_access_token = decryptChannelSecrets(refreshedChannel)?.oauth_access_token
     }
 
-    // Load the sending user's signature (rich-text HTML). Optional: if the
-    // endpoint is invoked without an auth session (automations), skip cleanly.
     const {
       data: { user: authUser },
     } = await supabase.auth.getUser()
@@ -87,7 +66,6 @@ export async function POST(request: NextRequest) {
       ? await getUserSignature(supabase, authUser.id)
       : { html: null }
 
-    // Normalise body to HTML so the signature renders with its styling.
     const htmlBody = appendSignatureHtml(
       `<div style="font-family: Arial, sans-serif; font-size: 14px;">${String(body).replace(/\n/g, "<br>")}</div>`,
       signatureHtml,
@@ -114,15 +92,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: sendResult.error || "Errore invio email" }, { status: 500 })
     }
 
-    // Auto-capture TO recipients into CRM (fire-and-forget, honours tenant policy).
     captureOutboundRecipients(supabase, property_id, parseRecipientList(to)).catch((e) =>
       console.error("[v0] auto-capture send-oauth failed", e),
     )
 
-    return NextResponse.json({
-      success: true,
-      messageId: sendResult.messageId,
-    })
+    return NextResponse.json({ success: true, messageId: sendResult.messageId })
   } catch (error) {
     console.error("OAuth send error:", error)
     return NextResponse.json({ error: "Errore durante l'invio" }, { status: 500 })
@@ -139,8 +113,6 @@ async function sendGmailMessage(
   replyToMessageId?: string,
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    // Build RFC 2822 message. We send HTML so the admin user's rich-text
-    // signature (logo, colors, buttons, tables) renders correctly in the recipient's client.
     const messageParts = [
       `From: "${fromName}" <${from}>`,
       `To: ${to}`,
@@ -160,10 +132,7 @@ async function sendGmailMessage(
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        raw: encodedMessage,
-        ...(replyToMessageId && { threadId: replyToMessageId }),
-      }),
+      body: JSON.stringify({ raw: encodedMessage, ...(replyToMessageId && { threadId: replyToMessageId }) }),
     })
 
     if (!response.ok) {
@@ -194,17 +163,8 @@ async function sendOutlookMessage(
       body: JSON.stringify({
         message: {
           subject,
-          body: {
-            contentType: "HTML",
-            content: body,
-          },
-          toRecipients: [
-            {
-              emailAddress: {
-                address: to,
-              },
-            },
-          ],
+          body: { contentType: "HTML", content: body },
+          toRecipients: [{ emailAddress: { address: to } }],
         },
       }),
     })

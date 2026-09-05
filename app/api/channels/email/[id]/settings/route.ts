@@ -2,14 +2,13 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getChannelAccess, canAccessEmailChannel } from "@/lib/channel-access"
 
-// GET - Carica impostazioni canale email
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: channelId } = await params
     const propertyId = await getAuthenticatedPropertyId(request)
 
     const access = await getChannelAccess(request)
-    if (!(await canAccessEmailChannel(access, propertyId, channelId))) {
+    if (!(await canAccessEmailChannel(access, propertyId, channelId, "read"))) {
       return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
     }
     const supabase = access.supabase
@@ -21,11 +20,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .eq("property_id", propertyId)
       .single()
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-    // Carica anche le impostazioni aggiuntive da channel_settings
     const { data: channelSettings } = await supabase
       .from("channel_settings")
       .select("settings")
@@ -34,10 +30,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       .maybeSingle()
 
     return NextResponse.json({
-      // `=== true` e non `?? true`: la colonna e' annullabile con valore
-      // predefinito `false` e il servizio periodico seleziona solo
-      // `sync_enabled = true`. Con `?? true` una riga nulla mostrava
-      // l'interruttore ACCESO mentre la casella non veniva mai sincronizzata.
       sync_enabled: data?.sync_enabled === true,
       push_enabled: data?.push_enabled ?? false,
       is_default: data?.is_default ?? false,
@@ -51,7 +43,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-// PATCH - Aggiorna impostazioni canale email
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id: channelId } = await params
@@ -59,12 +50,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const body = await request.json()
 
     const access = await getChannelAccess(request)
-    if (!(await canAccessEmailChannel(access, propertyId, channelId))) {
+    if (!(await canAccessEmailChannel(access, propertyId, channelId, "manage"))) {
       return NextResponse.json({ error: "Accesso negato" }, { status: 403 })
     }
     const supabase = access.supabase
 
-    // Aggiorna le impostazioni nel canale email
     const emailChannelUpdates: Record<string, boolean> = {}
     if (body.sync_enabled !== undefined) emailChannelUpdates.sync_enabled = body.sync_enabled
     if (body.push_enabled !== undefined) emailChannelUpdates.push_enabled = body.push_enabled
@@ -76,20 +66,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .update(emailChannelUpdates)
         .eq("id", channelId)
         .eq("property_id", propertyId)
-
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 400 })
-      }
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    // Aggiorna le impostazioni aggiuntive in channel_settings
     const additionalSettings: Record<string, boolean> = {}
     if (body.notifications_enabled !== undefined) additionalSettings.notifications_enabled = body.notifications_enabled
     if (body.auto_create_contacts !== undefined) additionalSettings.auto_create_contacts = body.auto_create_contacts
     if (body.save_attachments !== undefined) additionalSettings.save_attachments = body.save_attachments
 
     if (Object.keys(additionalSettings).length > 0) {
-      // Upsert channel_settings
       const { data: existing } = await supabase
         .from("channel_settings")
         .select("id, settings")
@@ -100,10 +85,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       if (existing) {
         await supabase
           .from("channel_settings")
-          .update({
-            settings: { ...existing.settings, ...additionalSettings },
-            updated_at: new Date().toISOString(),
-          })
+          .update({ settings: { ...existing.settings, ...additionalSettings }, updated_at: new Date().toISOString() })
           .eq("id", existing.id)
       } else {
         await supabase.from("channel_settings").insert({

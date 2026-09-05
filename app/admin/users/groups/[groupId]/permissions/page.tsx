@@ -12,20 +12,26 @@ import { AutoLogoutPicker } from "@/components/admin/auto-logout-picker"
 interface ChannelPermission {
   id?: string
   channel_type: string
-  channel_id: string | null
-  channel_name?: string
+  channel_id: string
+  channel_name: string
   can_read: boolean
   can_write: boolean
   can_manage: boolean
 }
 
-const CHANNEL_TYPES = [
-  { type: "email", label: "Email", icon: Mail, description: "Canali email collegati" },
-  { type: "whatsapp", label: "WhatsApp", icon: MessageSquare, description: "WhatsApp Business" },
-  { type: "telegram", label: "Telegram", icon: Send, description: "Bot Telegram" },
-  { type: "chat", label: "Chat Widget", icon: MessageSquare, description: "Chat sul sito web" },
-  { type: "phone", label: "Telefono", icon: Phone, description: "Chiamate VoIP" },
-]
+interface ChannelDescriptor {
+  channel_type: string
+  channel_id: string
+  channel_name: string
+}
+
+const CHANNEL_ICONS: Record<string, typeof Mail> = {
+  email: Mail,
+  whatsapp: MessageSquare,
+  telegram: Send,
+  chat: MessageSquare,
+  phone: Phone,
+}
 
 export default function GroupPermissionsPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = use(params)
@@ -35,14 +41,12 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
   const [autoLogout, setAutoLogout] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  // Questa pagina non diceva NULLA dopo il salvataggio (c'era un commento
-  // "Show success" senza codice). Con un tempo di disconnessione in gioco il
-  // silenzio e' un difetto: chi imposta 5 minuti deve sapere se e' stato preso.
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId])
 
   async function loadData() {
@@ -58,28 +62,38 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
       }
       if (permissionsRes.ok) {
         const data = await permissionsRes.json()
-        // Merge with defaults
-        const existingPermissions = data.permissions || []
-        const mergedPermissions = CHANNEL_TYPES.map((ct) => {
-          const existing = existingPermissions.find(
-            (p: ChannelPermission) => p.channel_type === ct.type && !p.channel_id,
+        const existing = (data.permissions || []) as Array<{
+          channel_type: string
+          channel_id: string | null
+          can_read: boolean
+          can_write: boolean
+          can_manage: boolean
+        }>
+        const channels = (data.channels || []) as ChannelDescriptor[]
+
+        const merged = channels.map((channel) => {
+          const exact = existing.find(
+            (p) => p.channel_type === channel.channel_type && p.channel_id === channel.channel_id,
           )
-          return (
-            existing || {
-              channel_type: ct.type,
-              channel_id: null,
-              can_read: false,
-              can_write: false,
-              can_manage: false,
-            }
+          const legacyWildcard = existing.find(
+            (p) => p.channel_type === channel.channel_type && p.channel_id == null,
           )
+          const source = exact || legacyWildcard
+          return {
+            ...channel,
+            can_read: source?.can_read === true,
+            can_write: source?.can_write === true,
+            can_manage: source?.can_manage === true,
+          }
         })
-        setPermissions(mergedPermissions)
+
+        setPermissions(merged)
         setAreas(data.areas || [])
         setAutoLogout(data.autoLogoutMinutes ?? null)
       }
     } catch (e) {
       console.error("Error loading data:", e)
+      setError("Errore nel caricamento dei permessi")
     } finally {
       setLoading(false)
     }
@@ -96,8 +110,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
         body: JSON.stringify({ permissions, areas, autoLogoutMinutes: autoLogout }),
       })
       if (!res.ok) {
-        // Prima l'errore finiva solo nella console del browser: chi salvava
-        // vedeva la pagina immobile e credeva che fosse andata bene.
         const data = await res.json().catch(() => ({}))
         setError(data.error || "Errore nel salvataggio")
         return
@@ -110,24 +122,23 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
     }
   }
 
-  function updatePermission(channelType: string, field: "can_read" | "can_write" | "can_manage", value: boolean) {
-    // Toccando un permesso il messaggio "salvato" deve spegnersi, altrimenti
-    // resta a dire il falso su modifiche non ancora salvate.
+  function updatePermission(
+    channelId: string,
+    channelType: string,
+    field: "can_read" | "can_write" | "can_manage",
+    value: boolean,
+  ) {
     setSaved(false)
     setPermissions((prev) =>
       prev.map((p) => {
-        if (p.channel_type === channelType && !p.channel_id) {
-          // If disabling read, disable write and manage too
-          if (field === "can_read" && !value) {
-            return { ...p, can_read: false, can_write: false, can_manage: false }
-          }
-          // If enabling write or manage, enable read too
-          if ((field === "can_write" || field === "can_manage") && value) {
-            return { ...p, [field]: value, can_read: true }
-          }
-          return { ...p, [field]: value }
+        if (p.channel_id !== channelId || p.channel_type !== channelType) return p
+        if (field === "can_read" && !value) {
+          return { ...p, can_read: false, can_write: false, can_manage: false }
         }
-        return p
+        if ((field === "can_write" || field === "can_manage") && value) {
+          return { ...p, [field]: true, can_read: true }
+        }
+        return { ...p, [field]: value }
       }),
     )
   }
@@ -135,7 +146,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
   if (loading) {
     return (
       <div className="min-h-full bg-background flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
       </div>
     )
   }
@@ -145,7 +156,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title={`Permessi: ${group?.name || ""}`}
-          subtitle="Configura le aree della piattaforma e i permessi sui canali per i membri del gruppo"
+          subtitle="Configura aree e singoli canali ereditati dai membri del gruppo"
           actions={
             <div className="flex gap-2">
               <Link href="/admin/users">
@@ -167,7 +178,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
             {error}
           </div>
         )}
-
         {saved && !error && (
           <div className="mt-6 rounded-lg border border-ha-success-soft bg-ha-success-soft px-4 py-3 text-sm text-ha-success-soft-foreground">
             Permessi salvati correttamente.
@@ -200,65 +210,78 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
         <div className="mt-6">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Canali</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            I membri del gruppo ereditano sia le aree sopra sia i permessi sui canali qui sotto.
+            I permessi valgono sulla singola casella o canale. In questo modo un gruppo può usare, ad esempio,
+            clienti@4bid.it senza vedere la posta personale della Direzione.
           </p>
         </div>
 
         <div className="mt-3 space-y-4">
-          {CHANNEL_TYPES.map((ct) => {
-            const permission = permissions.find((p) => p.channel_type === ct.type && !p.channel_id)
-            const IconComponent = ct.icon
+          {permissions.length === 0 && (
+            <div className="bg-card rounded-xl border p-8 text-center text-muted-foreground">
+              Nessun canale configurato per questo tenant.
+            </div>
+          )}
 
+          {permissions.map((permission) => {
+            const Icon = CHANNEL_ICONS[permission.channel_type] || MessageSquare
             return (
-              <div key={ct.type} className="bg-card rounded-xl shadow-sm border p-6">
+              <div
+                key={`${permission.channel_type}:${permission.channel_id}`}
+                className="bg-card rounded-xl shadow-sm border p-6"
+              >
                 <div className="flex items-start gap-4">
                   <div
                     className="w-12 h-12 rounded-lg flex items-center justify-center"
-                    style={{ backgroundColor: group?.color + "20" }}
+                    style={{ backgroundColor: group?.color ? `${group.color}20` : undefined }}
                   >
-                    <IconComponent className="w-6 h-6" style={{ color: group?.color }} />
+                    <Icon className="w-6 h-6" style={{ color: group?.color }} />
                   </div>
 
                   <div className="flex-1">
-                    <h3 className="font-medium text-lg">{ct.label}</h3>
-                    <p className="text-sm text-muted-foreground mb-4">{ct.description}</p>
+                    <div className="mb-4">
+                      <h3 className="font-medium text-lg">{permission.channel_name}</h3>
+                      <p className="text-sm text-muted-foreground capitalize">{permission.channel_type}</p>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Lettura */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
                           <Eye className="w-4 h-4 text-ha-info-soft-foreground" />
                           <span className="text-sm font-medium">Lettura</span>
                         </div>
                         <Switch
-                          checked={permission?.can_read || false}
-                          onCheckedChange={(checked) => updatePermission(ct.type, "can_read", checked)}
+                          checked={permission.can_read}
+                          onCheckedChange={(checked) =>
+                            updatePermission(permission.channel_id, permission.channel_type, "can_read", checked)
+                          }
                         />
                       </div>
 
-                      {/* Scrittura */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
                           <Edit3 className="w-4 h-4 text-ha-success-soft-foreground" />
                           <span className="text-sm font-medium">Scrittura</span>
                         </div>
                         <Switch
-                          checked={permission?.can_write || false}
-                          onCheckedChange={(checked) => updatePermission(ct.type, "can_write", checked)}
-                          disabled={!permission?.can_read}
+                          checked={permission.can_write}
+                          onCheckedChange={(checked) =>
+                            updatePermission(permission.channel_id, permission.channel_type, "can_write", checked)
+                          }
+                          disabled={!permission.can_read}
                         />
                       </div>
 
-                      {/* Gestione */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
                           <Shield className="w-4 h-4 text-purple-500" />
                           <span className="text-sm font-medium">Gestione</span>
                         </div>
                         <Switch
-                          checked={permission?.can_manage || false}
-                          onCheckedChange={(checked) => updatePermission(ct.type, "can_manage", checked)}
-                          disabled={!permission?.can_read}
+                          checked={permission.can_manage}
+                          onCheckedChange={(checked) =>
+                            updatePermission(permission.channel_id, permission.channel_type, "can_manage", checked)
+                          }
+                          disabled={!permission.can_read}
                         />
                       </div>
                     </div>
@@ -267,34 +290,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
               </div>
             )
           })}
-        </div>
-
-        {/* Legenda */}
-        <div className="mt-6 bg-muted/50 rounded-xl p-6">
-          <h3 className="font-medium mb-4">Legenda Permessi</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="flex items-start gap-2">
-              <Eye className="w-4 h-4 text-ha-info-soft-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">Lettura</p>
-                <p className="text-muted-foreground">Può visualizzare messaggi e conversazioni</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <Edit3 className="w-4 h-4 text-ha-success-soft-foreground mt-0.5" />
-              <div>
-                <p className="font-medium">Scrittura</p>
-                <p className="text-muted-foreground">Può rispondere e inviare messaggi</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <Shield className="w-4 h-4 text-purple-500 mt-0.5" />
-              <div>
-                <p className="font-medium">Gestione</p>
-                <p className="text-muted-foreground">Può configurare il canale e le impostazioni</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
