@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 
 import { authenticateRegistryClient } from "@/lib/customer-codes/registry-auth"
+import { assertExistingHotelAcceleratorPropertyUsable } from "@/lib/suite-identity/preflight"
 import { provisionHotelAcceleratorFromSatellite, SuiteIdentityError } from "@/lib/suite-identity/registry"
 import { parseSuiteSsoProduct } from "@/lib/suite-sso/config"
 
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await assertExistingHotelAcceleratorPropertyUsable({ product, externalTenantId })
     const result = await provisionHotelAcceleratorFromSatellite({
       product,
       externalTenantId,
