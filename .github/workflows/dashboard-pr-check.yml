@@ -40,6 +40,9 @@ jobs:
       - name: Test HR time-clock login gate
         run: pnpm vitest run tests/mobile-login-time-clock-gate.test.ts
 
+      - name: Test HR tenant user provisioning
+        run: pnpm vitest run tests/hr-user-provisioning.test.ts
+
       - name: Test dashboard local day boundaries
         run: pnpm vitest run tests/dashboard-local-day.test.ts
 
