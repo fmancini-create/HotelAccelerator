@@ -94,7 +94,9 @@ export async function GET(request: NextRequest) {
       ? await db.from("properties").select("id,name").in("id", propertyIds)
       : { data: [], error: null }
     if (propertiesError) throw propertiesError
-    const propertyName = new Map((properties ?? []).map((row: any) => [String(row.id), String(row.name || "Tenant")]))
+    const propertyName = new Map<string, string>(
+      (properties ?? []).map((row: any): [string, string] => [String(row.id), String(row.name || "Tenant")]),
+    )
 
     const trackedCredits = rows.reduce((sum: number, row: any) => sum + number(row.credits_used), 0)
     const trackedProviderCostMicros = rows.reduce((sum: number, row: any) => sum + number(row.provider_cost_micros), 0)
