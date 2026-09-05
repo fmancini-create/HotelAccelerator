@@ -2,10 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { requireAreaApi } from "@/lib/auth/area-access"
-import { getChannelAccess } from "@/lib/channel-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getScoutTenantBillingState } from "@/lib/scout/billing"
+import { requireScoutBillingAdmin, ScoutBillingAccessDenied } from "@/lib/scout/access"
 
 const patchSchema = z.object({
   enabled: z.boolean(),
@@ -54,13 +54,10 @@ export async function GET(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     await requireAreaApi("crm", request)
-    const access = await getChannelAccess(request)
-    if (!access.isAdmin) {
-      return NextResponse.json({ error: "Solo un amministratore del tenant può modificare la ricarica automatica." }, { status: 403 })
-    }
     const propertyId = await getAuthenticatedPropertyId(request)
     const body = patchSchema.parse(await request.json())
     const db = createServiceClient()
+    const actorEmail = await requireScoutBillingAdmin(db, request, propertyId)
     const billing = await getScoutTenantBillingState(db, propertyId)
     if (!billing.active) return NextResponse.json({ error: "Attiva Scout prima di configurare la ricarica automatica." }, { status: 409 })
     if (!billing.creditPriceCents || !billing.pricingConfigured) return NextResponse.json({ error: "Listino Scout non configurato." }, { status: 503 })
@@ -87,13 +84,14 @@ export async function PATCH(request: NextRequest) {
       threshold_cents: body.thresholdCents,
       recharge_credits: body.rechargeCredits,
       consented_at: body.enabled ? now : null,
-      updated_by: access.email,
+      updated_by: actorEmail,
       updated_at: now,
     }, { onConflict: "property_id" })
     if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
+    if (error instanceof ScoutBillingAccessDenied) return NextResponse.json({ error: error.message }, { status: 403 })
     if (error instanceof z.ZodError) return NextResponse.json({ error: "Impostazioni ricarica automatica non valide." }, { status: 400 })
     console.error("Scout auto recharge update failed:", error)
     return NextResponse.json({ error: "Impossibile aggiornare la ricarica automatica Scout." }, { status: 500 })
