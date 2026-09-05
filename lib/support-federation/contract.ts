@@ -24,6 +24,14 @@ export function toInboxConversationStatus(status?: "open" | "closed"): "open" | 
   return status === "closed" ? "resolved" : "open"
 }
 
+// public.update_conversation_on_message() is the single owner of unread +1 for
+// newly inserted customer messages. The federation must only preserve the
+// current value while upserting the parent conversation.
+export function preserveInboxUnreadCount(value: unknown): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.trunc(parsed) : 0
+}
+
 export const federatedSupportProjectionSchema = z.object({
   tenant_ref: z.string().trim().min(1).max(160),
   thread_id: z.string().trim().min(1).max(200),
