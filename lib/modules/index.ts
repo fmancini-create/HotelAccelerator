@@ -16,6 +16,7 @@
  */
 
 import { createServiceClient } from "@/lib/supabase/server"
+import { getSuiteAddonEntitlementForTenant } from "@/lib/suite-addons/entitlements"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type ModuleCategory = "core" | "product" | "addon"
@@ -79,6 +80,22 @@ function isEffectivelyActive(status: ModuleStatus, expiresAt: string | null): bo
   return true
 }
 
+async function reviewsSuiteEntitlement(propertyId: string) {
+  try {
+    return await getSuiteAddonEntitlementForTenant({
+      productKey: "hotelaccelerator",
+      externalTenantId: propertyId,
+      addonKey: "reviews",
+    })
+  } catch (error) {
+    console.error("[modules] reviews suite entitlement lookup failed", {
+      propertyId,
+      error: error instanceof Error ? error.message : "unknown",
+    })
+    return null
+  }
+}
+
 /**
  * Legge l'intero catalogo dei moduli disponibili.
  */
@@ -124,23 +141,37 @@ export async function getModulesWithState(
   supabase: SupabaseClient,
   propertyId: string,
 ): Promise<ModuleWithState[]> {
-  const [catalog, tenant] = await Promise.all([
+  const [catalog, tenant, reviewsEntitlement] = await Promise.all([
     getModuleCatalog(supabase),
     getTenantModules(supabase, propertyId),
+    reviewsSuiteEntitlement(propertyId),
   ])
 
   const byKey = new Map(tenant.map((t) => [t.moduleKey, t]))
 
   return catalog.map((m) => {
     const state = byKey.get(m.key)
-    const status: ModuleStatus = state?.status ?? "inactive"
-    const expiresAt = state?.expiresAt ?? null
+    const localStatus: ModuleStatus = state?.status ?? "inactive"
+    const localExpiresAt = state?.expiresAt ?? null
+    const localActive = isEffectivelyActive(localStatus, localExpiresAt)
+
+    if (m.key === "reviews" && !localActive && reviewsEntitlement?.active) {
+      const status: ModuleStatus = reviewsEntitlement.status === "trial" ? "trial" : "active"
+      return {
+        ...m,
+        status,
+        plan: "suite",
+        expiresAt: reviewsEntitlement.expiresAt,
+        active: true,
+      }
+    }
+
     return {
       ...m,
-      status,
+      status: localStatus,
       plan: state?.plan ?? null,
-      expiresAt,
-      active: isEffectivelyActive(status, expiresAt),
+      expiresAt: localExpiresAt,
+      active: localActive,
     }
   })
 }
@@ -153,9 +184,14 @@ export async function getActiveModuleKeys(
   supabase: SupabaseClient,
   propertyId: string,
 ): Promise<Set<string>> {
-  const tenant = await getTenantModules(supabase, propertyId)
+  const [tenant, reviewsEntitlement] = await Promise.all([
+    getTenantModules(supabase, propertyId),
+    reviewsSuiteEntitlement(propertyId),
+  ])
   const active = tenant.filter((t) => isEffectivelyActive(t.status, t.expiresAt))
-  return new Set(active.map((t) => t.moduleKey))
+  const keys = new Set(active.map((t) => t.moduleKey))
+  if (reviewsEntitlement?.active) keys.add("reviews")
+  return keys
 }
 
 /**
