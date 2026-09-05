@@ -13,6 +13,20 @@ import {
 } from "@/lib/telephony/voice-products"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { getVoiceIvrRoutes, isMissingVoiceRoutingSchema } from "@/lib/telephony/voice-routing"
+import { CUSTOMER_CODE_DIGITS } from "@/lib/telephony/customer-code"
+
+const VOICE_INTERACTION_UX = {
+  slow_tool_threshold_ms: 3_000,
+  slow_tool_speech: "Un attimo per cortesia, verifico subito.",
+  support_customer_code: {
+    digits: CUSTOMER_CODE_DIGITS,
+    input_modes: ["dtmf", "speech"],
+  },
+  prospect_qualification: {
+    order: ["name", "email"],
+    one_question_per_turn: true,
+  },
+} as const
 
 /** Restituisce gli URL degli strumenti degli agenti vocali 3CX senza mai includere il segreto. */
 export async function GET(request: NextRequest) {
@@ -115,6 +129,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       support_hub: supportHub,
       configuration_mode: supportHub ? "4bid_advanced" : "tenant_easy",
+      interaction_ux: VOICE_INTERACTION_UX,
       voice_agents: voiceAgents,
       prospect_agents: prospectAgents,
       customer_support_agents: customerSupportAgents,

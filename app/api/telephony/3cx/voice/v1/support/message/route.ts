@@ -7,6 +7,7 @@ import { authenticateVoiceInbound } from "@/lib/telephony/inbound-auth"
 import { getVoiceProduct } from "@/lib/telephony/voice-products"
 import { takeVoiceRequest } from "@/lib/telephony/voice-rate-limit"
 import { createVoiceSupportMessage, findVoiceSupportCustomer, isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
+import { normalizeVoiceSupportAliases } from "@/lib/telephony/voice-request"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   if (!rate.allowed) return NextResponse.json({ error: "Troppe richieste", request_id: requestId }, { status: 429, headers: NO_STORE })
 
   const raw = await readVoiceBody(request)
-  const parsed = requestSchema.safeParse(raw)
+  const parsed = requestSchema.safeParse(normalizeVoiceSupportAliases(raw))
   if (!parsed.success) return NextResponse.json({ error: "Messaggio vocale non valido", request_id: requestId }, { status: 400, headers: NO_STORE })
 
   const suiteProductKey = VOICE_PRODUCT_TO_SUITE_PRODUCT[product.key]
