@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   const sb = createServiceClient()
   const { data: account, error: accountError } = await sb
     .from("customer_accounts")
-    .select("id, property_id")
+    .select("id")
     .eq("id", customerAccountId)
     .maybeSingle()
   if (accountError) throw accountError
@@ -62,34 +62,8 @@ export async function POST(request: NextRequest) {
     .single()
   if (error) throw error
 
-  // If HA already exists, keep the local module guard aligned for satellite
-  // products. Standalone accounts have no property yet, so activation remains
-  // account-level until HA is provisioned.
-  if (account.property_id && productKey !== "hotelaccelerator") {
-    const { error: moduleError } = await sb.from("tenant_modules").upsert(
-      {
-        property_id: account.property_id,
-        module_key: productKey,
-        status: status === "trial" ? "trial" : status === "active" ? "active" : "inactive",
-        activated_at: activatedAt,
-        expires_at: expiresAt,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "property_id,module_key" },
-    )
-    if (moduleError) {
-      console.error("[suite-identity] entitlement saved but tenant module sync failed", {
-        customer_account_id: customerAccountId,
-        product_key: productKey,
-        property_id: account.property_id,
-        error: moduleError.message,
-      })
-      return NextResponse.json(
-        { error: "Entitlement registrato ma sincronizzazione modulo non riuscita", code: "module_sync_failed" },
-        { status: 500 },
-      )
-    }
-  }
-
+  // Account-level entitlement is intentionally separate from tenant_modules.
+  // Local product access keeps its existing owner/flow; provisioning aligns a
+  // local module only when a real cross-suite launch needs it.
   return NextResponse.json({ entitlement: data }, { headers: { "Cache-Control": "no-store" } })
 }
