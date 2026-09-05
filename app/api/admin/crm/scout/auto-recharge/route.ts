@@ -27,6 +27,15 @@ export async function GET(request: NextRequest) {
       getScoutTenantBillingState(db, propertyId),
     ])
     if (error) throw error
+
+    let canManage = true
+    try {
+      await requireScoutBillingAdmin(db, request, propertyId)
+    } catch (accessError) {
+      if (accessError instanceof ScoutBillingAccessDenied) canManage = false
+      else throw accessError
+    }
+
     const row = data
     return NextResponse.json({
       autoRecharge: {
@@ -43,6 +52,7 @@ export async function GET(request: NextRequest) {
         lastErrorAt: row?.last_error_at ?? null,
       },
       creditPriceCents: billing.creditPriceCents,
+      canManage,
     })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
