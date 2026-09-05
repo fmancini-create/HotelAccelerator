@@ -15,6 +15,12 @@ function redirect(request: NextRequest, params: Record<string, string>) {
   return NextResponse.redirect(url)
 }
 
+function disabledCalendarApiProject(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (!/Google Calendar API has not been used|Calendar API.*disabled/i.test(message)) return null
+  return message.match(/project\s+(\d+)/i)?.[1] || message.match(/[?&]project=(\d+)/i)?.[1] || ""
+}
+
 export async function GET(request: NextRequest) {
   try {
     const errorParam = request.nextUrl.searchParams.get("error")
@@ -94,7 +100,14 @@ export async function GET(request: NextRequest) {
 
     return redirect(request, { calendar_connected: sourceKind })
   } catch (error) {
+    const project = disabledCalendarApiProject(error)
     console.error("[crm-calendar] Google callback failed:", error instanceof Error ? error.message : error)
+    if (project !== null) {
+      return redirect(request, {
+        calendar_error: "google_calendar_api_disabled",
+        ...(project ? { google_project: project } : {}),
+      })
+    }
     return redirect(request, { calendar_error: "collegamento_google_fallito" })
   }
 }
