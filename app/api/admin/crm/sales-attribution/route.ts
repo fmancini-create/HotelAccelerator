@@ -36,6 +36,34 @@ type ConversationRow = {
   subject: string | null
 }
 
+type ReviewRow = {
+  id: string
+  date_request_id: string
+  conversation_id: string | null
+  user_id: string | null
+  quote_sent_at: string | null
+  closed_at: string | null
+  amount_cents: number | null
+  confidence: number
+  verification_status: string
+  evidence: Record<string, unknown> | null
+  scanned_at: string
+}
+
+type UserLabel = { id: string; name: string | null; email: string | null }
+type ConversationLabel = {
+  id: string
+  contact_name: string | null
+  contact_email: string | null
+  subject: string | null
+}
+type StatusRow = { verification_status: string }
+type ExistingLockRow = {
+  date_request_id: string
+  attribution_source: string
+  verified_by: string | null
+}
+
 function responseError(error: unknown, fallback: string) {
   const status = error && typeof error === "object" && "status" in error
     ? Number((error as { status?: number }).status) || 500
@@ -135,41 +163,52 @@ export async function GET(request: NextRequest) {
     if (attributions.error) throw attributions.error
     if (reviewRows.error) throw reviewRows.error
 
+    const statusRows = (attributions.data ?? []) as StatusRow[]
+    const rows = (reviewRows.data ?? []) as ReviewRow[]
     const statuses = { confirmed: 0, needs_review: 0, unattributed: 0, rejected: 0 }
-    for (const row of attributions.data ?? []) {
+    for (const row of statusRows) {
       const key = row.verification_status as keyof typeof statuses
       if (key in statuses) statuses[key] += 1
     }
 
-    const rows = reviewRows.data ?? []
-    const userIds = [...new Set(rows.map((row) => row.user_id).filter(Boolean))] as string[]
-    const conversationIds = [...new Set(rows.map((row) => row.conversation_id).filter(Boolean))] as string[]
-    const [usersResult, conversationsResult] = await Promise.all([
-      userIds.length
-        ? sb.from("admin_users").select("id,name,email").eq("property_id", caller.propertyId).in("id", userIds)
-        : Promise.resolve({ data: [], error: null }),
-      conversationIds.length
-        ? sb
-            .from("conversations")
-            .select("id,contact_name,contact_email,subject")
-            .eq("property_id", caller.propertyId)
-            .in("id", conversationIds)
-        : Promise.resolve({ data: [], error: null }),
-    ])
-    if (usersResult.error) throw usersResult.error
-    if (conversationsResult.error) throw conversationsResult.error
+    const userIds = [...new Set(rows.map((row: ReviewRow) => row.user_id).filter(Boolean))] as string[]
+    const conversationIds = [...new Set(rows.map((row: ReviewRow) => row.conversation_id).filter(Boolean))] as string[]
 
-    const users = new Map((usersResult.data ?? []).map((user) => [user.id, user]))
-    const conversations = new Map((conversationsResult.data ?? []).map((conversation) => [conversation.id, conversation]))
+    let userRows: UserLabel[] = []
+    if (userIds.length) {
+      const { data, error } = await sb
+        .from("admin_users")
+        .select("id,name,email")
+        .eq("property_id", caller.propertyId)
+        .in("id", userIds)
+      if (error) throw error
+      userRows = (data ?? []) as UserLabel[]
+    }
+
+    let conversationLabelRows: ConversationLabel[] = []
+    if (conversationIds.length) {
+      const { data, error } = await sb
+        .from("conversations")
+        .select("id,contact_name,contact_email,subject")
+        .eq("property_id", caller.propertyId)
+        .in("id", conversationIds)
+      if (error) throw error
+      conversationLabelRows = (data ?? []) as ConversationLabel[]
+    }
+
+    const users = new Map<string, UserLabel>(userRows.map((user: UserLabel) => [user.id, user]))
+    const conversations = new Map<string, ConversationLabel>(
+      conversationLabelRows.map((conversation: ConversationLabel) => [conversation.id, conversation]),
+    )
 
     return NextResponse.json({
       summary: {
         totalRequests: allRequests.count ?? 0,
-        scanned: (attributions.data ?? []).length,
-        unscanned: Math.max(0, (allRequests.count ?? 0) - (attributions.data ?? []).length),
+        scanned: statusRows.length,
+        unscanned: Math.max(0, (allRequests.count ?? 0) - statusRows.length),
         ...statuses,
       },
-      review: rows.map((row) => {
+      review: rows.map((row: ReviewRow) => {
         const user = row.user_id ? users.get(row.user_id) : null
         const conversation = row.conversation_id ? conversations.get(row.conversation_id) : null
         return {
@@ -188,8 +227,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const caller = await requireTenantAdmin(request)
-    const body = await request.json().catch(() => ({}))
-    const offset = Number.isInteger(body?.offset) && body.offset >= 0 ? body.offset : 0
+    const body = (await request.json().catch(() => ({}))) as { offset?: unknown }
+    const offset = typeof body.offset === "number" && Number.isInteger(body.offset) && body.offset >= 0 ? body.offset : 0
     const sb = createServiceClient()
 
     const [{ data: property, error: propertyError }, { data: operatorRows, error: operatorError }, requests] =
@@ -214,33 +253,36 @@ export async function POST(request: NextRequest) {
 
     const batch = (requests.data ?? []) as ScanRequestRow[]
     const conversationIds = [...new Set(batch.map((row) => row.conversation_id).filter(Boolean))] as string[]
-    const [{ data: conversationRows, error: conversationError }, { data: existingRows, error: existingError }] =
-      await Promise.all([
-        conversationIds.length
-          ? sb
-              .from("conversations")
-              .select("id,gmail_thread_id,channel_id,channel,contact_email,contact_name,subject")
-              .eq("property_id", caller.propertyId)
-              .in("id", conversationIds)
-          : Promise.resolve({ data: [], error: null }),
-        batch.length
-          ? sb
-              .from("crm_operator_sales_attributions")
-              .select("date_request_id,attribution_source,verified_by")
-              .eq("property_id", caller.propertyId)
-              .in("date_request_id", batch.map((row) => row.id))
-          : Promise.resolve({ data: [], error: null }),
-      ])
-    if (conversationError) throw conversationError
-    if (existingError) throw existingError
 
-    const conversations = new Map(
-      ((conversationRows ?? []) as ConversationRow[]).map((conversation) => [conversation.id, conversation]),
+    let conversationRows: ConversationRow[] = []
+    if (conversationIds.length) {
+      const { data, error } = await sb
+        .from("conversations")
+        .select("id,gmail_thread_id,channel_id,channel,contact_email,contact_name,subject")
+        .eq("property_id", caller.propertyId)
+        .in("id", conversationIds)
+      if (error) throw error
+      conversationRows = (data ?? []) as ConversationRow[]
+    }
+
+    let existingRows: ExistingLockRow[] = []
+    if (batch.length) {
+      const { data, error } = await sb
+        .from("crm_operator_sales_attributions")
+        .select("date_request_id,attribution_source,verified_by")
+        .eq("property_id", caller.propertyId)
+        .in("date_request_id", batch.map((row) => row.id))
+      if (error) throw error
+      existingRows = (data ?? []) as ExistingLockRow[]
+    }
+
+    const conversations = new Map<string, ConversationRow>(
+      conversationRows.map((conversation: ConversationRow) => [conversation.id, conversation]),
     )
-    const locked = new Set(
-      (existingRows ?? [])
-        .filter((row) => row.attribution_source === "manual" || Boolean(row.verified_by))
-        .map((row) => row.date_request_id),
+    const locked = new Set<string>(
+      existingRows
+        .filter((row: ExistingLockRow) => row.attribution_source === "manual" || Boolean(row.verified_by))
+        .map((row: ExistingLockRow) => row.date_request_id),
     )
     const operators = (operatorRows ?? []) as SalesOperatorIdentity[]
     const tenantDomain = property?.domain ?? property?.custom_domain ?? null
@@ -361,7 +403,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const caller = await requireTenantAdmin(request)
-    const body = await request.json().catch(() => null)
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
     if (!body || typeof body.id !== "string") {
       return NextResponse.json({ error: "Attribuzione non indicata" }, { status: 400 })
     }
@@ -408,12 +450,17 @@ export async function PATCH(request: NextRequest) {
       updated_at: now,
     }
     if (amountCents !== undefined) updates.amount_cents = amountCents
+
     if ("closedAt" in body) {
-      const closedAt = body.closedAt === null ? null : new Date(String(body.closedAt))
-      if (closedAt instanceof Date && closedAt !== null && Number.isNaN(closedAt.getTime())) {
-        return NextResponse.json({ error: "Data di chiusura non valida" }, { status: 400 })
+      if (body.closedAt === null) {
+        updates.closed_at = null
+      } else {
+        const closedAt = new Date(String(body.closedAt))
+        if (Number.isNaN(closedAt.getTime())) {
+          return NextResponse.json({ error: "Data di chiusura non valida" }, { status: 400 })
+        }
+        updates.closed_at = closedAt.toISOString()
       }
-      updates.closed_at = closedAt === null ? null : closedAt.toISOString()
     }
 
     const { data, error } = await sb
