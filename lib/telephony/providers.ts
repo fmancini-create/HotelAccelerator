@@ -53,12 +53,12 @@ export type TelephonyProviderDefinition = {
     inboundEvents: boolean
     voiceAgent: boolean
   }
-  fields: ProviderField[]
+  fields: readonly ProviderField[]
   guide: {
     intro: string
-    steps: ProviderGuideStep[]
-    screenshots: ProviderGuideScreenshot[]
-    officialDocs: Array<{ label: string; url: string }>
+    steps: readonly ProviderGuideStep[]
+    screenshots: readonly ProviderGuideScreenshot[]
+    officialDocs: ReadonlyArray<{ label: string; url: string }>
   }
 }
 
