@@ -7,14 +7,18 @@ import { handleServiceError } from "@/lib/errors"
 import {
   effectiveLeadUnitCostMicros,
   getScoutBillingSettings,
+  resolveScoutFxRate,
   scoutEconomics,
   syncApolloUsageSnapshot,
 } from "@/lib/crm/scout-billing"
 
+const currencySchema = z.string().trim().regex(/^[A-Za-z]{3}$/).transform((value) => value.toUpperCase())
 const patchSchema = z.object({
   providerPlanLabel: z.string().trim().max(120).nullable().optional(),
   providerCycleCostCents: z.number().int().min(0).nullable().optional(),
   leadCreditUnitCostMicrosOverride: z.number().int().min(0).nullable().optional(),
+  commercialCurrency: currencySchema.optional(),
+  fxRateOverride: z.number().positive().nullable().optional(),
   markupMultiplier: z.number().min(1).max(100).optional(),
   lowBalanceThresholdPct: z.number().min(0).max(100).optional(),
   pricingSource: z.enum(["manual_invoice", "contract", "manual_override"]).optional(),
@@ -58,6 +62,14 @@ export async function GET(request: NextRequest) {
       providerError = error instanceof Error ? error.message : "Lettura Apollo non disponibile"
     }
 
+    let fx: Awaited<ReturnType<typeof resolveScoutFxRate>> | null = null
+    let fxError: string | null = null
+    try {
+      fx = await resolveScoutFxRate(db, settings)
+    } catch (error) {
+      fxError = error instanceof Error ? error.message : "Cambio non disponibile"
+    }
+
     const { data: latestSnapshot, error: latestSnapshotError } = await db
       .from("platform_scout_provider_usage_snapshots")
       .select("*")
@@ -81,7 +93,7 @@ export async function GET(request: NextRequest) {
 
     let usageQuery = db
       .from("crm_scout_usage_events")
-      .select("property_id,action,success,credits_used,provider_cost_micros,customer_value_micros,created_at")
+      .select("property_id,action,success,credits_used,provider_cost_micros,provider_cost_customer_micros,customer_value_micros,provider_currency,customer_currency,fx_rate_provider_to_customer,created_at")
       .eq("action", "enrich")
     if (cycleStart) usageQuery = usageQuery.gte("created_at", cycleStart)
     if (cycleEnd) usageQuery = usageQuery.lt("created_at", cycleEnd)
@@ -100,20 +112,23 @@ export async function GET(request: NextRequest) {
 
     const trackedCredits = rows.reduce((sum: number, row: any) => sum + number(row.credits_used), 0)
     const trackedProviderCostMicros = rows.reduce((sum: number, row: any) => sum + number(row.provider_cost_micros), 0)
+    const trackedProviderCostCustomerMicros = rows.reduce((sum: number, row: any) => sum + number(row.provider_cost_customer_micros), 0)
     const trackedCustomerValueMicros = rows.reduce((sum: number, row: any) => sum + number(row.customer_value_micros), 0)
-    const trackedMarginMicros = Math.max(0, trackedCustomerValueMicros - trackedProviderCostMicros)
+    const trackedMarginMicros = Math.max(0, trackedCustomerValueMicros - trackedProviderCostCustomerMicros)
     const unattributedCredits = Math.max(0, leadConsumed - trackedCredits)
     const attributionPct = leadConsumed > 0 ? Math.max(0, Math.min(100, (trackedCredits / leadConsumed) * 100)) : 100
 
     const unitCostMicros = effectiveLeadUnitCostMicros(settings, leadLimit)
-    const liveEconomics = scoutEconomics(settings, leadConsumed, leadLimit)
-    const remainingEconomics = scoutEconomics(settings, leadRemaining, leadLimit)
+    const fxRate = fx?.rate ?? (settings.currency === settings.commercialCurrency ? 1 : 0)
+    const liveEconomics = scoutEconomics(settings, leadConsumed, leadLimit, fxRate || 1)
+    const remainingEconomics = scoutEconomics(settings, leadRemaining, leadLimit, fxRate || 1)
 
     const byProperty = new Map<string, {
       propertyId: string
       propertyName: string
       credits: number
       providerCostMicros: number
+      providerCostCustomerMicros: number
       customerValueMicros: number
       marginMicros: number
     }>()
@@ -124,13 +139,15 @@ export async function GET(request: NextRequest) {
         propertyName: propertyName.get(id) || id,
         credits: 0,
         providerCostMicros: 0,
+        providerCostCustomerMicros: 0,
         customerValueMicros: 0,
         marginMicros: 0,
       }
       current.credits += number(row.credits_used)
       current.providerCostMicros += number(row.provider_cost_micros)
+      current.providerCostCustomerMicros += number(row.provider_cost_customer_micros)
       current.customerValueMicros += number(row.customer_value_micros)
-      current.marginMicros = Math.max(0, current.customerValueMicros - current.providerCostMicros)
+      current.marginMicros = Math.max(0, current.customerValueMicros - current.providerCostCustomerMicros)
       byProperty.set(id, current)
     }
 
@@ -142,9 +159,19 @@ export async function GET(request: NextRequest) {
       .limit(24)
     if (snapshotsError) throw snapshotsError
 
+    const { data: fxSnapshots, error: fxSnapshotsError } = await db
+      .from("platform_scout_fx_snapshots")
+      .select("source,from_currency,to_currency,rate,reference_date,fetched_at")
+      .eq("from_currency", settings.currency)
+      .eq("to_currency", settings.commercialCurrency)
+      .order("reference_date", { ascending: false })
+      .order("fetched_at", { ascending: false })
+      .limit(20)
+    if (fxSnapshotsError) throw fxSnapshotsError
+
     const { data: priceHistory, error: historyError } = await db
       .from("platform_scout_billing_settings_audit")
-      .select("currency,provider_plan_label,provider_cycle_cost_cents,lead_credit_unit_cost_micros_override,markup_multiplier,low_balance_threshold_pct,pricing_source,price_verified_at,changed_by_email,created_at")
+      .select("currency,commercial_currency,provider_plan_label,provider_cycle_cost_cents,lead_credit_unit_cost_micros_override,markup_multiplier,low_balance_threshold_pct,pricing_source,price_verified_at,fx_source,fx_rate_override,changed_by_email,created_at")
       .eq("provider", "apollo")
       .order("created_at", { ascending: false })
       .limit(20)
@@ -160,6 +187,13 @@ export async function GET(request: NextRequest) {
     }
     if (!settings.priceVerifiedAt || Date.now() - new Date(settings.priceVerifiedAt).getTime() > 35 * 24 * 60 * 60 * 1000) {
       warnings.push(warning("pricing_stale", "Costo Apollo non verificato negli ultimi 35 giorni: controlla la fattura o il contratto corrente."))
+    }
+    if (fxError && settings.currency !== settings.commercialCurrency) {
+      warnings.push(warning("fx_unavailable", `Cambio ${settings.currency}/${settings.commercialCurrency} non disponibile: ${fxError}. I prezzi commerciali non sono affidabili finché il cambio non torna disponibile.`, "critical"))
+    }
+    if (fx?.referenceDate) {
+      const ageDays = (Date.now() - new Date(`${fx.referenceDate}T12:00:00Z`).getTime()) / (24 * 60 * 60 * 1000)
+      if (ageDays > 5) warnings.push(warning("fx_stale", `Cambio BCE del ${fx.referenceDate}: dato più vecchio di 5 giorni.`))
     }
     const remainingPct = leadLimit > 0 ? (leadRemaining / leadLimit) * 100 : 100
     if (leadLimit > 0 && remainingPct <= settings.lowBalanceThresholdPct) {
@@ -193,6 +227,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       provider: "apollo",
       settings,
+      fx: {
+        available: Boolean(fx),
+        source: fx?.source || null,
+        fromCurrency: settings.currency,
+        toCurrency: settings.commercialCurrency,
+        rate: fx?.rate ?? null,
+        referenceDate: fx?.referenceDate ?? null,
+        fetchedAt: fx?.fetchedAt ?? null,
+      },
       live: {
         available: Boolean(liveUsage),
         fetchedAt: liveUsage?.fetchedAt || latestSnapshot?.fetched_at || null,
@@ -203,14 +246,17 @@ export async function GET(request: NextRequest) {
       },
       economics: {
         unitCostMicros,
-        customerUnitPriceMicros: unitCostMicros === null ? null : Math.round(unitCostMicros * settings.markupMultiplier),
+        customerUnitPriceMicros: fx ? liveEconomics.customerUnitPriceMicros : null,
         providerCostMicros: liveEconomics.providerCostMicros,
-        customerValueMicros: liveEconomics.customerValueMicros,
-        marginMicros: liveEconomics.providerCostMicros === null || liveEconomics.customerValueMicros === null
-          ? null
-          : Math.max(0, liveEconomics.customerValueMicros - liveEconomics.providerCostMicros),
+        providerCostCustomerMicros: fx ? liveEconomics.providerCostCustomerMicros : null,
+        customerValueMicros: fx ? liveEconomics.customerValueMicros : null,
+        marginMicros: fx && liveEconomics.providerCostCustomerMicros !== null && liveEconomics.customerValueMicros !== null
+          ? Math.max(0, liveEconomics.customerValueMicros - liveEconomics.providerCostCustomerMicros)
+          : null,
         remainingProviderValueMicros: remainingEconomics.providerCostMicros,
+        remainingProviderValueCustomerMicros: fx ? remainingEconomics.providerCostCustomerMicros : null,
         trackedProviderCostMicros,
+        trackedProviderCostCustomerMicros,
         trackedCustomerValueMicros,
         trackedMarginMicros,
       },
@@ -223,6 +269,7 @@ export async function GET(request: NextRequest) {
       tenants: Array.from(byProperty.values()).sort((a, b) => b.credits - a.credits),
       warnings,
       snapshots: snapshots ?? [],
+      fxSnapshots: fxSnapshots ?? [],
       priceHistory: priceHistory ?? [],
     })
   } catch (error) {
@@ -245,6 +292,9 @@ export async function PATCH(request: NextRequest) {
       lead_credit_unit_cost_micros_override: payload.leadCreditUnitCostMicrosOverride !== undefined
         ? payload.leadCreditUnitCostMicrosOverride
         : current.leadCreditUnitCostMicrosOverride,
+      commercial_currency: payload.commercialCurrency ?? current.commercialCurrency,
+      fx_source: payload.fxRateOverride !== undefined && payload.fxRateOverride !== null ? "manual_override" : "ecb",
+      fx_rate_override: payload.fxRateOverride !== undefined ? payload.fxRateOverride : current.fxRateOverride,
       markup_multiplier: payload.markupMultiplier ?? current.markupMultiplier,
       low_balance_threshold_pct: payload.lowBalanceThresholdPct ?? current.lowBalanceThresholdPct,
       pricing_source: payload.pricingSource ?? current.pricingSource,
@@ -256,6 +306,7 @@ export async function PATCH(request: NextRequest) {
     const { error: auditError } = await db.from("platform_scout_billing_settings_audit").insert({
       provider: "apollo",
       currency: current.currency,
+      commercial_currency: current.commercialCurrency,
       provider_plan_label: current.providerPlanLabel,
       provider_cycle_cost_cents: current.providerCycleCostCents,
       lead_credit_unit_cost_micros_override: current.leadCreditUnitCostMicrosOverride,
@@ -263,6 +314,8 @@ export async function PATCH(request: NextRequest) {
       low_balance_threshold_pct: current.lowBalanceThresholdPct,
       pricing_source: current.pricingSource,
       price_verified_at: current.priceVerifiedAt,
+      fx_source: current.fxSource,
+      fx_rate_override: current.fxRateOverride,
       changed_by_email: actorEmail,
     })
     if (auditError) throw auditError
@@ -282,13 +335,15 @@ export async function PATCH(request: NextRequest) {
       .limit(1)
       .maybeSingle()
     const leadLimit = nullableNumber(latest?.lead_credit_limit)
-    const unitCostMicros = effectiveLeadUnitCostMicros(updated, leadLimit)
+    const fx = await resolveScoutFxRate(db, updated)
+    const economics = scoutEconomics(updated, 1, leadLimit, fx.rate)
 
     return NextResponse.json({
       ok: true,
       settings: updated,
-      unitCostMicros,
-      customerUnitPriceMicros: unitCostMicros === null ? null : Math.round(unitCostMicros * updated.markupMultiplier),
+      fx,
+      unitCostMicros: economics.unitCostMicros,
+      customerUnitPriceMicros: economics.customerUnitPriceMicros,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
