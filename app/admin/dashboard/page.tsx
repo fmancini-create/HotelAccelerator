@@ -2,6 +2,7 @@ import PersonalizedDashboard from "@/components/admin/dashboard/personalized-das
 import { DesktopTimeClockPrompt } from "@/components/admin/dashboard/desktop-time-clock-prompt"
 import { OperatorRewardsMotivation } from "@/components/admin/dashboard/operator-rewards-motivation"
 import { ResourceUsagePanel } from "@/components/admin/dashboard/resource-usage-panel"
+import { ScoutUsagePanel } from "@/components/admin/dashboard/scout-usage-panel"
 
 export default function AdminDashboardPage() {
   return (
@@ -9,6 +10,7 @@ export default function AdminDashboardPage() {
       <DesktopTimeClockPrompt />
       <OperatorRewardsMotivation />
       <PersonalizedDashboard />
+      <ScoutUsagePanel />
       <ResourceUsagePanel />
     </>
   )
