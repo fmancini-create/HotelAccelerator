@@ -4,6 +4,7 @@ import { accessErrorStatus, adminUserIdPerDatabase, requireTenantAdmin } from "@
 import { classificaConversazione } from "@/lib/crm/date-requests"
 import {
   analyzeSalesThread,
+  type SalesAttributionAnalysis,
   type SalesOperatorIdentity,
   type SalesThreadMessage,
 } from "@/lib/crm/sales-attribution"
@@ -76,7 +77,7 @@ async function upsertScanResult(
   propertyId: string,
   requestRow: ScanRequestRow,
   conversationId: string | null,
-  result: ReturnType<typeof analyzeSalesThread>,
+  result: SalesAttributionAnalysis,
 ) {
   const now = new Date().toISOString()
   const { error } = await sb.from("crm_operator_sales_attributions").upsert(
@@ -224,6 +225,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
+function countAnalysis(
+  result: SalesAttributionAnalysis,
+  counters: { confirmed: number; review: number; unattributed: number },
+) {
+  if (result.verificationStatus === "confirmed") counters.confirmed += 1
+  else if (result.verificationStatus === "needs_review") counters.review += 1
+  else counters.unattributed += 1
+}
+
 export async function POST(request: NextRequest) {
   try {
     const caller = await requireTenantAdmin(request)
@@ -288,9 +298,7 @@ export async function POST(request: NextRequest) {
     const tenantDomain = property?.domain ?? property?.custom_domain ?? null
 
     let scanned = 0
-    let confirmed = 0
-    let review = 0
-    let unattributed = 0
+    const counters = { confirmed: 0, review: 0, unattributed: 0 }
     let skippedLocked = 0
     let errors = 0
 
@@ -309,17 +317,10 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        if (row.stage === "confermata" && row.stage_set_by && row.stage_set_at) {
+        if (!conversation) {
           const result = analyzeSalesThread([], operators, pipeline)
           await upsertScanResult(sb, caller.propertyId, row, row.conversation_id, result)
-          confirmed += 1
-          scanned += 1
-          continue
-        }
-
-        if (!conversation) {
-          await markUnattributed(sb, caller.propertyId, row, row.conversation_id, "conversation_missing")
-          unattributed += 1
+          countAnalysis(result, counters)
           scanned += 1
           continue
         }
@@ -330,14 +331,15 @@ export async function POST(request: NextRequest) {
         )
         if (classification !== "lavorabile") {
           await markUnattributed(sb, caller.propertyId, row, conversation.id, `excluded_${classification}`)
-          unattributed += 1
+          counters.unattributed += 1
           scanned += 1
           continue
         }
 
         if (conversation.channel !== "email" || !conversation.gmail_thread_id || !conversation.channel_id) {
-          await markUnattributed(sb, caller.propertyId, row, conversation.id, "gmail_thread_not_available")
-          unattributed += 1
+          const result = analyzeSalesThread([], operators, pipeline)
+          await upsertScanResult(sb, caller.propertyId, row, conversation.id, result)
+          countAnalysis(result, counters)
           scanned += 1
           continue
         }
@@ -349,7 +351,17 @@ export async function POST(request: NextRequest) {
           sb,
         )
         if (gmail.error || !gmail.data) {
-          errors += 1
+          // Se esiste almeno una decisione umana finale, conserviamo un candidato
+          // da verificare invece di perdere del tutto l'attribuzione. Un rerun del
+          // backfill potrà poi sostituirlo con l'autore reale del preventivo.
+          if ((row.stage === "confermata" || row.stage === "persa") && row.stage_set_by) {
+            const result = analyzeSalesThread([], operators, pipeline)
+            await upsertScanResult(sb, caller.propertyId, row, conversation.id, result)
+            countAnalysis(result, counters)
+            scanned += 1
+          } else {
+            errors += 1
+          }
           continue
         }
 
@@ -366,10 +378,8 @@ export async function POST(request: NextRequest) {
         })
         const result = analyzeSalesThread(messages, operators, pipeline)
         await upsertScanResult(sb, caller.propertyId, row, conversation.id, result)
+        countAnalysis(result, counters)
         scanned += 1
-        if (result.verificationStatus === "confirmed") confirmed += 1
-        else if (result.verificationStatus === "needs_review") review += 1
-        else unattributed += 1
       } catch (error) {
         errors += 1
         console.error("[sales-attribution] scan row failed", {
@@ -389,9 +399,9 @@ export async function POST(request: NextRequest) {
       total,
       batch: batch.length,
       scanned,
-      confirmed,
-      review,
-      unattributed,
+      confirmed: counters.confirmed,
+      review: counters.review,
+      unattributed: counters.unattributed,
       skippedLocked,
       errors,
     })
