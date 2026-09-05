@@ -32,7 +32,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck Core
-        run: pnpm run typecheck
+        shell: bash
+        run: |
+          set +e
+          pnpm run typecheck > /tmp/typecheck.log 2>&1
+          status=$?
+          cat /tmp/typecheck.log
+          if [ "$status" -ne 0 ]; then
+            {
+              echo "### Typecheck Core"
+              echo '```text'
+              tail -n 120 /tmp/typecheck.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$status"
 
       - name: Test support federation timestamp contract
         run: pnpm vitest run lib/support-federation/__tests__/contract.test.ts
