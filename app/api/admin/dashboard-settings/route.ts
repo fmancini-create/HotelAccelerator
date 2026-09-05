@@ -64,6 +64,8 @@ export async function PATCH(request: NextRequest) {
         property_id: caller.propertyId,
         user_id: body.userId,
         hidden_panels: hiddenPanels,
+        workday_responses_target: goals.workdayResponsesTarget,
+        workday_conversations_target: goals.workdayConversationsTarget,
         responses_target: goals.responsesTarget,
         conversations_target: goals.conversationsTarget,
         median_response_seconds_target: goals.medianResponseSecondsTarget,
