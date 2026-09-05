@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
       period: { from: since, to: new Date().toISOString() },
       users,
       totals: {
-        enabledUsers: rows.filter((row) => row.enabled).length,
+        enabledUsers: rows.filter((row: { enabled: boolean }) => row.enabled).length,
         searches: users.reduce((sum, row) => sum + row.searches, 0),
         saved: users.reduce((sum, row) => sum + row.saved, 0),
         enriched: users.reduce((sum, row) => sum + row.enriched, 0),
