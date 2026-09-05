@@ -1,6 +1,6 @@
 import "server-only"
 
-import { createHash } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { createServiceClient } from "@/lib/supabase/server"
 import { SUITE_SSO_CONFIG } from "@/lib/suite-sso/config"
 import { CENTRAL_SUPPORT_SLUG } from "@/lib/telephony/voice-support"
@@ -29,6 +29,23 @@ function callbackConfig(product: "santaddeo" | "hotelprofitai") {
   }
 }
 
+function callbackHeaders(product: "santaddeo" | "hotelprofitai", staticKey?: string) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+
+  // HotelProfitAI validates the short-lived Vercel workload identity of this
+  // exact HotelAccelerator project. The static registry key remains recovery
+  // auth only; production must not depend on manually mirroring a secret.
+  if (product === "hotelprofitai") {
+    const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim()
+    if (oidcToken) headers.Authorization = `Bearer ${oidcToken}`
+    if (!oidcToken && staticKey) headers["X-4BID-Registry-Key"] = staticKey
+    return headers
+  }
+
+  if (staticKey) headers["X-4BID-Registry-Key"] = staticKey
+  return headers
+}
+
 export async function sendFederatedSupportReply(input: {
   conversationId: string
   propertyId: string
@@ -47,23 +64,39 @@ export async function sendFederatedSupportReply(input: {
   if (!metadata?.product_key || !metadata.external_thread_id || !metadata.external_tenant_id || !metadata.kind) return null
 
   const now = new Date().toISOString()
-  let sourceMessageId = `hotelaccelerator-reply:${now}`
+  const replyId = randomUUID()
+  let sourceMessageId = replyId
 
   if (metadata.product_key !== "hotelaccelerator") {
     const config = callbackConfig(metadata.product_key)
-    if (!config.key) throw new Error(`support_callback_not_configured:${metadata.product_key}`)
+    const headers = callbackHeaders(metadata.product_key, config.key)
+    if (!headers.Authorization && !headers["X-4BID-Registry-Key"]) {
+      throw new Error(`support_callback_not_configured:${metadata.product_key}`)
+    }
+
+    const body = metadata.product_key === "hotelprofitai"
+      ? {
+          reply_id: replyId,
+          tenant_ref: metadata.external_tenant_id,
+          thread_id: metadata.external_thread_id,
+          kind: metadata.kind,
+          content: input.content,
+          actor_name: input.actorName,
+        }
+      : {
+          tenant_ref: metadata.external_tenant_id,
+          thread_id: metadata.external_thread_id,
+          kind: metadata.kind,
+          content: input.content,
+          actor_name: input.actorName,
+        }
+
     const response = await fetch(config.url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-4BID-Registry-Key": config.key },
-      body: JSON.stringify({
-        tenant_ref: metadata.external_tenant_id,
-        thread_id: metadata.external_thread_id,
-        kind: metadata.kind,
-        content: input.content,
-        actor_name: input.actorName,
-      }),
+      headers,
+      body: JSON.stringify(body),
       cache: "no-store",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(15_000),
     })
     const payload = await response.json().catch(() => ({})) as { message?: { id?: string } }
     if (!response.ok) throw new Error(`support_callback_failed:${metadata.product_key}:${response.status}`)
