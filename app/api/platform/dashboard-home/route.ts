@@ -5,6 +5,7 @@ import { getMemberEffectiveAreas } from "@/lib/auth/area-access"
 import { getAccessibleChannelIds, getChannelAccess } from "@/lib/channel-access"
 import { BASELINE_AREA_KEYS } from "@/lib/platform/areas"
 import { readDashboardUserSettings } from "@/lib/platform/dashboard-user-settings"
+import { getTenantLocalDayStart, resolveTenantTimeZone } from "@/lib/platform/local-day"
 import { computeOperatorPerformance, GIORNI_PREDEFINITI } from "@/lib/platform/operator-performance"
 import { InboxReadService } from "@/lib/platform-services/inbox-read.service"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -84,7 +85,16 @@ export async function GET(request: NextRequest) {
 
   const settings = await readDashboardUserSettings(sb, propertyId, userId).catch((error) => {
     console.error("[dashboard-home] user settings unavailable", error)
-    return { hiddenPanels: [], goals: { responsesTarget: null, conversationsTarget: null, medianResponseSecondsTarget: null } }
+    return {
+      hiddenPanels: [],
+      goals: {
+        workdayResponsesTarget: null,
+        workdayConversationsTarget: null,
+        responsesTarget: null,
+        conversationsTarget: null,
+        medianResponseSecondsTarget: null,
+      },
+    }
   })
 
   const result: Record<string, unknown> = {
@@ -97,6 +107,9 @@ export async function GET(request: NextRequest) {
       conversations: null,
       medianResponseSeconds: null,
       measuredResponses: 0,
+      todayResponses: null,
+      todayConversations: null,
+      timeZone: "Europe/Rome",
     },
     todos: [],
     messages: [],
@@ -107,16 +120,28 @@ export async function GET(request: NextRequest) {
   // owns team comparisons; this route never exposes another operator's row.
   if (userId) {
     try {
-      const { data: kpi } = await sb
-        .from("operator_kpi_settings")
-        .select("enabled")
-        .eq("property_id", propertyId)
-        .eq("user_id", userId)
-        .maybeSingle()
+      const [{ data: kpi }, { data: property }] = await Promise.all([
+        sb
+          .from("operator_kpi_settings")
+          .select("enabled")
+          .eq("property_id", propertyId)
+          .eq("user_id", userId)
+          .maybeSingle(),
+        sb.from("properties").select("timezone").eq("id", propertyId).maybeSingle(),
+      ])
+
+      const timeZone = resolveTenantTimeZone(property?.timezone)
 
       if (kpi?.enabled) {
-        const performance = await computeOperatorPerformance(sb, propertyId, GIORNI_PREDEFINITI)
+        const now = new Date()
+        const dayStart = getTenantLocalDayStart(now, timeZone)
+        const dailyWindowDays = Math.max((now.getTime() - dayStart.getTime()) / 86_400_000, 1 / 86_400)
+        const [performance, todayPerformance] = await Promise.all([
+          computeOperatorPerformance(sb, propertyId, GIORNI_PREDEFINITI),
+          computeOperatorPerformance(sb, propertyId, dailyWindowDays),
+        ])
         const me = performance.righe.find((row) => row.genere === "persona" && row.id === userId)
+        const todayMe = todayPerformance.righe.find((row) => row.genere === "persona" && row.id === userId)
         result.performance = {
           enabled: true,
           days: performance.giorni,
@@ -124,6 +149,21 @@ export async function GET(request: NextRequest) {
           conversations: me?.conversazioni ?? 0,
           medianResponseSeconds: me?.attesaMedianaSec ?? null,
           measuredResponses: me?.attesaSu ?? 0,
+          todayResponses: todayMe?.risposte ?? 0,
+          todayConversations: todayMe?.conversazioni ?? 0,
+          timeZone,
+        }
+      } else {
+        result.performance = {
+          enabled: false,
+          days: GIORNI_PREDEFINITI,
+          responses: null,
+          conversations: null,
+          medianResponseSeconds: null,
+          measuredResponses: 0,
+          todayResponses: null,
+          todayConversations: null,
+          timeZone,
         }
       }
     } catch (error) {
@@ -135,6 +175,9 @@ export async function GET(request: NextRequest) {
         conversations: null,
         medianResponseSeconds: null,
         measuredResponses: 0,
+        todayResponses: null,
+        todayConversations: null,
+        timeZone: "Europe/Rome",
       }
     }
   }

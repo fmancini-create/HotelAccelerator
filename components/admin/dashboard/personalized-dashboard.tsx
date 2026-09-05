@@ -32,6 +32,8 @@ type BaseDashboard = {
 type HomeDashboard = {
   hiddenPanels: string[]
   goals: {
+    workdayResponsesTarget: number | null
+    workdayConversationsTarget: number | null
     responsesTarget: number | null
     conversationsTarget: number | null
     medianResponseSecondsTarget: number | null
@@ -43,6 +45,9 @@ type HomeDashboard = {
     conversations: number | null
     medianResponseSeconds: number | null
     measuredResponses: number
+    todayResponses: number | null
+    todayConversations: number | null
+    timeZone: string
   }
   todos: null | Array<{
     id: string
@@ -183,30 +188,65 @@ function PerformanceStrip({ home }: { home: HomeDashboard }) {
             <Target className="h-5 w-5 text-ha-brand" />
             <h2 className="text-base font-semibold">Le tue performance</h2>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Finestra ultimi {p.days} giorni · solo dati misurati dopo l'attivazione KPI.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Confronto tra la giornata di oggi e la finestra mobile degli ultimi {p.days} giorni · solo dati misurati dopo l'attivazione KPI.
+          </p>
         </div>
         <span className="w-fit rounded-full bg-ha-success-soft px-3 py-1 text-xs font-medium text-ha-success-soft-foreground">KPI attivi</span>
       </div>
-      <div className="grid gap-3 p-4 md:grid-cols-3">
-        <MetricCard
-          label="Risposte inviate"
-          value={(p.responses ?? 0).toLocaleString("it-IT")}
-          target={g.responsesTarget ? `Obiettivo: ${g.responsesTarget.toLocaleString("it-IT")}` : null}
-          progress={progressAtLeast(p.responses, g.responsesTarget)}
-        />
-        <MetricCard
-          label="Conversazioni gestite"
-          value={(p.conversations ?? 0).toLocaleString("it-IT")}
-          target={g.conversationsTarget ? `Obiettivo: ${g.conversationsTarget.toLocaleString("it-IT")}` : null}
-          progress={progressAtLeast(p.conversations, g.conversationsTarget)}
-        />
-        <MetricCard
-          label="Tempo mediano di risposta"
-          value={responseTime(p.medianResponseSeconds)}
-          target={g.medianResponseSecondsTarget ? `Obiettivo: entro ${responseTime(g.medianResponseSecondsTarget)}` : null}
-          progress={progressAtMost(p.medianResponseSeconds, g.medianResponseSecondsTarget)}
-          note={p.measuredResponses > 0 ? `Calcolato su ${p.measuredResponses} risposte misurabili` : "Non ci sono ancora risposte misurabili"}
-        />
+
+      <div className="p-4">
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-semibold"><Clock3 className="h-4 w-4 text-ha-brand" /> Oggi</div>
+            <p className="mt-1 text-[11px] text-muted-foreground">Dalla mezzanotte locale della struttura · fuso {p.timeZone}.</p>
+          </div>
+          <span className="text-[11px] text-muted-foreground">Il conteggio riparte da zero a ogni nuova giornata.</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <MetricCard
+            label="Risposte inviate oggi"
+            value={(p.todayResponses ?? 0).toLocaleString("it-IT")}
+            target={g.workdayResponsesTarget ? `Obiettivo giornata: ${g.workdayResponsesTarget.toLocaleString("it-IT")}` : null}
+            progress={progressAtLeast(p.todayResponses, g.workdayResponsesTarget)}
+            note="Obiettivo giornaliero non configurato"
+          />
+          <MetricCard
+            label="Conversazioni gestite oggi"
+            value={(p.todayConversations ?? 0).toLocaleString("it-IT")}
+            target={g.workdayConversationsTarget ? `Obiettivo giornata: ${g.workdayConversationsTarget.toLocaleString("it-IT")}` : null}
+            progress={progressAtLeast(p.todayConversations, g.workdayConversationsTarget)}
+            note="Obiettivo giornaliero non configurato"
+          />
+        </div>
+
+        <div className="mb-3 mt-5 border-t border-border/70 pt-5">
+          <div className="text-sm font-semibold">Ultimi {p.days} giorni</div>
+          <p className="mt-1 text-[11px] text-muted-foreground">Finestra mobile: non coincide necessariamente con il mese solare.</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <MetricCard
+            label="Risposte inviate"
+            value={(p.responses ?? 0).toLocaleString("it-IT")}
+            target={g.responsesTarget ? `Obiettivo 30 giorni: ${g.responsesTarget.toLocaleString("it-IT")}` : null}
+            progress={progressAtLeast(p.responses, g.responsesTarget)}
+            note="Obiettivo 30 giorni non configurato"
+          />
+          <MetricCard
+            label="Conversazioni gestite"
+            value={(p.conversations ?? 0).toLocaleString("it-IT")}
+            target={g.conversationsTarget ? `Obiettivo 30 giorni: ${g.conversationsTarget.toLocaleString("it-IT")}` : null}
+            progress={progressAtLeast(p.conversations, g.conversationsTarget)}
+            note="Obiettivo 30 giorni non configurato"
+          />
+          <MetricCard
+            label="Tempo mediano di risposta"
+            value={responseTime(p.medianResponseSeconds)}
+            target={g.medianResponseSecondsTarget ? `Soglia: entro ${responseTime(g.medianResponseSecondsTarget)}` : null}
+            progress={progressAtMost(p.medianResponseSeconds, g.medianResponseSecondsTarget)}
+            note={p.measuredResponses > 0 ? `Calcolato su ${p.measuredResponses} risposte misurabili` : "Non ci sono ancora risposte misurabili"}
+          />
+        </div>
       </div>
     </section>
   )

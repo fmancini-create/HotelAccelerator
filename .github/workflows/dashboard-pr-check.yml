@@ -37,5 +37,8 @@ jobs:
       - name: Test HR time-clock login gate
         run: pnpm vitest run tests/mobile-login-time-clock-gate.test.ts
 
+      - name: Test dashboard local day boundaries
+        run: pnpm vitest run tests/dashboard-local-day.test.ts
+
       - name: Check dashboard manifest
         run: pnpm run check:dashboard
