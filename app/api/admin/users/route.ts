@@ -11,9 +11,19 @@ type KpiSetting = {
   tracking_started_at: string | null
 }
 
+type TenantMembership = {
+  user_id: string
+  role: string
+  is_tenant_admin: boolean
+  can_upload: boolean
+  can_delete: boolean
+  can_move: boolean
+  can_manage_users: boolean
+  created_at: string
+}
+
 export async function GET(request: NextRequest) {
   try {
-    // DEV BYPASS: dati fittizi solo in sviluppo locale (regola centralizzata in getDevBypass).
     if (await getDevBypass(request)) {
       return NextResponse.json({
         users: [
@@ -36,65 +46,81 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    // Listing users is an administrative action: only tenant admins / super admins.
     const { propertyId } = await requireTenantAdmin(request)
     const supabase = createServiceClient()
 
-    const { data: users, error } = await supabase
-      .from("admin_users")
-      .select(`
-        id,
-        email,
-        name,
-        role,
-        signature,
-        signature_html,
-        is_tenant_admin,
-        can_upload,
-        can_delete,
-        can_move,
-        can_manage_users,
-        created_at
-      `)
+    // La membership tenant è la fonte autorevole. admin_users contiene
+    // l'identità/auth e il tenant primario legacy, ma una persona può lavorare
+    // in più tenant senza duplicare l'account Supabase Auth.
+    const { data: memberships, error: membershipsError } = await supabase
+      .from("tenant_user_memberships")
+      .select("user_id, role, is_tenant_admin, can_upload, can_delete, can_move, can_manage_users, created_at")
       .eq("property_id", propertyId)
       .order("created_at", { ascending: true })
+    if (membershipsError) throw membershipsError
 
-    if (error) throw error
+    const membershipRows = (memberships || []) as TenantMembership[]
+    const userIds = membershipRows.map((m) => m.user_id)
+    const { data: identities, error: identitiesError } = userIds.length
+      ? await supabase
+          .from("admin_users")
+          .select("id, email, name, signature, signature_html")
+          .in("id", userIds)
+      : { data: [], error: null }
+    if (identitiesError) throw identitiesError
 
-    // Memberships and KPI settings are independent once the tenant's user IDs
-    // are known: start both reads together instead of adding a waterfall.
-    const [{ data: memberships, error: membershipsError }, { data: kpiSettings, error: kpiError }] =
+    const identityById = new Map((identities || []).map((u: any) => [String(u.id), u]))
+    const users = membershipRows
+      .map((membership) => {
+        const identity = identityById.get(membership.user_id) as any | undefined
+        if (!identity) return null
+        return {
+          id: identity.id,
+          email: identity.email,
+          name: identity.name,
+          signature: identity.signature,
+          signature_html: identity.signature_html,
+          role: membership.role,
+          is_tenant_admin: membership.is_tenant_admin,
+          can_upload: membership.can_upload,
+          can_delete: membership.can_delete,
+          can_move: membership.can_move,
+          can_manage_users: membership.can_manage_users,
+          created_at: membership.created_at,
+        }
+      })
+      .filter(Boolean) as Array<any>
+
+    const [{ data: groupMemberships, error: groupMembershipsError }, { data: kpiSettings, error: kpiError }] =
       await Promise.all([
-        supabase
-          .from("user_group_members")
-          .select("user_id, group_id")
-          .in("user_id", users?.map((u: { id: string }) => u.id) || []),
+        userIds.length
+          ? supabase.from("user_group_members").select("user_id, group_id").in("user_id", userIds)
+          : Promise.resolve({ data: [], error: null } as any),
         supabase
           .from("operator_kpi_settings")
           .select("user_id, enabled, tracking_started_at")
           .eq("property_id", propertyId),
       ])
 
-    if (membershipsError) throw membershipsError
+    if (groupMembershipsError) throw groupMembershipsError
     if (kpiError) throw kpiError
 
     const kpiByUser = new Map<string, KpiSetting>(
       ((kpiSettings || []) as KpiSetting[]).map((setting) => [setting.user_id, setting]),
     )
 
-    const usersWithGroups = users?.map((user: { id: string }) => ({
+    const usersWithGroups = users.map((user) => ({
       ...user,
       groups:
-        memberships
+        groupMemberships
           ?.filter((m: { user_id: string; group_id: string }) => m.user_id === user.id)
           .map((m: { user_id: string; group_id: string }) => m.group_id) || [],
       kpi_enabled: kpiByUser.get(user.id)?.enabled === true,
       kpi_tracking_started_at: kpiByUser.get(user.id)?.tracking_started_at ?? null,
     }))
 
-    return NextResponse.json({ users: usersWithGroups || [] })
+    return NextResponse.json({ users: usersWithGroups })
   } catch (error: any) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
@@ -102,7 +128,6 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Creating users is reserved to tenant admins / super admins.
     const caller = await requireTenantAdmin(request)
     const propertyId = caller.propertyId
     const supabase = createServiceClient()
@@ -110,24 +135,20 @@ export async function POST(request: NextRequest) {
 
     const { email, password, name, role, is_tenant_admin } = body
 
-    // Privilege-escalation guard: only a platform super_admin can mint another
-    // super_admin. A tenant admin can create users (incl. tenant admins) only
-    // within their own tenant.
     if (role === "super_admin" && !caller.isSuperAdmin) {
       return NextResponse.json({ error: "Non puoi creare un super admin" }, { status: 403 })
     }
 
-    // Create auth user
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
     })
-
     if (authError) throw authError
 
-    // Create admin_users record. The PK has no DB default and is expected to
-    // match the Supabase auth user id (1:1 relationship), so it must be set here.
+    const tenantRole = role === "admin" ? "admin" : "editor"
+    const tenantAdmin = is_tenant_admin === true
+
     const { data: user, error } = await supabase
       .from("admin_users")
       .insert({
@@ -135,26 +156,37 @@ export async function POST(request: NextRequest) {
         property_id: propertyId,
         email,
         name,
-        role,
-        is_tenant_admin: is_tenant_admin || false,
+        role: tenantRole,
+        is_tenant_admin: tenantAdmin,
         can_upload: true,
-        can_delete: role !== "editor",
+        can_delete: tenantRole !== "editor",
         can_move: true,
-        can_manage_users: role === "super_admin" || is_tenant_admin,
+        can_manage_users: tenantAdmin,
       })
       .select()
       .single()
 
     if (error) {
-      // Roll back the just-created auth user so the email isn't left orphaned
-      // (which would make a retry fail with "email already registered").
       await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {})
       throw error
     }
 
-    // "Mail di default": if a mailbox with the same address as the user's login
-    // email already exists for this tenant, auto-assign it to the new user (owner).
-    // This is best-effort: a failure here must not block user creation.
+    const { error: membershipError } = await supabase.from("tenant_user_memberships").insert({
+      property_id: propertyId,
+      user_id: user.id,
+      role: tenantRole,
+      is_tenant_admin: tenantAdmin,
+      can_upload: true,
+      can_delete: tenantRole !== "editor",
+      can_move: true,
+      can_manage_users: tenantAdmin,
+    })
+    if (membershipError) {
+      await supabase.from("admin_users").delete().eq("id", user.id)
+      await supabase.auth.admin.deleteUser(authData.user.id).catch(() => {})
+      throw membershipError
+    }
+
     try {
       const { data: ownMailbox } = await supabase
         .from("email_channels")
@@ -171,9 +203,8 @@ export async function POST(request: NextRequest) {
       console.error("[v0] Auto-assign default mailbox failed:", assignErr)
     }
 
-    return NextResponse.json({ user })
+    return NextResponse.json({ user: { ...user, role: tenantRole, is_tenant_admin: tenantAdmin } })
   } catch (error: any) {
-    // Diniego della guardia di area: 403, non il 500 generico qui sotto.
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     return NextResponse.json({ error: error.message }, { status: accessErrorStatus(error) })
   }
