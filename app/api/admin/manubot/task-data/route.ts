@@ -17,10 +17,11 @@ export const dynamic = "force-dynamic"
  * attivo il client NON deve mostrare l'opzione ManuBot.
  */
 export async function GET(request: NextRequest) {
+  let moduleActive = false
   try {
     await requireAreaApi("todos", request)
     const identity = await getCallerIdentity(request)
-    if (!identity) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
+    if (!identity) return NextResponse.json({ error: "unauthorized", active: false }, { status: 401 })
 
     const resolved = await loadManubotPropertyForCaller(
       identity,
@@ -28,14 +29,14 @@ export async function GET(request: NextRequest) {
     )
     if (!resolved.ok) {
       return NextResponse.json(
-        { error: resolved.error, message: resolved.message },
+        { error: resolved.error, message: resolved.message, active: false },
         { status: resolved.status },
       )
     }
 
-    const active = await isModuleActive(createServiceClient(), resolved.property.id, "manubot")
-    if (!active) {
-      return NextResponse.json({ error: "module_inactive" }, { status: 404 })
+    moduleActive = await isModuleActive(createServiceClient(), resolved.property.id, "manubot")
+    if (!moduleActive) {
+      return NextResponse.json({ error: "module_inactive", active: false }, { status: 404 })
     }
 
     const client = await getManubotClient(resolved.property)
@@ -48,6 +49,6 @@ export async function GET(request: NextRequest) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     const category = categorizeManubotError(error)
     logManubotError("manubot/task-data", error, category)
-    return NextResponse.json({ error: category }, { status: 502 })
+    return NextResponse.json({ error: category, active: moduleActive }, { status: 502 })
   }
 }
