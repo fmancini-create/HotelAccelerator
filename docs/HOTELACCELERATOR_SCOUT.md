@@ -10,6 +10,7 @@ Ultimo aggiornamento: 2026-09-05
 - Guest Scout: `Specifica`
 - Add-on a pagamento, saldo crediti, checkout e ledger: `Codice` sul branch `feat/scout-paid-addon-credits`
 - Dashboard economics superadmin: `Codice` sul branch `feat/scout-paid-addon-credits`
+- Monitoraggio live dei crediti del provider nel superadmin: `Codice` sul branch `feat/scout-paid-addon-credits`
 - Verifica con pagamento reale, webhook reale e migrazioni applicate: non ancora oltre `Codice`
 
 ## Nome canonico
@@ -76,13 +77,28 @@ Il prezzo non usa piu' un moltiplicatore hardcoded. Il superadmin configura:
 - crediti inclusi;
 - acquisto minimo;
 - moltiplicatore commerciale;
-- costo effettivo stimato del provider per operazione, con storico e decorrenza.
+- costo monetario stimato del provider per operazione, con storico e decorrenza.
 
 Per l'operazione corrente:
 
-`prezzo_credito_scout = arrotonda_al_centesimo(costo_provider_effettivo * moltiplicatore_superadmin)`
+`prezzo_credito_scout = arrotonda_al_centesimo(costo_provider_stimato * moltiplicatore_superadmin)`
 
 Il costo provider e' salvato in micro-euro per non perdere precisione. Ogni variazione crea una nuova riga storica: i vecchi consumi mantengono costo, moltiplicatore e valore commerciale validi al momento dell'uso.
+
+Il costo monetario configurato e' una stima interna e non deve essere confuso con il numero di crediti tecnici effettivamente consumati dal piano del provider.
+
+### Monitoraggio provider
+
+Il superadmin legge in tempo reale, tramite endpoint provider server-side, i contatori del piano disponibili senza consumo aggiuntivo:
+
+- limite per tipo di credito;
+- crediti consumati;
+- crediti residui;
+- inizio e fine del ciclo corrente.
+
+I contatori tecnici restano separati dal costo monetario configurato. Il loro scopo e' individuare rapidamente esaurimenti, variazioni di consumo o cambi del piano e consentire al superadmin di aggiornare costo stimato e moltiplicatore senza modificare il contratto tenant.
+
+Un errore del monitoraggio provider non deve bloccare la dashboard economics, il checkout o Scout: viene degradato a stato non disponibile e loggato server-side.
 
 ### Idempotenza e concorrenza
 
@@ -109,9 +125,9 @@ Il tenant vede esclusivamente:
 - prezzo di vendita per credito;
 - quantita' minima acquistabile.
 
-Non vede costo provider, nome provider, contratto provider, moltiplicatore o margine.
+Non vede costo provider, nome provider, contratto provider, contatori del piano provider, moltiplicatore o margine.
 
-Il superadmin vede invece costo corrente e storico, moltiplicatore, prezzo risultante, margine unitario, crediti acquistati/concessi/consumati, costo provider contabilizzato e valore commerciale degli utilizzi per tenant.
+Il superadmin vede invece costo corrente e storico, moltiplicatore, prezzo risultante, margine unitario, crediti acquistati/concessi/consumati, costo provider stimato contabilizzato, valore commerciale degli utilizzi per tenant e contatori live del piano provider.
 
 ## Relazione con il CRM
 
