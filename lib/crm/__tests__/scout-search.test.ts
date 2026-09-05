@@ -32,12 +32,13 @@ describe("interpretScoutSearch", () => {
   })
 
   it("keeps cybersecurity separate from workplace safety", () => {
-    const { providerInput } = search({ titles: ["sicurezza informatica"] })
+    const { providerInput } = search({ titles: ["responsabile della sicurezza informatica"] })
 
     expect(providerInput.titles).toEqual(
       expect.arrayContaining(["cyber security manager", "information security manager", "CISO"]),
     )
     expect(providerInput.titles).not.toContain("HSE manager")
+    expect(providerInput.titles).not.toContain("RSPP")
   })
 
   it("preserves unknown industry and role terms", () => {
