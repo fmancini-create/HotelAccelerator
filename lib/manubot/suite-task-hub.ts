@@ -4,7 +4,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   getManubotClient,
-  HA_TO_MANUBOT_PRIORITY,
   type ManubotCreateTaskPayload,
   type ManubotTask,
   type ManubotTaskFormData,
@@ -32,7 +31,8 @@ export type SuiteManubotTaskInput = {
   idempotencyKey: string
   title: string
   description?: string | null
-  priority?: "low" | "normal" | "high" | "urgent"
+  /** Nome esatto di priority_levels.name del tenant ManuBot. */
+  priority: string
   assigneeIds?: string[]
   groupIds?: string[]
   assetIds?: string[]
@@ -227,6 +227,9 @@ export async function createSuiteManubotTask(input: SuiteManubotTaskInput): Prom
   const groupIds = dedupe(input.groupIds)
   if (assigneeIds.length === 0 && groupIds.length === 0) throw new Error("responsible_required")
 
+  const priority = input.priority.trim()
+  if (!priority) throw new Error("priority_required")
+
   const expectedResolutionMinutes = input.expectedResolutionMinutes ?? 60
   if (!Number.isInteger(expectedResolutionMinutes) || expectedResolutionMinutes < 5 || expectedResolutionMinutes > 1440) {
     throw new Error("invalid_expected_resolution_minutes")
@@ -249,7 +252,8 @@ export async function createSuiteManubotTask(input: SuiteManubotTaskInput): Prom
   const payload: ManubotCreateTaskPayload = {
     title: input.title.trim(),
     description: `${sourceHeader}${input.description ? `\n\n${input.description.trim()}` : ""}${contextText}`.trim(),
-    priority: HA_TO_MANUBOT_PRIORITY[input.priority || "normal"] || "medium",
+    // Non normalizzare: e' il nome reale configurato nel DB del tenant ManuBot.
+    priority,
     assignee_ids: assigneeIds,
     group_ids: groupIds,
     asset_ids: dedupe(input.assetIds),
