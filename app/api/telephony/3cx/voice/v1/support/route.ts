@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { VOICE_PRODUCT_TO_SUITE_PRODUCT } from "@/lib/customer-codes/product"
-import { normalizeCustomerCode } from "@/lib/telephony/customer-code"
+import { CUSTOMER_CODE_DIGITS, normalizeCustomerCode } from "@/lib/telephony/customer-code"
 import { authenticateVoiceInbound } from "@/lib/telephony/inbound-auth"
 import { answerVoiceQuestion } from "@/lib/telephony/voice-agent"
 import { getVoiceProduct, VOICE_4BID_FALLBACK_EXTENSION } from "@/lib/telephony/voice-products"
@@ -12,6 +12,7 @@ import { getVoiceIvrRoute, isMissingVoiceRoutingSchema } from "@/lib/telephony/v
 import { findVoiceSupportCustomer, isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
 import { invalidCustomerCodeSpeech, resolveSupportHandoff } from "@/lib/telephony/voice-support"
 import { captureSharedPbxVoiceExchange, touchSharedPbxRouteHint } from "@/lib/telephony/shared-pbx-routing"
+import { normalizeVoiceSupportAliases } from "@/lib/telephony/voice-request"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -25,6 +26,11 @@ const requestSchema = z.object({
 })
 
 const NO_STORE = { "Cache-Control": "no-store, max-age=0" }
+const CUSTOMER_CODE_INPUT = {
+  digits: CUSTOMER_CODE_DIGITS,
+  modes: ["dtmf", "speech"] as const,
+  canonical_field: "customer_code",
+}
 
 async function readVoiceBody(request: NextRequest): Promise<unknown | null> {
   const text = await request.text()
@@ -41,6 +47,7 @@ function unauthenticatedCodeResponse(requestId: string) {
     {
       ok: true,
       customer: { recognized: false },
+      customer_code_input: CUSTOMER_CODE_INPUT,
       speech: invalidCustomerCodeSpeech(),
       handoff: { action: "retry_customer_code", destination: null, mode: null },
       transfer: { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" },
@@ -53,6 +60,7 @@ function unauthenticatedCodeResponse(requestId: string) {
 /**
  * Supporto per clienti: il codice e' risolto solo dopo l'autenticazione del
  * centralino 4 BID, poi ogni retrieval riparte dal property_id del cliente.
+ * Il flow puo' passare le sette cifre sia da voce sia da tastiera DTMF.
  */
 export async function POST(request: NextRequest) {
   const requestId = request.headers.get("x-request-id")?.slice(0, 100) || randomUUID()
@@ -108,7 +116,7 @@ export async function POST(request: NextRequest) {
   }
 
   const raw = await readVoiceBody(request)
-  const parsed = requestSchema.safeParse(raw)
+  const parsed = requestSchema.safeParse(normalizeVoiceSupportAliases(raw))
   if (!parsed.success) return unauthenticatedCodeResponse(requestId)
 
   await touchSharedPbxRouteHint({
@@ -138,6 +146,7 @@ export async function POST(request: NextRequest) {
       {
         ok: true,
         customer: { recognized: true, property_name: customer.propertyName },
+        customer_code_input: CUSTOMER_CODE_INPUT,
         product: { key: product.key, label: product.label },
         agent: { key: product.key, label: route?.agent_label ?? product.label },
         crm_tool: { key: route?.crm_tool_key ?? "customer_code_lookup", executed: true },
@@ -189,6 +198,7 @@ export async function POST(request: NextRequest) {
       {
         ...response,
         customer: { recognized: true, property_name: customer.propertyName },
+        customer_code_input: CUSTOMER_CODE_INPUT,
         speech,
         transfer: shouldRecord
           ? { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" }
@@ -205,6 +215,7 @@ export async function POST(request: NextRequest) {
       {
         ...serviceErrorVoiceResponse(product, afterHoursHandoff.destination ?? VOICE_4BID_FALLBACK_EXTENSION, "provider_error"),
         customer: { recognized: true, property_name: customer.propertyName },
+        customer_code_input: CUSTOMER_CODE_INPUT,
         speech: shouldRecord ? afterHoursHandoff.speech : "Non riesco a completare la richiesta. La metto in contatto con un operatore.",
         transfer: shouldRecord
           ? { required: false, destination: VOICE_4BID_FALLBACK_EXTENSION, reason: "none" }
