@@ -158,6 +158,9 @@ export default function UnifiedLoginForm() {
       provider: "google",
       options: {
         redirectTo: `${callbackOrigin}/auth/callback`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     })
 
