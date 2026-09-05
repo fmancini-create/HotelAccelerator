@@ -42,16 +42,18 @@ export async function syncSuiteProductModule(params: {
   if (linkError) throw linkError
   if (!account?.property_id) return
 
-  const entitlementActive =
-    Boolean(entitlement) &&
+  const activeEntitlement =
+    entitlement &&
     ACTIVE_ENTITLEMENTS.has(entitlement.status) &&
     (!entitlement.expires_at || new Date(entitlement.expires_at).getTime() >= Date.now())
+      ? entitlement
+      : null
   const linked = Boolean(link?.external_tenant_id)
 
   await setModuleStatus({
     propertyId: account.property_id,
     moduleKey: productKey,
-    status: linked && entitlementActive ? localStatus(entitlement!.status) : "inactive",
-    expiresAt: linked && entitlementActive ? entitlement!.expires_at : null,
+    status: linked && activeEntitlement ? localStatus(activeEntitlement.status) : "inactive",
+    expiresAt: linked && activeEntitlement ? activeEntitlement.expires_at : null,
   })
 }
