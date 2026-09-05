@@ -1,6 +1,6 @@
 # HotelAccelerator — Integrations Registry
 
-Ultimo aggiornamento: 2026-09-02
+Ultimo aggiornamento: 2026-09-05
 
 ## Regola
 
@@ -11,6 +11,7 @@ Il registro distingue **codice nel Core**, **provider realmente attivato** e **p
 | Hosting | Vercel | Deploy HotelAccelerator | Codice | Deploy di produzione verificato sul `main`; build verde non equivale a `Production-ready`. |
 | Dati/auth | Supabase | DB, Auth, RLS, storage | Codice | Migrazioni e RLS sono usate dal Core; serve audit sistematico policy/route per dichiarare `Multi-tenant` globale. |
 | Codice/CI | GitHub | Repository, PR e Actions | Codice | Repository sorgente tecnica primaria; CI Core usata sulle PR. README root ancora mancante. |
+| Cartografia/geocoding | OpenStreetMap / Nominatim | HR: ricerca indirizzo, centratura geofence e mappa | Codice | PR #406. Geocodifica server-side dietro adapter e accessibile solo al tenant admin con HR attivo; tile mappa caricati dal browser con attribuzione. Prima di `Tenant reale` servono salvataggio/timbratura su struttura reale; prima di scala enterprise vanno rivalutati SLA, rate limit, termini e privacy del provider. |
 | Email | Gmail | Inbox email | Tenant reale | Villa I Barronci verificata: OAuth, import storico, multi-casella, Pub/Sub, history cursor, poll fallback e riconciliazione. PR #345/#347 aggiungono cartelle complete multi-account in `Codice`. |
 | Email | Outlook / Microsoft Graph | Inbox email | Specifica | Adapter e flusso OAuth da implementare/validare. |
 | Email | IMAP/SMTP | Caselle generiche | Specifica | Definire credenziali, cifratura, limiti provider, retry e sync model. |
