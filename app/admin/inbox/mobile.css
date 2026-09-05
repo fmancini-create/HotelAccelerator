@@ -1,4 +1,16 @@
-/* Mobile-only adaptations for /admin/inbox. Scoped by the nested route layout. */
+/* Route-local adaptations for /admin/inbox. Scoped by the nested route layout. */
+
+/*
+ * The historical Inbox list viewport is `overflow-hidden`. The detail view owns
+ * its own inner scrollbar, but the conversation/thread list did not, so rows
+ * below the fold were clipped even after "select all" had selected them.
+ * Keep horizontal overflow closed and let the viewport scroll vertically so an
+ * operator can actually review every loaded/selected row (e.g. all 50).
+ */
+[data-inbox-mobile] > .h-full > .flex.flex-1.min-h-0 > div:last-child > .relative.flex-1.min-h-0.overflow-hidden.w-full.max-w-full {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 
 /*
  * The historical Inbox page owns an email-only "Scrivi" button identified by
