@@ -33,7 +33,8 @@ create table if not exists public.calendar_sources (
   constraint calendar_sources_oauth_account_check check (
     (auth_mode = 'oauth' and account_id is not null and owner_user_id is not null)
     or (auth_mode = 'service_account' and account_id is null)
-  )
+  ),
+  constraint calendar_sources_oauth_unique unique (property_id, account_id, external_calendar_id, source_kind)
 );
 
 create table if not exists public.calendar_source_grants (
@@ -56,11 +57,8 @@ create index if not exists calendar_sources_owner_idx
 create index if not exists calendar_source_grants_user_idx
   on public.calendar_source_grants(property_id, admin_user_id);
 
--- Avoid duplicate selected calendars while still allowing different owners to
--- select the same remote calendar as their own personal source.
-create unique index if not exists calendar_sources_oauth_unique_idx
-  on public.calendar_sources(property_id, account_id, external_calendar_id, source_kind)
-  where account_id is not null;
+-- account_id is NULL for service-account calendars, so the UNIQUE constraint
+-- above does not collapse those rows; this second index handles that case.
 create unique index if not exists calendar_sources_service_unique_idx
   on public.calendar_sources(property_id, external_calendar_id, source_kind)
   where auth_mode = 'service_account';
