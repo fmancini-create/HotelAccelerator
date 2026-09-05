@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { authorizeUser } from "@/lib/auth/authorize-user"
+import { isMobileUserAgent } from "@/lib/auth/mobile-login-gate"
 
 /**
  * OAuth callback (Google). Supabase redirects here with a `code` that we
@@ -27,7 +28,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/admin?error=oauth`)
   }
 
-  const result = await authorizeUser(supabase, data.user)
+  const result = await authorizeUser(supabase, data.user, {
+    mobile: isMobileUserAgent(request.headers.get("user-agent")),
+  })
 
   if (result.authorized) {
     return NextResponse.redirect(`${origin}${result.destination}`)
