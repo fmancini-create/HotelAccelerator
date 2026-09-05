@@ -9,10 +9,17 @@ describe("codice cliente 4 BID", () => {
     expect(customerCodeDigits("HA-3493840", "hotelaccelerator")).toBe("3493840")
   })
 
+  it("accetta le sette cifre scandite a voce in italiano o inglese", () => {
+    expect(normalizeCustomerCode("tre quattro nove tre otto quattro zero", "hotelaccelerator")).toBe("HA-3493840")
+    expect(normalizeCustomerCode("three four nine three eight four zero", "hotelprofitai")).toBe("HPA-3493840")
+    expect(normalizeCustomerCode("licenza 3 4 9 3 8 4 0", "manubot")).toBe("MB-3493840")
+  })
+
   it("rifiuta formati incompleti, prefissi sconosciuti e prefissi non coerenti con il menu", () => {
     expect(normalizeCustomerCode("HA-123456")).toBeNull()
     expect(normalizeCustomerCode("XX-1234567")).toBeNull()
     expect(normalizeCustomerCode("SNT-3493840", "hotelaccelerator")).toBeNull()
+    expect(normalizeCustomerCode("tre quattro nove", "hotelaccelerator")).toBeNull()
   })
 
   it("mantiene stabili i quattro prefissi di prodotto", () => {
