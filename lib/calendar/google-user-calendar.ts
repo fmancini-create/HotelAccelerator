@@ -26,7 +26,9 @@ function googleClientConfig() {
 
 export function getCalendarOAuthRedirectUri() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-  return `${baseUrl}/api/admin/crm/calendar/oauth/google/callback`
+  // Reuse the Google callback already registered for Gmail in Google Cloud.
+  // The shared callback forwards calendar states to the CRM calendar handler.
+  return `${baseUrl}/api/channels/email/oauth/callback`
 }
 
 export function buildGoogleCalendarOAuthUrl(state: string) {
