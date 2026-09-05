@@ -13,8 +13,16 @@ export type ThreeCxAudioInspection = {
   pbxVersion: string | null
   queue: ThreeCxQueueAudio | null
   systemMusicOnHold: string | null
+  systemMusicOnHoldAccessible: boolean
+  accessScope: "system" | "department"
+  transferMusicCandidate: string | null
   transferMusicConfigured: boolean
 }
+
+// 3CX ships with this as the default system Music on Hold file. It is used only
+// as a safe fallback when a department-scoped Service Principal can edit its
+// own Queue but cannot read the global MusicOnHoldSettings resource.
+const DEFAULT_3CX_MOH = "onhold.wav"
 
 function odataString(value: string): string {
   return value.replace(/'/g, "''")
@@ -74,7 +82,7 @@ async function ensureXapiOk(res: Response, operation: string): Promise<void> {
   }
   if (res.status === 403) {
     throw new ThreeCxError(
-      "La credenziale 3CX e' valida ma non ha accesso alla Configuration API (XAPI). In 3CX abilita '3CX Configuration API Access' sul Service Principal e usa ruolo System Owner.",
+      "La credenziale 3CX e' valida, ma il ruolo non puo' accedere a questa risorsa XAPI. Con ruolo Owner l'oggetto deve appartenere allo stesso dipartimento del Service Principal; per accesso globale usa System Owner o System Administrator.",
       403,
       detail,
     )
@@ -89,20 +97,19 @@ function firstString(value: unknown): string | null {
 /**
  * Legge solo i dati necessari alla UX audio 4BID. Non modifica il PBX.
  *
- * Fonti 3CX: /xapi/v1/Defs, /Queues e /MusicOnHoldSettings. La Queue espone
- * OnHoldFile e le impostazioni di sistema espongono MusicOnHold[0..9].
+ * Importante: NON usiamo /Defs come gate di autorizzazione. /Defs e
+ * /MusicOnHoldSettings sono risorse globali e possono rispondere 403 a un
+ * Service Principal correttamente limitato al solo dipartimento 4BID, mentre
+ * /Queues resta perfettamente utilizzabile per la coda appartenente al reparto.
  */
 export async function inspectThreeCxAudio(cfg: ThreeCxConfig, queueNumber = "820"): Promise<ThreeCxAudioInspection> {
-  const defs = await xapiFetch(cfg, "/Defs?$select=Id", { method: "GET" })
-  await ensureXapiOk(defs, "la verifica della Configuration API")
-  const pbxVersion = defs.headers.get("x-3cx-version")
-
   const queueParams = new URLSearchParams({
     "$filter": `Number eq '${odataString(queueNumber)}'`,
     "$select": "Id,Number,Name,OnHoldFile",
   })
   const queueRes = await xapiFetch(cfg, `/Queues?${queueParams.toString()}`, { method: "GET" })
   await ensureXapiOk(queueRes, `la lettura della coda ${queueNumber}`)
+  const pbxVersionFromQueue = queueRes.headers.get("x-3cx-version")
   const queueJson = (await queueRes.json().catch(() => null)) as
     | { value?: Array<{ Id?: unknown; Number?: unknown; Name?: unknown; OnHoldFile?: unknown }> }
     | null
@@ -117,27 +124,60 @@ export async function inspectThreeCxAudio(cfg: ThreeCxConfig, queueNumber = "820
         }
       : null
 
+  // /Defs e' utile per la versione PBX, ma non deve rendere falso-negativa una
+  // credenziale Owner di dipartimento. Se e' vietato, continuiamo con lo scope
+  // dipartimentale e usiamo l'header della Queue quando disponibile.
+  let pbxVersion = pbxVersionFromQueue
+  let defsAccessible = false
+  const defs = await xapiFetch(cfg, "/Defs?$select=Id", { method: "GET" })
+  if (defs.ok) {
+    defsAccessible = true
+    pbxVersion = defs.headers.get("x-3cx-version") || pbxVersion
+  } else if (defs.status === 401) {
+    await ensureXapiOk(defs, "la verifica della Configuration API")
+  }
+
   const mohSelect = ["MusicOnHold", ...Array.from({ length: 9 }, (_, index) => `MusicOnHold${index + 1}`)].join(",")
   const mohRes = await xapiFetch(cfg, `/MusicOnHoldSettings?$select=${encodeURIComponent(mohSelect)}`, { method: "GET" })
-  await ensureXapiOk(mohRes, "la lettura della musica di attesa")
-  const mohJson = (await mohRes.json().catch(() => null)) as Record<string, unknown> | null
-  const systemMusicOnHold = mohJson
-    ? ["MusicOnHold", ...Array.from({ length: 9 }, (_, index) => `MusicOnHold${index + 1}`)]
-        .map((key) => firstString(mohJson[key]))
-        .find(Boolean) ?? null
-    : null
+  let systemMusicOnHoldAccessible = false
+  let systemMusicOnHold: string | null = null
+
+  if (mohRes.ok) {
+    systemMusicOnHoldAccessible = true
+    const mohJson = (await mohRes.json().catch(() => null)) as Record<string, unknown> | null
+    systemMusicOnHold = mohJson
+      ? ["MusicOnHold", ...Array.from({ length: 9 }, (_, index) => `MusicOnHold${index + 1}`)]
+          .map((key) => firstString(mohJson[key]))
+          .find(Boolean) ?? null
+      : null
+  } else if (mohRes.status === 401) {
+    await ensureXapiOk(mohRes, "la lettura della musica di attesa")
+  } else if (mohRes.status !== 403) {
+    await ensureXapiOk(mohRes, "la lettura della musica di attesa")
+  }
+
+  const accessScope: "system" | "department" = defsAccessible && systemMusicOnHoldAccessible ? "system" : "department"
+  const transferMusicCandidate = systemMusicOnHold || (!systemMusicOnHoldAccessible ? DEFAULT_3CX_MOH : null)
 
   return {
     pbxVersion,
     queue,
     systemMusicOnHold,
+    systemMusicOnHoldAccessible,
+    accessScope,
+    transferMusicCandidate,
     transferMusicConfigured: Boolean(queue?.onHoldFile),
   }
 }
 
 /**
- * Imposta sulla coda la prima Music on Hold gia' disponibile nel PBX.
- * Non carica file e non tocca altre code/reparti: riduce il rischio sul PBX condiviso.
+ * Imposta sulla coda la prima Music on Hold disponibile nel PBX.
+ *
+ * Con Service Principal Owner di dipartimento, 3CX puo' negare la lettura della
+ * libreria MOH globale pur consentendo di modificare la Queue del dipartimento.
+ * In quel caso tentiamo il file standard `onhold.wav`; la PATCH resta confinata
+ * alla sola coda 820 e 3CX rifiuta la richiesta se quel riferimento non e'
+ * valido, quindi non modifichiamo altri reparti o impostazioni globali.
  */
 export async function configureQueueHoldMusic(
   cfg: ThreeCxConfig,
@@ -145,11 +185,14 @@ export async function configureQueueHoldMusic(
 ): Promise<ThreeCxAudioInspection> {
   const before = await inspectThreeCxAudio(cfg, queueNumber)
   if (!before.queue) {
-    throw new ThreeCxError(`La coda ${queueNumber} non esiste nel PBX 3CX.`, 404)
+    throw new ThreeCxError(`La coda ${queueNumber} non esiste nel PBX 3CX o non appartiene al dipartimento autorizzato.`, 404)
   }
-  if (!before.systemMusicOnHold) {
+  if (before.queue.onHoldFile) return before
+
+  const candidate = before.transferMusicCandidate
+  if (!candidate) {
     throw new ThreeCxError(
-      "Nel PBX non risulta alcun file Music on Hold disponibile. Caricane uno in 3CX prima di applicarlo alla coda.",
+      "Nel PBX non risulta alcun file Music on Hold disponibile. Configura una musica nel dipartimento 4BID o nel sistema 3CX e riprova.",
       409,
     )
   }
@@ -157,9 +200,16 @@ export async function configureQueueHoldMusic(
   const update = await xapiFetch(cfg, `/Queues(${before.queue.id})`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ OnHoldFile: before.systemMusicOnHold }),
+    body: JSON.stringify({ OnHoldFile: candidate }),
   })
   await ensureXapiOk(update, `l'aggiornamento della musica di attesa della coda ${queueNumber}`)
 
-  return inspectThreeCxAudio(cfg, queueNumber)
+  const after = await inspectThreeCxAudio(cfg, queueNumber)
+  if (!after.queue?.onHoldFile) {
+    throw new ThreeCxError(
+      `3CX ha accettato l'aggiornamento della coda ${queueNumber}, ma non restituisce un file Music on Hold configurato.`,
+      409,
+    )
+  }
+  return after
 }
