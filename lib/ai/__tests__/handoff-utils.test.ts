@@ -38,6 +38,11 @@ describe("staff handoff conversation state", () => {
     expect(extractContactDetails("Filippo Manini")).toMatchObject({ firstName: "Filippo", lastName: "Manini" })
   })
 
+  it("non scambia una domanda commerciale per nome e cognome", () => {
+    expect(extractContactDetails("Come funziona e quanto costa?")).toMatchObject({ firstName: null, lastName: null })
+    expect(extractContactDetails("Vorrei informazioni sul prodotto")).toMatchObject({ firstName: null, lastName: null })
+  })
+
   it("mantiene i dati progressivi e completa solo nome, cognome, email e telefono", () => {
     const withName = mergeHandoffContacts(extractContactDetails("Filippo Manini"))
     const withEmail = mergeHandoffContacts(withName, extractContactDetails("filippo@example.com"))

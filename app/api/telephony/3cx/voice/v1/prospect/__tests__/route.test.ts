@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getVoiceIvrRoute: vi.fn(),
   getVoiceIvrSharedBaseIds: vi.fn(),
   isVoiceSupportHub: vi.fn(),
+  findVoiceSupportCustomer: vi.fn(),
   touchSharedPbxRouteHint: vi.fn(),
   captureSharedPbxVoiceExchange: vi.fn(),
 }))
@@ -26,7 +27,10 @@ vi.mock("@/lib/telephony/voice-routing", () => ({
   getVoiceIvrSharedBaseIds: mocks.getVoiceIvrSharedBaseIds,
   isMissingVoiceRoutingSchema: () => false,
 }))
-vi.mock("@/lib/telephony/voice-support-customer", () => ({ isVoiceSupportHub: mocks.isVoiceSupportHub }))
+vi.mock("@/lib/telephony/voice-support-customer", () => ({
+  isVoiceSupportHub: mocks.isVoiceSupportHub,
+  findVoiceSupportCustomer: mocks.findVoiceSupportCustomer,
+}))
 vi.mock("@/lib/telephony/shared-pbx-routing", () => ({
   touchSharedPbxRouteHint: mocks.touchSharedPbxRouteHint,
   captureSharedPbxVoiceExchange: mocks.captureSharedPbxVoiceExchange,
@@ -92,6 +96,33 @@ describe("POST /api/telephony/3cx/voice/v1/prospect", () => {
       question: "Cos'è Santaddeo?",
       responseSpeech: "Santaddeo RMS è il sistema di revenue management di 4BID.",
     }))
+  })
+
+  it("intercetta una licenza DTMF anche se 3CX la invia al percorso prospect", async () => {
+    setupRoute()
+    mocks.findVoiceSupportCustomer.mockResolvedValue({
+      propertyId: "f2a20a5d-b697-4b57-b235-94d871b31683",
+      propertyName: "Cliente Test",
+      customerCode: "SNT-1100001",
+      plan: "pro",
+      supportAfterHoursMode: "plan_default",
+      supportAfterHoursExtension: null,
+    })
+
+    const { POST } = await loadRoute()
+    const response = await POST(new NextRequest("https://example.test/api/telephony/3cx/voice/v1/prospect?product=santaddeo-rms", {
+      method: "POST",
+      body: JSON.stringify({ license_digits: "1100001", caller: "+393331234567", history: [] }),
+    }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(mocks.getVoiceIvrRoute).toHaveBeenCalledWith(HUB, "customer_support", "santaddeo-rms")
+    expect(mocks.findVoiceSupportCustomer).toHaveBeenCalled()
+    expect(body.customer).toEqual({ recognized: true, property_name: "Cliente Test" })
+    expect(body.speech).toContain("Licenza verificata")
+    expect(body.customer_code_input.modes).toEqual(["dtmf", "speech"])
+    expect(mocks.answerVoiceQuestion).not.toHaveBeenCalled()
   })
 
   it("non trasferisce automaticamente se la risposta propone un operatore", async () => {
