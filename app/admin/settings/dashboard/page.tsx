@@ -3,12 +3,15 @@
 import { useEffect, useMemo, useState } from "react"
 import { CalendarDays, Clock3, Eye, Gauge, Save, Target, Users } from "lucide-react"
 
+import { SalesAttributionAdmin } from "@/components/admin/dashboard/sales-attribution-admin"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { DASHBOARD_PANELS } from "@/lib/platform/dashboard"
 
 type User = { id: string; name: string; email: string; role: string; kpi_enabled?: boolean }
+type CustomMetric = "quotes_sent" | "completed_calls" | "completed_tasks" | "conversion_rate"
+type CustomPeriod = "workday" | "30_days"
 type Settings = {
   hiddenPanels: string[]
   goals: {
@@ -17,6 +20,12 @@ type Settings = {
     responsesTarget: number | null
     conversationsTarget: number | null
     medianResponseSecondsTarget: number | null
+    closedDealsTarget: number | null
+    closedRevenueTargetCents: number | null
+    customGoalMetric: CustomMetric | null
+    customGoalLabel: string | null
+    customGoalTarget: number | null
+    customGoalPeriod: CustomPeriod | null
   }
 }
 
@@ -28,6 +37,12 @@ const EMPTY: Settings = {
     responsesTarget: null,
     conversationsTarget: null,
     medianResponseSecondsTarget: null,
+    closedDealsTarget: null,
+    closedRevenueTargetCents: null,
+    customGoalMetric: null,
+    customGoalLabel: null,
+    customGoalTarget: null,
+    customGoalPeriod: null,
   },
 }
 
@@ -84,9 +99,39 @@ export default function DashboardSettingsPage() {
     }))
   }
 
-  function setGoal(key: keyof Settings["goals"], raw: string) {
+  function setNumericGoal(
+    key:
+      | "workdayResponsesTarget"
+      | "workdayConversationsTarget"
+      | "responsesTarget"
+      | "conversationsTarget"
+      | "medianResponseSecondsTarget"
+      | "closedDealsTarget"
+      | "customGoalTarget",
+    raw: string,
+  ) {
     const value = raw === "" ? null : Number(raw)
     setSettings((current) => ({ ...current, goals: { ...current.goals, [key]: value } }))
+  }
+
+  function setRevenueGoal(raw: string) {
+    const normalized = raw.trim().replace(",", ".")
+    const cents = normalized === "" ? null : Math.round(Number(normalized) * 100)
+    setSettings((current) => ({ ...current, goals: { ...current.goals, closedRevenueTargetCents: cents } }))
+  }
+
+  function setCustomMetric(raw: string) {
+    const metric = raw ? (raw as CustomMetric) : null
+    setSettings((current) => ({
+      ...current,
+      goals: {
+        ...current.goals,
+        customGoalMetric: metric,
+        customGoalPeriod: metric ? current.goals.customGoalPeriod ?? "30_days" : null,
+        customGoalLabel: metric ? current.goals.customGoalLabel : null,
+        customGoalTarget: metric ? current.goals.customGoalTarget : null,
+      },
+    }))
   }
 
   async function save() {
@@ -157,7 +202,7 @@ export default function DashboardSettingsPage() {
                 <div className="flex items-center gap-2 text-base font-semibold"><Target className="h-5 w-5 text-ha-brand" /> Obiettivi individuali</div>
                 <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                   {selected ? `Stai impostando gli obiettivi di ${selected.name || selected.email}. ` : "Seleziona un utente. "}
-                  Gli obiettivi vengono confrontati con le attività realmente attribuite all'operatore e sono mostrati solo quando i suoi KPI sono attivi.
+                  Gli obiettivi vengono confrontati con attività e risultati realmente attribuiti all'operatore e sono mostrati solo quando i suoi KPI sono attivi.
                 </p>
               </div>
               {selected && (
@@ -170,21 +215,15 @@ export default function DashboardSettingsPage() {
             <div className="mb-5 grid gap-3 md:grid-cols-3">
               <div className="rounded-lg border bg-muted/25 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold"><Clock3 className="h-4 w-4 text-ha-brand" /> Giornata lavorativa</div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  Misura il ritmo di oggi, dalla mezzanotte nel fuso orario della struttura. Non sono le ultime 24 ore: a ogni nuova giornata il conteggio riparte da zero.
-                </p>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">Misura il ritmo di oggi, dalla mezzanotte nel fuso orario della struttura. A ogni nuova giornata il conteggio riparte da zero.</p>
               </div>
               <div className="rounded-lg border bg-muted/25 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold"><CalendarDays className="h-4 w-4 text-ha-brand" /> Ultimi 30 giorni</div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  È una finestra mobile, non il mese solare. Ogni giorno considera i 30 giorni precedenti per mostrare continuità e andamento nel tempo.
-                </p>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">È una finestra mobile, non il mese solare. È usata anche per risultati commerciali e budget individuale.</p>
               </div>
               <div className="rounded-lg border bg-muted/25 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold"><Gauge className="h-4 w-4 text-ha-brand" /> Tempo di risposta</div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  È una soglia massima sulla mediana: più il valore reale è basso, meglio è. La mediana riduce l'effetto di pochi casi eccezionalmente lenti.
-                </p>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">È una soglia massima sulla mediana: più il valore reale è basso, meglio è.</p>
               </div>
             </div>
 
@@ -195,12 +234,12 @@ export default function DashboardSettingsPage() {
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   <label className="space-y-2 text-sm">
                     <span className="font-medium">Risposte nella giornata</span>
-                    <Input type="number" min={1} value={settings.goals.workdayResponsesTarget ?? ""} onChange={(e) => setGoal("workdayResponsesTarget", e.target.value)} placeholder="Es. 20" />
+                    <Input type="number" min={1} value={settings.goals.workdayResponsesTarget ?? ""} onChange={(e) => setNumericGoal("workdayResponsesTarget", e.target.value)} placeholder="Es. 20" />
                     <span className="block text-xs text-muted-foreground">Numero di risposte inviate dall'operatore oggi.</span>
                   </label>
                   <label className="space-y-2 text-sm">
                     <span className="font-medium">Conversazioni nella giornata</span>
-                    <Input type="number" min={1} value={settings.goals.workdayConversationsTarget ?? ""} onChange={(e) => setGoal("workdayConversationsTarget", e.target.value)} placeholder="Es. 14" />
+                    <Input type="number" min={1} value={settings.goals.workdayConversationsTarget ?? ""} onChange={(e) => setNumericGoal("workdayConversationsTarget", e.target.value)} placeholder="Es. 14" />
                     <span className="block text-xs text-muted-foreground">Conta conversazioni distinte: più risposte nella stessa conversazione valgono una sola conversazione gestita.</span>
                   </label>
                 </div>
@@ -212,12 +251,12 @@ export default function DashboardSettingsPage() {
                 <div className="mt-3 grid gap-4 md:grid-cols-2">
                   <label className="space-y-2 text-sm">
                     <span className="font-medium">Risposte / ultimi 30 giorni</span>
-                    <Input type="number" min={1} value={settings.goals.responsesTarget ?? ""} onChange={(e) => setGoal("responsesTarget", e.target.value)} placeholder="Es. 400" />
+                    <Input type="number" min={1} value={settings.goals.responsesTarget ?? ""} onChange={(e) => setNumericGoal("responsesTarget", e.target.value)} placeholder="Es. 400" />
                     <span className="block text-xs text-muted-foreground">Totale delle risposte attribuite all'operatore nella finestra mobile di 30 giorni.</span>
                   </label>
                   <label className="space-y-2 text-sm">
                     <span className="font-medium">Conversazioni / ultimi 30 giorni</span>
-                    <Input type="number" min={1} value={settings.goals.conversationsTarget ?? ""} onChange={(e) => setGoal("conversationsTarget", e.target.value)} placeholder="Es. 280" />
+                    <Input type="number" min={1} value={settings.goals.conversationsTarget ?? ""} onChange={(e) => setNumericGoal("conversationsTarget", e.target.value)} placeholder="Es. 280" />
                     <span className="block text-xs text-muted-foreground">Numero di conversazioni distinte gestite dall'operatore negli ultimi 30 giorni.</span>
                   </label>
                 </div>
@@ -226,14 +265,95 @@ export default function DashboardSettingsPage() {
               <div className="border-t pt-5">
                 <label className="block max-w-md space-y-2 text-sm">
                   <span className="font-medium">Tempo mediano massimo di risposta (secondi)</span>
-                  <Input type="number" min={1} value={settings.goals.medianResponseSecondsTarget ?? ""} onChange={(e) => setGoal("medianResponseSecondsTarget", e.target.value)} placeholder="Es. 600" />
-                  <span className="block text-xs leading-relaxed text-muted-foreground">
-                    Esempio: 600 secondi = 10 minuti. Il target è raggiunto quando il tempo mediano reale è uguale o inferiore alla soglia impostata.
-                  </span>
+                  <Input type="number" min={1} value={settings.goals.medianResponseSecondsTarget ?? ""} onChange={(e) => setNumericGoal("medianResponseSecondsTarget", e.target.value)} placeholder="Es. 600" />
+                  <span className="block text-xs leading-relaxed text-muted-foreground">Esempio: 600 secondi = 10 minuti. Il target è raggiunto quando il tempo mediano reale è uguale o inferiore alla soglia impostata.</span>
                 </label>
+              </div>
+
+              <div className="border-t pt-5">
+                <h3 className="text-sm font-semibold">Risultati commerciali / ultimi 30 giorni</h3>
+                <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">
+                  Entrano solo trattative attribuite con evidenza confermata. Le prenotazioni automatiche dal booking engine, gli esiti letti soltanto dall'IA e le attribuzioni ancora da verificare restano fuori.
+                </p>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium">Trattative chiuse vinte</span>
+                    <Input type="number" min={1} value={settings.goals.closedDealsTarget ?? ""} onChange={(e) => setNumericGoal("closedDealsTarget", e.target.value)} placeholder="Es. 12" />
+                    <span className="block text-xs text-muted-foreground">Numero di trattative confermate attribuite all'operatore nei 30 giorni mobili.</span>
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium">Budget vendite chiuse (€)</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      step="0.01"
+                      value={settings.goals.closedRevenueTargetCents !== null ? settings.goals.closedRevenueTargetCents / 100 : ""}
+                      onChange={(e) => setRevenueGoal(e.target.value)}
+                      placeholder="Es. 15000"
+                    />
+                    <span className="block text-xs text-muted-foreground">Somma del valore delle trattative vinte nel periodo. Se il valore storico non è univoco, richiede verifica admin.</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="border-t pt-5">
+                <h3 className="text-sm font-semibold">Obiettivo extra personalizzabile</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Scegli una metrica che HotelAccelerator può misurare davvero, il periodo e il target individuale.</p>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium">Metrica</span>
+                    <select
+                      value={settings.goals.customGoalMetric ?? ""}
+                      onChange={(e) => setCustomMetric(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">Nessun obiettivo extra</option>
+                      <option value="quotes_sent">Preventivi inviati</option>
+                      <option value="completed_calls">Chiamate completate</option>
+                      <option value="completed_tasks">Attività completate</option>
+                      <option value="conversion_rate">Tasso di conversione preventivi (%)</option>
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium">Periodo</span>
+                    <select
+                      value={settings.goals.customGoalPeriod ?? "30_days"}
+                      onChange={(e) => setSettings((current) => ({ ...current, goals: { ...current.goals, customGoalPeriod: e.target.value as CustomPeriod } }))}
+                      disabled={!settings.goals.customGoalMetric}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm disabled:opacity-50"
+                    >
+                      <option value="workday">Giornata lavorativa</option>
+                      <option value="30_days">Ultimi 30 giorni</option>
+                    </select>
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium">Nome da mostrare</span>
+                    <Input
+                      value={settings.goals.customGoalLabel ?? ""}
+                      onChange={(e) => setSettings((current) => ({ ...current, goals: { ...current.goals, customGoalLabel: e.target.value || null } }))}
+                      disabled={!settings.goals.customGoalMetric}
+                      maxLength={80}
+                      placeholder="Es. Preventivi qualificati"
+                    />
+                  </label>
+                  <label className="space-y-2 text-sm">
+                    <span className="font-medium">Target</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={settings.goals.customGoalMetric === "conversion_rate" ? 100 : undefined}
+                      value={settings.goals.customGoalTarget ?? ""}
+                      onChange={(e) => setNumericGoal("customGoalTarget", e.target.value)}
+                      disabled={!settings.goals.customGoalMetric}
+                      placeholder={settings.goals.customGoalMetric === "conversion_rate" ? "Es. 30" : "Es. 25"}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           </section>
+
+          <SalesAttributionAdmin users={users} />
 
           <section className="rounded-xl border bg-card p-5">
             <div className="mb-5">

@@ -16,6 +16,7 @@ import {
   TriangleAlert,
 } from "lucide-react"
 
+import { CommercialPerformance } from "@/components/admin/dashboard/commercial-performance"
 import { DashboardCard } from "@/components/admin/dashboard/dashboard-cards"
 import { PlatformOverviewPanel } from "@/components/platform/platform-overview-panel"
 import { Progress } from "@/components/ui/progress"
@@ -37,6 +38,12 @@ type HomeDashboard = {
     responsesTarget: number | null
     conversationsTarget: number | null
     medianResponseSecondsTarget: number | null
+    closedDealsTarget: number | null
+    closedRevenueTargetCents: number | null
+    customGoalMetric: "quotes_sent" | "completed_calls" | "completed_tasks" | "conversion_rate" | null
+    customGoalLabel: string | null
+    customGoalTarget: number | null
+    customGoalPeriod: "workday" | "30_days" | null
   }
   performance: {
     enabled: boolean | null
@@ -48,6 +55,18 @@ type HomeDashboard = {
     todayResponses: number | null
     todayConversations: number | null
     timeZone: string
+  }
+  commercial: {
+    enabled: boolean | null
+    closedDeals30: number | null
+    closedDealsMissingValue30: number | null
+    closedRevenueCents30: number | null
+    quotesSent30: number | null
+    customMetricValue: number | null
+    customMetricUnit: "count" | "percent" | null
+    customMetric: "quotes_sent" | "completed_calls" | "completed_tasks" | "conversion_rate" | null
+    customMetricPeriod: "workday" | "30_days" | null
+    customMetricAllowed: boolean
   }
   todos: null | Array<{
     id: string
@@ -84,7 +103,7 @@ type CallRow = {
   needsCallback: boolean
 }
 
-const SPECIAL = new Set(["my-performance", "backlog", "my-todos", "calls"])
+const SPECIAL = new Set(["my-performance", "my-commercial-performance", "backlog", "my-todos", "calls"])
 
 function relativeTime(value: string | null | undefined) {
   if (!value) return "—"
@@ -376,9 +395,7 @@ export default function PersonalizedDashboard() {
           fetch("/api/platform/dashboard"),
           fetch("/api/platform/dashboard-home"),
         ])
-        if (!baseResponse.ok || !homeResponse.ok) {
-          throw new Error(`Dashboard non disponibile (${baseResponse.status}/${homeResponse.status})`)
-        }
+        if (!baseResponse.ok || !homeResponse.ok) throw new Error(`Dashboard non disponibile (${baseResponse.status}/${homeResponse.status})`)
         const [baseData, homeData] = await Promise.all([baseResponse.json(), homeResponse.json()])
         if (alive) {
           setBase(baseData)
@@ -400,9 +417,7 @@ export default function PersonalizedDashboard() {
   if (error) {
     return (
       <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6">
-        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive">
-          <TriangleAlert className="h-5 w-5" /> {error}
-        </div>
+        <div className="flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-5 text-sm text-destructive"><TriangleAlert className="h-5 w-5" /> {error}</div>
       </main>
     )
   }
@@ -424,7 +439,7 @@ export default function PersonalizedDashboard() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ha-brand">Cruscotto {base.profilo}</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">La tua giornata, in un solo posto</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Priorità, conversazioni, attività e telefonate costruite sui tuoi permessi e sulle impostazioni del tenant.</p>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Priorità, conversazioni, attività, risultati e telefonate costruiti sui tuoi permessi e sulle impostazioni del tenant.</p>
         </div>
         {base.isAdmin && (
           <Link href="/admin/settings/dashboard" className="inline-flex w-fit items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium transition-colors hover:border-ha-brand/40 hover:text-ha-brand">
@@ -436,6 +451,15 @@ export default function PersonalizedDashboard() {
       {base.isPlatformAdmin && <div className="mb-6"><PlatformOverviewPanel /></div>}
 
       {visibleIds.has("my-performance") && <PerformanceStrip home={home} />}
+
+      {visibleIds.has("my-commercial-performance") && home.performance.enabled === true && home.commercial.enabled === true && (
+        <CommercialPerformance goals={home.goals} commercial={home.commercial} />
+      )}
+      {visibleIds.has("my-commercial-performance") && home.performance.enabled === true && home.commercial.enabled === null && (
+        <section className="mb-6 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive">
+          <div className="flex items-center gap-2"><TriangleAlert className="h-4 w-4" /> Risultati commerciali temporaneamente non misurabili.</div>
+        </section>
+      )}
 
       <section className="mb-8 grid gap-4 lg:grid-cols-3">
         {visibleIds.has("backlog") && <MessagesCard messages={home.messages} />}
