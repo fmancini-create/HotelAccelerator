@@ -112,8 +112,7 @@ async function handleScoutCheckout(
         status: "active",
         plan: "scout_paid",
         activated_at: new Date().toISOString(),
-        deactivated_at: null,
-        updated_at: new Date().toISOString(),
+        expires_at: null,
       },
       { onConflict: "property_id,module_key" },
     )
