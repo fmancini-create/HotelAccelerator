@@ -2,31 +2,33 @@
 
 Il modulo Recensioni usa Santaddeo come unico control plane dati/configurazione, mentre HotelAccelerator e ManuBot espongono UI native.
 
-## Variabili runtime
+## Autenticazione interna
 
-### Santaddeo
-- `REVIEWS_FEDERATION_KEY_HA`: chiave condivisa con HotelAccelerator per GET/PATCH configurazione.
-- `REVIEWS_FEDERATION_KEY_MB`: chiave condivisa con ManuBot per GET/PATCH configurazione.
-- `REVIEWS_FEDERATION_PROVISION_KEY`: chiave condivisa con HotelAccelerator Core per provisioning/attivazione workspace Recensioni.
+Non esistono chiavi `REVIEWS_FEDERATION_*` dedicate.
 
-### HotelAccelerator
-- `REVIEWS_FEDERATION_KEY_HA`: deve coincidere con Santaddeo.
-- `REVIEWS_FEDERATION_PROVISION_KEY`: deve coincidere con Santaddeo.
-- `SANTADDEO_APP_URL`: base URL Santaddeo; fallback `https://www.santaddeo.com`.
+Il traffico segue i trust boundary gia usati dalla suite:
 
-### ManuBot
-- `REVIEWS_FEDERATION_KEY_MB`: deve coincidere con Santaddeo.
-- `HOTELACCELERATOR_APP_URL`: base URL del Core; fallback `https://www.hotelaccelerator.com`.
-- `SANTADDEO_APP_URL`: base URL Santaddeo; fallback `https://www.santaddeo.com`.
-- `CUSTOMER_CODE_REGISTRY_KEY_MB`: fallback server-side già esistente per autenticare ManuBot verso il Core quando Vercel OIDC non è disponibile.
+- ManuBot -> HotelAccelerator Core: Vercel OIDC short-lived in produzione, con `CUSTOMER_CODE_REGISTRY_KEY_MB` come fallback recovery/preview.
+- HotelAccelerator Core -> Santaddeo: Vercel OIDC short-lived in produzione, con `CUSTOMER_CODE_REGISTRY_KEY_SNT` come fallback recovery/preview.
+- Il browser non riceve mai credenziali interne, token provider o ID tecnici necessari all'autenticazione.
 
-Le chiavi `REVIEWS_FEDERATION_*` devono essere valori casuali ad alta entropia, solo server-side e mai `NEXT_PUBLIC_*`.
+Le variabili URL restano opzionali:
+
+- `SANTADDEO_APP_URL` in HotelAccelerator, fallback `https://www.santaddeo.com`.
+- `HOTELACCELERATOR_APP_URL` in ManuBot, fallback `https://www.hotelaccelerator.com`.
+
+ManuBot non chiama Santaddeo direttamente: il Core e' l'unico ingresso di suite verso il motore Recensioni.
 
 ## Flusso
+
 1. L'utente apre la configurazione Recensioni nella piattaforma di origine.
 2. La piattaforma verifica localmente che l'addon `reviews` sia attivo.
-3. Il Core risolve il `customer_account` e il mapping Santaddeo.
+3. HotelAccelerator Core risolve il `customer_account` e il mapping Santaddeo.
 4. Se manca un tenant Santaddeo, viene creato un workspace tecnico `reviews_only`; se esiste, viene riutilizzato.
 5. Sul workspace centrale viene attivato soltanto l'addon `reviews`; questo non concede Santaddeo RMS.
-6. GET/PATCH della configurazione passano server-to-server a Santaddeo.
+6. GET/PATCH della configurazione passano server-to-server dal Core a Santaddeo.
 7. I token provider non vengono mai restituiti al browser.
+
+## Concorrenza e idempotenza
+
+Il workspace tecnico e' deterministico rispetto al `customer_account_id`. Se due richieste tentano il provisioning contemporaneamente, il mapping `suite_tenant_links` resta la fonte autorevole e la richiesta perdente rilegge il link gia creato invece di esporre un secondo workspace.
