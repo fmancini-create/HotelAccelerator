@@ -30,10 +30,10 @@ export async function GET(request: Request) {
 
     const propertyId = await getFourBidPropertyId()
     const supabase = createServiceClient()
-    const [{ data: users, error: usersError }, { data: collaborators, error: collaboratorsError }] = await Promise.all([
+    const [{ data: memberships, error: membershipsError }, { data: collaborators, error: collaboratorsError }] = await Promise.all([
       supabase
-        .from("admin_users")
-        .select("id, email, name, role, is_tenant_admin, created_at")
+        .from("tenant_user_memberships")
+        .select("user_id, role, is_tenant_admin, created_at")
         .eq("property_id", propertyId)
         .order("created_at", { ascending: true }),
       supabase
@@ -42,30 +42,39 @@ export async function GET(request: Request) {
         .order("created_at", { ascending: true }),
     ])
 
-    if (usersError) throw usersError
+    if (membershipsError) throw membershipsError
     if (collaboratorsError) throw collaboratorsError
 
+    const userIds = (memberships ?? []).map((membership: any) => String(membership.user_id))
+    const { data: identities, error: identitiesError } = userIds.length
+      ? await supabase.from("admin_users").select("id, email, name").in("id", userIds)
+      : { data: [], error: null }
+    if (identitiesError) throw identitiesError
+
+    const identityById = new Map((identities ?? []).map((user: any) => [String(user.id), user]))
     const platformByEmail = new Map(
       (collaborators ?? []).map((collaborator: any) => [String(collaborator.email).toLowerCase(), collaborator]),
     )
-    const fourBidEmails = new Set((users ?? []).map((user: any) => String(user.email).toLowerCase()))
 
-    const team = (users ?? []).map((user: any) => {
+    const team = (memberships ?? []).flatMap((membership: any) => {
+      const user = identityById.get(String(membership.user_id)) as any | undefined
+      if (!user) return []
       const platform = platformByEmail.get(String(user.email).toLowerCase()) as any | undefined
-      return {
+      return [{
         user_id: user.id,
         collaborator_id: platform?.id ?? null,
         email: user.email,
         name: user.name,
-        tenant_role: user.role,
-        is_tenant_admin: user.is_tenant_admin === true,
+        tenant_role: membership.role,
+        is_tenant_admin: membership.is_tenant_admin === true,
         platform_role: platform?.role ?? null,
         platform_access_active: platform?.is_active === true,
         last_login_at: platform?.last_login_at ?? null,
-        created_at: user.created_at,
-      }
+        created_at: membership.created_at,
+      }]
     })
 
+    const fourBidEmails = new Set(team.map((user: any) => String(user.email).toLowerCase()))
     const legacyCollaborators = (collaborators ?? [])
       .filter((collaborator: any) => !fourBidEmails.has(String(collaborator.email).toLowerCase()))
       .map((collaborator: any) => ({
@@ -102,23 +111,33 @@ export async function POST(request: Request) {
     await service.verifySuperAdmin(actorEmail)
     const propertyId = await getFourBidPropertyId()
     const supabase = createServiceClient()
-    const { data: fourBidUser, error } = await supabase
+
+    const { data: identity, error: identityError } = await supabase
       .from("admin_users")
-      .select("email, name")
-      .eq("property_id", propertyId)
+      .select("id, email, name")
       .ilike("email", email)
       .maybeSingle()
+    if (identityError) throw identityError
 
-    if (error) throw error
-    if (!fourBidUser) {
+    const { data: membership, error: membershipError } = identity?.id
+      ? await supabase
+          .from("tenant_user_memberships")
+          .select("user_id")
+          .eq("property_id", propertyId)
+          .eq("user_id", identity.id)
+          .maybeSingle()
+      : { data: null, error: null }
+    if (membershipError) throw membershipError
+
+    if (!identity || !membership) {
       return NextResponse.json(
-        { error: "La persona deve prima esistere nel Team 4BID. Gli accessi piattaforma non creano una seconda anagrafica." },
+        { error: "La persona deve prima appartenere al Team 4BID. Gli accessi piattaforma non creano una seconda anagrafica." },
         { status: 409 },
       )
     }
 
     const collaborator = await service.createCollaborator(
-      { email: fourBidUser.email, name: fourBidUser.name, role } as any,
+      { email: identity.email, name: identity.name, role } as any,
       actorEmail,
     )
 
