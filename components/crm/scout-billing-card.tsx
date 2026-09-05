@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import useSWR from "swr"
 import { Coins, CreditCard, Loader2, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -26,7 +27,19 @@ function euro(cents: number | null) {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(cents / 100)
 }
 
+const fetcher = async (url: string) => {
+  const response = await fetch(url, { cache: "no-store" })
+  if (!response.ok) throw new Error("Saldo Scout non disponibile")
+  return response.json()
+}
+
 export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }) {
+  const { data } = useSWR<{ billing: ScoutBillingCardState }>(
+    billing.active ? "/api/admin/crm/scout/billing" : null,
+    fetcher,
+    { fallbackData: { billing }, refreshInterval: 3000, revalidateOnFocus: true },
+  )
+  const current = data?.billing ?? billing
   const [quantity, setQuantity] = useState(Math.max(1, billing.minimumPurchaseCredits))
   const [loading, setLoading] = useState(false)
 
@@ -48,7 +61,7 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
     }
   }
 
-  if (!billing.active) {
+  if (!current.active) {
     return (
       <Card className="border-ha-brand/30 bg-ha-brand/5">
         <CardHeader>
@@ -62,16 +75,16 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
         </CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
-            <p className="text-2xl font-semibold">{euro(billing.activationFeeCents)}</p>
+            <p className="text-2xl font-semibold">{euro(current.activationFeeCents)}</p>
             <p className="text-sm text-muted-foreground">
-              {billing.activationIncludedCredits > 0
-                ? `${billing.activationIncludedCredits.toLocaleString("it-IT")} crediti Scout inclusi nell'attivazione`
+              {current.activationIncludedCredits > 0
+                ? `${current.activationIncludedCredits.toLocaleString("it-IT")} crediti Scout inclusi nell'attivazione`
                 : "Crediti acquistabili dopo l'attivazione"}
             </p>
           </div>
           <Button
             onClick={() => void checkout("activation")}
-            disabled={loading || billing.activationFeeCents === null || billing.activationFeeCents <= 0}
+            disabled={loading || current.activationFeeCents === null || current.activationFeeCents <= 0}
           >
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : <CreditCard className="mr-2 h-4 w-4" aria-hidden />}
             Attiva Scout
@@ -92,8 +105,8 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
             </CardTitle>
             <CardDescription>Il saldo è condiviso da tutti gli utenti autorizzati di questo tenant.</CardDescription>
           </div>
-          <Badge variant={billing.availableCredits > 0 ? "secondary" : "destructive"} className="text-sm">
-            {billing.availableCredits.toLocaleString("it-IT")} disponibili
+          <Badge variant={current.availableCredits > 0 ? "secondary" : "destructive"} className="text-sm">
+            {current.availableCredits.toLocaleString("it-IT")} disponibili
           </Badge>
         </div>
       </CardHeader>
@@ -101,15 +114,15 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
             <p className="text-xs text-muted-foreground">Saldo totale</p>
-            <p className="text-xl font-semibold">{billing.balance.toLocaleString("it-IT")}</p>
+            <p className="text-xl font-semibold">{current.balance.toLocaleString("it-IT")}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Temporaneamente riservati</p>
-            <p className="text-xl font-semibold">{billing.reservedCredits.toLocaleString("it-IT")}</p>
+            <p className="text-xl font-semibold">{current.reservedCredits.toLocaleString("it-IT")}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Prezzo per credito</p>
-            <p className="text-xl font-semibold">{billing.pricingConfigured ? euro(billing.creditPriceCents) : "da definire"}</p>
+            <p className="text-xl font-semibold">{current.pricingConfigured ? euro(current.creditPriceCents) : "da definire"}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-end gap-2">
@@ -120,15 +133,15 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
               className="w-36"
               inputMode="numeric"
               type="number"
-              min={billing.minimumPurchaseCredits}
+              min={current.minimumPurchaseCredits}
               value={quantity}
               onChange={(event) => setQuantity(Math.max(1, Number.parseInt(event.target.value || "0", 10) || 1))}
             />
-            <p className="text-xs text-muted-foreground">Minimo {billing.minimumPurchaseCredits}</p>
+            <p className="text-xs text-muted-foreground">Minimo {current.minimumPurchaseCredits}</p>
           </div>
           <Button
             onClick={() => void checkout("credits")}
-            disabled={loading || !billing.pricingConfigured || quantity < billing.minimumPurchaseCredits}
+            disabled={loading || !current.pricingConfigured || quantity < current.minimumPurchaseCredits}
           >
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : <CreditCard className="mr-2 h-4 w-4" aria-hidden />}
             Acquista crediti
