@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Coins, Loader2, Save, TrendingUp } from "lucide-react"
+import { ArrowLeft, Coins, Gauge, Loader2, Save, TrendingUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -40,6 +40,22 @@ type AccountRow = {
   properties?: { name?: string; slug?: string } | Array<{ name?: string; slug?: string }> | null
 }
 
+type ProviderCredit = {
+  limit: number
+  consumed: number
+  leftOver: number
+}
+
+type ProviderUsage = {
+  available: boolean
+  stats: {
+    creditTypes: Record<string, ProviderCredit>
+    cycleStart: string | null
+    cycleEnd: string | null
+  } | null
+  error: string | null
+}
+
 type Payload = {
   settings: Settings
   currentCost: { costMicroEur: number; effectiveFrom: string } | null
@@ -56,6 +72,7 @@ type Payload = {
     providerCostMicroEur: number
     usageRetailValueCents: number
   }
+  providerUsage: ProviderUsage
 }
 
 function euroFromCents(cents: number | null | undefined) {
@@ -76,6 +93,20 @@ function euroFromMicro(micro: number | null | undefined, digits = 4) {
 function propertyName(row: AccountRow) {
   const value = Array.isArray(row.properties) ? row.properties[0] : row.properties
   return value?.name || value?.slug || row.property_id
+}
+
+const providerCreditLabels: Record<string, string> = {
+  lead_credit: "Lead / enrichment",
+  direct_dial_credit: "Direct dial",
+  export_credit: "Export",
+  conversation_credit: "Conversation",
+  ai_credit: "AI",
+  power_up_credit: "Power-up",
+  inbound_website_visitor_credit: "Website visitor inbound",
+  contact_website_visitor_credit: "Website visitor contact",
+  dialer: "Dialer",
+  web_search_record_credit: "Web search",
+  broadcast_credit: "Broadcast",
 }
 
 export default function ScoutBillingAdminPage() {
@@ -121,8 +152,8 @@ export default function ScoutBillingAdminPage() {
     const credits = Number.parseInt(includedCredits, 10)
     const mult = Number(multiplier.replace(",", "."))
     const minimum = Number.parseInt(minimumPurchase, 10)
-    if ((fee !== null && (!Number.isFinite(fee) || fee < 0)) || !Number.isInteger(credits) || credits < 0 || !Number.isFinite(mult) || mult < 1 || !Number.isInteger(minimum) || minimum < 1) {
-      toast.error("Controlla i valori del listino Scout.")
+    if ((fee !== null && (!Number.isFinite(fee) || fee < 0.5)) || !Number.isInteger(credits) || credits < 0 || !Number.isFinite(mult) || mult < 1 || !Number.isInteger(minimum) || minimum < 1) {
+      toast.error("Controlla il listino Scout. La fee deve essere vuota oppure almeno € 0,50.")
       return
     }
     setSaving(true)
@@ -172,6 +203,9 @@ export default function ScoutBillingAdminPage() {
     }
   }
 
+  const providerCredits = data?.providerUsage.stats?.creditTypes ?? {}
+  const leadCredits = providerCredits.lead_credit
+
   return (
     <div className="min-h-screen bg-neutral-50">
       <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -197,9 +231,46 @@ export default function ScoutBillingAdminPage() {
             <div className="grid gap-4 md:grid-cols-4">
               <Card><CardHeader className="pb-2"><CardDescription>Crediti residui tenant</CardDescription><CardTitle>{data.totals.balance.toLocaleString("it-IT")}</CardTitle></CardHeader></Card>
               <Card><CardHeader className="pb-2"><CardDescription>Crediti consumati</CardDescription><CardTitle>{data.totals.consumed.toLocaleString("it-IT")}</CardTitle></CardHeader></Card>
-              <Card><CardHeader className="pb-2"><CardDescription>Costo provider contabilizzato</CardDescription><CardTitle>{euroFromMicro(data.totals.providerCostMicroEur, 2)}</CardTitle></CardHeader></Card>
+              <Card><CardHeader className="pb-2"><CardDescription>Costo provider stimato</CardDescription><CardTitle>{euroFromMicro(data.totals.providerCostMicroEur, 2)}</CardTitle></CardHeader></Card>
               <Card><CardHeader className="pb-2"><CardDescription>Valore vendita utilizzi</CardDescription><CardTitle>{euroFromCents(data.totals.usageRetailValueCents)}</CardTitle></CardHeader></Card>
             </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Gauge className="h-5 w-5" /> Crediti provider in tempo reale</CardTitle>
+                <CardDescription>
+                  Monitoraggio del piano sottostante. Serve a intercettare variazioni di consumo o disponibilità; non viene mai mostrato ai tenant.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!data.providerUsage.available || !data.providerUsage.stats ? (
+                  <p className="text-sm text-amber-700">{data.providerUsage.error || "Monitoraggio provider non disponibile."}</p>
+                ) : (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-3">
+                      <div><p className="text-xs text-muted-foreground">Lead credit disponibili</p><p className="text-2xl font-semibold">{leadCredits ? leadCredits.leftOver.toLocaleString("it-IT") : "—"}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Lead credit consumati</p><p className="text-2xl font-semibold">{leadCredits ? leadCredits.consumed.toLocaleString("it-IT") : "—"}</p></div>
+                      <div><p className="text-xs text-muted-foreground">Ciclo provider</p><p className="text-sm font-medium">{data.providerUsage.stats.cycleStart && data.providerUsage.stats.cycleEnd ? `${new Date(data.providerUsage.stats.cycleStart).toLocaleDateString("it-IT")} → ${new Date(data.providerUsage.stats.cycleEnd).toLocaleDateString("it-IT")}` : "—"}</p></div>
+                    </div>
+                    <div className="overflow-x-auto rounded-md border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 text-left"><tr><th className="p-3">Tipo credito</th><th className="p-3 text-right">Limite</th><th className="p-3 text-right">Consumati</th><th className="p-3 text-right">Residui</th></tr></thead>
+                        <tbody>
+                          {Object.entries(providerCredits).filter(([, row]) => row.limit > 0 || row.consumed > 0).map(([key, row]) => (
+                            <tr key={key} className="border-t">
+                              <td className="p-3 font-medium">{providerCreditLabels[key] || key}</td>
+                              <td className="p-3 text-right">{row.limit.toLocaleString("it-IT")}</td>
+                              <td className="p-3 text-right">{row.consumed.toLocaleString("it-IT")}</td>
+                              <td className={`p-3 text-right ${row.leftOver === 0 ? "font-semibold text-red-600" : ""}`}>{row.leftOver.toLocaleString("it-IT")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
             <Card>
               <CardHeader>
@@ -207,7 +278,7 @@ export default function ScoutBillingAdminPage() {
                 <CardDescription>Il tenant vede solo fee, prezzo dei crediti e saldo. Il costo provider resta interno.</CardDescription>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-4">
-                <div className="space-y-1"><Label htmlFor="fee">Attivazione una tantum (€)</Label><Input id="fee" inputMode="decimal" placeholder="da definire" value={feeEuro} onChange={(e) => setFeeEuro(e.target.value)} /></div>
+                <div className="space-y-1"><Label htmlFor="fee">Attivazione una tantum (€)</Label><Input id="fee" inputMode="decimal" placeholder="da definire" value={feeEuro} onChange={(e) => setFeeEuro(e.target.value)} /><p className="text-xs text-muted-foreground">Vuota = non acquistabile; minimo € 0,50.</p></div>
                 <div className="space-y-1"><Label htmlFor="included">Crediti inclusi</Label><Input id="included" type="number" min={0} value={includedCredits} onChange={(e) => setIncludedCredits(e.target.value)} /></div>
                 <div className="space-y-1"><Label htmlFor="multiplier">Moltiplicatore</Label><Input id="multiplier" inputMode="decimal" min={1} value={multiplier} onChange={(e) => setMultiplier(e.target.value)} /></div>
                 <div className="space-y-1"><Label htmlFor="minimum">Acquisto minimo crediti</Label><Input id="minimum" type="number" min={1} value={minimumPurchase} onChange={(e) => setMinimumPurchase(e.target.value)} /></div>
@@ -218,13 +289,13 @@ export default function ScoutBillingAdminPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" /> Costo provider</CardTitle>
-                <CardDescription>Ogni variazione crea una nuova riga con decorrenza: lo storico economico non viene riscritto.</CardDescription>
+                <CardDescription>Ogni variazione crea una nuova riga con decorrenza. Il costo è la nostra stima economica per operazione e resta distinto dai contatori tecnici del piano.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 md:grid-cols-4 md:items-end">
-                  <div className="space-y-1"><Label htmlFor="provider-cost">Costo per enrichment (€)</Label><Input id="provider-cost" inputMode="decimal" value={providerCostEuro} onChange={(e) => setProviderCostEuro(e.target.value)} placeholder="0,000000" /></div>
+                  <div className="space-y-1"><Label htmlFor="provider-cost">Costo stimato per enrichment (€)</Label><Input id="provider-cost" inputMode="decimal" value={providerCostEuro} onChange={(e) => setProviderCostEuro(e.target.value)} placeholder="0,000000" /></div>
                   <div><p className="text-xs text-muted-foreground">Prezzo/credito attuale</p><p className="text-lg font-semibold">{data.creditPriceCents == null ? "da definire" : euroFromCents(data.creditPriceCents)}</p></div>
-                  <div><p className="text-xs text-muted-foreground">Margine unitario attuale</p><p className="text-lg font-semibold">{euroFromMicro(data.unitMarginMicroEur)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Margine unitario stimato</p><p className="text-lg font-semibold">{euroFromMicro(data.unitMarginMicroEur)}</p></div>
                   <Button onClick={() => void addProviderCost()} disabled={saving}>Registra nuovo costo</Button>
                 </div>
                 {projectedUnit !== null && <p className="text-xs text-muted-foreground">Con i valori in modifica, il prezzo arrotondato al centesimo sarebbe circa {new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(projectedUnit)} per credito.</p>}
