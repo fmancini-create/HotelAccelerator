@@ -30,17 +30,26 @@ describe("Suite ManuBot task hub", () => {
     expect(route).toContain('"addon_configuration_required"')
   })
 
-  it("mounts the Inbox action, keeps the contextual upsell, and creates through the existing tenant-scoped todos route", () => {
+  it("mounts the Inbox action, uses authoritative addon state, and creates through the tenant-scoped todos route", () => {
     const layout = source("app/admin/inbox/layout.tsx")
     const enhancer = source("components/admin/inbox/inbox-manubot-task-enhancer.tsx")
+    const contextRoute = source("app/api/admin/manubot/addon-context/route.ts")
+    const areaMap = source("lib/auth/api-area-map.ts")
 
     expect(layout).toContain("InboxManubotTaskEnhancer")
+    expect(enhancer).toContain('fetch("/api/admin/manubot/addon-context"')
     expect(enhancer).toContain("Trasforma questa conversazione in un ticket operativo")
     expect(enhancer).toContain("Attiva ManuBot")
+    expect(enhancer).toContain('addonState === "configuration_required"')
+    expect(enhancer).toContain("collegamento tecnico deve essere completato")
     expect(enhancer).toContain('fetch("/api/admin/todos"')
     expect(enhancer).toContain("send_to_manubot: true")
     expect(enhancer).toContain("lastReply")
     expect(enhancer).toContain("ManuBot momentaneamente non disponibile")
+
+    expect(contextRoute).toContain('getSuiteManubotTaskFormData("hotelaccelerator"')
+    expect(contextRoute).toContain('requireAreaApi("todos"')
+    expect(areaMap).toContain('"/api/admin/manubot/addon-context": "todos"')
   })
 
   it("records the contextual addon rule as a repository invariant", () => {
