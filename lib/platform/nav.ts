@@ -324,6 +324,15 @@ export const NAV_ENTRIES: NavEntry[] = [
     adminOnly: true,
   },
   {
+    id: "operator-rewards",
+    href: "/admin/settings/rewards",
+    label: "Premi sugli obiettivi",
+    description: "Configura premi in punti o denaro collegati agli obiettivi degli operatori",
+    placement: "settings",
+    icon: Coins,
+    adminOnly: true,
+  },
+  {
     id: "users",
     href: "/admin/users",
     label: "Gestione Utenti",
