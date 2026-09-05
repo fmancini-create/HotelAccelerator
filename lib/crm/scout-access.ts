@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { createServiceClient } from "@/lib/supabase/server"
 import { AccessError, adminUserIdPerDatabase, getCallerIdentity } from "@/lib/auth/admin-access"
 import { isGroupLead } from "@/lib/auth/group-lead"
+import { economicsForScoutUsage } from "@/lib/crm/scout-billing"
 
 export type ScoutAccessContext = {
   propertyId: string
@@ -157,17 +158,32 @@ export async function recordScoutUsage(db: SupabaseClient, input: {
   metadata?: Record<string, unknown>
 }) {
   try {
+    const creditsUsed = Number.isFinite(input.creditsUsed) ? Math.max(0, Number(input.creditsUsed)) : 0
+    const economics = creditsUsed > 0 && input.success !== false
+      ? await economicsForScoutUsage(db, creditsUsed).catch((error) => {
+          console.error("[scout] cost attribution failed", error)
+          return null
+        })
+      : null
+
     const { error } = await db.from("crm_scout_usage_events").insert({
       property_id: input.propertyId,
       user_id: adminUserIdPerDatabase(input.access.userId),
       actor_label: input.access.label || null,
       action: input.action,
       success: input.success !== false,
-      credits_used: Math.max(0, Math.trunc(input.creditsUsed ?? 0)),
+      credits_used: Number(creditsUsed.toFixed(4)),
+      provider_unit_cost_micros: economics?.unitCostMicros ?? null,
+      provider_cost_micros: economics?.providerCostMicros ?? null,
+      price_multiplier: economics?.multiplier ?? null,
+      customer_value_micros: economics?.customerValueMicros ?? null,
       prospect_id: input.prospectId || null,
       target_user_id: adminUserIdPerDatabase(input.targetUserId),
       error_message: input.errorMessage?.slice(0, 1000) || null,
-      metadata: input.metadata ?? {},
+      metadata: {
+        ...(input.metadata ?? {}),
+        ...(economics ? { billing_currency: economics.currency } : {}),
+      },
     })
     if (error) console.error("[scout] usage audit failed", error)
   } catch (error) {

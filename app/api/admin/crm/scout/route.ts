@@ -40,6 +40,12 @@ async function sanitizeResponse(response: Response) {
   })
 }
 
+function reportedCreditCost(action: string, payload: any) {
+  if (action !== "enrich") return 0
+  const value = Number(payload?.creditCost ?? 0)
+  return Number.isFinite(value) && value > 0 ? value : 0
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAreaApi("crm", request)
@@ -102,12 +108,13 @@ export async function POST(request: NextRequest) {
 
     if (auditable.has(action)) {
       const prospectId = String(body?.prospectId || payload?.prospect?.id || "") || null
+      const creditsUsed = reportedCreditCost(action, payload)
       await recordScoutUsage(db, {
         propertyId,
         access,
         action: action as "search" | "save" | "enrich" | "import" | "dismiss",
         success: response.ok,
-        creditsUsed: action === "enrich" && response.ok ? 1 : 0,
+        creditsUsed,
         prospectId,
         errorMessage: response.ok ? null : String(payload?.error || "Operazione Scout non completata"),
         metadata:
@@ -118,7 +125,13 @@ export async function POST(request: NextRequest) {
                 organizationLocations: Array.isArray(body?.organizationLocations) ? body.organizationLocations : [],
                 resultCount: Array.isArray(payload?.people) ? payload.people.length : null,
               }
-            : {},
+            : action === "enrich"
+              ? {
+                  providerReportedCredits: creditsUsed,
+                  reused: payload?.reused === true,
+                  outcome: payload?.outcome || null,
+                }
+              : {},
       })
     }
 

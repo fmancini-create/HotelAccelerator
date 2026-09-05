@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { OpenAICostsPanel } from "@/components/platform/openai-costs-panel"
+import { ScoutCostsPanel } from "@/components/platform/scout-costs-panel"
 import { toast } from "sonner"
 import { MOLTIPLICATORE_PREZZO, formattaImporto } from "@/lib/modules/pricing"
 
@@ -79,7 +80,7 @@ export default function ModuleCostsPage() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      <div className="max-w-4xl mx-auto p-6">
+      <div className="max-w-5xl mx-auto p-6">
         <Link
           href="/super-admin"
           className="inline-flex items-center gap-2 text-sm text-neutral-600 hover:text-neutral-900"
@@ -97,6 +98,7 @@ export default function ModuleCostsPage() {
         </header>
 
         <OpenAICostsPanel />
+        <ScoutCostsPanel />
 
         <section aria-labelledby="module-costs-title">
           <div className="mb-4">

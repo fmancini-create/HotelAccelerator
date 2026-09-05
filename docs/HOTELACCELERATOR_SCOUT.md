@@ -1,14 +1,16 @@
 # HotelAccelerator Scout
 
-Ultimo aggiornamento: 2026-09-01
+Ultimo aggiornamento: 2026-09-06
 
 ## Stato
 
 - Nome prodotto e contratto white-label: `Specifica`
 - Ricerca B2B sottostante: `Codice`
-- Company Scout / Agency Scout UI: `Codice` dopo merge della PR che introduce questa pagina
+- Company Scout / Agency Scout UI: `Codice`
+- Permessi per utente, assegnazione prospect e monitoraggio admin: `Codice`
+- Controllo costi provider, metering reale, riconciliazione e markup 3x: `Codice`
+- Wallet/pacchetti crediti acquistabili dal tenant: `Specifica`
 - Guest Scout: `Specifica`
-- Billing addon con markup 3x: `Specifica`
 
 ## Nome canonico
 
@@ -63,9 +65,15 @@ Il prezzo cliente deve preservare il requisito commerciale:
 
 `prezzo_cliente = costo_provider_effettivo * 3`
 
+Il moltiplicatore e' configurabile dal superadmin ma parte da `3.0`. Il costo monetario del provider viene inserito/verificato da fattura o contratto, perche' l'API di utilizzo restituisce i saldi crediti e il ciclo ma non il prezzo monetario dell'abbonamento. In alternativa il superadmin puo' impostare un costo unitario per lead credit.
+
+Il controllo costi legge periodicamente il plafond, il consumo e il residuo ufficiali del provider e li confronta con gli eventi Scout attribuiti ai tenant. Una differenza evidenzia consumo non attribuito, uso esterno a HotelAccelerator, vecchi eventi non metered o un'anomalia da verificare.
+
+Ogni evento fatturabile salva il consumo crediti dichiarato dal provider, anche frazionario, insieme a costo unitario, costo provider, moltiplicatore e valore cliente validi in quel momento. Lo storico economico non viene quindi riscritto quando cambia il prezzo del provider.
+
 Ogni evento fatturabile deve essere tenant-scoped, idempotente e auditabile. I retry tecnici non generano un secondo addebito. Un'operazione senza costo provider non genera costo variabile cliente salvo futura quota fissa/pacchetto esplicitamente definita.
 
-Il tenant vede solo prezzi, pacchetti e crediti Scout; non il costo o il contratto del provider.
+Il tenant vede solo prezzi, pacchetti e crediti Scout; non il costo o il contratto del provider. Il superadmin vede anche saldo globale provider, costo, margine, riconciliazione e ripartizione per tenant.
 
 ## Relazione con il CRM
 

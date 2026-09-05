@@ -7,7 +7,7 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import {
   ApolloConfigurationError,
   ApolloRequestError,
-  enrichApolloPerson,
+  enrichApolloPersonWithUsage,
   searchApolloPeople,
 } from "@/lib/integrations/apollo/client"
 
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
         .select()
         .single()
       if (error) throw error
-      return NextResponse.json({ prospect: data })
+      return NextResponse.json({ prospect: data, creditCost: 0 })
     }
 
     const { data: prospect, error: prospectError } = await supabase
@@ -186,20 +186,33 @@ export async function POST(request: NextRequest) {
         .eq("id", prospect.id)
         .eq("property_id", propertyId)
       if (error) throw error
-      return NextResponse.json({ ok: true })
+      return NextResponse.json({ ok: true, creditCost: 0 })
     }
 
     if (body.action === "enrich") {
-      if (prospect.status === "enriched" && !prospect.email) {
-        return NextResponse.json(
-          { error: "Apollo ha già verificato questo profilo e non ha un'email disponibile." },
-          { status: 409 },
-        )
+      // Server-side idempotency: a click ripetuto non deve mai generare una
+      // seconda richiesta fatturabile se questo profilo e' gia stato verificato.
+      if (prospect.status === "enriched" || prospect.email) {
+        return NextResponse.json({
+          prospect,
+          creditCost: 0,
+          reused: true,
+          outcome: prospect.email ? "email_found" : "email_unavailable",
+          message: prospect.email
+            ? "Il recapito era gia stato verificato: nessun nuovo credito Scout utilizzato."
+            : "Il profilo era gia stato verificato senza recapito: nessun nuovo credito Scout utilizzato.",
+        })
       }
 
-      const enriched = await enrichApolloPerson(prospect.apollo_person_id)
+      const enrichment = await enrichApolloPersonWithUsage(prospect.apollo_person_id)
+      const enriched = enrichment.person
       if (!enriched) {
-        return NextResponse.json({ error: "Apollo non ha trovato dati aggiuntivi per questo profilo." }, { status: 404 })
+        // Il provider dichiara il consumo esatto anche quando non trova un match.
+        // Lo restituiamo comunque al wrapper di metering per la riconciliazione.
+        return NextResponse.json({
+          error: "Apollo non ha trovato dati aggiuntivi per questo profilo.",
+          creditCost: enrichment.creditsConsumed,
+        }, { status: 404 })
       }
       const { data, error } = await supabase
         .from("crm_apollo_prospects")
@@ -228,6 +241,7 @@ export async function POST(request: NextRequest) {
       if (error) throw error
       return NextResponse.json({
         prospect: data,
+        creditCost: enrichment.creditsConsumed,
         outcome: data.email ? "email_found" : "email_unavailable",
         message: data.email
           ? "Email trovata da Apollo."
@@ -296,7 +310,7 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
     if (error) throw error
-    return NextResponse.json({ prospect: data, contactId, existing: Boolean(existing) })
+    return NextResponse.json({ prospect: data, contactId, existing: Boolean(existing), creditCost: 0 })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     const apollo = providerError(error)

@@ -75,8 +75,28 @@ export type ApolloPerson = {
   emailStatus: string | null
 }
 
+export type ApolloCreditBucket = {
+  limit: number
+  consumed: number
+  leftOver: number
+}
+
+export type ApolloCreditUsageStats = {
+  credits: Record<string, ApolloCreditBucket>
+  currentCycle: {
+    startDate: string | null
+    endDate: string | null
+  }
+  fetchedAt: string
+}
+
 function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function finiteNumber(value: unknown, fallback = 0) {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 0 ? number : fallback
 }
 
 function organizationKeywordTags(value: string) {
@@ -126,6 +146,39 @@ function normalizePerson(value: unknown): ApolloPerson | null {
   }
 }
 
+function normalizeCreditBucket(value: unknown): ApolloCreditBucket {
+  const row = value && typeof value === "object" ? value as Record<string, unknown> : {}
+  return {
+    limit: finiteNumber(row.limit),
+    consumed: finiteNumber(row.consumed),
+    leftOver: finiteNumber(row.left_over),
+  }
+}
+
+/**
+ * Saldo crediti ufficiale del team Apollo. L'endpoint non consuma crediti e
+ * aggiorna i contatori entro pochi secondi dalle operazioni fatturabili.
+ */
+export async function getApolloCreditUsageStats(): Promise<ApolloCreditUsageStats> {
+  const payload = await apolloPost("/usage_stats/credit_usage_stats", {})
+  const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+  const rawStats = root.credit_usage_stats && typeof root.credit_usage_stats === "object"
+    ? root.credit_usage_stats as Record<string, unknown>
+    : {}
+  const rawCycle = root.current_credit_cycle && typeof root.current_credit_cycle === "object"
+    ? root.current_credit_cycle as Record<string, unknown>
+    : {}
+
+  return {
+    credits: Object.fromEntries(Object.entries(rawStats).map(([key, value]) => [key, normalizeCreditBucket(value)])),
+    currentCycle: {
+      startDate: text(rawCycle.start_date),
+      endDate: text(rawCycle.end_date),
+    },
+    fetchedAt: new Date().toISOString(),
+  }
+}
+
 export async function searchApolloPeople(input: {
   keywords: string
   titles: string[]
@@ -159,12 +212,36 @@ export async function searchApolloPeople(input: {
   }
 }
 
-export async function enrichApolloPerson(apolloPersonId: string) {
-  const payload = await apolloPost("/people/match", {
-    id: apolloPersonId,
+/**
+ * Usa bulk_match anche per il singolo profilo perche' la risposta espone
+ * `credits_consumed`. In questo modo il metering non assume piu' "1 credito"
+ * ma salva esattamente il consumo dichiarato dal provider, anche su piani che
+ * usano crediti frazionari.
+ */
+export async function enrichApolloPersonWithUsage(apolloPersonId: string) {
+  const payload = await apolloPost("/people/bulk_match", {
+    details: [{ id: apolloPersonId }],
     reveal_personal_emails: false,
     reveal_phone_number: false,
   })
-  const root = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
-  return normalizePerson(root.person)
+  const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {}
+  const matches = Array.isArray(root.matches) ? root.matches : []
+  const person = matches
+    .map((value) => {
+      if (value && typeof value === "object" && "person" in (value as Record<string, unknown>)) {
+        return normalizePerson((value as Record<string, unknown>).person)
+      }
+      return normalizePerson(value)
+    })
+    .find(Boolean) ?? null
+
+  return {
+    person,
+    creditsConsumed: finiteNumber(root.credits_consumed, person ? 1 : 0),
+  }
+}
+
+/** Compatibilita' per eventuali chiamanti legacy. */
+export async function enrichApolloPerson(apolloPersonId: string) {
+  return (await enrichApolloPersonWithUsage(apolloPersonId)).person
 }
