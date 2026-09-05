@@ -53,6 +53,7 @@ jobs:
       - name: Lint Scout billing files
         run: >-
           pnpm exec eslint
+          lib/scout/access.ts
           lib/scout/billing.ts
           lib/scout/auto-recharge.ts
           lib/scout/__tests__/billing.test.ts
