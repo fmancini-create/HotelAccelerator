@@ -34,7 +34,7 @@ jobs:
       - name: Typecheck Core
         run: pnpm run typecheck
 
-      - name: Test mobile HR login gate
+      - name: Test HR time-clock login gate
         run: pnpm vitest run tests/mobile-login-time-clock-gate.test.ts
 
       - name: Check dashboard manifest

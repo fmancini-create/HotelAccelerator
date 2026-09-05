@@ -1,8 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import { isMobileBrowser, shouldRouteToMobileTimeClock } from "@/lib/auth/mobile-login-gate"
+import {
+  hasActiveTimeClockRequirement,
+  isMobileBrowser,
+  shouldPromptDesktopTimeClock,
+  shouldRouteToMobileTimeClock,
+} from "@/lib/auth/mobile-login-gate"
 
 export type AuthorizeResult =
-  | { authorized: true; destination: "/admin/dashboard" | "/admin/time-clock" | "/super-admin" }
+  | {
+      authorized: true
+      destination:
+        | "/admin/dashboard"
+        | "/admin/dashboard?time_clock_prompt=1"
+        | "/admin/time-clock"
+        | "/super-admin"
+    }
   | { authorized: false }
 
 type AuthorizeOptions = {
@@ -14,14 +26,17 @@ type AuthorizeOptions = {
   mobile?: boolean
 }
 
-async function requiresMobileTimeClock(
+type TimeClockLoginDestination =
+  | "/admin/time-clock"
+  | "/admin/dashboard?time_clock_prompt=1"
+  | null
+
+async function timeClockLoginDestination(
   supabase: SupabaseClient,
   propertyId: string,
   adminUserId: string,
   mobile: boolean,
-): Promise<boolean> {
-  if (!mobile) return false
-
+): Promise<TimeClockLoginDestination> {
   const [moduleResult, employeeResult] = await Promise.all([
     supabase
       .from("tenant_modules")
@@ -31,32 +46,74 @@ async function requiresMobileTimeClock(
       .maybeSingle(),
     supabase
       .from("hr_employees")
-      .select("employment_status,requires_time_clock")
+      .select("id,employment_status,requires_time_clock")
       .eq("property_id", propertyId)
       .eq("admin_user_id", adminUserId)
       .maybeSingle(),
   ])
 
-  // Il modulo HR non deve diventare un single point of failure del login. Se la
-  // lettura fallisce, manteniamo la destinazione standard e lasciamo traccia nei
-  // log invece di bloccare l'intera piattaforma.
+  // HR non deve diventare un single point of failure del login. Se una lettura
+  // fallisce, manteniamo la destinazione standard e registriamo il guasto.
   if (moduleResult.error || employeeResult.error) {
-    console.error("[auth] mobile HR time-clock gate lookup failed", {
+    console.error("[auth] HR time-clock login lookup failed", {
       property_id: propertyId,
       admin_user_id: adminUserId,
       module_error: moduleResult.error?.message,
       employee_error: employeeResult.error?.message,
     })
-    return false
+    return null
   }
 
-  return shouldRouteToMobileTimeClock({
-    mobile,
+  const requirement = {
     moduleStatus: moduleResult.data?.status,
     moduleExpiresAt: moduleResult.data?.expires_at,
     employmentStatus: employeeResult.data?.employment_status,
     requiresTimeClock: employeeResult.data?.requires_time_clock,
-  })
+  }
+
+  if (!hasActiveTimeClockRequirement(requirement)) return null
+
+  // Mobile mantiene il comportamento vincolante gia' in produzione: si passa
+  // dalla schermata presenza, che propone entrata oppure uscita in base allo stato.
+  if (shouldRouteToMobileTimeClock({ ...requirement, mobile })) {
+    return "/admin/time-clock"
+  }
+
+  const employeeId = employeeResult.data?.id
+  if (!employeeId) return null
+
+  // Desktop: il promemoria serve soltanto quando manca un check-in aperto.
+  // La query resta esplicitamente tenant + employee scoped anche se RLS applica
+  // gia' il confine property.
+  const openEntryResult = await supabase
+    .from("hr_time_entries")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("employee_id", employeeId)
+    .is("clock_out_at", null)
+    .limit(1)
+
+  if (openEntryResult.error) {
+    console.error("[auth] desktop HR open time-entry lookup failed", {
+      property_id: propertyId,
+      admin_user_id: adminUserId,
+      employee_id: employeeId,
+      error: openEntryResult.error.message,
+    })
+    return null
+  }
+
+  if (
+    shouldPromptDesktopTimeClock({
+      ...requirement,
+      mobile,
+      hasOpenTimeEntry: (openEntryResult.data?.length ?? 0) > 0,
+    })
+  ) {
+    return "/admin/dashboard?time_clock_prompt=1"
+  }
+
+  return null
 }
 
 /**
@@ -67,8 +124,10 @@ async function requiresMobileTimeClock(
  * piattaforma: da li' puo' usare il cambio-contesto esplicito. Un collaboratore
  * esclusivamente Super Admin atterra invece direttamente in `/super-admin`.
  *
- * Per i soli utenti tenant che hanno `requires_time_clock=true`, un login da
- * smartphone passa prima da `/admin/time-clock`; il desktop resta invariato.
+ * Per gli utenti tenant con `requires_time_clock=true`:
+ * - smartphone: gate su `/admin/time-clock`;
+ * - desktop senza check-in aperto: dashboard + promemoria non bloccante;
+ * - desktop con check-in aperto: dashboard normale.
  */
 export async function authorizeUser(
   supabase: SupabaseClient,
@@ -83,11 +142,14 @@ export async function authorizeUser(
 
   if (adminUser) {
     const mobile = typeof options.mobile === "boolean" ? options.mobile : isMobileBrowser()
-    if (
-      adminUser.property_id &&
-      (await requiresMobileTimeClock(supabase, adminUser.property_id, adminUser.id, mobile))
-    ) {
-      return { authorized: true, destination: "/admin/time-clock" }
+    if (adminUser.property_id) {
+      const destination = await timeClockLoginDestination(
+        supabase,
+        adminUser.property_id,
+        adminUser.id,
+        mobile,
+      )
+      if (destination) return { authorized: true, destination }
     }
 
     return { authorized: true, destination: "/admin/dashboard" }
