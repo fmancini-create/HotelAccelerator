@@ -4,13 +4,14 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type OperatorSalesPerformance = {
   closedDeals30: number
+  closedDealsMissingValue30: number
   closedRevenueCents30: number
   quotesSent30: number
   quotesSentToday: number
-  completedCalls30: number
-  completedCallsToday: number
-  completedTasks30: number
-  completedTasksToday: number
+  completedCalls30: number | null
+  completedCallsToday: number | null
+  completedTasks30: number | null
+  completedTasksToday: number | null
   conversionRate30: number | null
   conversionRateToday: number | null
 }
@@ -19,6 +20,11 @@ type SalesRow = {
   quote_sent_at: string | null
   closed_at: string | null
   amount_cents: number | null
+}
+
+type OperatorSalesOptions = {
+  includeCalls?: boolean
+  includeTasks?: boolean
 }
 
 function atOrAfter(value: string | null, startMs: number): boolean {
@@ -49,55 +55,71 @@ export async function computeOperatorSalesPerformance(
   userId: string,
   workdayStartIso: string,
   rollingStartIso: string,
+  options: OperatorSalesOptions = {},
 ): Promise<OperatorSalesPerformance> {
   const workdayStartMs = Date.parse(workdayStartIso)
   const rollingStartMs = Date.parse(rollingStartIso)
 
+  const salesPromise = sb
+    .from("crm_operator_sales_attributions")
+    .select("quote_sent_at,closed_at,amount_cents")
+    .eq("property_id", propertyId)
+    .eq("user_id", userId)
+    .eq("verification_status", "confirmed")
+    .or(`quote_sent_at.gte.${rollingStartIso},closed_at.gte.${rollingStartIso}`)
+    .limit(5000)
+
+  const calls30Promise = options.includeCalls
+    ? exactCount(
+        sb
+          .from("phone_calls")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", propertyId)
+          .eq("user_id", userId)
+          .eq("status", "completed")
+          .gte("started_at", rollingStartIso),
+      )
+    : Promise.resolve(null)
+  const callsTodayPromise = options.includeCalls
+    ? exactCount(
+        sb
+          .from("phone_calls")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", propertyId)
+          .eq("user_id", userId)
+          .eq("status", "completed")
+          .gte("started_at", workdayStartIso),
+      )
+    : Promise.resolve(null)
+  const tasks30Promise = options.includeTasks
+    ? exactCount(
+        sb
+          .from("todos")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", propertyId)
+          .eq("assigned_to", userId)
+          .eq("status", "done")
+          .gte("completed_at", rollingStartIso),
+      )
+    : Promise.resolve(null)
+  const tasksTodayPromise = options.includeTasks
+    ? exactCount(
+        sb
+          .from("todos")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", propertyId)
+          .eq("assigned_to", userId)
+          .eq("status", "done")
+          .gte("completed_at", workdayStartIso),
+      )
+    : Promise.resolve(null)
+
   const [sales, completedCalls30, completedCallsToday, completedTasks30, completedTasksToday] = await Promise.all([
-    sb
-      .from("crm_operator_sales_attributions")
-      .select("quote_sent_at,closed_at,amount_cents")
-      .eq("property_id", propertyId)
-      .eq("user_id", userId)
-      .eq("verification_status", "confirmed")
-      .or(`quote_sent_at.gte.${rollingStartIso},closed_at.gte.${rollingStartIso}`)
-      .limit(5000),
-    exactCount(
-      sb
-        .from("phone_calls")
-        .select("id", { count: "exact", head: true })
-        .eq("property_id", propertyId)
-        .eq("user_id", userId)
-        .eq("status", "completed")
-        .gte("started_at", rollingStartIso),
-    ),
-    exactCount(
-      sb
-        .from("phone_calls")
-        .select("id", { count: "exact", head: true })
-        .eq("property_id", propertyId)
-        .eq("user_id", userId)
-        .eq("status", "completed")
-        .gte("started_at", workdayStartIso),
-    ),
-    exactCount(
-      sb
-        .from("todos")
-        .select("id", { count: "exact", head: true })
-        .eq("property_id", propertyId)
-        .eq("assigned_to", userId)
-        .eq("status", "done")
-        .gte("completed_at", rollingStartIso),
-    ),
-    exactCount(
-      sb
-        .from("todos")
-        .select("id", { count: "exact", head: true })
-        .eq("property_id", propertyId)
-        .eq("assigned_to", userId)
-        .eq("status", "done")
-        .gte("completed_at", workdayStartIso),
-    ),
+    salesPromise,
+    calls30Promise,
+    callsTodayPromise,
+    tasks30Promise,
+    tasksTodayPromise,
   ])
 
   if (sales.error) throw sales.error
@@ -106,6 +128,7 @@ export async function computeOperatorSalesPerformance(
 
   return {
     closedDeals30: closed30.length,
+    closedDealsMissingValue30: closed30.filter((row) => row.amount_cents === null).length,
     closedRevenueCents30: closed30.reduce((sum, row) => sum + (row.amount_cents ?? 0), 0),
     quotesSent30: rows.filter((row) => atOrAfter(row.quote_sent_at, rollingStartMs)).length,
     quotesSentToday: rows.filter((row) => atOrAfter(row.quote_sent_at, workdayStartMs)).length,
