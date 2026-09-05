@@ -1,6 +1,6 @@
 # HotelAccelerator — Roadmap
 
-Ultimo aggiornamento: 2026-09-02
+Ultimo aggiornamento: 2026-09-05
 
 ## Principio di priorita
 
@@ -8,7 +8,7 @@ La priorita non e aggiungere funzioni, ma portare quelle gia presenti da `Codice
 
 La pagina `/super-admin/roadmap` e un cruscotto tecnico: i flag **In main** e **Deploy prod** indicano presenza del codice e deploy, non maturita. Lo stato ufficiale e in `MODULE_REGISTRY.md`.
 
-Snapshot verificato: repository `main` dopo PR #349 e deploy HotelAccelerator di produzione corrispondente.
+Snapshot verificato: repository `main` con le capability fino alla PR #390 incluse e relative migrazioni additive applicate al Core.
 
 ## P0/P1 correnti
 
@@ -24,7 +24,7 @@ Snapshot verificato: repository `main` dopo PR #349 e deploy HotelAccelerator di
 - [x] Inventario repository, app, deploy e database principali.
 - [x] `AGENTS.md`, `PROJECT_OVERVIEW.md`, `ARCHITECTURE.md`, `MODULE_REGISTRY.md`, `DECISIONS.md`, `INTEGRATIONS.md`, `ROADMAP.md` presenti.
 - [x] Audit contenuti/SEO del sito pubblico con claim riallineati allo stato tecnico.
-- [x] `MODULE_REGISTRY.md` riallineato al `main` il 2026-09-02.
+- [x] `MODULE_REGISTRY.md` riallineato allo stato corrente del Core.
 - [x] Roadmap SuperAdmin persistente server-side con RLS backend-only e audit atomico.
 - [x] Roadmap live riallineata a implementazione/deploy e note di evidenza repo.
 - [ ] Creare/completare `README.md` root: al momento non e presente nel repository.
@@ -60,7 +60,7 @@ Snapshot verificato: repository `main` dopo PR #349 e deploy HotelAccelerator di
 - [x] KPI operatore opt-in con decorrenza affidabile (`Codice`, PR #315).
 - [ ] Recovery drill cursor scaduto + outage Google/Supabase.
 - [ ] Alert, SLO e runbook.
-- [ ] Modellare Sent/risposte prima di pubblicare KPI storici non affidabili.
+- [ ] Modellare Sent/risposte prima di pubblicare KPI storici non affidabili; la ricostruzione commerciale usa Gmail in read-only senza inserire `SENT` nella Inbox.
 
 ### Santaddeo
 
@@ -81,7 +81,10 @@ Snapshot verificato: repository `main` dopo PR #349 e deploy HotelAccelerator di
 ## Fase 3 — Esperienza unificata e lavoro quotidiano
 
 - [x] Dashboard utente personalizzata (`Codice`).
-- [ ] Collaudo dashboard admin + collaboratore reale e permessi/card per ruolo.
+- [x] Obiettivi operativi giornata/30 giorni (`Codice`, PR #388).
+- [x] KPI commerciali individuali, budget e obiettivo extra con attribuzione auditabile (`Codice`, PR #390).
+- [ ] Eseguire recupero storico commerciale su tenant reale e validare almeno una attribuzione forte, una `needs_review`, una cancellazione successiva e un valore economico ambiguo.
+- [ ] Collaudo dashboard admin + collaboratore reale e permessi/card per ruolo, compreso il gate area CRM sui risultati commerciali.
 - [x] Launcher suite senza nuovo login (`Codice`).
 - [ ] Collaudo SSO reale coordinato.
 - [x] Presenza operatore heartbeat + dashboard/routing (`Codice`).
@@ -125,6 +128,8 @@ Snapshot verificato: repository `main` dopo PR #349 e deploy HotelAccelerator di
 - [x] HotelAccelerator Scout Company/Agency white-label (`Codice`, PR #337-#339).
 - [x] Bulk actions e storico ricerche Scout (`Codice`, PR #344).
 - [x] Coda commerciale, follow-up e messaggi LinkedIn human-in-the-loop (`Codice`, PR #325).
+- [x] Attribuzione commerciale operatore separata dalla Inbox, con autore preventivo, esito finale, valore, confidenza, review admin e audit append-only (`Codice`, PR #390).
+- [ ] Recuperare/validare lo storico reale da Gmail: il backfill copre le richieste CRM collegate a thread, non inventa trattative assenti dal CRM.
 - [ ] Billing Scout a costo API x3 con metering tenant-scoped/idempotente.
 - [ ] Guest Scout: resta `Specifica` finche' non esiste una sorgente dedicata e conforme.
 - [ ] Collaudo reale completo sul CRM 4BID: ricerca -> verifica -> import -> pipeline -> attivita.
