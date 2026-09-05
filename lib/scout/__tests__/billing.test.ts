@@ -5,7 +5,11 @@ vi.mock("@/lib/modules", () => ({
   isModuleActive: vi.fn().mockResolvedValue(true),
 }))
 
-import { getScoutTenantBillingState, scoutCreditPriceCents } from "@/lib/scout/billing"
+import {
+  effectiveScoutMinimumPurchase,
+  getScoutTenantBillingState,
+  scoutCreditPriceCents,
+} from "@/lib/scout/billing"
 
 function chain(result: { data: unknown; error: unknown }) {
   const value = {
@@ -31,6 +35,13 @@ describe("Scout billing", () => {
     expect(scoutCreditPriceCents(1, 1)).toBe(1)
     expect(scoutCreditPriceCents(null, 3)).toBeNull()
     expect(scoutCreditPriceCents(10_000, 0.5)).toBeNull()
+  })
+
+  it("alza il minimo crediti quando serve a rispettare il minimo Stripe EUR", () => {
+    expect(effectiveScoutMinimumPurchase(10, 4)).toBe(13)
+    expect(effectiveScoutMinimumPurchase(10, 5)).toBe(10)
+    expect(effectiveScoutMinimumPurchase(25, 1)).toBe(50)
+    expect(effectiveScoutMinimumPurchase(10, null)).toBe(10)
   })
 
   it("restituisce al tenant solo saldo e prezzi Scout, mai economics provider", async () => {
@@ -78,7 +89,7 @@ describe("Scout billing", () => {
       availableCredits: 10,
       activationFeeCents: 9_900,
       activationIncludedCredits: 50,
-      minimumPurchaseCredits: 10,
+      minimumPurchaseCredits: 13,
       creditPriceCents: 4,
       pricingConfigured: true,
     })
