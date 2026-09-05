@@ -62,7 +62,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
   const { data: existingMessages } = incomingMessageIds.length > 0
     ? await supabase.from("messages").select("id").in("id", incomingMessageIds)
     : { data: [] as Array<{ id: string }> }
-  const existingIds = new Set((existingMessages ?? []).map((row) => row.id))
+  const existingIds = new Set(((existingMessages ?? []) as Array<{ id: string }>).map((row) => row.id))
   const newlyArrivedCustomerMessages = snapshot.messages.filter((message, index) => message.sender === "customer" && !existingIds.has(incomingMessageIds[index])).length
 
   const metadata = {
