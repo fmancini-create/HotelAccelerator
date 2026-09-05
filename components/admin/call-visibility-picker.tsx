@@ -21,6 +21,8 @@ export function CallVisibilityPicker({
   users = [],
   groups = [],
   allowInherit = true,
+  allowSelected = true,
+  context = "user",
   inheritedLabel,
   disabled,
 }: {
@@ -29,6 +31,8 @@ export function CallVisibilityPicker({
   users?: Choice[]
   groups?: Choice[]
   allowInherit?: boolean
+  allowSelected?: boolean
+  context?: "user" | "group"
   inheritedLabel?: string | null
   disabled?: boolean
 }) {
@@ -38,12 +42,17 @@ export function CallVisibilityPicker({
     set({ [key]: checked ? [...new Set([...current, id])] : current.filter((x) => x !== id) } as Partial<CallAccessValue>)
   }
 
+  const ownLabel = context === "group" ? "Solo le chiamate proprie di ciascun membro" : "Solo le mie chiamate"
+  const groupLabel = context === "group" ? "Le chiamate di questo gruppo" : "Le chiamate dei miei gruppi"
+
   return (
     <div className="rounded-xl border bg-card p-5">
       <div className="flex flex-col gap-1">
         <h3 className="font-semibold">Visibilità chiamate</h3>
         <p className="text-sm text-muted-foreground">
-          Decide quali telefonate compaiono nel registro, nelle notifiche e nei conteggi per questo utente.
+          {context === "group"
+            ? "Regola predefinita per i membri del gruppo, salvo un override sul singolo utente."
+            : "Decide quali telefonate compaiono nel registro, nelle notifiche e nei conteggi per questo utente."}
         </p>
       </div>
 
@@ -70,15 +79,15 @@ export function CallVisibilityPicker({
             >
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="own">Solo le mie chiamate</SelectItem>
-                <SelectItem value="groups">Le chiamate dei miei gruppi</SelectItem>
-                <SelectItem value="selected">Utenti o gruppi selezionati</SelectItem>
+                <SelectItem value="own">{ownLabel}</SelectItem>
+                <SelectItem value="groups">{groupLabel}</SelectItem>
+                {allowSelected && <SelectItem value="selected">Utenti o gruppi selezionati</SelectItem>}
                 <SelectItem value="all">Tutte le chiamate del tenant</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {value.visibility_scope === "selected" && (
+          {allowSelected && value.visibility_scope === "selected" && (
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-lg border p-3">
                 <p className="mb-2 text-sm font-medium">Utenti</p>
