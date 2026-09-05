@@ -4,7 +4,6 @@ import { accessErrorStatus, requireTenantAdmin } from "@/lib/auth/admin-access"
 import {
   isOperatorGoalKey,
   parseOperatorRewardRule,
-  type OperatorGoalKey,
 } from "@/lib/platform/operator-goal-rewards-core"
 import { computeOperatorRewardState } from "@/lib/platform/operator-goal-rewards"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -37,7 +36,7 @@ async function requireTenantUser(propertyId: string, userId: string) {
   const sb = createServiceClient()
   const { data, error } = await sb
     .from("admin_users")
-    .select("id,name,email,role,kpi_enabled")
+    .select("id,name,email,role")
     .eq("property_id", propertyId)
     .eq("id", userId)
     .maybeSingle()
