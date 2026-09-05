@@ -30,7 +30,6 @@ type AutoRechargeState = {
   card: { brand: string | null; last4: string; expMonth: number | null; expYear: number | null } | null
   consentedAt: string | null
   lastSuccessAt: string | null
-  lastErrorCode: string | null
   lastErrorAt: string | null
 }
 
@@ -51,7 +50,11 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
     fetcher,
     { fallbackData: { billing }, refreshInterval: 3000, revalidateOnFocus: true },
   )
-  const { data: autoData, mutate: mutateAuto } = useSWR<{ autoRecharge: AutoRechargeState; creditPriceCents: number | null }>(
+  const { data: autoData, mutate: mutateAuto } = useSWR<{
+    autoRecharge: AutoRechargeState
+    creditPriceCents: number | null
+    canManage: boolean
+  }>(
     billing.active ? "/api/admin/crm/scout/auto-recharge" : null,
     fetcher,
     { revalidateOnFocus: true },
@@ -59,6 +62,7 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
 
   const current = data?.billing ?? billing
   const auto = autoData?.autoRecharge
+  const canManageAutoRecharge = autoData?.canManage === true
   const [quantity, setQuantity] = useState(Math.max(1, billing.minimumPurchaseCredits))
   const [loading, setLoading] = useState(false)
   const [autoSaving, setAutoSaving] = useState(false)
@@ -117,6 +121,7 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
   }
 
   async function setupCard() {
+    if (!canManageAutoRecharge) return
     setAutoSaving(true)
     try {
       const response = await fetch("/api/admin/crm/scout/auto-recharge/setup", { method: "POST" })
@@ -131,6 +136,7 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
   }
 
   async function saveAutoRecharge(enabled: boolean) {
+    if (!canManageAutoRecharge) return
     const threshold = Number(thresholdEuro.replace(",", "."))
     const credits = Number.parseInt(autoCredits, 10)
     if (!Number.isFinite(threshold) || threshold < 0.5 || !Number.isInteger(credits) || credits < current.minimumPurchaseCredits) {
@@ -247,29 +253,30 @@ export function ScoutBillingCard({ billing }: { billing: ScoutBillingCardState }
         </CardHeader>
         <CardContent className="space-y-4">
           {auto?.status === "action_required" && <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">La banca ha richiesto un nuovo intervento sulla carta. L'autoricarica è stata fermata per sicurezza.</p>}
+          {!canManageAutoRecharge && autoData && <p className="rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">Solo gli amministratori della struttura possono modificare la ricarica automatica.</p>}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
             <div className="space-y-1">
               <Label htmlFor="scout-auto-threshold">Ricarica quando il valore residuo scende sotto</Label>
-              <div className="relative"><span className="absolute left-3 top-2.5 text-sm text-muted-foreground">€</span><Input id="scout-auto-threshold" className="pl-7" inputMode="decimal" value={thresholdEuro} onChange={(e) => setThresholdEuro(e.target.value)} /></div>
+              <div className="relative"><span className="absolute left-3 top-2.5 text-sm text-muted-foreground">€</span><Input id="scout-auto-threshold" className="pl-7" inputMode="decimal" value={thresholdEuro} onChange={(e) => setThresholdEuro(e.target.value)} disabled={!canManageAutoRecharge} /></div>
             </div>
             <div className="space-y-1">
               <Label htmlFor="scout-auto-credits">Crediti per ogni ricarica</Label>
-              <Input id="scout-auto-credits" type="number" min={current.minimumPurchaseCredits} value={autoCredits} onChange={(e) => setAutoCredits(e.target.value)} />
+              <Input id="scout-auto-credits" type="number" min={current.minimumPurchaseCredits} value={autoCredits} onChange={(e) => setAutoCredits(e.target.value)} disabled={!canManageAutoRecharge} />
               <p className="text-xs text-muted-foreground">{autoRechargeValue == null ? "Importo calcolato al prezzo corrente" : `Addebito attuale: ${euro(autoRechargeValue)}`}</p>
             </div>
             <div className="space-y-1">
               <Label>Metodo di pagamento</Label>
               <p className="min-h-10 rounded-md border px-3 py-2 text-sm">{auto?.card ? `${auto.card.brand?.toUpperCase() || "Carta"} •••• ${auto.card.last4}` : "Nessuna carta salvata"}</p>
             </div>
-            <Button variant="outline" onClick={() => void setupCard()} disabled={autoSaving}><CreditCard className="mr-2 h-4 w-4" aria-hidden />{auto?.card ? "Cambia carta" : "Salva carta"}</Button>
+            {canManageAutoRecharge && <Button variant="outline" onClick={() => void setupCard()} disabled={autoSaving}><CreditCard className="mr-2 h-4 w-4" aria-hidden />{auto?.card ? "Cambia carta" : "Salva carta"}</Button>}
           </div>
-          <div className="flex flex-wrap justify-end gap-2">
+          {canManageAutoRecharge && <div className="flex flex-wrap justify-end gap-2">
             {auto?.enabled && <Button variant="outline" onClick={() => void saveAutoRecharge(false)} disabled={autoSaving}>Disattiva autoricarica</Button>}
             <Button onClick={() => void saveAutoRecharge(true)} disabled={autoSaving || !auto?.card}>
               {autoSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
               {auto?.enabled ? "Aggiorna autoricarica" : "Attiva autoricarica"}
             </Button>
-          </div>
+          </div>}
           <p className="text-xs text-muted-foreground">Attivando la ricarica automatica autorizzi HotelAccelerator ad addebitare la carta salvata quando il valore dei crediti disponibili scende sotto la soglia impostata. Se il pagamento richiede autenticazione o viene rifiutato, l'autoricarica viene sospesa.</p>
         </CardContent>
       </Card>
