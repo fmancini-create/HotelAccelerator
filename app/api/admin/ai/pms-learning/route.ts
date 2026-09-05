@@ -12,7 +12,9 @@ import {
   aggregateDailyPmsActivities,
   calculatePmsKnowledgeCoverage,
   type DailyObservedTrace,
+  type ReviewStatus,
 } from "@/lib/pms/shadow/metrics"
+import type { ProcedureStatus, Risk } from "@/lib/pms/shadow/procedures"
 import { createServiceClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -22,6 +24,45 @@ const DecisionBody = z.object({
   action: z.enum(["approve", "reject"]),
   knowledgeBaseIds: z.array(z.string().uuid()).max(20).default([]),
 })
+
+type ProcedureRow = {
+  id: string
+  pms_type: string
+  title: string
+  occurrences: number
+  risk: Risk
+  status: ProcedureStatus
+  autonomy_threshold: number
+  steps_summary: unknown
+  first_seen_at: string
+  last_seen_at: string
+  review_status: ReviewStatus
+  reviewed_at: string | null
+}
+
+type UsageRow = {
+  id: string
+  source: "remote_browser" | "direct_iframe"
+  observable: boolean
+  active_seconds: number
+  started_at: string
+  ended_at: string | null
+  operator_label: string | null
+}
+
+type TraceRow = {
+  id: string
+  procedure_id: string | null
+  operator_label: string | null
+  steps_count: number
+  ended_at: string | null
+}
+
+type LinkRow = {
+  procedure_id: string
+  knowledge_base_id: string
+  knowledge_source_id: string | null
+}
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } })
@@ -90,6 +131,7 @@ export async function GET(request: NextRequest) {
   ])
   if (proceduresError) return json({ error: "Lettura apprendimento PMS non riuscita" }, 500)
 
+  const procedureRows = (procedures ?? []) as ProcedureRow[]
   const timezone = typeof property?.timezone === "string" && property.timezone ? property.timezone : "Europe/Rome"
   const since30d = new Date(Date.now() - 30 * 86_400_000).toISOString()
   const since36h = new Date(Date.now() - 36 * 3_600_000).toISOString()
@@ -119,31 +161,44 @@ export async function GET(request: NextRequest) {
     return json({ error: "Metriche PMS temporaneamente non disponibili" }, 500)
   }
 
+  const usageRows = (usage ?? []) as UsageRow[]
+  const traceRows = (traces ?? []) as TraceRow[]
+  const linkRows = (links ?? []) as LinkRow[]
   const todayKey = localDateKey(new Date(), timezone)
-  const todayUsage = (usage ?? []).filter((row) => localDateKey(row.started_at, timezone) === todayKey)
-  const todayTraces = (traces ?? []).filter((row) => row.ended_at && localDateKey(row.ended_at, timezone) === todayKey)
-  const procedureById = new Map((procedures ?? []).map((p) => [p.id, p]))
+  const todayUsage = usageRows.filter((row) => localDateKey(row.started_at, timezone) === todayKey)
+  const todayTraces = traceRows.filter((row) => row.ended_at && localDateKey(row.ended_at, timezone) === todayKey)
+  const procedureById = new Map<string, ProcedureRow>(procedureRows.map((procedure) => [procedure.id, procedure]))
   const activityRows: DailyObservedTrace[] = todayTraces.map((row) => {
-    const p = row.procedure_id ? procedureById.get(row.procedure_id) : null
+    const procedure = row.procedure_id ? procedureById.get(row.procedure_id) : null
     return {
       id: row.id,
       procedure_id: row.procedure_id,
       operator_label: row.operator_label,
       steps_count: row.steps_count,
       ended_at: row.ended_at,
-      procedure: p ? { title: p.title, review_status: p.review_status, risk: p.risk } : null,
+      procedure: procedure
+        ? { title: procedure.title, review_status: procedure.review_status, risk: procedure.risk }
+        : null,
     }
   })
 
-  const coverage = calculatePmsKnowledgeCoverage((procedures ?? []) as Parameters<typeof calculatePmsKnowledgeCoverage>[0])
-  const total30 = (usage ?? []).reduce((sum, row) => sum + Math.max(0, row.active_seconds ?? 0), 0)
+  const coverage = calculatePmsKnowledgeCoverage(
+    procedureRows.map((procedure) => ({
+      occurrences: procedure.occurrences,
+      autonomy_threshold: procedure.autonomy_threshold,
+      review_status: procedure.review_status,
+      status: procedure.status,
+      risk: procedure.risk,
+    })),
+  )
+  const total30 = usageRows.reduce((sum, row) => sum + Math.max(0, row.active_seconds ?? 0), 0)
   const todaySeconds = todayUsage.reduce((sum, row) => sum + Math.max(0, row.active_seconds ?? 0), 0)
   const unobservableTodaySeconds = todayUsage
     .filter((row) => !row.observable)
     .reduce((sum, row) => sum + Math.max(0, row.active_seconds ?? 0), 0)
 
   const kbByProcedure = new Map<string, string[]>()
-  for (const link of links ?? []) {
+  for (const link of linkRows) {
     const current = kbByProcedure.get(link.procedure_id) ?? []
     current.push(link.knowledge_base_id)
     kbByProcedure.set(link.procedure_id, current)
@@ -152,14 +207,17 @@ export async function GET(request: NextRequest) {
   return json({
     coverage,
     usage: {
-      averageMinutesPerSession30d: (usage ?? []).length ? Math.round(total30 / (usage ?? []).length / 60) : 0,
-      sessions30d: (usage ?? []).length,
+      averageMinutesPerSession30d: usageRows.length ? Math.round(total30 / usageRows.length / 60) : 0,
+      sessions30d: usageRows.length,
       todayMinutes: Math.round(todaySeconds / 60),
       todaySessions: todayUsage.length,
       unobservableTodayMinutes: Math.round(unobservableTodaySeconds / 60),
     },
     activities: aggregateDailyPmsActivities(activityRows),
-    procedures: (procedures ?? []).map((p) => ({ ...p, knowledge_base_ids: kbByProcedure.get(p.id) ?? [] })),
+    procedures: procedureRows.map((procedure) => ({
+      ...procedure,
+      knowledge_base_ids: kbByProcedure.get(procedure.id) ?? [],
+    })),
     timezone,
   })
 }
@@ -241,7 +299,11 @@ export async function PATCH(request: NextRequest) {
         created_by: reviewer,
       })
       if (linkError && linkError.code !== "23505") {
-        console.error("[pms-learning] knowledge link failed", { propertyId, procedureId: procedure.id, detail: linkError.message })
+        console.error("[pms-learning] knowledge link failed", {
+          propertyId,
+          procedureId: procedure.id,
+          detail: linkError.message,
+        })
         continue
       }
     }
@@ -261,7 +323,11 @@ export async function PATCH(request: NextRequest) {
       .single()
 
     if (sourceError || !source) {
-      console.error("[pms-learning] knowledge source failed", { propertyId, procedureId: procedure.id, detail: sourceError?.message })
+      console.error("[pms-learning] knowledge source failed", {
+        propertyId,
+        procedureId: procedure.id,
+        detail: sourceError?.message,
+      })
       continue
     }
 
@@ -280,7 +346,11 @@ export async function PATCH(request: NextRequest) {
         try {
           await indexSource(sourceId, propertyId)
         } catch (error) {
-          console.error("[pms-learning] index failed", { propertyId, sourceId, detail: error instanceof Error ? error.message : String(error) })
+          console.error("[pms-learning] index failed", {
+            propertyId,
+            sourceId,
+            detail: error instanceof Error ? error.message : String(error),
+          })
         }
       }
     })
