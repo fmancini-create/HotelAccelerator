@@ -11,16 +11,23 @@ export type PipelineSalesRow = {
   stage_set_at: string | null
 }
 
+type PipelineSalesAction = {
+  actorId: string | null
+  at: string
+  stageWasTouched: boolean
+  quoteValueWasTouched: boolean
+}
+
 export async function syncPipelineSalesAttribution(
   sb: SupabaseClient,
   propertyId: string,
   row: PipelineSalesRow,
-  action?: { actorId: string | null; at: string; quoteValueWasSet: boolean },
+  action?: PipelineSalesAction,
 ): Promise<void> {
   const { data: existing, error: existingError } = await sb
     .from("crm_operator_sales_attributions")
     .select(
-      "id,user_id,quote_sent_at,closed_at,amount_cents,attribution_source,verification_status,confidence,verified_by",
+      "id,user_id,quote_sent_at,closed_at,amount_cents,attribution_source,verification_status,confidence,verified_by,evidence",
     )
     .eq("property_id", propertyId)
     .eq("date_request_id", row.id)
@@ -34,26 +41,62 @@ export async function syncPipelineSalesAttribution(
 
   const now = action?.at ?? row.stage_set_at ?? new Date().toISOString()
   const explicitStageActor = row.stage_set_by ?? null
-  const quoteActor = existing?.user_id ?? explicitStageActor ?? action?.actorId ?? null
-  const quoteAction =
-    row.stage === "preventivo_inviato" ||
-    (Boolean(action?.quoteValueWasSet) && Boolean(row.quoted_rate_cents && row.quoted_rate_cents > 0))
-  const won = row.stage === "confermata"
-  const lost = row.stage === "persa"
-  const explicitlyNotWon = row.stage !== null && row.stage !== "confermata"
+  const quoteAction = row.stage === "preventivo_inviato" && Boolean(explicitStageActor)
+  const wonAction = Boolean(action?.stageWasTouched && row.stage === "confermata")
+  const nonWonStageAction = Boolean(action?.stageWasTouched && row.stage !== "confermata")
+  const quoteValueTouched = Boolean(action?.quoteValueWasTouched)
 
-  if (!existing && !quoteAction && !won && !lost) return
+  if (!existing && !quoteAction && !wonAction && !nonWonStageAction && !quoteValueTouched) return
 
-  const userId = existing?.user_id ?? (quoteAction || won ? quoteActor : null)
-  const quoteSentAt = existing?.quote_sent_at ?? (quoteAction ? now : null)
-  // Se una trattativa precedentemente vinta viene riaperta o marcata persa,
-  // smette subito di contare fra le chiuse. Il preventivo resta invece storico.
-  const closedAt = won ? row.stage_set_at ?? now : explicitlyNotWon ? null : existing?.closed_at ?? null
-  const amountCents = row.quoted_rate_cents && row.quoted_rate_cents > 0 ? row.quoted_rate_cents : existing?.amount_cents ?? null
+  let userId = existing?.user_id ?? null
+  let verificationStatus = existing?.verification_status ?? "unattributed"
+  let confidence = existing?.confidence ?? 0
+  let attributionSource = existing?.attribution_source ?? "pipeline_stage"
+  let operatorMatch =
+    existing?.evidence && typeof existing.evidence === "object" && "operator_match" in existing.evidence
+      ? String((existing.evidence as Record<string, unknown>).operator_match ?? "existing")
+      : "unresolved"
 
-  const shouldConfirm = Boolean(userId && (quoteAction || won || existing?.verification_status === "confirmed"))
-  const verificationStatus = shouldConfirm ? "confirmed" : existing?.verification_status ?? "unattributed"
-  const confidence = shouldConfirm ? 100 : existing?.confidence ?? 0
+  // `preventivo_inviato` e una decisione umana esplicita sul momento del
+  // preventivo: qui possiamo attribuire il preventivo all'autore della fase.
+  // Inserire soltanto il valore economico, invece, non prova chi abbia scritto.
+  if (quoteAction && explicitStageActor) {
+    userId = existing?.user_id ?? explicitStageActor
+    if (!existing?.user_id) {
+      verificationStatus = "confirmed"
+      confidence = 100
+      attributionSource = "pipeline_stage"
+      operatorMatch = "pipeline_quote_actor"
+    }
+  }
+
+  // Se qualcuno marca direttamente Confermata senza una precedente attribuzione
+  // del preventivo, e solo un candidato: non gli assegniamo automaticamente il
+  // merito che potrebbe appartenere a chi ha scritto la proposta.
+  if (wonAction && !userId && explicitStageActor) {
+    userId = explicitStageActor
+    verificationStatus = "needs_review"
+    confidence = 75
+    attributionSource = "pipeline_stage"
+    operatorMatch = "pipeline_stage_actor_candidate"
+  }
+
+  const quoteSentAt = existing?.quote_sent_at ?? (quoteAction ? row.stage_set_at ?? now : null)
+  const closedAt = wonAction
+    ? row.stage_set_at ?? now
+    : nonWonStageAction
+      ? null
+      : existing?.closed_at ?? null
+  const amountCents = quoteValueTouched
+    ? row.quoted_rate_cents
+    : row.quoted_rate_cents && row.quoted_rate_cents > 0
+      ? row.quoted_rate_cents
+      : existing?.amount_cents ?? null
+
+  const existingEvidence =
+    existing?.evidence && typeof existing.evidence === "object"
+      ? (existing.evidence as Record<string, unknown>)
+      : {}
 
   const { error } = await sb.from("crm_operator_sales_attributions").upsert(
     {
@@ -64,13 +107,20 @@ export async function syncPipelineSalesAttribution(
       quote_sent_at: quoteSentAt,
       closed_at: closedAt,
       amount_cents: amountCents,
-      attribution_source: "pipeline_stage",
+      attribution_source: attributionSource,
       confidence,
       verification_status: verificationStatus,
       evidence: {
-        operator_match: quoteAction ? "pipeline_quote_actor" : won ? "pipeline_stage_set_by" : "pipeline_existing",
-        close_signal: won ? "human_stage_confirmed" : lost ? "human_stage_lost" : explicitlyNotWon ? "human_stage_reopened" : "none",
-        quote_signal: quoteAction ? "human_pipeline_action" : quoteSentAt ? "existing" : "none",
+        ...existingEvidence,
+        operator_match: operatorMatch,
+        pipeline_close_signal: wonAction
+          ? "human_stage_confirmed"
+          : nonWonStageAction
+            ? row.stage === "persa"
+              ? "human_stage_lost"
+              : "human_stage_reopened"
+            : "unchanged",
+        pipeline_quote_signal: quoteAction ? "human_stage_quote_sent" : quoteValueTouched ? "amount_only" : "unchanged",
       },
       scanned_at: now,
       updated_at: now,
