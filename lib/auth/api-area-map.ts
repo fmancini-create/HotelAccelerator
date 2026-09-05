@@ -70,6 +70,7 @@ export const API_AREA_MAP: Record<string, string> = {
   // amministrativa dei moduli. I prefissi piu' specifici vincono sul generico
   // /api/admin/manubot, cosi' un operatore con Todos puo' creare l'intervento
   // senza ottenere permessi di configurazione ManuBot.
+  "/api/admin/manubot/addon-context": "todos",
   "/api/admin/manubot/task-data": "todos",
   "/api/admin/manubot/task-photos": "todos",
   "/api/admin/manubot": "modules",
