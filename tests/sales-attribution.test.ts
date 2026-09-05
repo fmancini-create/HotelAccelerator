@@ -4,6 +4,7 @@ import {
   analyzeSalesThread,
   extractSingleAmountCents,
   isBookingAcceptanceMessage,
+  isBookingCancellationMessage,
   isQuoteLikeMessage,
   resolveOperatorFromSentMessage,
   type SalesOperatorIdentity,
@@ -42,9 +43,10 @@ describe("sales attribution", () => {
     expect(isQuoteLikeMessage("Informazioni piscina", "Apertura dalle 9 alle 19")).toBe(false)
   })
 
-  it("riconosce una conferma cliente ma non una cancellazione/rimborso", () => {
+  it("distingue conferma e cancellazione/rimborso", () => {
     expect(isBookingAcceptanceMessage("Re: preventivo", "Grazie, confermo la prenotazione.")).toBe(true)
     expect(isBookingAcceptanceMessage("Rimborso", "Non confermo la prenotazione, chiedo rimborso.")).toBe(false)
+    expect(isBookingCancellationMessage("Rimborso", "Devo annullare la prenotazione e chiedo rimborso.")).toBe(true)
   })
 
   it("estrae il valore solo se il preventivo contiene un unico importo distinto", () => {
@@ -97,7 +99,34 @@ describe("sales attribution", () => {
     expect(result.source).toBe("gmail_scan")
   })
 
-  it("la decisione umana confermata in pipeline prevale sullo storico Gmail", () => {
+  it("il collega che marca Confermata non prende il merito del preventivo scritto da un altro", () => {
+    const result = analyzeSalesThread(
+      [
+        mail({
+          id: "quote-maria",
+          labels: ["SENT"],
+          from: "Booking <booking@hotel.test>",
+          subject: "Preventivo soggiorno",
+          body: "Totale € 950,00\n\nMaria Rossi\nBooking Office",
+          occurredAt: "2026-09-02T09:00:00.000Z",
+        }),
+      ],
+      operators,
+      {
+        stage: "confermata",
+        stageSetBy: operators[1].id,
+        stageSetAt: "2026-09-03T12:00:00.000Z",
+        quotedRateCents: 95000,
+      },
+    )
+
+    expect(result.userId).toBe(operators[0].id)
+    expect(result.closedAt).toBe("2026-09-03T12:00:00.000Z")
+    expect(result.verificationStatus).toBe("confirmed")
+    expect(result.source).toBe("gmail_scan")
+  })
+
+  it("senza preventivo, chi chiude la fase resta solo un candidato da verificare", () => {
     const result = analyzeSalesThread(
       [],
       operators,
@@ -110,8 +139,41 @@ describe("sales attribution", () => {
     )
     expect(result.userId).toBe(operators[1].id)
     expect(result.closedAt).toBe("2026-09-03T12:00:00.000Z")
-    expect(result.amountCents).toBe(95000)
-    expect(result.verificationStatus).toBe("confirmed")
+    expect(result.verificationStatus).toBe("needs_review")
+    expect(result.confidence).toBe(75)
     expect(result.source).toBe("pipeline_stage")
+  })
+
+  it("una cancellazione cliente successiva toglie la trattativa dalle chiuse ma conserva il preventivo", () => {
+    const result = analyzeSalesThread(
+      [
+        mail({
+          id: "quote-1",
+          labels: ["SENT"],
+          from: "Booking <booking@hotel.test>",
+          subject: "Preventivo soggiorno",
+          body: "Totale € 1.200,00\n\nMaria Rossi\nBooking Office",
+          occurredAt: "2026-08-20T09:00:00.000Z",
+        }),
+        mail({
+          id: "accept-1",
+          body: "Confermo la prenotazione, grazie.",
+          occurredAt: "2026-08-20T10:00:00.000Z",
+        }),
+        mail({
+          id: "cancel-1",
+          body: "Purtroppo devo annullare la prenotazione e chiedo rimborso.",
+          occurredAt: "2026-08-22T08:00:00.000Z",
+        }),
+      ],
+      operators,
+      { stage: null, stageSetBy: null, stageSetAt: null, quotedRateCents: null },
+    )
+
+    expect(result.userId).toBe(operators[0].id)
+    expect(result.quoteSentAt).toBe("2026-08-20T09:00:00.000Z")
+    expect(result.closedAt).toBeNull()
+    expect(result.closeMessageId).toBe("cancel-1")
+    expect(result.verificationStatus).toBe("confirmed")
   })
 })
