@@ -2,6 +2,7 @@ import "server-only"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { parse } from "node-html-parser"
 import { runAutopilot } from "@/lib/ai/autopilot"
+import { decideEmailAiResponse, getEmailAiResponsePolicy } from "@/lib/ai/email-response-policy"
 import { sendGmailEmailWithServiceClient } from "@/lib/email/gmail-service-send"
 import { appendSignatureHtml } from "@/lib/email/signature"
 
@@ -13,6 +14,7 @@ export interface EmailAiTask {
   externalId?: string
   body: string
   contentType: "text" | "html"
+  headers?: Record<string, string | null | undefined>
 }
 
 function extractEmailAddress(fromHeader: string): string | null {
@@ -96,6 +98,8 @@ export async function processEmailAiTasks(
   propertyId: string,
   tasks: EmailAiTask[],
 ): Promise<void> {
+  const policy = await getEmailAiResponsePolicy(supabase, propertyId)
+
   for (const task of tasks) {
     const externalId = task.externalId?.trim()
     if (!externalId) {
@@ -103,6 +107,24 @@ export async function processEmailAiTasks(
         channelId,
         propertyId,
         conversationId: task.conversationId,
+      })
+      continue
+    }
+
+    const decision = decideEmailAiResponse(policy, {
+      from: task.fromHeader,
+      subject: task.subject,
+      headers: task.headers,
+    })
+
+    if (decision.action === "skip") {
+      console.info("[email-autopilot] policy skipped", {
+        channelId,
+        propertyId,
+        conversationId: task.conversationId,
+        inboundExternalId: externalId,
+        category: decision.category,
+        reason: decision.reason,
       })
       continue
     }
@@ -126,6 +148,7 @@ export async function processEmailAiTasks(
         channel: "email",
         channelId,
         incomingText: toPlainText(task.body, task.contentType),
+        modeOverride: decision.action === "draft" ? "on_request" : undefined,
         send: async (text, context) => {
           virtualUserName = context.virtualUser.displayName
           const bodyHtml = `<div style="font-family: Arial, sans-serif; font-size: 14px;">${text.replace(/\n/g, "<br>")}</div>`
@@ -155,6 +178,8 @@ export async function processEmailAiTasks(
         propertyId,
         conversationId: task.conversationId,
         inboundExternalId: externalId,
+        policyAction: decision.action,
+        policyCategory: decision.category,
         action: outcome.action,
         reason: outcome.reason ?? null,
         aiAgentName: virtualUserName,

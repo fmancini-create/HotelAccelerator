@@ -7,6 +7,7 @@ import {
 } from "@/components/admin/knowledge/knowledge-bases-manager"
 import { KnowledgeGaps } from "@/components/admin/knowledge/knowledge-gaps"
 import { InternalKnowledgeSyncStatusCard } from "@/components/admin/knowledge/internal-knowledge-sync-status"
+import { EmailAiResponsePolicyCard } from "@/components/admin/knowledge/email-ai-response-policy-card"
 import { getInternalKnowledgeSyncDiagnostics } from "@/lib/ai/internal-knowledge-sync-status"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { isVoiceSupportHub } from "@/lib/telephony/voice-support-customer"
@@ -80,6 +81,8 @@ export default async function KnowledgePage() {
         </div>
 
         <KnowledgeBasesManager initialBases={initialBases} initialChannels={initialChannels} />
+
+        <EmailAiResponsePolicyCard />
 
         {internalSyncDiagnostics ? <InternalKnowledgeSyncStatusCard diagnostics={internalSyncDiagnostics} /> : null}
 

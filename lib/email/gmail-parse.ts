@@ -5,6 +5,10 @@
 
 import type { InboundEmail } from "@/lib/email/email-processor"
 
+export type ParsedGmailMessage = InboundEmail & {
+  aiSafetyHeaders: Record<string, string>
+}
+
 function decodeBase64UrlToString(input: string): string {
   if (!input) return ""
   let b64 = input.replace(/-/g, "+").replace(/_/g, "/")
@@ -13,7 +17,7 @@ function decodeBase64UrlToString(input: string): string {
   return Buffer.from(b64, "base64").toString("utf-8")
 }
 
-export function parseGmailMessage(msg: any): InboundEmail {
+export function parseGmailMessage(msg: any): ParsedGmailMessage {
   const headers = msg.payload?.headers || []
   const getHeader = (name: string) =>
     headers.find((h: any) => h.name?.toLowerCase() === name.toLowerCase())?.value || ""
@@ -48,6 +52,11 @@ export function parseGmailMessage(msg: any): InboundEmail {
   }
 
   const dateStr = getHeader("Date")
+  const aiSafetyHeaders = Object.fromEntries(
+    ["Auto-Submitted", "Precedence", "List-Id", "List-Unsubscribe", "X-Auto-Response-Suppress", "Return-Path"]
+      .map((name) => [name, getHeader(name)] as const)
+      .filter(([, value]) => Boolean(value)),
+  )
 
   return {
     externalId: msg.id,
@@ -61,5 +70,6 @@ export function parseGmailMessage(msg: any): InboundEmail {
     inReplyTo: getHeader("In-Reply-To"),
     references: getHeader("References"),
     labelIds: msg.labelIds || [],
+    aiSafetyHeaders,
   }
 }
