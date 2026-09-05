@@ -79,9 +79,10 @@ create index if not exists suite_sso_exchange_codes_suite_identity_idx
   on public.suite_sso_exchange_codes (suite_identity_id)
   where suite_identity_id is not null;
 
--- Existing explicit tenant links prove that the account owns/uses that product.
--- This is a one-time seed only: future billing changes update entitlement status
--- independently and do not delete the tenant mapping.
+-- Existing explicit satellite tenant links seed the current account/product
+-- relationship. Future activation/deactivation is written only by trusted
+-- backend/SuperAdmin flows; no trigger is attached to tenant_modules so this
+-- migration cannot break pre-existing authenticated module writes.
 insert into public.suite_product_entitlements (
   customer_account_id, product_key, status, activated_at, source
 )
@@ -113,66 +114,6 @@ select
 from public.customer_accounts a
 join public.properties p on p.id = a.property_id
 on conflict (customer_account_id, product_key) do nothing;
-
--- Keep the central product entitlement aligned when a satellite module is
--- activated or revoked inside HotelAccelerator. The tenant mapping is not
--- changed by this trigger.
-create or replace function public.sync_suite_product_entitlement_from_tenant_module()
-returns trigger
-language plpgsql
-set search_path = pg_catalog, public
-as $$
-declare
-  account_id uuid;
-  entitlement_status text;
-begin
-  if new.module_key not in ('santaddeo', 'hotelprofitai', 'manubot') then
-    return new;
-  end if;
-
-  select id into account_id
-  from public.customer_accounts
-  where property_id = new.property_id;
-
-  if account_id is null then
-    return new;
-  end if;
-
-  entitlement_status := case new.status
-    when 'active' then 'active'
-    when 'trial' then 'trial'
-    else 'inactive'
-  end;
-
-  insert into public.suite_product_entitlements (
-    customer_account_id, product_key, status, activated_at, expires_at, source, updated_at
-  ) values (
-    account_id,
-    new.module_key,
-    entitlement_status,
-    case when new.status in ('active', 'trial') then coalesce(new.activated_at, now()) else null end,
-    new.expires_at,
-    'tenant_module',
-    now()
-  )
-  on conflict (customer_account_id, product_key) do update set
-    status = excluded.status,
-    activated_at = excluded.activated_at,
-    expires_at = excluded.expires_at,
-    source = excluded.source,
-    updated_at = now();
-
-  return new;
-end;
-$$;
-
-revoke all on function public.sync_suite_product_entitlement_from_tenant_module() from public, anon, authenticated;
-
-drop trigger if exists tenant_modules_sync_suite_entitlement on public.tenant_modules;
-create trigger tenant_modules_sync_suite_entitlement
-after insert or update of status, expires_at, activated_at
-on public.tenant_modules
-for each row execute function public.sync_suite_product_entitlement_from_tenant_module();
 
 -- Atomically attaches a new HotelAccelerator property to a customer account
 -- that was born as a satellite-only account. A normal INSERT on properties
