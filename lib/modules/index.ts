@@ -5,14 +5,9 @@
  *  - `modules`        = catalogo di tutto cio' che la piattaforma puo' offrire.
  *  - `tenant_modules` = quali moduli sono attivi per ciascuna struttura (tenant).
  *
- * Questo file espone funzioni semplici e riusabili per:
- *  - leggere il catalogo dei moduli;
- *  - leggere lo stato dei moduli di una struttura;
- *  - sapere se un singolo modulo e' attivo (con gestione scadenza);
- *  - attivare/disattivare un modulo (scrittura server-side, service role).
- *
- * Le letture usano il client passato dal chiamante (RLS-aware). Le scritture
- * usano il service role, coerentemente col resto dell'app.
+ * Per i prodotti satellite della suite (Santaddeo, HotelProfitAI, ManuBot),
+ * quando esiste un entitlement account-level questo e' la fonte autorevole.
+ * In questo modo collegamento Suite, menu, card e SSO non possono divergere.
  */
 
 import { createServiceClient } from "@/lib/supabase/server"
@@ -20,6 +15,8 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type ModuleCategory = "core" | "product" | "addon"
 export type ModuleStatus = "active" | "inactive" | "trial"
+
+const SUITE_MODULE_KEYS = new Set(["santaddeo", "hotelprofitai", "manubot"])
 
 export interface ModuleCatalogEntry {
   key: string
@@ -45,6 +42,12 @@ export interface TenantModule {
   status: ModuleStatus
   plan: string | null
   activatedAt: string | null
+  expiresAt: string | null
+}
+
+interface SuiteEntitlementState {
+  moduleKey: string
+  status: ModuleStatus
   expiresAt: string | null
 }
 
@@ -77,6 +80,50 @@ function isEffectivelyActive(status: ModuleStatus, expiresAt: string | null): bo
   if (status !== "active" && status !== "trial") return false
   if (expiresAt && new Date(expiresAt).getTime() < Date.now()) return false
   return true
+}
+
+function entitlementStatusToModuleStatus(status: string): ModuleStatus {
+  if (status === "trial") return "trial"
+  if (status === "active") return "active"
+  return "inactive"
+}
+
+/**
+ * Legge gli entitlement account-level dei tre prodotti satellite.
+ * Se l'account o l'entitlement non esistono, il vecchio stato locale resta il
+ * fallback per compatibilita' con tenant non ancora migrati alla Suite Identity.
+ */
+async function getSuiteEntitlementStates(
+  supabase: SupabaseClient,
+  propertyId: string,
+): Promise<Map<string, SuiteEntitlementState>> {
+  const { data: account, error: accountError } = await supabase
+    .from("customer_accounts")
+    .select("id")
+    .eq("property_id", propertyId)
+    .maybeSingle()
+
+  if (accountError) throw new Error(`getSuiteEntitlementStates account: ${accountError.message}`)
+  if (!account?.id) return new Map()
+
+  const { data, error } = await supabase
+    .from("suite_product_entitlements")
+    .select("product_key, status, expires_at")
+    .eq("customer_account_id", account.id)
+    .in("product_key", [...SUITE_MODULE_KEYS])
+
+  if (error) throw new Error(`getSuiteEntitlementStates entitlements: ${error.message}`)
+
+  return new Map(
+    (data ?? []).map((row) => [
+      row.product_key as string,
+      {
+        moduleKey: row.product_key as string,
+        status: entitlementStatusToModuleStatus(row.status as string),
+        expiresAt: (row.expires_at as string | null) ?? null,
+      },
+    ]),
+  )
 }
 
 /**
@@ -124,21 +171,23 @@ export async function getModulesWithState(
   supabase: SupabaseClient,
   propertyId: string,
 ): Promise<ModuleWithState[]> {
-  const [catalog, tenant] = await Promise.all([
+  const [catalog, tenant, suiteEntitlements] = await Promise.all([
     getModuleCatalog(supabase),
     getTenantModules(supabase, propertyId),
+    getSuiteEntitlementStates(supabase, propertyId),
   ])
 
   const byKey = new Map(tenant.map((t) => [t.moduleKey, t]))
 
   return catalog.map((m) => {
-    const state = byKey.get(m.key)
-    const status: ModuleStatus = state?.status ?? "inactive"
-    const expiresAt = state?.expiresAt ?? null
+    const localState = byKey.get(m.key)
+    const suiteState = suiteEntitlements.get(m.key)
+    const status: ModuleStatus = suiteState?.status ?? localState?.status ?? "inactive"
+    const expiresAt = suiteState?.expiresAt ?? localState?.expiresAt ?? null
     return {
       ...m,
       status,
-      plan: state?.plan ?? null,
+      plan: localState?.plan ?? null,
       expiresAt,
       active: isEffectivelyActive(status, expiresAt),
     }
@@ -147,15 +196,29 @@ export async function getModulesWithState(
 
 /**
  * Restituisce l'insieme delle chiavi dei moduli ATTIVI per una struttura.
- * Comodo per il menu e per i controlli "questo modulo e' acceso?".
+ * Per i prodotti Suite, un entitlement esplicito sostituisce il vecchio stato
+ * locale; se non esiste ancora, tenant_modules rimane il fallback.
  */
 export async function getActiveModuleKeys(
   supabase: SupabaseClient,
   propertyId: string,
 ): Promise<Set<string>> {
-  const tenant = await getTenantModules(supabase, propertyId)
-  const active = tenant.filter((t) => isEffectivelyActive(t.status, t.expiresAt))
-  return new Set(active.map((t) => t.moduleKey))
+  const [tenant, suiteEntitlements] = await Promise.all([
+    getTenantModules(supabase, propertyId),
+    getSuiteEntitlementStates(supabase, propertyId),
+  ])
+
+  const active = new Set(
+    tenant
+      .filter((t) => !suiteEntitlements.has(t.moduleKey) && isEffectivelyActive(t.status, t.expiresAt))
+      .map((t) => t.moduleKey),
+  )
+
+  for (const entitlement of suiteEntitlements.values()) {
+    if (isEffectivelyActive(entitlement.status, entitlement.expiresAt)) active.add(entitlement.moduleKey)
+  }
+
+  return active
 }
 
 /**
