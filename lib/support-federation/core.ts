@@ -5,10 +5,22 @@ import { createServiceClient } from "@/lib/supabase/server"
 import { findCustomerProductCode, resolveExternalTenantCode } from "@/lib/customer-codes/registry"
 import type { SuiteProductKey } from "@/lib/customer-codes/product"
 import { CENTRAL_SUPPORT_SLUG } from "@/lib/telephony/voice-support"
+import {
+  copyFederatedSupportAttachments,
+  supportMessageHtml,
+  type FederatedSupportAttachment,
+  type StoredSupportAttachment,
+} from "@/lib/support-attachments"
 
 export type SupportFederationProduct = Extract<SuiteProductKey, "santaddeo" | "hotelprofitai">
 export type SupportFederationKind = "human_support" | "suggestion" | "bug"
 export type SupportFederationSender = "customer" | "agent" | "system"
+
+export interface FederatedSupportReporter {
+  user_id?: string | null
+  name?: string | null
+  email?: string | null
+}
 
 export interface FederatedSupportMessage {
   id: string
@@ -16,6 +28,8 @@ export interface FederatedSupportMessage {
   content: string
   created_at?: string | null
   sender_name?: string | null
+  sender_email?: string | null
+  attachments?: FederatedSupportAttachment[]
 }
 
 export interface FederatedSupportSnapshot {
@@ -26,6 +40,7 @@ export interface FederatedSupportSnapshot {
   kind: SupportFederationKind
   status?: "open" | "closed"
   sourcePath?: string | null
+  reporter?: FederatedSupportReporter | null
   messages: FederatedSupportMessage[]
 }
 
@@ -67,7 +82,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
 
   const metadata = {
     support_federation: {
-      version: 1,
+      version: 2,
       product_key: snapshot.product,
       external_tenant_id: snapshot.tenantRef,
       external_thread_id: snapshot.threadId,
@@ -75,6 +90,9 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
       customer_code: code.code,
       kind: snapshot.kind,
       source_path: snapshot.sourcePath ?? null,
+      reporter_user_id: snapshot.reporter?.user_id ?? null,
+      reporter_name: snapshot.reporter?.name ?? null,
+      reporter_email: snapshot.reporter?.email ?? null,
     },
   }
 
@@ -86,7 +104,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     status: snapshot.status === "closed" ? "closed" : "open",
     subject: `[${snapshot.product === "santaddeo" ? "Santaddeo" : "HotelProfitAI"}] ${snapshot.title}`.slice(0, 240),
     external_thread_id: externalThreadId,
-    contact_name: code.code,
+    contact_name: snapshot.reporter?.name || snapshot.reporter?.email || code.code,
     last_message_at: lastMessageAt,
     unread_count: nextUnread,
     updated_at: now,
@@ -98,21 +116,56 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     const externalMessageId = `suite-support:${snapshot.product}:${snapshot.threadId}:${message.id}`
     const messageId = deterministicUuid(`message:${externalMessageId}`)
     const createdAt = message.created_at || now
+    const storedAttachments = await copyFederatedSupportAttachments({
+      attachments: message.attachments ?? [],
+      hubPropertyId,
+      product: snapshot.product,
+      tenantRef: snapshot.tenantRef,
+      threadId: snapshot.threadId,
+      messageId: message.id,
+    })
+    const useRichSupportBody = snapshot.kind === "bug" || snapshot.kind === "suggestion" || storedAttachments.length > 0
+    const reporterName = message.sender === "customer" ? snapshot.reporter?.name || message.sender_name : null
+    const reporterEmail = message.sender === "customer" ? snapshot.reporter?.email || message.sender_email : null
+    const content = useRichSupportBody
+      ? supportMessageHtml({
+          content: message.content,
+          reporterName,
+          reporterEmail,
+          sourcePath: message.sender === "customer" ? snapshot.sourcePath : null,
+          conversationId,
+          messageId,
+          attachments: storedAttachments,
+        })
+      : message.content
+
     const { error: messageError } = await supabase.from("messages").upsert({
       id: messageId,
       conversation_id: conversationId,
       property_id: hubPropertyId,
       sender_type: message.sender === "customer" ? "contact" : message.sender,
       sender_id: null,
-      sender_name: message.sender_name ?? null,
-      content: message.content,
-      content_type: "text",
+      sender_name: message.sender_name ?? snapshot.reporter?.name ?? null,
+      content,
+      content_type: useRichSupportBody ? "html" : "text",
+      attachments: storedAttachments,
       external_message_id: externalMessageId,
       created_at: createdAt,
       received_at: createdAt,
       stored_at: now,
       status: "delivered",
-      metadata: { support_federation: { product_key: snapshot.product, external_thread_id: snapshot.threadId, external_message_id: message.id, sender: message.sender } },
+      metadata: {
+        support_federation: {
+          product_key: snapshot.product,
+          external_thread_id: snapshot.threadId,
+          external_message_id: message.id,
+          sender: message.sender,
+          source_path: snapshot.sourcePath ?? null,
+          reporter_user_id: snapshot.reporter?.user_id ?? null,
+          reporter_name: snapshot.reporter?.name ?? null,
+          reporter_email: snapshot.reporter?.email ?? null,
+        },
+      },
     }, { onConflict: "id" })
     if (messageError) throw messageError
   }
@@ -127,8 +180,10 @@ export async function createHotelAcceleratorSupportReport(input: {
   title: string
   description: string
   currentPath?: string | null
+  actorUserId?: string | null
   actorName?: string | null
   actorEmail?: string | null
+  attachments?: StoredSupportAttachment[]
 }) {
   const hubPropertyId = await getCentralSupportPropertyId()
   const supabase = createServiceClient()
@@ -138,7 +193,22 @@ export async function createHotelAcceleratorSupportReport(input: {
   const messageId = deterministicUuid(`message:hotelaccelerator:${threadId}:initial`)
   const now = new Date().toISOString()
   const customerCode = input.customerCode || input.customerPropertyId
-  const metadata = { support_federation: { version: 1, product_key: "hotelaccelerator", external_tenant_id: input.customerPropertyId, external_thread_id: threadId, customer_property_id: input.customerPropertyId, customer_code: customerCode, kind: input.kind, source_path: input.currentPath ?? null } }
+  const attachments = input.attachments ?? []
+  const metadata = {
+    support_federation: {
+      version: 2,
+      product_key: "hotelaccelerator",
+      external_tenant_id: input.customerPropertyId,
+      external_thread_id: threadId,
+      customer_property_id: input.customerPropertyId,
+      customer_code: customerCode,
+      kind: input.kind,
+      source_path: input.currentPath ?? null,
+      reporter_user_id: input.actorUserId ?? null,
+      reporter_name: input.actorName ?? null,
+      reporter_email: input.actorEmail ?? null,
+    },
+  }
 
   const { error: conversationError } = await supabase.from("conversations").insert({
     id: conversationId,
@@ -147,29 +217,38 @@ export async function createHotelAcceleratorSupportReport(input: {
     status: "open",
     subject: `[HotelAccelerator] ${input.kind === "bug" ? "Errore" : "Miglioria"}: ${input.title}`.slice(0, 240),
     external_thread_id: `suite-support:hotelaccelerator:${threadId}`,
-    contact_name: customerCode,
+    contact_name: input.actorName || input.actorEmail || customerCode,
     last_message_at: now,
     unread_count: 1,
     metadata,
   })
   if (conversationError) throw conversationError
 
-  const context = [input.currentPath ? `Pagina: ${input.currentPath}` : null, input.actorName || input.actorEmail ? `Segnalato da: ${input.actorName || input.actorEmail}` : null, input.description].filter(Boolean).join("\n\n")
+  const content = supportMessageHtml({
+    content: input.description,
+    reporterName: input.actorName,
+    reporterEmail: input.actorEmail,
+    sourcePath: input.currentPath,
+    conversationId,
+    messageId,
+    attachments,
+  })
   const { error: messageError } = await supabase.from("messages").insert({
     id: messageId,
     conversation_id: conversationId,
     property_id: hubPropertyId,
     sender_type: "contact",
     sender_name: input.actorName || input.actorEmail || customerCode,
-    content: context,
-    content_type: "text",
+    content,
+    content_type: "html",
+    attachments,
     external_message_id: `suite-support:hotelaccelerator:${threadId}:initial`,
     created_at: now,
     received_at: now,
     stored_at: now,
     status: "delivered",
-    metadata: { support_federation: { product_key: "hotelaccelerator", kind: input.kind } },
+    metadata: { support_federation: metadata.support_federation },
   })
   if (messageError) throw messageError
-  return { conversationId }
+  return { conversationId, messageId }
 }
