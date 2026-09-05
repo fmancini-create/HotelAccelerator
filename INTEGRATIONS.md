@@ -24,7 +24,8 @@ Il registro distingue **codice nel Core**, **provider realmente attivato** e **p
 | Social | LinkedIn | OAuth + supporto CRM commerciale human-in-the-loop | Codice | PR #306/#325. Messaggi commerciali richiedono conferma umana; niente automazione browser proibita. Provider scopes da verificare in produzione. |
 | Browser remoto | Browserbase | PMS incorporato e osservazione procedure | Codice | Context tenant-aware, Live View e observer verso `pms_shadow` presenti. Serve procedura reale ripetuta prima di `Tenant reale`. |
 | Manutenzioni | ManuBot | Asset/team/task federati dal Core | Codice | `X-ManuBot-Company-Id` risolto dalla property e fail-closed. PR #300/#302. Creazione/aggiornamento task end-to-end ancora da collaudare con backend ManuBot reale. |
-| VoIP | 3CX | Chiamate, Voice Agent, journal, trascrizioni e routing shared-PBX | Codice | PR #322-#324/#329/#331/#335. Voice Agent 4BID ha risposto su chiamata reale dopo ripristino credito OpenAI; restano isolamento 4BID/Barronci, transcript, recording e journal end-to-end. |
+| VoIP | Registry PBX: 3CX, Wildix, NethVoice, VOIspeed, Yeastar, Teams Phone, Webex Calling, Asterisk/FreePBX, Avaya IP Office | Scelta centralino, verifica, click-to-call, guide e stato provider | Codice | PR #425. Un solo PBX attivo per tenant; switch API solo dopo test riuscito; URL/DNS protetti da SSRF; configurazione admin-only e auditata. Adapter di verifica: 3CX/Wildix/NethVoice/VOIspeed/Yeastar/Asterisk. Click-to-call: 3CX/VOIspeed/Yeastar/Asterisk. Teams/Webex restano guidati e Avaya richiede bridge. Nessun nuovo provider e' `Tenant reale` senza E2E su impianto cliente. |
+| VoIP specifico | 3CX | Voice Agent, journal, trascrizioni e routing shared-PBX | Codice | PR #322-#324/#329/#331/#335 + compatibilita preservata da #425. Voice Agent 4BID ha risposto su chiamata reale; restano isolamento 4BID/Barronci, transcript, recording e journal end-to-end. Shared PBX e strumenti avanzati restano volutamente 3CX-specifici. |
 | AI voce | OpenAI Realtime | Conversazione vocale 3CX | Tenant reale | Sessione `gpt-realtime-2` verificata sul PBX 4BID. Questa prova riguarda il provider Realtime, non promuove automaticamente l'intera integrazione 3CX. |
 | AI costi | OpenAI Organization Costs API | Spesa reale SuperAdmin | Codice | PR #343. `OPENAI_ADMIN_KEY` server-only configurata in produzione; serve confronto numerico UI/API provider. Per costo Voice esatto occorre project/API-key scope dedicato. |
 | AI knowledge | Knowledge sync interno 4BID | Fonti vocali/commerciali versionate | Codice | Endpoint firmato e allowlist presenti. Satelliti richiedono contratti separati, senza accesso DB cross-prodotto. |
@@ -38,6 +39,16 @@ Il registro distingue **codice nel Core**, **provider realmente attivato** e **p
 | Banking | Provider AISP | Conti e movimenti | Specifica | Provider e compliance da validare nel prodotto HotelProfitAI. |
 | Demand data | Provider voli/treni | Domanda esterna | Specifica | Selezione tramite adapter, licenze e costi ancora da definire. |
 | Market pricing | Rate shopper | Competitor/parity | Specifica | Origine dati, termini, qualita e costi da verificare in Santaddeo. |
+
+## Telefonia — registry e adapter
+
+- Il Core espone un contratto telefonico comune: il tenant sceglie un provider dalla pagina `Centralino telefonico`; 3CX non e' piu il modello universale.
+- `telephony_integrations` conserva una riga per provider e un indice parziale garantisce un solo `is_active=true` per tenant.
+- Un nuovo provider API sostituisce quello operativo soltanto dopo una verifica riuscita; una guida Teams/Webex o un bridge Avaya non spegne il PBX funzionante.
+- La configurazione e riservata a tenant admin/superadmin; i segreti restano cifrati e non vengono serializzati al browser.
+- Gli endpoint PBX server-side accettano solo HTTPS e ricontrollano DNS/reti private prima della chiamata; i redirect non vengono seguiti.
+- Le guide mostrano passaggi semplici, link ufficiali e screenshot soltanto quando il vendor espone un URL stabile; non vengono inventate schermate.
+- Documento: `docs/TELEPHONY_PROVIDER_ARCHITECTURE.md`.
 
 ## 3CX — stato operativo corrente
 
