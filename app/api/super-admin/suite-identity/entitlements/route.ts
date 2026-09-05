@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
   // products. Standalone accounts have no property yet, so activation remains
   // account-level until HA is provisioned.
   if (account.property_id && productKey !== "hotelaccelerator") {
-    await sb.from("tenant_modules").upsert(
+    const { error: moduleError } = await sb.from("tenant_modules").upsert(
       {
         property_id: account.property_id,
         module_key: productKey,
@@ -77,6 +77,18 @@ export async function POST(request: NextRequest) {
       },
       { onConflict: "property_id,module_key" },
     )
+    if (moduleError) {
+      console.error("[suite-identity] entitlement saved but tenant module sync failed", {
+        customer_account_id: customerAccountId,
+        product_key: productKey,
+        property_id: account.property_id,
+        error: moduleError.message,
+      })
+      return NextResponse.json(
+        { error: "Entitlement registrato ma sincronizzazione modulo non riuscita", code: "module_sync_failed" },
+        { status: 500 },
+      )
+    }
   }
 
   return NextResponse.json({ entitlement: data }, { headers: { "Cache-Control": "no-store" } })
