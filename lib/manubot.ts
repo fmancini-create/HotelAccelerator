@@ -2,17 +2,6 @@
  * Manubot API Client
  * Base URL: https://manubot.it/api
  * Auth: Supabase JWT (login con email/password della company)
- *
- * Ogni property in HotelAccelerator ha:
- *   - manubot_email: email account Manubot della struttura
- *   - manubot_password: password account Manubot
- *   - manubot_supabase_url: URL Supabase di Manubot (per il login JWT)
- *   - manubot_company_id: UUID company su Manubot
- *
- * IMPORTANTE: il JWT identifica l'account tecnico, mentre la company da usare
- * per la singola property viene inviata separatamente con
- * `X-ManuBot-Company-Id`. ManuBot valida lo scope server-side e tratta
- * l'account super_admin come tenant-scoped solo per quella richiesta.
  */
 
 import { decryptManubotPassword } from "@/lib/manubot/credential-secrets"
@@ -56,8 +45,9 @@ export interface ManubotTask {
 
 /**
  * Contratto reale del form task ManuBot (settembre 2026).
- * Gli array sono la fonte di verita' per assegnazioni/asset multipli; i campi
- * singolari restano per retrocompatibilita' con il backend ManuBot.
+ * `expected_resolution_minutes` resta opzionale lato client per non rompere i
+ * vecchi chiamanti HotelAccelerator: `createTask` applica 60 minuti quando il
+ * chiamante legacy non lo valorizza, mentre il nuovo popup lo invia sempre.
  */
 export interface ManubotCreateTaskPayload {
   title: string
@@ -74,7 +64,7 @@ export interface ManubotCreateTaskPayload {
   photos?: ManubotTaskPhoto[]
   requires_completion_photo?: boolean
   procedure_ids?: string[]
-  expected_resolution_minutes: number
+  expected_resolution_minutes?: number
   client_request_id?: string
 }
 
@@ -171,21 +161,16 @@ export class ManubotClient {
   }
 
   async login(email: string, password: string): Promise<string> {
-    const res = await fetch(
-      `${this.supabaseUrl}/auth/v1/token?grant_type=password`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": requireEnv("MANUBOT_SUPABASE_ANON_KEY"),
-        },
-        body: JSON.stringify({ email, password }),
+    const res = await fetch(`${this.supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": requireEnv("MANUBOT_SUPABASE_ANON_KEY"),
       },
-    )
+      body: JSON.stringify({ email, password }),
+    })
     if (!res.ok) {
-      throw await upstreamErrorFromResponse("login", "/auth/v1/token", res, {
-        isLoginPhase: true,
-      })
+      throw await upstreamErrorFromResponse("login", "/auth/v1/token", res, { isLoginPhase: true })
     }
     const data = await res.json()
     this.accessToken = data.access_token
@@ -205,15 +190,19 @@ export class ManubotClient {
     return headers
   }
 
-  /** Crea uno o piu' task con il contratto nativo ManuBot. */
   async createTask(payload: ManubotCreateTaskPayload, idempotencyKey?: string): Promise<ManubotTask> {
     const headers = this.authHeaders()
     if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey
 
+    const normalizedPayload: ManubotCreateTaskPayload = {
+      ...payload,
+      expected_resolution_minutes: payload.expected_resolution_minutes ?? 60,
+    }
+
     const res = await fetch(`${this.baseUrl}/tasks/create`, {
       method: "POST",
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify(normalizedPayload),
     })
     if (!res.ok) throw await upstreamErrorFromResponse("tasks/create", "/tasks/create", res)
 
@@ -223,7 +212,6 @@ export class ManubotClient {
     return task as ManubotTask
   }
 
-  /** Dati esatti usati dal form nativo ManuBot. */
   async getTaskFormData(): Promise<ManubotTaskFormData> {
     const res = await fetch(`${this.baseUrl}/new-task-data`, {
       headers: this.authHeaders(),
@@ -242,10 +230,6 @@ export class ManubotClient {
     }
   }
 
-  /**
-   * Carica le foto nello stesso storage e con gli stessi limiti del form nativo
-   * ManuBot: max 5, JPEG/PNG/WebP, 10 MB ciascuna e 25 MB complessivi.
-   */
   async uploadTaskPhotos(files: File[]): Promise<ManubotTaskPhoto[]> {
     const form = new FormData()
     files.forEach((file) => form.append("files", file))
@@ -274,27 +258,21 @@ export class ManubotClient {
   }
 
   async getTasks(): Promise<ManubotTask[]> {
-    const res = await fetch(`${this.baseUrl}/tasks`, {
-      headers: this.authHeaders(),
-    })
+    const res = await fetch(`${this.baseUrl}/tasks`, { headers: this.authHeaders() })
     if (!res.ok) throw await upstreamErrorFromResponse("tasks", "/tasks", res)
     const data = await res.json()
     return Array.isArray(data) ? data : data.tasks || []
   }
 
   async getTeam(): Promise<ManubotTeamMember[]> {
-    const res = await fetch(`${this.baseUrl}/team`, {
-      headers: this.authHeaders(),
-    })
+    const res = await fetch(`${this.baseUrl}/team`, { headers: this.authHeaders() })
     if (!res.ok) throw await upstreamErrorFromResponse("team", "/team", res)
     const data = await res.json()
     return Array.isArray(data) ? data : data.members || data.team || []
   }
 
   async getAssets(): Promise<ManubotAsset[]> {
-    const res = await fetch(`${this.baseUrl}/assets`, {
-      headers: this.authHeaders(),
-    })
+    const res = await fetch(`${this.baseUrl}/assets`, { headers: this.authHeaders() })
     if (!res.ok) throw await upstreamErrorFromResponse("assets", "/assets", res)
     const data = await res.json()
     return Array.isArray(data) ? data : data.assets || []
