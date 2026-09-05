@@ -94,7 +94,7 @@ Il costo monetario configurato e' una stima interna e non deve essere confuso co
 
 ### Ricarica automatica
 
-La ricarica automatica e' sempre **opt-in** e puo' essere modificata solo da un amministratore/owner del tenant.
+La ricarica automatica e' sempre **opt-in** e puo' essere modificata solo da un amministratore/owner del tenant. Gli operatori non amministratori possono vedere lo stato ma non possono salvare carte, attivare, modificare o disattivare l'autoricarica.
 
 Il tenant configura:
 
@@ -109,14 +109,15 @@ Flusso:
 1. il tenant salva la carta tramite Stripe Checkout in modalita' setup;
 2. HotelAccelerator conserva solo customer/payment-method ID Stripe e dati non sensibili della carta (brand, ultime 4 cifre, scadenza);
 3. quando il saldo Scout diminuisce, il database accoda un controllo autoricarica;
-4. un unico cron HotelAccelerator processa la coda ogni 5 minuti;
+4. un unico cron HotelAccelerator processa la coda ogni 5 minuti tramite claim atomico; eventuali lock lasciati da un crash sono recuperabili dopo 15 minuti;
 5. se `crediti_disponibili * prezzo_credito_corrente < soglia_euro`, viene creato un PaymentIntent off-session;
 6. il PaymentIntent usa una idempotency key legata al tentativo;
 7. dopo il pagamento riuscito vengono accreditati i crediti con ledger idempotente;
 8. se il pagamento richiede autenticazione o viene rifiutato, l'autoricarica viene sospesa e la UI lo segnala;
-9. se Stripe ha addebitato ma l'accredito DB fallisce, il tentativo resta riconciliabile e il retry recupera lo stesso PaymentIntent senza creare un secondo addebito.
+9. se Stripe ha addebitato ma l'accredito DB fallisce, il tentativo resta riconciliabile e il retry recupera lo stesso PaymentIntent senza creare un secondo addebito;
+10. se il tenant disattiva l'autoricarica prima che esista un PaymentIntent, un tentativo gia' accodato viene annullato senza addebito; se il PaymentIntent esiste gia', il sistema completa solo la riconciliazione dello stesso pagamento senza riattivare il consenso.
 
-Non viene memorizzato alcun PAN/CVC nel database HotelAccelerator.
+Non viene memorizzato alcun PAN/CVC nel database HotelAccelerator. I codici tecnici interni degli errori di pagamento restano server-side e non vengono esposti nell'API tenant.
 
 ### Monitoraggio provider
 
@@ -143,7 +144,7 @@ Le operazioni a consumo usano una riserva atomica tenant-scoped. Il flusso e':
 6. se il provider completa, contabilizza il credito e il costo;
 7. doppi click e richieste concorrenti sullo stesso prospect non generano due consumi.
 
-Checkout e webhook usano idempotency key legate alla Stripe Checkout Session, cosi' una ridelivery del webhook non accredita due volte i crediti. La ricarica automatica aggiunge un secondo livello di idempotenza basato sul tentativo di ricarica e sul PaymentIntent.
+Checkout e webhook usano idempotency key legate alla Stripe Checkout Session, cosi' una ridelivery del webhook non accredita due volte i crediti. La ricarica automatica aggiunge un secondo livello di idempotenza basato sul tentativo di ricarica e sul PaymentIntent. Il claim della coda usa `FOR UPDATE SKIP LOCKED` per evitare doppie lavorazioni concorrenti e consente il recupero dei lock stantii.
 
 ### Visibilita'
 
@@ -159,7 +160,7 @@ Il tenant vede esclusivamente:
 - soglia e quantita' impostate;
 - brand e ultime 4 cifre della carta salvata.
 
-Non vede costo provider, nome provider, contratto provider, contatori del piano provider, moltiplicatore o margine.
+Non vede costo provider, nome provider, contratto provider, contatori del piano provider, moltiplicatore, margine o codici tecnici di errore interni.
 
 Il superadmin vede invece costo corrente e storico, moltiplicatore, prezzo risultante, margine unitario, crediti acquistati/concessi/consumati, costo provider stimato contabilizzato, valore commerciale degli utilizzi per tenant e contatori live del piano provider.
 
@@ -194,4 +195,4 @@ Prima del merge la modifica e' confinata al branch. Dopo l'applicazione delle mi
 
 Il white-label Scout puo' passare da `Specifica` a `Codice` solo quando una ricerca globale delle superfici tenant non trova il nome del provider in UI, CTA, errori o sorgenti visualizzate. La presenza del nome in codice server, migrazioni storiche, log interni e documentazione tecnica riservata non costituisce violazione.
 
-Il billing non passa oltre `Codice` finche' non sono verificati almeno: migrazioni su ambiente controllato, checkout Stripe reale/test, setup carta, autoricarica sotto soglia, rifiuto/3DS, reconciliation dopo pagamento, ridelivery webhook, tenant isolation, consumo/rimborso credito, pagamento fallito, documentazione fiscale, typecheck/test/build e preview UI mobile.
+Il billing non passa oltre `Codice` finche' non sono verificati almeno: migrazioni su ambiente controllato, checkout Stripe reale/test, setup carta, autoricarica sotto soglia, rifiuto/3DS, disattivazione tra claim e addebito, recovery lock coda, reconciliation dopo pagamento, ridelivery webhook, tenant isolation, consumo/rimborso credito, pagamento fallito, documentazione fiscale, typecheck/test/build e preview UI mobile.
