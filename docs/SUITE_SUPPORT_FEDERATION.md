@@ -12,6 +12,8 @@ Autenticazione server-to-server tramite Vercel OIDC, con fallback alle credenzia
 
 Ogni snapshot contiene prodotto, tenant esterno, thread, tipo di supporto, stato, pagina di origine e messaggi. Per le richieste `miglioria` e `errore` il contratto porta inoltre lo snapshot dell'autore (`user_id`, nome, email) e gli eventuali allegati. HotelAccelerator risolve il tenant tramite customer-code registry e materializza il thread nella Inbox del tenant centrale `4bid`.
 
+I timestamp dei messaggi seguono RFC3339 e il Core accetta sia la forma UTC con `Z` sia gli offset espliciti come `+00:00`, che e' il formato normalmente serializzato da Supabase/PostgREST per i campi `timestamptz`. I producer possono normalizzare in UTC `Z` per mantenere compatibilita durante rollout coordinati.
+
 Gli ID di conversazioni e messaggi materializzati sono deterministici: retry, replay e recovery sync non devono creare duplicati.
 
 ## Tracciamento autore e pagina
@@ -48,7 +50,8 @@ Per il download, sia i backend locali sia HotelAccelerator verificano prima auto
 ## Ownership
 
 - La piattaforma satellite resta source of truth del thread e degli allegati locali.
-- HotelAccelerator possiede la proiezione Inbox, la copia privata degli allegati centrali e il recovery sync centrale.
+- HotelAccelerator possiede la proiezione Inbox e la copia privata degli allegati centrali.
+- Il producer satellite possiede il retry durevole delle proprie proiezioni immediate quando il Core non accetta o non raggiunge la richiesta.
 - Una risposta inviata dalla Inbox 4BID viene prima salvata nel backend satellite attraverso `/api/integrations/support/v1/reply`; solo dopo viene materializzata nella Inbox centrale.
 - Nessun database satellite viene letto o scritto direttamente da HotelAccelerator.
 
@@ -79,7 +82,11 @@ La stessa interfaccia espone `Segnala miglioria` e `Segnala errore`. Le segnalaz
 
 HotelAccelerator esegue il recovery sync del supporto umano nativo Santaddeo ogni 5 minuti. Il satellite resta comunque proprietario del thread e il sync e idempotente.
 
-Le proiezioni immediate dai satelliti sono best-effort: un errore di rete non deve annullare la scrittura locale gia riuscita. Gli allegati centrali usano path deterministici nella fase di copia, quindi un retry non genera copie parallele dello stesso file. Il recovery sync recupera i thread supportati quando previsto.
+Le proiezioni immediate dai satelliti sono best-effort rispetto alla scrittura locale: un errore del Core non deve annullare la segnalazione gia salvata nel prodotto sorgente. Questo non significa pero' perdere l'evento. I producer devono conservare uno stato durevole di consegna o un outbox equivalente e ritentare in modo idempotente gli elementi non materializzati.
+
+HotelProfitAI conserva per `ai_feedback` il timestamp della proiezione riuscita, l'ultimo tentativo e il numero dei tentativi. Un cron proprietario del satellite riprova gli elementi pendenti; il Core continua a deduplicare conversazione, messaggio e copia allegati tramite ID/path deterministici.
+
+Gli allegati centrali usano path deterministici nella fase di copia, quindi un retry non genera copie parallele dello stesso file.
 
 ## Configurazione
 
@@ -94,12 +101,16 @@ I satelliti possono opzionalmente sovrascrivere l'endpoint Core con `SUPPORT_FED
 
 Non sono richiesti nuovi segreti per gli allegati: signed upload e signed download vengono emessi server-side usando i client storage gia configurati per ciascuna piattaforma.
 
+## Osservabilita
+
+Un payload respinto dal Core deve produrre un log strutturato con prodotto, status HTTP e soli path/codici degli errori di validazione, senza contenuti del messaggio, email, URL firmati o altri dati sensibili. Il producer registra l'esito della proiezione senza loggare segreti.
+
 ## Rollback
 
-Le migrazioni sono additive. Il rollback applicativo consiste nel disabilitare/rimuovere upload, proiezione e callback mantenendo intatti i thread locali e le colonne aggiunte. I bucket privati possono rimanere non pubblici senza compromettere le versioni precedenti.
+Le migrazioni sono additive. Il rollback applicativo consiste nel disabilitare/rimuovere upload, proiezione, retry e callback mantenendo intatti i thread locali e le colonne aggiunte. I bucket privati possono rimanere non pubblici senza compromettere le versioni precedenti.
 
 Non eliminare automaticamente oggetti gia allegati durante un rollback: la cancellazione dei file e un'azione dati separata e potenzialmente distruttiva.
 
 ## Stato ufficiale
 
-**Codice**: l'estensione `feat/support-report-context-attachments-v1` aggiunge autore, pagina reale e allegati privati alle segnalazioni di errore/miglioria di HotelAccelerator, Santaddeo e HotelProfitAI. La promozione a `Tenant reale` richiede un collaudo end-to-end autenticato con almeno una segnalazione reale e un allegato verificato sia nel backend locale sia nella Inbox 4BID.
+**Codice**: l'estensione aggiunge autore, pagina reale e allegati privati alle segnalazioni di errore/miglioria di HotelAccelerator, Santaddeo e HotelProfitAI. Il bug emerso il 5 settembre 2026 su un feedback HotelProfitAI reale ha evidenziato una divergenza sul formato RFC3339 del timestamp e l'assenza di retry durevole HPA; entrambi vengono trattati senza promuovere lo stato. La promozione a `Tenant reale` richiede ancora un collaudo end-to-end autenticato con almeno una segnalazione reale e un allegato verificato sia nel backend locale sia nella Inbox 4BID.
