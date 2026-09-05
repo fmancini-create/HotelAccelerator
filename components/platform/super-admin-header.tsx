@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
 import useSWR from "swr"
-import { Building2, ChevronDown, LayoutDashboard, LogOut, MoreHorizontal, ShieldCheck } from "lucide-react"
+import { Building2, ChevronDown, GitCompareArrows, LayoutDashboard, LogOut, MoreHorizontal, ShieldCheck } from "lucide-react"
 
 import { HotelAcceleratorMark } from "@/components/brand/hotel-accelerator-logo"
 import { Button } from "@/components/ui/button"
@@ -56,7 +56,8 @@ export function SuperAdminHeader() {
   })
   const primary = platformNav.slice(0, 4)
   const secondary = platformNav.slice(4)
-  const secondaryActive = secondary.some((item) => active(item, pathname))
+  const isCompetitiveStudy = pathname.startsWith("/super-admin/competitive-study")
+  const secondaryActive = secondary.some((item) => active(item, pathname)) || isCompetitiveStudy
 
   const handleSignOut = async () => {
     if (signingOut) return
@@ -121,6 +122,16 @@ export function SuperAdminHeader() {
               </Link>
             )
           })}
+          <Link
+            href="/super-admin/competitive-study"
+            className={[
+              "flex items-center gap-1.5 px-3 h-9 rounded-md text-[13px] font-medium transition-colors",
+              isCompetitiveStudy ? "bg-background text-foreground" : "hover:bg-background/10",
+            ].join(" ")}
+          >
+            <GitCompareArrows className="h-4 w-4" aria-hidden />
+            <span>Studio CRM</span>
+          </Link>
         </nav>
 
         <DropdownMenu>
@@ -160,6 +171,12 @@ export function SuperAdminHeader() {
                   </DropdownMenuItem>
                 )
               })}
+              <DropdownMenuItem asChild>
+                <Link href="/super-admin/competitive-study" className="flex items-center gap-2 cursor-pointer">
+                  <GitCompareArrows className="h-4 w-4" aria-hidden />
+                  <span>Studio CRM e competitor</span>
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
             </div>
             {secondary.length > 0 && (
@@ -178,6 +195,13 @@ export function SuperAdminHeader() {
                 </DropdownMenuItem>
               )
             })}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/super-admin/competitive-study" className="flex items-center gap-2 cursor-pointer">
+                <GitCompareArrows className="h-4 w-4" aria-hidden />
+                <span>Studio CRM e competitor</span>
+              </Link>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
