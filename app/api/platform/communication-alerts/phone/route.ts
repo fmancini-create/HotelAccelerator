@@ -4,6 +4,7 @@ import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { areaDeniedResponse, isAreaDenied } from "@/lib/auth/area-denied"
 import { createServiceClient } from "@/lib/supabase/server"
+import { applyCallAccess, resolveCallAccess } from "@/lib/telephony/call-access"
 
 export const dynamic = "force-dynamic"
 
@@ -30,15 +31,20 @@ export async function GET(request: NextRequest) {
     const nowCursor = new Date(nowMs).toISOString()
 
     const sb = createServiceClient()
-    const { data, error } = await sb
-      .from("phone_calls")
-      .select("id,counterpart_number,started_at,status,created_at")
-      .eq("property_id", identity.propertyId)
-      .eq("direction", "inbound")
-      .gte("created_at", boundedAfter)
-      .lte("created_at", nowCursor)
-      .order("created_at", { ascending: true })
-      .limit(LIMIT)
+    const access = await resolveCallAccess(sb, identity as typeof identity & { propertyId: string })
+    const query = applyCallAccess(
+      sb
+        .from("phone_calls")
+        .select("id,counterpart_number,started_at,status,created_at")
+        .eq("property_id", identity.propertyId)
+        .eq("direction", "inbound")
+        .gte("created_at", boundedAfter)
+        .lte("created_at", nowCursor)
+        .order("created_at", { ascending: true })
+        .limit(LIMIT),
+      access,
+    )
+    const { data, error } = await query
 
     if (error) throw error
 

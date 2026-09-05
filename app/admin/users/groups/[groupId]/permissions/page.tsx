@@ -8,6 +8,7 @@ import { AdminHeader } from "@/components/admin/admin-header"
 import { Switch } from "@/components/ui/switch"
 import { AreaPermissionsMatrix } from "@/components/admin/area-permissions-matrix"
 import { AutoLogoutPicker } from "@/components/admin/auto-logout-picker"
+import { CallVisibilityPicker, type CallAccessValue } from "@/components/admin/call-visibility-picker"
 
 interface ChannelPermission {
   id?: string
@@ -27,25 +28,35 @@ const CHANNEL_TYPES = [
   { type: "phone", label: "Telefono", icon: Phone, description: "Chiamate VoIP" },
 ]
 
+const DEFAULT_CALL_ACCESS: CallAccessValue = {
+  inherit: false,
+  visibility_scope: "own",
+  can_read_transcripts: true,
+  can_listen_recordings: false,
+  selected_user_ids: [],
+  selected_group_ids: [],
+}
+
 export default function GroupPermissionsPage({ params }: { params: Promise<{ groupId: string }> }) {
   const { groupId } = use(params)
   const [group, setGroup] = useState<{ id: string; name: string; color: string } | null>(null)
   const [permissions, setPermissions] = useState<ChannelPermission[]>([])
   const [areas, setAreas] = useState<string[]>([])
   const [autoLogout, setAutoLogout] = useState<number | null>(null)
+  const [callAccess, setCallAccess] = useState<CallAccessValue>(DEFAULT_CALL_ACCESS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  // Questa pagina non diceva NULLA dopo il salvataggio (c'era un commento
-  // "Show success" senza codice). Con un tempo di disconnessione in gioco il
-  // silenzio e' un difetto: chi imposta 5 minuti deve sapere se e' stato preso.
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId])
 
   async function loadData() {
+    setLoading(true)
+    setError("")
     try {
       const [groupRes, permissionsRes] = await Promise.all([
         fetch(`/api/admin/groups/${groupId}`),
@@ -58,7 +69,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
       }
       if (permissionsRes.ok) {
         const data = await permissionsRes.json()
-        // Merge with defaults
         const existingPermissions = data.permissions || []
         const mergedPermissions = CHANNEL_TYPES.map((ct) => {
           const existing = existingPermissions.find(
@@ -77,9 +87,10 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
         setPermissions(mergedPermissions)
         setAreas(data.areas || [])
         setAutoLogout(data.autoLogoutMinutes ?? null)
+        setCallAccess({ ...DEFAULT_CALL_ACCESS, ...(data.callAccess || {}) })
       }
-    } catch (e) {
-      console.error("Error loading data:", e)
+    } catch {
+      setError("Errore nel caricamento dei permessi")
     } finally {
       setLoading(false)
     }
@@ -93,17 +104,16 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
       const res = await fetch(`/api/admin/groups/${groupId}/permissions`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ permissions, areas, autoLogoutMinutes: autoLogout }),
+        body: JSON.stringify({ permissions, areas, autoLogoutMinutes: autoLogout, callAccess }),
       })
       if (!res.ok) {
-        // Prima l'errore finiva solo nella console del browser: chi salvava
-        // vedeva la pagina immobile e credeva che fosse andata bene.
         const data = await res.json().catch(() => ({}))
         setError(data.error || "Errore nel salvataggio")
         return
       }
       setSaved(true)
-    } catch (e) {
+      await loadData()
+    } catch {
       setError("Errore nel salvataggio")
     } finally {
       setSaving(false)
@@ -111,17 +121,13 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
   }
 
   function updatePermission(channelType: string, field: "can_read" | "can_write" | "can_manage", value: boolean) {
-    // Toccando un permesso il messaggio "salvato" deve spegnersi, altrimenti
-    // resta a dire il falso su modifiche non ancora salvate.
     setSaved(false)
     setPermissions((prev) =>
       prev.map((p) => {
         if (p.channel_type === channelType && !p.channel_id) {
-          // If disabling read, disable write and manage too
           if (field === "can_read" && !value) {
             return { ...p, can_read: false, can_write: false, can_manage: false }
           }
-          // If enabling write or manage, enable read too
           if ((field === "can_write" || field === "can_manage") && value) {
             return { ...p, [field]: value, can_read: true }
           }
@@ -145,7 +151,7 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
       <div className="container mx-auto px-4 py-8">
         <AdminHeader
           title={`Permessi: ${group?.name || ""}`}
-          subtitle="Configura le aree della piattaforma e i permessi sui canali per i membri del gruppo"
+          subtitle="Configura aree, canali e visibilità dati per i membri del gruppo"
           actions={
             <div className="flex gap-2">
               <Link href="/admin/users">
@@ -182,6 +188,20 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
               setAreas(next)
             }}
             disabled={saving}
+          />
+        </div>
+
+        <div className="mt-6">
+          <CallVisibilityPicker
+            value={callAccess}
+            allowInherit={false}
+            allowSelected={false}
+            context="group"
+            disabled={saving}
+            onChange={(next) => {
+              setSaved(false)
+              setCallAccess(next)
+            }}
           />
         </div>
 
@@ -224,7 +244,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
                     <p className="text-sm text-muted-foreground mb-4">{ct.description}</p>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Lettura */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
                           <Eye className="w-4 h-4 text-ha-info-soft-foreground" />
@@ -236,7 +255,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
                         />
                       </div>
 
-                      {/* Scrittura */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
                           <Edit3 className="w-4 h-4 text-ha-success-soft-foreground" />
@@ -249,7 +267,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
                         />
                       </div>
 
-                      {/* Gestione */}
                       <div className="flex items-center justify-between p-3 border rounded-lg">
                         <div className="flex items-center gap-2">
                           <Shield className="w-4 h-4 text-purple-500" />
@@ -269,7 +286,6 @@ export default function GroupPermissionsPage({ params }: { params: Promise<{ gro
           })}
         </div>
 
-        {/* Legenda */}
         <div className="mt-6 bg-muted/50 rounded-xl p-6">
           <h3 className="font-medium mb-4">Legenda Permessi</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">

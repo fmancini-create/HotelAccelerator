@@ -2,7 +2,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
-import { resolveIdentity } from "@/lib/telephony/user-extension"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
+import { applyCallAccess, resolveCallAccess } from "@/lib/telephony/call-access"
+import { applyContactAccess, resolveContactAccess } from "@/lib/crm/contact-access"
 
 const MAX_LIMIT = 100
 const EXTENSION_SCAN = 2000
@@ -61,8 +63,15 @@ function inizioGiornataItaliana(now = new Date()): Date {
 export async function GET(request: NextRequest) {
   try {
     await requireAreaApi("calls", request)
-    const identity = await resolveIdentity(request)
+    const identity = await getCallerIdentity(request)
+    if (!identity?.propertyId) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
+
     const supabase = createServiceClient()
+    const scopedIdentity = identity as typeof identity & { propertyId: string }
+    const [access, contactAccess] = await Promise.all([
+      resolveCallAccess(supabase, scopedIdentity),
+      resolveContactAccess(supabase, scopedIdentity),
+    ])
 
     const params = new URL(request.url).searchParams
     const limit = Math.min(Math.max(toInt(params.get("limit"), 50), 1), MAX_LIMIT)
@@ -97,37 +106,49 @@ export async function GET(request: NextRequest) {
     }
 
     const base = () =>
-      supabase.from("phone_calls").select("id", { count: "exact", head: true }).eq("property_id", identity.propertyId)
+      applyCallAccess(
+        supabase.from("phone_calls").select("id", { count: "exact", head: true }).eq("property_id", identity.propertyId!),
+        access,
+      )
 
     const [righe, totale, perse, sconosciute, oggi, etichette, scansione] = await Promise.all([
       conFiltri(
-        supabase
-          .from("phone_calls")
-          .select(
-            "id, direction, status, status_source, counterpart_number, extension, started_at, duration_seconds, contact_id, user_id, transcription, transcription_summary, recording_url, sentiment, transcription_updated_at",
-          )
-          .eq("property_id", identity.propertyId),
+        applyCallAccess(
+          supabase
+            .from("phone_calls")
+            .select(
+              "id, direction, status, status_source, counterpart_number, extension, started_at, duration_seconds, contact_id, user_id, transcription, transcription_summary, recording_url, sentiment, transcription_updated_at",
+            )
+            .eq("property_id", identity.propertyId),
+          access,
+        ),
       )
         .order("started_at", { ascending: false, nullsFirst: false })
         .range(offset, offset + limit - 1),
       conFiltri(base()),
       conFiltri(base()).eq("status", "missed"),
       conFiltri(base()).is("contact_id", null),
-      supabase
-        .from("phone_calls")
-        .select("id", { count: "exact", head: true })
-        .eq("property_id", identity.propertyId)
-        .gte("started_at", inizioGiornataItaliana().toISOString()),
+      applyCallAccess(
+        supabase
+          .from("phone_calls")
+          .select("id", { count: "exact", head: true })
+          .eq("property_id", identity.propertyId)
+          .gte("started_at", inizioGiornataItaliana().toISOString()),
+        access,
+      ),
       supabase
         .from("telephony_extension_labels")
         .select("extension, label, kind")
         .eq("property_id", identity.propertyId),
-      supabase
-        .from("phone_calls")
-        .select("extension")
-        .eq("property_id", identity.propertyId)
-        .order("started_at", { ascending: false, nullsFirst: false })
-        .limit(EXTENSION_SCAN),
+      applyCallAccess(
+        supabase
+          .from("phone_calls")
+          .select("extension")
+          .eq("property_id", identity.propertyId)
+          .order("started_at", { ascending: false, nullsFirst: false })
+          .limit(EXTENSION_SCAN),
+        access,
+      ),
     ])
 
     if (righe.error) {
@@ -141,11 +162,14 @@ export async function GET(request: NextRequest) {
 
     const [contatti, utenti] = await Promise.all([
       idContatti.length
-        ? supabase
-            .from("contacts")
-            .select("id, name, company")
-            .eq("property_id", identity.propertyId)
-            .in("id", idContatti)
+        ? applyContactAccess(
+            supabase
+              .from("contacts")
+              .select("id, name, company")
+              .eq("property_id", identity.propertyId)
+              .in("id", idContatti),
+            contactAccess,
+          )
         : Promise.resolve({ data: [] as RigaContatto[] }),
       idUtenti.length
         ? supabase
@@ -189,16 +213,22 @@ export async function GET(request: NextRequest) {
           extension_label: et?.label ?? null,
           extension_kind: et?.kind ?? null,
           handled_by: c.user_id ? (nomeUtente.get(String(c.user_id)) ?? null) : null,
-          transcription: c.transcription ?? null,
-          transcription_summary: c.transcription_summary ?? null,
-          recording_url: c.recording_url ?? null,
-          sentiment: c.sentiment ?? null,
-          transcription_updated_at: c.transcription_updated_at ?? null,
+          transcription: access.canReadTranscripts ? c.transcription ?? null : null,
+          transcription_summary: access.canReadTranscripts ? c.transcription_summary ?? null : null,
+          recording_url: access.canListenRecordings ? c.recording_url ?? null : null,
+          sentiment: access.canReadTranscripts ? c.sentiment ?? null : null,
+          transcription_updated_at: access.canReadTranscripts ? c.transcription_updated_at ?? null : null,
         }
       }),
       total: totale.count ?? 0,
       limit,
       offset,
+      access: {
+        scope: access.scope,
+        inherited: access.inherited,
+        can_read_transcripts: access.canReadTranscripts,
+        can_listen_recordings: access.canListenRecordings,
+      },
       summary: {
         filtered: totale.count ?? 0,
         missed: perse.count ?? 0,
