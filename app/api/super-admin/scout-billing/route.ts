@@ -27,6 +27,29 @@ const costSchema = z.object({
   effectiveFrom: z.string().datetime().optional(),
 })
 
+type ScoutAccountRow = {
+  property_id: string
+  balance: number | null
+  reserved_credits: number | null
+  purchased_credits: number | null
+  granted_credits: number | null
+  consumed_credits: number | null
+  provider_cost_micro_eur: number | null
+  usage_retail_value_cents: number | null
+  updated_at: string
+  properties: unknown
+}
+
+type ScoutTotals = {
+  balance: number
+  reserved: number
+  purchased: number
+  granted: number
+  consumed: number
+  providerCostMicroEur: number
+  usageRetailValueCents: number
+}
+
 async function requireSuperAdmin(request: NextRequest) {
   const actorEmail = await getAuthenticatedUserEmail(request)
   await new SuperAdminService().verifySuperAdmin(actorEmail)
@@ -55,8 +78,8 @@ export async function GET(request: NextRequest) {
     if (accountsResult.error) throw accountsResult.error
 
     const creditPriceCents = scoutCreditPriceCents(currentCost?.costMicroEur ?? null, settings.markupMultiplier)
-    const accounts = accountsResult.data ?? []
-    const totals = accounts.reduce(
+    const accounts = (accountsResult.data ?? []) as ScoutAccountRow[]
+    const totals = accounts.reduce<ScoutTotals>(
       (acc, row) => {
         acc.balance += Number(row.balance || 0)
         acc.reserved += Number(row.reserved_credits || 0)
