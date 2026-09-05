@@ -55,7 +55,7 @@ export default function PhoneChannelPage() {
   const provider = useMemo(() => getTelephonyProvider(selected)!, [selected])
   const selectedIntegration = useMemo(() => integrations.find((item) => item.provider === selected) ?? null, [integrations, selected])
 
-  async function load() {
+  async function load(options: { preserveSelection?: boolean } = {}) {
     setLoading(true)
     setError("")
     try {
@@ -66,7 +66,7 @@ export default function PhoneChannelPage() {
       setIntegrations(rows)
       const active = (body.active_integration?.provider || null) as TelephonyProviderId | null
       setActiveProvider(active)
-      if (active) setSelected(active)
+      if (active && !options.preserveSelection) setSelected(active)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Impossibile caricare i centralini.")
     } finally {
@@ -124,7 +124,7 @@ export default function PhoneChannelPage() {
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body?.error || "Configurazione non salvata.")
       setMessage(body.message || "Configurazione salvata.")
-      await load()
+      await load({ preserveSelection: true })
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Configurazione non salvata.")
     } finally {
@@ -144,27 +144,22 @@ export default function PhoneChannelPage() {
         <Card>
           <CardHeader>
             <CardTitle>Scegli il centralino</CardTitle>
-            <CardDescription>Aprire una guida non cambia nulla. Il provider diventa attivo soltanto quando premi “Imposta come centralino attivo”.</CardDescription>
+            <CardDescription>Puoi aprire tutte le guide senza cambiare nulla. Un nuovo PBX API sostituisce quello attuale solo dopo una verifica riuscita.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {TELEPHONY_PROVIDERS.map((item) => {
               const row = integrations.find((candidate) => candidate.provider === item.id)
               const isActive = activeProvider === item.id
               return (
-                <button
-                  type="button"
-                  key={item.id}
-                  onClick={() => setSelected(item.id)}
-                  className={`rounded-xl border p-4 text-left transition hover:border-foreground/30 ${selected === item.id ? "border-primary ring-1 ring-primary" : ""}`}
-                >
+                <button type="button" key={item.id} onClick={() => setSelected(item.id)} className={`rounded-xl border p-4 text-left transition hover:border-foreground/30 ${selected === item.id ? "border-primary ring-1 ring-primary" : ""}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div><div className="font-semibold">{item.name}</div><p className="mt-1 text-xs text-muted-foreground">{item.shortDescription}</p></div>
                     {isActive && <Badge>Attivo</Badge>}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1">
                     {row?.last_check_status === "ok" && <Badge variant="secondary">API verificata</Badge>}
-                    {row?.last_check_status === "guided" && <Badge variant="outline">Guida</Badge>}
-                    {row?.last_check_status === "bridge_required" && <Badge variant="outline">Bridge</Badge>}
+                    {row?.last_check_status === "guided" && <Badge variant="outline">Guida salvata</Badge>}
+                    {row?.last_check_status === "bridge_required" && <Badge variant="outline">Bridge richiesto</Badge>}
                     {row?.last_check_status === "error" && <Badge variant="destructive">Da correggere</Badge>}
                   </div>
                 </button>
@@ -192,8 +187,10 @@ export default function PhoneChannelPage() {
                       </li>
                     ))}
                   </ol>
-                  {provider.guide.screenshots.length > 0 && (
+                  {provider.guide.screenshots.length > 0 ? (
                     <div className="space-y-4"><h3 className="font-semibold">Schermate ufficiali</h3>{provider.guide.screenshots.map((shot) => <figure key={shot.src} className="overflow-hidden rounded-xl border"><a href={shot.sourceUrl} target="_blank" rel="noreferrer"><Image src={shot.src} alt={shot.alt} width={1200} height={760} className="h-auto w-full object-contain" unoptimized /></a><figcaption className="border-t p-3 text-xs text-muted-foreground">{shot.caption} · clicca l'immagine per aprire la fonte ufficiale.</figcaption></figure>)}</div>
+                  ) : (
+                    <Alert><ExternalLink className="h-4 w-4" /><AlertTitle>Schermate del produttore</AlertTitle><AlertDescription>Per questo centralino non incorporiamo immagini che potrebbero diventare obsolete: usa i link ufficiali qui sotto, che aprono la guida aggiornata del produttore.</AlertDescription></Alert>
                   )}
                   <div className="space-y-2"><h3 className="font-semibold">Documentazione ufficiale</h3>{provider.guide.officialDocs.map((doc) => <a key={doc.url} className="flex items-center gap-2 text-sm underline" href={doc.url} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />{doc.label}</a>)}</div>
                 </DialogContent>
@@ -207,27 +204,20 @@ export default function PhoneChannelPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {activeProvider && activeProvider !== selected && <Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Stai preparando un cambio di centralino</AlertTitle><AlertDescription>Il centralino attuale resta attivo finche non premi il pulsante di salvataggio qui sotto.</AlertDescription></Alert>}
+            {activeProvider && activeProvider !== selected && <Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Il centralino attuale resta protetto</AlertTitle><AlertDescription>{provider.connectionMode === "api" ? "HotelAccelerator passera a questo provider solo se la verifica automatica riesce." : "Questa guida non disattiva il centralino operativo attuale."}</AlertDescription></Alert>}
 
             {provider.fields.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2">
                 {provider.fields.map((field) => (
                   <div key={field.storage} className={field.storage === "base_url" ? "sm:col-span-2" : ""}>
                     <Label htmlFor={`field-${field.storage}`}>{field.label}{field.required ? " *" : ""}</Label>
-                    <Input
-                      id={`field-${field.storage}`}
-                      className="mt-1"
-                      type={field.secret ? "password" : "text"}
-                      value={valueOf(field.storage)}
-                      onChange={(event) => updateField(field.storage, event.target.value)}
-                      placeholder={field.secret && selectedIntegration?.has_client_secret ? selectedIntegration.credentials_preview.client_secret || "Gia salvato: lascia vuoto per non cambiarlo" : field.placeholder}
-                    />
+                    <Input id={`field-${field.storage}`} className="mt-1" type={field.secret ? "password" : "text"} value={valueOf(field.storage)} onChange={(event) => updateField(field.storage, event.target.value)} placeholder={field.secret && selectedIntegration?.has_client_secret ? selectedIntegration.credentials_preview.client_secret || "Gia salvato: lascia vuoto per non cambiarlo" : field.placeholder} />
                     <p className="mt-1 text-xs text-muted-foreground">{field.help}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <Alert><Settings2 className="h-4 w-4" /><AlertTitle>Configurazione guidata</AlertTitle><AlertDescription>Per {provider.name} non raccogliamo ancora credenziali: prima serve il collaudo OAuth/bridge con un tenant reale. Puoi comunque selezionare il centralino e seguire la guida senza creare una falsa connessione.</AlertDescription></Alert>
+              <Alert><Settings2 className="h-4 w-4" /><AlertTitle>Configurazione guidata</AlertTitle><AlertDescription>Per {provider.name} non raccogliamo ancora credenziali: prima serve il collaudo OAuth/bridge con un tenant reale. La guida si puo salvare senza creare una falsa connessione.</AlertDescription></Alert>
             )}
 
             {selectedIntegration?.last_check_status === "error" && selectedIntegration.last_check_error && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Ultima verifica non riuscita</AlertTitle><AlertDescription>{selectedIntegration.last_check_error}</AlertDescription></Alert>}
@@ -236,11 +226,9 @@ export default function PhoneChannelPage() {
             <div className="flex flex-wrap gap-2">
               <Button onClick={() => void save()} disabled={saving}>
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                {activeProvider === selected ? "Salva e verifica" : "Imposta come centralino attivo"}
+                {provider.connectionMode === "api" ? (activeProvider === selected ? "Salva e verifica" : "Verifica e imposta come centralino") : "Salva questa guida"}
               </Button>
-              {selected === "3cx" && activeProvider === "3cx" && (
-                <Button variant="outline" asChild><Link href="/admin/channels/phone/3cx"><Settings2 className="mr-2 h-4 w-4" />Configurazione avanzata 3CX</Link></Button>
-              )}
+              {selected === "3cx" && activeProvider === "3cx" && <Button variant="outline" asChild><Link href="/admin/channels/phone/3cx"><Settings2 className="mr-2 h-4 w-4" />Configurazione avanzata 3CX</Link></Button>}
             </div>
           </CardContent>
         </Card>

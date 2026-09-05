@@ -1,19 +1,11 @@
+import { randomBytes } from "node:crypto"
 import { type NextRequest, NextResponse } from "next/server"
-import { randomBytes } from "crypto"
 import { createServiceClient } from "@/lib/supabase/server"
-import { getAuthenticatedPropertyId } from "@/lib/auth-property"
-import { requireAreaApi } from "@/lib/auth/area-access"
-import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
-import { loadTelephonyRow, maskSecret, encryptForWrite, type TelephonyRow } from "@/lib/telephony/config"
-import { normalizeBaseUrl, testConnection } from "@/lib/telephony/threecx-client"
+import { accessErrorStatus, requireTenantAdmin } from "@/lib/auth/admin-access"
 import { decryptSecretIfNeeded } from "@/lib/crypto/secrets"
-
-/**
- * Configurazione del centralino 3CX, per struttura.
- *
- * Il Client Secret NON viene mai restituito in chiaro: la GET manda un'anteprima
- * mascherata e un booleano, come per il bot token di Telegram.
- */
+import { encryptForWrite, loadActiveTelephonyRow, loadTelephonyRow, maskSecret, type TelephonyRow } from "@/lib/telephony/config"
+import { validateTelephonyBaseUrl, ensureTelephonyHostIsPublic } from "@/lib/telephony/provider-url"
+import { testConnection } from "@/lib/telephony/threecx-client"
 
 function serialize(row: TelephonyRow | null) {
   if (!row) return null
@@ -23,9 +15,7 @@ function serialize(row: TelephonyRow | null) {
     base_url: row.base_url ?? "",
     client_id: row.client_id ?? "",
     default_extension: row.default_extension ?? "",
-    credentials_preview: {
-      client_secret: maskSecret(decryptSecretIfNeeded(row.client_secret_encrypted)),
-    },
+    credentials_preview: { client_secret: maskSecret(decryptSecretIfNeeded(row.client_secret_encrypted)) },
     has_credentials: {
       client_secret: Boolean(row.client_secret_encrypted),
       inbound_secret: Boolean(row.inbound_secret_encrypted),
@@ -39,143 +29,81 @@ function serialize(row: TelephonyRow | null) {
   }
 }
 
+/** Compatibilita per la pagina avanzata 3CX. La scelta provider vive nel nuovo hub. */
 export async function GET(request: NextRequest) {
   try {
-    // Area "settings": l'elenco delle aree valide (lib/platform/areas.ts) NON
-    // contiene "channels" — con una chiave inesistente la guardia negherebbe
-    // sempre, rendendo la pagina inutilizzabile. Configurare il centralino e'
-    // un'impostazione di struttura, quindi "settings" e' la chiave giusta.
-    await requireAreaApi("settings", request)
-    const propertyId = await getAuthenticatedPropertyId(request)
-    const row = await loadTelephonyRow(propertyId)
+    const identity = await requireTenantAdmin(request)
+    const row = await loadTelephonyRow(identity.propertyId, "3cx")
     return NextResponse.json({ integration: serialize(row) })
   } catch (error) {
-    // In modalita' "enforce" la guardia LANCIA: senza questo, un diniego di
-    // permesso diventerebbe un 500 "server rotto" invece di un 403.
-    if (isAreaDenied(error)) return areaDeniedResponse(error)
-    const message = error instanceof Error ? error.message : "Errore"
-    const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Errore" }, { status: accessErrorStatus(error) })
   }
 }
 
-/**
- * POST: salva la connessione e la VERIFICA subito.
- *
- * Salvare senza provare lascerebbe l'amministratore convinto di aver finito,
- * con l'errore che compare solo al primo clic su "Chiama" — magari davanti al
- * cliente. Se la verifica non passa, la riga viene comunque salvata (per non
- * fargli riscrivere tutto) ma la risposta dichiara il fallimento e l'esito
- * resta registrato in `last_check_*`.
- */
 export async function POST(request: NextRequest) {
   try {
-    await requireAreaApi("settings", request)
-    const propertyId = await getAuthenticatedPropertyId(request)
+    const identity = await requireTenantAdmin(request)
+    const propertyId = identity.propertyId
+    const active = await loadActiveTelephonyRow(propertyId)
+    if (active && active.provider !== "3cx") {
+      return NextResponse.json({ error: `Il centralino attivo e ${active.provider}. Se vuoi passare a 3CX, selezionalo prima dalla pagina Centralino telefonico.` }, { status: 409 })
+    }
+
     const body = await request.json().catch(() => null)
-    const baseUrlRaw = typeof body?.base_url === "string" ? body.base_url : ""
-    const clientIdRaw = typeof body?.client_id === "string" ? body.client_id : ""
-    const clientSecretRaw = typeof body?.client_secret === "string" ? body.client_secret : ""
-    const extensionRaw = typeof body?.default_extension === "string" ? body.default_extension : ""
+    const baseCheck = validateTelephonyBaseUrl(typeof body?.base_url === "string" ? body.base_url : "")
+    if (!baseCheck.ok) return NextResponse.json({ error: baseCheck.error }, { status: 400 })
+    const publicHost = await ensureTelephonyHostIsPublic(baseCheck.url)
+    if (!publicHost.ok) return NextResponse.json({ error: publicHost.error }, { status: 400 })
 
-    const baseUrl = normalizeBaseUrl(baseUrlRaw)
-    const clientId = clientIdRaw.trim()
-    const defaultExtension = extensionRaw.trim()
+    const clientId = typeof body?.client_id === "string" ? body.client_id.trim() : ""
+    const clientSecretRaw = typeof body?.client_secret === "string" ? body.client_secret.trim() : ""
+    const defaultExtension = typeof body?.default_extension === "string" ? body.default_extension.trim() : ""
+    if (!clientId) return NextResponse.json({ error: "Client ID obbligatorio." }, { status: 400 })
 
-    if (!baseUrl || !clientId) {
-      return NextResponse.json({ error: "Indirizzo del centralino e Client ID sono obbligatori." }, { status: 400 })
-    }
-    // Un indirizzo senza https non e' un dettaglio: le credenziali viaggerebbero
-    // in chiaro verso il centralino.
-    if (!/^https:\/\//i.test(baseUrl)) {
-      return NextResponse.json(
-        { error: "L'indirizzo deve iniziare con https:// (le credenziali non vanno inviate su una connessione non cifrata)." },
-        { status: 400 },
-      )
-    }
+    const existing = await loadTelephonyRow(propertyId, "3cx")
+    const effectiveSecret = clientSecretRaw || decryptSecretIfNeeded(existing?.client_secret_encrypted ?? null) || ""
+    if (!effectiveSecret) return NextResponse.json({ error: "Client Secret obbligatorio." }, { status: 400 })
 
-    const existing = await loadTelephonyRow(propertyId)
-
-    // Segreto lasciato in bianco = "non cambiarlo": e' l'unico modo per
-    // modificare l'interno senza dover reincollare il secret ogni volta.
-    const newSecret = clientSecretRaw.trim() !== "" ? clientSecretRaw.trim() : null
-    const effectiveSecret = newSecret ?? decryptSecretIfNeeded(existing?.client_secret_encrypted ?? null)
-    if (!effectiveSecret) {
-      return NextResponse.json({ error: "Client Secret obbligatorio." }, { status: 400 })
+    const check = await testConnection({ baseUrl: baseCheck.url, clientId, clientSecret: effectiveSecret })
+    if (!check.ok) {
+      // Non sovrascrivere una configurazione 3CX gia operativa con credenziali
+      // che falliscono il test. L'utente puo correggere i campi e riprovare.
+      return NextResponse.json({ integration: serialize(existing), verified: false, error: check.error }, { status: 422 })
     }
 
-    // Il segreto in ingresso serve a 3CX per autenticarsi verso di noi: lo
-    // genero io, non lo chiedo all'utente, cosi' non puo' essere debole.
-    const inboundSecret = existing?.inbound_secret_encrypted
-      ? decryptSecretIfNeeded(existing.inbound_secret_encrypted)
-      : randomBytes(24).toString("base64url")
-
-    const check = await testConnection({ baseUrl, clientId, clientSecret: effectiveSecret })
-
+    const inboundSecret = decryptSecretIfNeeded(existing?.inbound_secret_encrypted ?? null) || randomBytes(24).toString("base64url")
     const supabase = createServiceClient()
-    const payload = {
-      property_id: propertyId,
-      provider: "3cx",
-      base_url: baseUrl,
-      client_id: clientId,
-      client_secret_encrypted: encryptForWrite(effectiveSecret),
-      default_extension: defaultExtension || null,
-      inbound_secret_encrypted: encryptForWrite(inboundSecret),
-      is_active: true,
-      last_check_at: new Date().toISOString(),
-      last_check_status: check.ok ? "ok" : "error",
-      last_check_error: check.ok ? null : check.error,
-      updated_at: new Date().toISOString(),
-    }
-
-    const { error } = await supabase
-      .from("telephony_integrations")
-      .upsert(payload, { onConflict: "property_id,provider" })
+    const { data, error } = await supabase.rpc("upsert_active_telephony_integration", {
+      p_property_id: propertyId,
+      p_provider: "3cx",
+      p_base_url: baseCheck.url,
+      p_client_id: clientId,
+      p_client_secret_encrypted: encryptForWrite(effectiveSecret),
+      p_default_extension: defaultExtension || null,
+      p_inbound_secret_encrypted: encryptForWrite(inboundSecret),
+      p_provider_config: existing?.provider_config ?? {},
+      p_last_check_status: "ok",
+      p_last_check_error: null,
+      p_last_check_at: new Date().toISOString(),
+      p_actor_email: identity.email,
+    }).single()
     if (error) throw error
 
-    const row = await loadTelephonyRow(propertyId)
-
-    if (!check.ok) {
-      return NextResponse.json(
-        {
-          integration: serialize(row),
-          verified: false,
-          error: check.error,
-        },
-        // 200: il salvataggio e' RIUSCITO, la verifica no. Un 4xx qui farebbe
-        // credere all'interfaccia che non sia stato salvato niente.
-        { status: 200 },
-      )
-    }
-
-    return NextResponse.json({
-      integration: serialize(row),
-      verified: true,
-      extensions: check.extensions,
-    })
+    return NextResponse.json({ integration: serialize(data as TelephonyRow), verified: true, extensions: check.extensions })
   } catch (error) {
-    if (isAreaDenied(error)) return areaDeniedResponse(error)
-    const message = error instanceof Error ? error.message : "Errore"
-    const status = message.includes("autenticat") || message.includes("tenant") ? 401 : 500
-    return NextResponse.json({ error: message }, { status })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Errore" }, { status: accessErrorStatus(error) })
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    await requireAreaApi("settings", request)
-    const propertyId = await getAuthenticatedPropertyId(request)
+    const identity = await requireTenantAdmin(request)
     const supabase = createServiceClient()
-    const { error } = await supabase
-      .from("telephony_integrations")
-      .delete()
-      .eq("property_id", propertyId)
-      .eq("provider", "3cx")
+    const { error } = await supabase.from("telephony_integrations").delete().eq("property_id", identity.propertyId).eq("provider", "3cx")
     if (error) throw error
+    await supabase.from("telephony_integration_audit").insert({ property_id: identity.propertyId, provider: "3cx", action: "deleted", actor_email: identity.email, details: { source: "3cx_advanced" } })
     return NextResponse.json({ ok: true })
   } catch (error) {
-    if (isAreaDenied(error)) return areaDeniedResponse(error)
-    const message = error instanceof Error ? error.message : "Errore"
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Errore" }, { status: accessErrorStatus(error) })
   }
 }

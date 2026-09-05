@@ -34,10 +34,11 @@ export async function GET(request: NextRequest) {
   try {
     const identity = await requireTenantAdmin(request)
     const rows = await loadTelephonyRows(identity.propertyId)
+    const active = rows.find((row) => row.is_active) ?? null
     return NextResponse.json({
       providers: TELEPHONY_PROVIDERS,
       integrations: rows.map(serialize),
-      active_integration: rows.find((row) => row.is_active) ? serialize(rows.find((row) => row.is_active)!) : null,
+      active_integration: active ? serialize(active) : null,
     })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Errore" }, { status: accessErrorStatus(error) })
@@ -48,9 +49,7 @@ export async function PUT(request: NextRequest) {
   try {
     const identity = await requireTenantAdmin(request)
     const body = await request.json().catch(() => null)
-    if (!isTelephonyProviderId(body?.provider)) {
-      return NextResponse.json({ error: "Centralino non riconosciuto." }, { status: 400 })
-    }
+    if (!isTelephonyProviderId(body?.provider)) return NextResponse.json({ error: "Centralino non riconosciuto." }, { status: 400 })
     const provider = getTelephonyProvider(body.provider)
     if (!provider) return NextResponse.json({ error: "Centralino non riconosciuto." }, { status: 400 })
 
@@ -90,53 +89,83 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    let checkStatus: "ok" | "error" | "guided" | "bridge_required" = provider.connectionMode === "guided" ? "guided" : provider.connectionMode === "bridge" ? "bridge_required" : "error"
-    let checkError: string | null = null
-    let verified = false
+    const supabase = createServiceClient()
+    const now = new Date().toISOString()
 
     if (provider.connectionMode === "api") {
       const runtime: ProviderRuntimeConfig = { baseUrl, clientId, clientSecret: effectiveSecret, defaultExtension, providerConfig }
       const check = await verifyTelephonyConnection(provider.id, runtime)
-      verified = check.ok
-      checkStatus = check.ok ? "ok" : "error"
-      checkError = check.ok ? null : check.error
+      if (!check.ok) {
+        // Non sostituire un centralino funzionante con una configurazione che
+        // non supera il test. Registriamo solo il tentativo, senza segreti.
+        await supabase.from("telephony_integration_audit").insert({
+          property_id: identity.propertyId,
+          provider: provider.id,
+          action: "verification_failed",
+          actor_email: identity.email,
+          details: { status: check.status, error: check.error.slice(0, 500) },
+        })
+        return NextResponse.json({ error: `Verifica ${provider.name} non riuscita: ${check.error}`, verified: false }, { status: 422 })
+      }
+
+      const inboundSecret = provider.id === "3cx"
+        ? (decryptSecretIfNeeded(existing?.inbound_secret_encrypted ?? null) || randomBytes(24).toString("base64url"))
+        : null
+
+      const { data, error } = await supabase.rpc("upsert_active_telephony_integration", {
+        p_property_id: identity.propertyId,
+        p_provider: provider.id,
+        p_base_url: baseUrl || null,
+        p_client_id: clientId || null,
+        p_client_secret_encrypted: effectiveSecret ? encryptForWrite(effectiveSecret) : null,
+        p_default_extension: defaultExtension || null,
+        p_inbound_secret_encrypted: inboundSecret ? encryptForWrite(inboundSecret) : null,
+        p_provider_config: providerConfig,
+        p_last_check_status: "ok",
+        p_last_check_error: null,
+        p_last_check_at: now,
+        p_actor_email: identity.email,
+      }).single()
+      if (error) throw error
+      return NextResponse.json({ integration: serialize(data as TelephonyRow), verified: true, mode: provider.connectionMode, message: `${provider.name} collegato, verificato e impostato come centralino attivo.` })
     }
 
-    // Il segreto di ingresso CRM viene mantenuto per 3CX, per non rompere i
-    // template gia installati. Per una nuova configurazione 3CX lo generiamo.
-    const inboundSecret = provider.id === "3cx"
-      ? (decryptSecretIfNeeded(existing?.inbound_secret_encrypted ?? null) || randomBytes(24).toString("base64url"))
-      : null
-
-    const supabase = createServiceClient()
-    const now = new Date().toISOString()
-    const { data, error } = await supabase.rpc("upsert_active_telephony_integration", {
-      p_property_id: identity.propertyId,
-      p_provider: provider.id,
-      p_base_url: baseUrl || null,
-      p_client_id: clientId || null,
-      p_client_secret_encrypted: effectiveSecret ? encryptForWrite(effectiveSecret) : null,
-      p_default_extension: defaultExtension || null,
-      p_inbound_secret_encrypted: inboundSecret ? encryptForWrite(inboundSecret) : null,
-      p_provider_config: providerConfig,
-      p_last_check_status: checkStatus,
-      p_last_check_error: checkError,
-      p_last_check_at: provider.connectionMode === "api" ? now : null,
-      p_actor_email: identity.email,
-    }).single()
+    // Teams/Webex/Avaya: salviamo la scelta/guida ma NON spegniamo un PBX
+    // attualmente funzionante e non marchiamo questa riga come operativa.
+    const status = provider.connectionMode === "bridge" ? "bridge_required" : "guided"
+    const { data, error } = await supabase
+      .from("telephony_integrations")
+      .upsert({
+        property_id: identity.propertyId,
+        provider: provider.id,
+        base_url: baseUrl || null,
+        client_id: clientId || null,
+        client_secret_encrypted: effectiveSecret ? encryptForWrite(effectiveSecret) : null,
+        default_extension: defaultExtension || null,
+        provider_config: providerConfig,
+        is_active: false,
+        last_check_at: null,
+        last_check_status: status,
+        last_check_error: null,
+        updated_at: now,
+      }, { onConflict: "property_id,provider" })
+      .select("*")
+      .single()
     if (error) throw error
-
+    await supabase.from("telephony_integration_audit").insert({
+      property_id: identity.propertyId,
+      provider: provider.id,
+      action: "guide_selected",
+      actor_email: identity.email,
+      details: { mode: provider.connectionMode },
+    })
     return NextResponse.json({
       integration: serialize(data as TelephonyRow),
-      verified,
+      verified: false,
       mode: provider.connectionMode,
-      message: verified
-        ? `${provider.name} collegato e verificato.`
-        : provider.connectionMode === "api"
-          ? `Configurazione salvata, ma la verifica non e riuscita: ${checkError}`
-          : provider.connectionMode === "bridge"
-            ? `${provider.name} selezionato. Completa il bridge seguendo la guida.`
-            : `${provider.name} selezionato. Segui la guida: il connettore automatico non viene dichiarato attivo finche non e collaudato.`,
+      message: provider.connectionMode === "bridge"
+        ? `${provider.name}: guida salvata. Il centralino operativo attuale non e stato modificato; completa prima il bridge.`
+        : `${provider.name}: guida salvata. Il centralino operativo attuale non e stato modificato finche il connettore OAuth non e collaudato.`,
     })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Errore" }, { status: accessErrorStatus(error) })
@@ -151,13 +180,7 @@ export async function DELETE(request: NextRequest) {
     const supabase = createServiceClient()
     const { error } = await supabase.from("telephony_integrations").delete().eq("property_id", identity.propertyId).eq("provider", providerId)
     if (error) throw error
-    await supabase.from("telephony_integration_audit").insert({
-      property_id: identity.propertyId,
-      provider: providerId,
-      action: "deleted",
-      actor_email: identity.email,
-      details: {},
-    })
+    await supabase.from("telephony_integration_audit").insert({ property_id: identity.propertyId, provider: providerId, action: "deleted", actor_email: identity.email, details: {} })
     return NextResponse.json({ ok: true })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Errore" }, { status: accessErrorStatus(error) })

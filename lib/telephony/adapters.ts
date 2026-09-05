@@ -1,6 +1,7 @@
 import "server-only"
 import { createHmac } from "node:crypto"
 import type { TelephonyProviderId } from "@/lib/telephony/providers"
+import { ensureTelephonyHostIsPublic } from "@/lib/telephony/provider-url"
 import { makeCall as makeThreeCxCall, testConnection as testThreeCxConnection } from "@/lib/telephony/threecx-client"
 
 export type ProviderRuntimeConfig = {
@@ -24,15 +25,23 @@ function cleanBase(value: string): string {
 }
 
 async function safeText(response: Response): Promise<string> {
-  try {
-    return (await response.text()).slice(0, 500)
-  } catch {
-    return ""
-  }
+  try { return (await response.text()).slice(0, 500) } catch { return "" }
 }
 
+/**
+ * Tutti gli adapter passano da qui: il DNS viene ricontrollato anche a runtime
+ * (non solo quando l'admin salva l'URL) e i redirect vengono rifiutati, cosi un
+ * PBX non puo dirottare il backend verso localhost/reti private.
+ */
 async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(15_000) })
+  const safety = await ensureTelephonyHostIsPublic(url)
+  if (!safety.ok) throw new Error(safety.error)
+  return fetch(url, {
+    ...init,
+    cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(15_000),
+  })
 }
 
 async function verifyWildix(cfg: ProviderRuntimeConfig): Promise<ProviderCheck> {
@@ -58,8 +67,8 @@ async function verifyNethVoice(cfg: ProviderRuntimeConfig): Promise<ProviderChec
       body: JSON.stringify({ username: cfg.clientId, password: cfg.clientSecret }),
     })
     const auth = response.headers.get("www-authenticate") || ""
-    // NethCTI documenta 401 + "Digest <nonce>" come esito POSITIVO del primo
-    // passo di login. Un 401 senza nonce invece e un rifiuto credenziali.
+    // La documentazione NethCTI specifica che il 401 CON nonce Digest significa
+    // autenticazione riuscita; senza nonce le credenziali sono state rifiutate.
     if (response.status === 401 && /^Digest\s+\S+/i.test(auth)) {
       const nonce = auth.replace(/^Digest\s+/i, "").trim()
       const token = createHmac("sha1", cfg.clientSecret)
@@ -146,8 +155,12 @@ async function verifyAsterisk(cfg: ProviderRuntimeConfig): Promise<ProviderCheck
 
 export async function verifyTelephonyConnection(provider: TelephonyProviderId, cfg: ProviderRuntimeConfig): Promise<ProviderCheck> {
   if (provider === "3cx") {
+    // 3CX usa il client esistente, ma l'host e comunque controllato qui prima
+    // della chiamata per applicare lo stesso confine SSRF degli altri adapter.
+    const safety = await ensureTelephonyHostIsPublic(cfg.baseUrl)
+    if (!safety.ok) return { ok: false, status: 400, error: safety.error }
     const result = await testThreeCxConnection({ baseUrl: cfg.baseUrl, clientId: cfg.clientId, clientSecret: cfg.clientSecret })
-    return result.ok ? { ok: true, detail: `3CX verificato (${result.extensions.length} interni visibili).` } : result
+    return result.ok ? { ok: true, detail: `3CX verificato (${result.extensions.length} interni visibili).` } : { ok: false, status: result.status, error: result.error }
   }
   if (provider === "wildix") return verifyWildix(cfg)
   if (provider === "nethvoice") return verifyNethVoice(cfg)
@@ -222,7 +235,11 @@ async function callAsterisk(cfg: ProviderRuntimeConfig, extension: string, desti
 }
 
 export async function makeTelephonyCall(provider: TelephonyProviderId, cfg: ProviderRuntimeConfig, extension: string, destination: string): Promise<ProviderCallResult> {
-  if (provider === "3cx") return makeThreeCxCall({ baseUrl: cfg.baseUrl, clientId: cfg.clientId, clientSecret: cfg.clientSecret }, extension, destination)
+  if (provider === "3cx") {
+    const safety = await ensureTelephonyHostIsPublic(cfg.baseUrl)
+    if (!safety.ok) return { ok: false, status: 400, error: safety.error }
+    return makeThreeCxCall({ baseUrl: cfg.baseUrl, clientId: cfg.clientId, clientSecret: cfg.clientSecret }, extension, destination)
+  }
   if (provider === "voispeed") return callVoispeed(cfg, extension, destination)
   if (provider === "yeastar") return callYeastar(cfg, extension, destination)
   if (provider === "asterisk_freepbx") return callAsterisk(cfg, extension, destination)
@@ -230,6 +247,6 @@ export async function makeTelephonyCall(provider: TelephonyProviderId, cfg: Prov
     ok: false,
     status: 409,
     unsupported: true,
-    error: "Click-to-call non ancora abilitato per questo centralino: la configurazione viene conservata ma HotelAccelerator non simula una funzione non collaudata.",
+    error: "Click-to-call non ancora abilitato per questo centralino: HotelAccelerator non simula una funzione non collaudata.",
   }
 }
