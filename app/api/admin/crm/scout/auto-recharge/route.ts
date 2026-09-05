@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     const [{ data, error }, billing] = await Promise.all([
       db
         .from("scout_auto_recharge_settings")
-        .select("enabled,status,threshold_cents,recharge_credits,card_brand,card_last4,card_exp_month,card_exp_year,consented_at,last_success_at,last_error_code,last_error_at,updated_at")
+        .select("enabled,status,threshold_cents,recharge_credits,card_brand,card_last4,card_exp_month,card_exp_year,consented_at,last_success_at,last_error_at,updated_at")
         .eq("property_id", propertyId)
         .maybeSingle(),
       getScoutTenantBillingState(db, propertyId),
@@ -48,7 +48,6 @@ export async function GET(request: NextRequest) {
           : null,
         consentedAt: row?.consented_at ?? null,
         lastSuccessAt: row?.last_success_at ?? null,
-        lastErrorCode: row?.last_error_code ?? null,
         lastErrorAt: row?.last_error_at ?? null,
       },
       creditPriceCents: billing.creditPriceCents,
