@@ -34,11 +34,20 @@ jobs:
       - name: Typecheck Core
         run: pnpm run typecheck
 
+      - name: Test support federation timestamp contract
+        run: pnpm vitest run lib/support-federation/__tests__/contract.test.ts
+
       - name: Test HR time-clock login gate
         run: pnpm vitest run tests/mobile-login-time-clock-gate.test.ts
 
       - name: Test dashboard local day boundaries
         run: pnpm vitest run tests/dashboard-local-day.test.ts
+
+      - name: Test commercial dashboard goals
+        run: pnpm vitest run tests/dashboard-commercial-goals.test.ts
+
+      - name: Test sales attribution rules
+        run: pnpm vitest run tests/sales-attribution.test.ts
 
       - name: Test suite directory email guard
         run: pnpm vitest run tests/suite-directory-email.test.ts
