@@ -49,6 +49,9 @@ jobs:
       - name: Test HR geofence map geometry
         run: pnpm vitest run tests/hr-geofence-map.test.ts
 
+      - name: Test HR geofence admin boundary
+        run: pnpm vitest run tests/hr-geofence-admin-boundary.test.ts
+
       - name: Test dashboard local day boundaries
         run: pnpm vitest run tests/dashboard-local-day.test.ts
 

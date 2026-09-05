@@ -333,6 +333,16 @@ export const NAV_ENTRIES: NavEntry[] = [
     adminOnly: true,
   },
   {
+    id: "hr-settings",
+    href: "/admin/settings/hr",
+    label: "HR · Timbratura e posizione",
+    description: "Configura sede, raggio e regole GPS della timbratura",
+    placement: "settings",
+    icon: CalendarClock,
+    module: "hr",
+    adminOnly: true,
+  },
+  {
     id: "users",
     href: "/admin/users",
     label: "Gestione Utenti",

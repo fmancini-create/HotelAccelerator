@@ -12,7 +12,6 @@ const schema=z.discriminatedUnion("action",[
  z.object({action:z.literal("publish"),shift_ids:z.array(z.string().uuid()).min(1).max(200)}),
  z.object({action:z.literal("leave"),employee_id:z.string().uuid(),kind:z.enum(["holiday","permission","rol","sickness","unavailability"]),starts_on:z.string().date(),ends_on:z.string().date(),reason:z.string().max(500).optional()}),
  z.object({action:z.literal("review_leave"),request_id:z.string().uuid(),decision:z.enum(["approved","rejected"])})
- ,z.object({action:z.literal("settings"),location_name:z.string().trim().max(120),latitude:z.coerce.number().min(-90).max(90),longitude:z.coerce.number().min(-180).max(180),geofence_radius_m:z.coerce.number().int().min(25).max(5000),require_geolocation:z.boolean(),allow_outside_geofence:z.boolean()})
  ,z.object({action:z.literal("review_time"),entry_id:z.string().uuid(),decision:z.enum(["approved","needs_review"]),notes:z.string().max(500).optional()})
 ])
 
@@ -23,7 +22,7 @@ export async function GET(req:NextRequest){try{const {identity,db}=await context
  // inizia alle 00:30 del primo giorno cade fuori e sparisce dal tabellone.
  const giornoDopoDueSettimane=new Date(`${from}T00:00:00Z`);giornoDopoDueSettimane.setUTCDate(giornoDopoDueSettimane.getUTCDate()+14);
  const inizioFinestra=inizioGiornoItaliano(from).toISOString(),fineFinestra=inizioGiornoItaliano(giornoDopoDueSettimane.toISOString().slice(0,10)).toISOString();
- const [d,e,s,l,t,settings]=await Promise.all([
+ const [d,e,s,l,t]=await Promise.all([
  // I reparti SONO i gruppi di lavoro: una lista sola. Prima erano due tabelle
  // con gli stessi campi, e quella dell'HR era vuota: chi apriva questa pagina
  // doveva ridigitare Front Office, Direzione, F&B e Spa, e dal giorno dopo le
@@ -33,9 +32,8 @@ export async function GET(req:NextRequest){try{const {identity,db}=await context
  db.from("hr_employees").select("id,first_name,last_name,email,job_title,weekly_hours,department_id,telegram_chat_id").eq("property_id",identity.propertyId).eq("employment_status","active").order("last_name"),
  db.from("hr_shifts").select("id,employee_id,department_id,starts_at,ends_at,break_minutes,status,response_status,location").eq("property_id",identity.propertyId).gte("starts_at",inizioFinestra).lt("starts_at",fineFinestra).neq("status","cancelled").order("starts_at"),
  db.from("hr_leave_requests").select("id,employee_id,kind,starts_on,ends_on,reason,status").eq("property_id",identity.propertyId).order("starts_on",{ascending:false}).limit(100),
- db.from("hr_time_entries").select("id,employee_id,clock_in_at,clock_out_at,status,clock_in_outside_geofence,clock_out_outside_geofence,clock_in_distance_m,clock_out_distance_m,notes").eq("property_id",identity.propertyId).gte("clock_in_at",inizioFinestra).lt("clock_in_at",fineFinestra).order("clock_in_at",{ascending:false}),
- db.from("hr_settings").select("location_name,latitude,longitude,geofence_radius_m,require_geolocation,allow_outside_geofence").eq("property_id",identity.propertyId).maybeSingle()
- ]);const error=d.error||e.error||s.error||l.error||t.error||settings.error;if(error)throw error;return NextResponse.json({departments:d.data||[],employees:e.data||[],shifts:s.data||[],leave_requests:l.data||[],time_entries:t.data||[],settings:settings.data})}catch(error){return NextResponse.json({error:"hr_load_failed"},{status:accessErrorStatus(error)})}}
+ db.from("hr_time_entries").select("id,employee_id,clock_in_at,clock_out_at,status,clock_in_outside_geofence,clock_out_outside_geofence,clock_in_distance_m,clock_out_distance_m,notes").eq("property_id",identity.propertyId).gte("clock_in_at",inizioFinestra).lt("clock_in_at",fineFinestra).order("clock_in_at",{ascending:false})
+ ]);const error=d.error||e.error||s.error||l.error||t.error;if(error)throw error;return NextResponse.json({departments:d.data||[],employees:e.data||[],shifts:s.data||[],leave_requests:l.data||[],time_entries:t.data||[]})}catch(error){return NextResponse.json({error:"hr_load_failed"},{status:accessErrorStatus(error)})}}
 
 export async function POST(req:NextRequest){try{const {identity,db}=await context(req);const parsed=schema.safeParse(await req.json());if(!parsed.success)return NextResponse.json({error:"invalid_payload",details:parsed.error.flatten()},{status:400});const b=parsed.data;const property_id=identity.propertyId;
  if(b.action==="department"){
@@ -69,7 +67,6 @@ export async function POST(req:NextRequest){try{const {identity,db}=await contex
   // struttura l'id di un dipendente di un'altra.
   const suo=await db.from("hr_employees").select("id").eq("id",b.employee_id).eq("property_id",property_id).maybeSingle();if(!suo.data)return NextResponse.json({error:"employee_not_found"},{status:404});
   const q=await db.from("hr_leave_requests").insert({property_id,employee_id:b.employee_id,kind:b.kind,starts_on:b.starts_on,ends_on:b.ends_on,reason:b.reason||null}).select().single();if(q.error)throw q.error;return NextResponse.json(q.data,{status:201})}
- if(b.action==="settings"){const q=await db.from("hr_settings").upsert({property_id,location_name:b.location_name,latitude:b.latitude,longitude:b.longitude,geofence_radius_m:b.geofence_radius_m,require_geolocation:b.require_geolocation,allow_outside_geofence:b.allow_outside_geofence,updated_by:adminUserIdPerDatabase(identity.adminUserId),updated_at:new Date().toISOString()},{onConflict:"property_id"}).select().single();if(q.error)throw q.error;return NextResponse.json(q.data)}
  if(b.action==="review_time"){const q=await db.from("hr_time_entries").update({status:b.decision,notes:b.notes||null,reviewed_by:adminUserIdPerDatabase(identity.adminUserId),reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq("id",b.entry_id).eq("property_id",property_id).not("clock_out_at","is",null).select().maybeSingle();if(q.error)throw q.error;if(!q.data)return NextResponse.json({error:"time_entry_not_found"},{status:404});await db.from("hr_audit_log").insert({property_id,actor_admin_user_id:adminUserIdPerDatabase(identity.adminUserId),employee_id:q.data.employee_id,action:"time_entry_reviewed",entity_type:"time_entry",entity_id:q.data.id,metadata:{decision:b.decision}});return NextResponse.json(q.data)}
  const q=await db.from("hr_leave_requests").update({status:b.decision,reviewed_by:adminUserIdPerDatabase(identity.adminUserId),reviewed_at:new Date().toISOString()}).eq("id",b.request_id).eq("property_id",property_id).eq("status","pending").select().maybeSingle();if(q.error)throw q.error;
  // Nessuna riga aggiornata = richiesta inesistente, di un'altra struttura o
