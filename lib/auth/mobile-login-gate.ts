@@ -1,9 +1,17 @@
-export type MobileTimeClockGateInput = {
-  mobile: boolean
+export type TimeClockRequirementInput = {
   moduleStatus: string | null | undefined
   moduleExpiresAt: string | null | undefined
   employmentStatus: string | null | undefined
   requiresTimeClock: boolean | null | undefined
+}
+
+export type MobileTimeClockGateInput = TimeClockRequirementInput & {
+  mobile: boolean
+}
+
+export type DesktopTimeClockPromptInput = TimeClockRequirementInput & {
+  mobile: boolean
+  hasOpenTimeEntry: boolean | null | undefined
 }
 
 /**
@@ -26,15 +34,15 @@ export function isMobileBrowser(): boolean {
 }
 
 /**
- * Regola pura del gate post-login. Il redirect alla timbratura scatta soltanto
- * se tutte le condizioni sono vere; qualunque dato mancante lascia l'accesso
- * normale alla dashboard, evitando di bloccare il login per un guasto HR.
+ * Regola comune: l'obbligo e' applicabile soltanto con HR attivo/trial non
+ * scaduto, dipendente attivo e flag individuale esplicito. Dati mancanti fanno
+ * fallire aperto il login normale invece di trasformare HR in un blocco accessi.
  */
-export function shouldRouteToMobileTimeClock(
-  input: MobileTimeClockGateInput,
+export function hasActiveTimeClockRequirement(
+  input: TimeClockRequirementInput,
   nowMs = Date.now(),
 ): boolean {
-  if (!input.mobile || input.requiresTimeClock !== true || input.employmentStatus !== "active") return false
+  if (input.requiresTimeClock !== true || input.employmentStatus !== "active") return false
   if (input.moduleStatus !== "active" && input.moduleStatus !== "trial") return false
 
   if (input.moduleExpiresAt) {
@@ -43,4 +51,28 @@ export function shouldRouteToMobileTimeClock(
   }
 
   return true
+}
+
+/**
+ * Regola pura del gate mobile post-login. Su smartphone l'utente obbligato passa
+ * sempre dalla schermata di timbratura, che decide poi se proporre entrata o uscita.
+ */
+export function shouldRouteToMobileTimeClock(
+  input: MobileTimeClockGateInput,
+  nowMs = Date.now(),
+): boolean {
+  return input.mobile && hasActiveTimeClockRequirement(input, nowMs)
+}
+
+/**
+ * Sul desktop non imponiamo il gate. Se l'obbligo e' attivo e NON esiste una
+ * presenza aperta, mostriamo un promemoria nella dashboard. `hasOpenTimeEntry`
+ * deve essere esplicitamente false: lookup mancanti/errori restano fail-open.
+ */
+export function shouldPromptDesktopTimeClock(
+  input: DesktopTimeClockPromptInput,
+  nowMs = Date.now(),
+): boolean {
+  if (input.mobile || input.hasOpenTimeEntry !== false) return false
+  return hasActiveTimeClockRequirement(input, nowMs)
 }
