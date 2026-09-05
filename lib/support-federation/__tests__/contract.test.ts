@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest"
-import { federatedSupportProjectionSchema } from "@/lib/support-federation/contract"
+import {
+  federatedSupportProjectionSchema,
+  toInboxConversationStatus,
+  toInboxSenderType,
+} from "@/lib/support-federation/contract"
 
 const basePayload = {
   tenant_ref: "854adfdd-3607-4428-a45d-61bc63b82c66",
@@ -41,5 +45,13 @@ describe("federatedSupportProjectionSchema", () => {
     })
 
     expect(result.success).toBe(true)
+  })
+
+  it("maps federation values to the real Inbox constraints", () => {
+    expect(toInboxSenderType("customer")).toBe("customer")
+    expect(toInboxSenderType("agent")).toBe("agent")
+    expect(toInboxSenderType("system")).toBe("system")
+    expect(toInboxConversationStatus("open")).toBe("open")
+    expect(toInboxConversationStatus("closed")).toBe("resolved")
   })
 })
