@@ -4,6 +4,7 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { applyCallAccess, resolveCallAccess } from "@/lib/telephony/call-access"
+import { applyContactAccess, resolveContactAccess } from "@/lib/crm/contact-access"
 
 const MAX_LIMIT = 100
 const EXTENSION_SCAN = 2000
@@ -66,7 +67,11 @@ export async function GET(request: NextRequest) {
     if (!identity?.propertyId) return NextResponse.json({ error: "Non autorizzato" }, { status: 401 })
 
     const supabase = createServiceClient()
-    const access = await resolveCallAccess(supabase, identity as typeof identity & { propertyId: string })
+    const scopedIdentity = identity as typeof identity & { propertyId: string }
+    const [access, contactAccess] = await Promise.all([
+      resolveCallAccess(supabase, scopedIdentity),
+      resolveContactAccess(supabase, scopedIdentity),
+    ])
 
     const params = new URL(request.url).searchParams
     const limit = Math.min(Math.max(toInt(params.get("limit"), 50), 1), MAX_LIMIT)
@@ -157,11 +162,14 @@ export async function GET(request: NextRequest) {
 
     const [contatti, utenti] = await Promise.all([
       idContatti.length
-        ? supabase
-            .from("contacts")
-            .select("id, name, company")
-            .eq("property_id", identity.propertyId)
-            .in("id", idContatti)
+        ? applyContactAccess(
+            supabase
+              .from("contacts")
+              .select("id, name, company")
+              .eq("property_id", identity.propertyId)
+              .in("id", idContatti),
+            contactAccess,
+          )
         : Promise.resolve({ data: [] as RigaContatto[] }),
       idUtenti.length
         ? supabase
