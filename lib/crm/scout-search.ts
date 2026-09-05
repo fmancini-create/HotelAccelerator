@@ -89,6 +89,17 @@ const INDUSTRY_CLUSTERS: SemanticCluster[] = [
 const TITLE_CLUSTERS: SemanticCluster[] = [
   {
     match: [
+      "responsabile della sicurezza informatica",
+      "responsabile sicurezza informatica",
+      "sicurezza informatica",
+      "cybersicurezza",
+      "cyber security",
+      "cybersecurity",
+    ],
+    expand: ["cyber security manager", "cybersecurity manager", "information security manager", "CISO"],
+  },
+  {
+    match: [
       "responsabile della sicurezza",
       "responsabile sicurezza",
       "sicurezza sul lavoro",
@@ -112,18 +123,6 @@ const TITLE_CLUSTERS: SemanticCluster[] = [
       "safety officer",
       "RSPP",
     ],
-  },
-  {
-    match: ["sicurezza informatica", "cybersicurezza", "cyber security", "cybersecurity"],
-    expand: ["cyber security manager", "cybersecurity manager", "information security manager", "CISO"],
-  },
-  {
-    match: ["direttore generale", "general manager", "direttore", "direzione generale"],
-    expand: ["general manager", "managing director", "director", "CEO"],
-  },
-  {
-    match: ["titolare", "proprietario", "owner", "founder", "fondatore"],
-    expand: ["owner", "founder", "CEO", "managing director"],
   },
   {
     match: ["responsabile acquisti", "ufficio acquisti", "procurement", "buyer", "purchasing"],
@@ -160,6 +159,14 @@ const TITLE_CLUSTERS: SemanticCluster[] = [
   {
     match: ["operations manager", "responsabile operativo", "direttore operativo", "operations"],
     expand: ["operations manager", "operations director", "COO", "head of operations"],
+  },
+  {
+    match: ["direttore generale", "general manager", "direzione generale", "direttore"],
+    expand: ["general manager", "managing director", "director", "CEO"],
+  },
+  {
+    match: ["titolare", "proprietario", "owner", "founder", "fondatore"],
+    expand: ["owner", "founder", "CEO", "managing director"],
   },
 ]
 
@@ -234,8 +241,8 @@ export function interpretScoutSearch(input: ScoutSearchInput) {
   const interpreted: ScoutInterpretedSearch = {
     organizationKeywords: expandTerms(splitTerms(input.keywords), INDUSTRY_CLUSTERS, 12),
     titles,
-    // Explicit roles are more precise than Apollo's seniority taxonomy. Keeping the hidden
-    // default seniority filter here caused valid roles such as RSPP/HSE to disappear entirely.
+    // Explicit roles are more precise than the provider seniority taxonomy. Keeping a hidden
+    // seniority filter caused valid roles such as RSPP/HSE to disappear entirely.
     seniorities: titles.length ? [] : dedupe(input.seniorities, 10),
     organizationLocations: normalizeLocations(input.organizationLocations),
   }
