@@ -74,15 +74,18 @@ export async function GET(request: NextRequest) {
       .map(([type, value]) => `        <Output Type="${type}" Passes="0" Value="${xmlEscape(value)}" />`)
       .join("\n")
 
-    // [Transcription], [Summary], [RecordingUrl] e [Sentiment] sono variabili
-    // ReportCall di 3CX. Passes=2 evita che caratteri speciali e a-capo della
-    // trascrizione rompano il JSON inviato al nostro endpoint.
+    // [Transcription], [Summary], [RecordingUrl] e [Sentiment] sono valori
+    // provider gia' finali. Devono essere valutati UNA SOLA VOLTA: una seconda
+    // passata farebbe reinterpretare come espressioni 3CX le parentesi quadre
+    // presenti nel testo reale della trascrizione (es. timestamp/speaker).
+    // Passes=2 resta soltanto sulle date, dove serve davvero per l'espressione
+    // annidata [CallStartTimeUTC].ToString(...).
     //
     // Lo scenario riservato ReportCall NON deve dichiarare Variables/Outputs:
     // la documentazione 3CX prevede solo Request/Query/Command. Tenerli vuoti
     // puo' impedire l'esecuzione del journaling su alcune versioni del PBX.
     const xml = `<?xml version="1.0" encoding="utf-8"?>
-<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="IT" Name="HotelAccelerator" Version="3" SupportsEmojis="true" SupportsTranscription="true" ListPageSize="0">
+<Crm xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" Country="IT" Name="HotelAccelerator" Version="4" SupportsEmojis="true" SupportsTranscription="true" ListPageSize="0">
   <Number Prefix="AsIs" MaxLength="" />
   <Connection MaxConcurrentRequests="16" />
   <Parameters>
@@ -122,10 +125,10 @@ ${contactOutputs}
           <Value Key="duration" If="" SkipIf="" Passes="1" Type="String">[Duration]</Value>
           <Value Key="started_at" If="" SkipIf="" Passes="2" Type="String">[[CallStartTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
           <Value Key="ended_at" If="" SkipIf="" Passes="2" Type="String">[[CallEndTimeUTC].ToString("yyyy-MM-ddTHH:mm:ssZ")]</Value>
-          <Value Key="transcription" If="" SkipIf="" Passes="2" Type="String">[Transcription]</Value>
-          <Value Key="summary" If="" SkipIf="" Passes="2" Type="String">[Summary]</Value>
-          <Value Key="recording_url" If="" SkipIf="" Passes="2" Type="String">[RecordingUrl]</Value>
-          <Value Key="sentiment" If="" SkipIf="" Passes="2" Type="String">[Sentiment]</Value>
+          <Value Key="transcription" If="" SkipIf="" Passes="1" Type="String">[Transcription]</Value>
+          <Value Key="summary" If="" SkipIf="" Passes="1" Type="String">[Summary]</Value>
+          <Value Key="recording_url" If="" SkipIf="" Passes="1" Type="String">[RecordingUrl]</Value>
+          <Value Key="sentiment" If="" SkipIf="" Passes="1" Type="String">[Sentiment]</Value>
         </PostValues>
         <QueryParams />
         <Values />
