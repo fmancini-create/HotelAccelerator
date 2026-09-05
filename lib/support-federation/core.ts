@@ -6,6 +6,11 @@ import { findCustomerProductCode, resolveExternalTenantCode } from "@/lib/custom
 import type { SuiteProductKey } from "@/lib/customer-codes/product"
 import { CENTRAL_SUPPORT_SLUG } from "@/lib/telephony/voice-support"
 import {
+  toInboxConversationStatus,
+  toInboxSenderType,
+  type SupportFederationSender,
+} from "@/lib/support-federation/contract"
+import {
   copyFederatedSupportAttachments,
   supportMessageHtml,
   type FederatedSupportAttachment,
@@ -14,7 +19,6 @@ import {
 
 export type SupportFederationProduct = Extract<SuiteProductKey, "santaddeo" | "hotelprofitai">
 export type SupportFederationKind = "human_support" | "suggestion" | "bug"
-export type SupportFederationSender = "customer" | "agent" | "system"
 
 export interface FederatedSupportReporter {
   user_id?: string | null
@@ -52,10 +56,15 @@ function deterministicUuid(value: string): string {
   return `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`
 }
 
+function databaseWriteError(stage: string, error: { code?: string | null } | null) {
+  const code = typeof error?.code === "string" && error.code.trim() ? error.code.trim().slice(0, 32) : "unknown"
+  return new Error(`${stage}:${code}`)
+}
+
 async function getCentralSupportPropertyId() {
   const supabase = createServiceClient()
   const { data, error } = await supabase.from("properties").select("id, type, is_active").eq("slug", CENTRAL_SUPPORT_SLUG).maybeSingle()
-  if (error) throw error
+  if (error) throw databaseWriteError("support_hub_read_failed", error)
   if (!data || data.type !== "company" || data.is_active === false) throw new Error("central_support_hub_unavailable")
   return data.id as string
 }
@@ -101,7 +110,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     id: conversationId,
     property_id: hubPropertyId,
     channel: "chat",
-    status: snapshot.status === "closed" ? "closed" : "open",
+    status: toInboxConversationStatus(snapshot.status),
     subject: `[${snapshot.product === "santaddeo" ? "Santaddeo" : "HotelProfitAI"}] ${snapshot.title}`.slice(0, 240),
     external_thread_id: externalThreadId,
     contact_name: snapshot.reporter?.name || snapshot.reporter?.email || code.code,
@@ -110,7 +119,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
     updated_at: now,
     metadata,
   }, { onConflict: "id" })
-  if (conversationError) throw conversationError
+  if (conversationError) throw databaseWriteError("conversation_upsert_failed", conversationError)
 
   for (const message of snapshot.messages) {
     const externalMessageId = `suite-support:${snapshot.product}:${snapshot.threadId}:${message.id}`
@@ -143,7 +152,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
       id: messageId,
       conversation_id: conversationId,
       property_id: hubPropertyId,
-      sender_type: message.sender === "customer" ? "contact" : message.sender,
+      sender_type: toInboxSenderType(message.sender),
       sender_id: null,
       sender_name: message.sender_name ?? snapshot.reporter?.name ?? null,
       content,
@@ -167,7 +176,7 @@ export async function projectFederatedSupport(snapshot: FederatedSupportSnapshot
         },
       },
     }, { onConflict: "id" })
-    if (messageError) throw messageError
+    if (messageError) throw databaseWriteError("message_upsert_failed", messageError)
   }
 
   return { ok: true as const, conversationId, customerCode: code.code }
@@ -222,7 +231,7 @@ export async function createHotelAcceleratorSupportReport(input: {
     unread_count: 1,
     metadata,
   })
-  if (conversationError) throw conversationError
+  if (conversationError) throw databaseWriteError("conversation_insert_failed", conversationError)
 
   const content = supportMessageHtml({
     content: input.description,
@@ -237,7 +246,7 @@ export async function createHotelAcceleratorSupportReport(input: {
     id: messageId,
     conversation_id: conversationId,
     property_id: hubPropertyId,
-    sender_type: "contact",
+    sender_type: toInboxSenderType("customer"),
     sender_name: input.actorName || input.actorEmail || customerCode,
     content,
     content_type: "html",
@@ -249,6 +258,6 @@ export async function createHotelAcceleratorSupportReport(input: {
     status: "delivered",
     metadata: { support_federation: metadata.support_federation },
   })
-  if (messageError) throw messageError
+  if (messageError) throw databaseWriteError("message_insert_failed", messageError)
   return { conversationId, messageId }
 }
