@@ -13,6 +13,17 @@ const attachmentSchema = z.object({
   source_url: z.string().url().max(3000),
 })
 
+export const supportFederationSenderSchema = z.enum(["customer", "agent", "system"])
+export type SupportFederationSender = z.infer<typeof supportFederationSenderSchema>
+
+export function toInboxSenderType(sender: SupportFederationSender): SupportFederationSender {
+  return sender
+}
+
+export function toInboxConversationStatus(status?: "open" | "closed"): "open" | "resolved" {
+  return status === "closed" ? "resolved" : "open"
+}
+
 export const federatedSupportProjectionSchema = z.object({
   tenant_ref: z.string().trim().min(1).max(160),
   thread_id: z.string().trim().min(1).max(200),
@@ -27,7 +38,7 @@ export const federatedSupportProjectionSchema = z.object({
   }).nullable().optional(),
   messages: z.array(z.object({
     id: z.string().trim().min(1).max(240),
-    sender: z.enum(["customer", "agent", "system"]),
+    sender: supportFederationSenderSchema,
     content: z.string().min(1).max(50000),
     // Supabase/PostgREST serializes timestamptz values with an explicit offset
     // (for example +00:00). RFC3339 permits both offsets and Z, so the suite
