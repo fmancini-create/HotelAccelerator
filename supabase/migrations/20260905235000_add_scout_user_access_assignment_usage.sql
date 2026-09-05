@@ -14,6 +14,15 @@ create table if not exists public.crm_scout_user_access (
 comment on table public.crm_scout_user_access is
   'Abilitazione individuale a HotelAccelerator Scout per tenant.';
 
+-- Scout era gia disponibile prima dell'introduzione del controllo individuale.
+-- Manteniamo acceso per gli amministratori tenant gia esistenti, cosi il deploy
+-- non interrompe il lavoro; da Team & Permessi l'admin puo spegnerlo subito.
+insert into public.crm_scout_user_access (property_id, user_id, enabled, updated_by)
+select membership.property_id, membership.user_id, true, membership.user_id
+from public.tenant_user_memberships membership
+where membership.is_tenant_admin = true
+on conflict (property_id, user_id) do nothing;
+
 alter table public.crm_apollo_prospects
   add column if not exists assigned_to_user_id uuid references public.admin_users(id) on delete set null,
   add column if not exists assigned_by_user_id uuid references public.admin_users(id) on delete set null,
