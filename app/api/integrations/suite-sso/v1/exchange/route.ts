@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 
 import { authenticateRegistryClient } from "@/lib/customer-codes/registry-auth"
 import { getActiveModuleKeys } from "@/lib/modules"
+import { ensureSuiteIdentityForHotelAcceleratorUser } from "@/lib/suite-identity/registry"
 import { createServiceClient } from "@/lib/supabase/server"
 import { parseSuiteSsoProduct, SUITE_SSO_CONFIG } from "@/lib/suite-sso/config"
 
@@ -52,8 +53,21 @@ export async function POST(request: NextRequest) {
     return response({ error: "Modulo non piu attivo" }, 403)
   }
 
+  // Lazy/additive identity federation. Failure here is deliberately non-fatal:
+  // old SSO keeps working while the registry rollout is coordinated across the
+  // four products, and the next launch retries the identity link.
+  const suiteIdentityId = await ensureSuiteIdentityForHotelAcceleratorUser({
+    propertyId: grant.property_id,
+    userId: grant.source_user_id,
+    email: grant.source_email,
+    name: grant.source_name,
+    roleLabel: grant.source_is_tenant_admin ? "admin" : "user",
+    isTenantAdmin: grant.source_is_tenant_admin,
+  })
+
   return response({
     product,
+    suiteIdentityId,
     user: {
       sourceUserId: grant.source_user_id,
       email: grant.source_email,
