@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  HrGeofenceLocationCard,
+  type HrGeofenceSettings,
+} from "@/components/hr/geofence-location-editor"
 import { HrTimeClockRequirements } from "@/components/hr/hr-time-clock-requirements"
 
 type Employee = { id: string; first_name: string; last_name: string }
@@ -23,7 +27,7 @@ export function HrWorkforcePanels() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<HrGeofenceSettings>({
     location_name: "",
     latitude: "",
     longitude: "",
@@ -50,9 +54,12 @@ export function HrWorkforcePanels() {
     if (body.settings) {
       setSettings({
         ...body.settings,
+        location_name: String(body.settings.location_name ?? ""),
         latitude: String(body.settings.latitude ?? ""),
         longitude: String(body.settings.longitude ?? ""),
         geofence_radius_m: String(body.settings.geofence_radius_m ?? 200),
+        require_geolocation: body.settings.require_geolocation !== false,
+        allow_outside_geofence: body.settings.allow_outside_geofence === true,
       })
     }
   }
@@ -62,20 +69,38 @@ export function HrWorkforcePanels() {
   }, [])
 
   async function saveSettings() {
+    const latitude = Number(settings.latitude)
+    const longitude = Number(settings.longitude)
+    const radius = Number(settings.geofence_radius_m)
+    if (
+      !Number.isFinite(latitude) ||
+      !Number.isFinite(longitude) ||
+      !Number.isFinite(radius) ||
+      radius < 25 ||
+      radius > 5000
+    ) {
+      setMessage("Controlla il punto sulla mappa e il raggio di copertura.")
+      return
+    }
+
     setBusy(true)
-    const response = await fetch("/api/admin/hr", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "settings",
-        ...settings,
-        latitude: Number(settings.latitude),
-        longitude: Number(settings.longitude),
-        geofence_radius_m: Number(settings.geofence_radius_m),
-      }),
-    })
-    setMessage(response.ok ? "Sede di timbratura salvata." : "Impostazioni non salvate.")
-    setBusy(false)
+    setMessage("")
+    try {
+      const response = await fetch("/api/admin/hr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "settings",
+          ...settings,
+          latitude,
+          longitude,
+          geofence_radius_m: radius,
+        }),
+      })
+      setMessage(response.ok ? "Sede di timbratura e raggio salvati." : "Impostazioni non salvate.")
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function upload() {
@@ -106,65 +131,12 @@ export function HrWorkforcePanels() {
     <div className="grid gap-5 lg:grid-cols-2">
       {message && <div className="lg:col-span-2 rounded border p-3 text-sm">{message}</div>}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Sede e timbratura geolocalizzata</CardTitle>
-          <CardDescription>
-            La posizione è rilevata soltanto al momento della timbratura. Imposta il centro e il raggio consentito.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-2 sm:grid-cols-2">
-          <Input
-            placeholder="Nome sede"
-            value={settings.location_name}
-            onChange={(event) => setSettings({ ...settings, location_name: event.target.value })}
-          />
-          <Input
-            type="number"
-            min="25"
-            max="5000"
-            placeholder="Raggio metri"
-            value={settings.geofence_radius_m}
-            onChange={(event) => setSettings({ ...settings, geofence_radius_m: event.target.value })}
-          />
-          <Input
-            type="number"
-            step="any"
-            placeholder="Latitudine"
-            value={settings.latitude}
-            onChange={(event) => setSettings({ ...settings, latitude: event.target.value })}
-          />
-          <Input
-            type="number"
-            step="any"
-            placeholder="Longitudine"
-            value={settings.longitude}
-            onChange={(event) => setSettings({ ...settings, longitude: event.target.value })}
-          />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={settings.require_geolocation}
-              onChange={(event) => setSettings({ ...settings, require_geolocation: event.target.checked })}
-            />
-            Posizione obbligatoria
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={settings.allow_outside_geofence}
-              onChange={(event) => setSettings({ ...settings, allow_outside_geofence: event.target.checked })}
-            />
-            Consenti fuori sede con anomalia
-          </label>
-          <Button
-            disabled={busy || settings.latitude === "" || settings.longitude === ""}
-            onClick={saveSettings}
-          >
-            Salva sede
-          </Button>
-        </CardContent>
-      </Card>
+      <HrGeofenceLocationCard
+        settings={settings}
+        busy={busy}
+        onChange={setSettings}
+        onSave={() => void saveSettings()}
+      />
 
       <HrTimeClockRequirements />
 
