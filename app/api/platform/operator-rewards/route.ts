@@ -22,6 +22,12 @@ type LedgerRow = {
   created_at: string
 }
 
+type RewardSummaryRow = {
+  points_credited: number | string | null
+  money_approved_cents: number | string | null
+  money_settled_cents: number | string | null
+}
+
 export async function GET(request: NextRequest) {
   const identity = await getCallerIdentity(request)
   if (!identity?.propertyId) return NextResponse.json({ error: "Sessione non valida" }, { status: 401 })
@@ -63,32 +69,55 @@ export async function GET(request: NextRequest) {
   try {
     const includeCalls = hasArea("calls")
     const includeTasks = hasArea("todos")
-    const [state, ledgerResult] = await Promise.all([
-      computeOperatorRewardState(sb, propertyId, userId, { includeCalls, includeTasks }),
-      sb
-        .from("operator_goal_reward_ledger")
-        .select("id,goal_key,period_key,period_label,reward_type,reward_value,achievement_pct,status,approved_at,settled_at,created_at")
-        .eq("property_id", propertyId)
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(5000),
+    const state = await computeOperatorRewardState(sb, propertyId, userId, { includeCalls, includeTasks })
+
+    // Il saldo è aggregato sull'intero ledger server-side. Lo storico recente e
+    // i record del ciclo corrente sono letture separate, così la correttezza del
+    // saldo non dipende mai da un limite di paginazione UI.
+    const periodKeys = [...new Set(state.goals.map((goal) => goal.periodKey))]
+    const summaryPromise = sb.rpc("operator_goal_reward_summary", {
+      p_property_id: propertyId,
+      p_user_id: userId,
+    })
+    const currentPromise =
+      periodKeys.length > 0
+        ? sb
+            .from("operator_goal_reward_ledger")
+            .select("id,goal_key,period_key,period_label,reward_type,reward_value,achievement_pct,status,approved_at,settled_at,created_at")
+            .eq("property_id", propertyId)
+            .eq("user_id", userId)
+            .neq("status", "void")
+            .in("period_key", periodKeys)
+        : Promise.resolve({ data: [], error: null })
+    const recentPromise = sb
+      .from("operator_goal_reward_ledger")
+      .select("id,goal_key,period_key,period_label,reward_type,reward_value,achievement_pct,status,approved_at,settled_at,created_at")
+      .eq("property_id", propertyId)
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(12)
+
+    const [summaryResult, currentResult, recentResult] = await Promise.all([
+      summaryPromise,
+      currentPromise,
+      recentPromise,
     ])
-    if (ledgerResult.error) throw ledgerResult.error
+    if (summaryResult.error) throw summaryResult.error
+    if (currentResult.error) throw currentResult.error
+    if (recentResult.error) throw recentResult.error
 
-    const ledger = (ledgerResult.data ?? []) as LedgerRow[]
-    const valid = ledger.filter((row) => row.status !== "void")
-    const summary = valid.reduce(
-      (acc, row) => {
-        if (row.reward_type === "points" && row.status === "settled") acc.pointsCredited += row.reward_value
-        if (row.reward_type === "money" && row.status === "approved") acc.moneyApprovedCents += row.reward_value
-        if (row.reward_type === "money" && row.status === "settled") acc.moneySettledCents += row.reward_value
-        return acc
-      },
-      { ...emptySummary },
-    )
+    const rawSummary = ((summaryResult.data ?? [])[0] ?? null) as RewardSummaryRow | null
+    const summary = rawSummary
+      ? {
+          pointsCredited: Number(rawSummary.points_credited ?? 0),
+          moneyApprovedCents: Number(rawSummary.money_approved_cents ?? 0),
+          moneySettledCents: Number(rawSummary.money_settled_cents ?? 0),
+        }
+      : emptySummary
 
+    const currentAwards = (currentResult.data ?? []) as LedgerRow[]
     const currentAward = new Map(
-      valid.map((row) => [`${row.goal_key}:${row.period_key}`, row] as const),
+      currentAwards.map((row) => [`${row.goal_key}:${row.period_key}`, row] as const),
     )
 
     const goals = state.goals
@@ -104,7 +133,7 @@ export async function GET(request: NextRequest) {
       timeZone: state.timeZone,
       goals,
       summary,
-      recentAwards: ledger.slice(0, 12),
+      recentAwards: (recentResult.data ?? []) as LedgerRow[],
     })
   } catch (error) {
     console.error("[operator-rewards] self reward state unavailable", error)
