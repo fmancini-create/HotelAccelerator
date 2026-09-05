@@ -115,8 +115,9 @@ async function loadLiveCommercialFacts(productKey: VoiceProductKey | undefined):
 
     return [
       "DATI COMMERCIALI LIVE HOTELPROFITAI, AUTORIZZATI E AGGIORNATI:",
+      "HotelProfitAI e' una piattaforma di controllo di gestione per strutture ricettive: aiuta a leggere ricavi e costi, budget, marginalita', forecast e insight AI per capire dove si guadagna, dove si perde e prendere decisioni economiche piu' rapidamente.",
       labels.join("; ") + ".",
-      "Questi prezzi prevalgono su eventuali vecchie informazioni che dicano 'prezzo su richiesta'. Se il cliente chiede quanto costa HotelProfitAI, cita i piani pertinenti e non dire che il prezzo non e' pubblico.",
+      "Questi prezzi prevalgono su eventuali vecchie informazioni che dicano 'prezzo su richiesta'. Se il cliente chiede quanto costa HotelProfitAI, cita i piani pertinenti e aggiungi sempre una brevissima frase su a cosa serve HotelProfitAI, anche se la domanda ricevuta dal call-flow contiene soltanto la parte sul prezzo.",
     ].join(" ")
   } catch {
     return null
