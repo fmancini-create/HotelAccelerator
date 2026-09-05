@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch"
 import { useAdminAuth, getRoleLabel, type AdminUser } from "@/lib/admin-hooks"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { SignatureEditor } from "@/components/admin/signature-editor"
+import { SuiteUserDirectory } from "@/components/admin/suite-user-directory"
 
 type UserRole = "super_admin" | "admin" | "editor"
 
@@ -399,6 +400,8 @@ export default function AdminUsersPage() {
                 </div>
               </div>
             )}
+
+            <SuiteUserDirectory />
 
             <div className="bg-card rounded-xl shadow-sm border overflow-hidden">
               <div className="p-4 border-b flex items-center gap-2">
