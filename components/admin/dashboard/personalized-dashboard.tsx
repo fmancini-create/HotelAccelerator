@@ -57,13 +57,16 @@ type HomeDashboard = {
     timeZone: string
   }
   commercial: {
+    enabled: boolean | null
     closedDeals30: number | null
+    closedDealsMissingValue30: number | null
     closedRevenueCents30: number | null
     quotesSent30: number | null
     customMetricValue: number | null
     customMetricUnit: "count" | "percent" | null
     customMetric: "quotes_sent" | "completed_calls" | "completed_tasks" | "conversion_rate" | null
     customMetricPeriod: "workday" | "30_days" | null
+    customMetricAllowed: boolean
   }
   todos: null | Array<{
     id: string
@@ -100,7 +103,7 @@ type CallRow = {
   needsCallback: boolean
 }
 
-const SPECIAL = new Set(["my-performance", "backlog", "my-todos", "calls"])
+const SPECIAL = new Set(["my-performance", "my-commercial-performance", "backlog", "my-todos", "calls"])
 
 function relativeTime(value: string | null | undefined) {
   if (!value) return "—"
@@ -448,8 +451,14 @@ export default function PersonalizedDashboard() {
       {base.isPlatformAdmin && <div className="mb-6"><PlatformOverviewPanel /></div>}
 
       {visibleIds.has("my-performance") && <PerformanceStrip home={home} />}
-      {visibleIds.has("my-performance") && home.performance.enabled === true && (
+
+      {visibleIds.has("my-commercial-performance") && home.performance.enabled === true && home.commercial.enabled === true && (
         <CommercialPerformance goals={home.goals} commercial={home.commercial} />
+      )}
+      {visibleIds.has("my-commercial-performance") && home.performance.enabled === true && home.commercial.enabled === null && (
+        <section className="mb-6 rounded-xl border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive">
+          <div className="flex items-center gap-2"><TriangleAlert className="h-4 w-4" /> Risultati commerciali temporaneamente non misurabili.</div>
+        </section>
       )}
 
       <section className="mb-8 grid gap-4 lg:grid-cols-3">
