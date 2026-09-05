@@ -2,6 +2,7 @@ import type React from "react"
 import "./mobile.css"
 import { InboxShell } from "@/components/admin/inbox/inbox-shell"
 import { MultichannelReplyEnhancer } from "@/components/admin/inbox/multichannel-reply-enhancer"
+import { InboxManubotTaskEnhancer } from "@/components/admin/inbox/inbox-manubot-task-enhancer"
 
 /**
  * Route-local shell for a single user-facing Inbox.
@@ -15,6 +16,7 @@ export default function InboxLayout({ children }: { children: React.ReactNode })
   return (
     <InboxShell>
       <MultichannelReplyEnhancer />
+      <InboxManubotTaskEnhancer />
       {children}
     </InboxShell>
   )

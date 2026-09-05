@@ -1,0 +1,46 @@
+-- Ogni sviluppo di prodotto deve comparire nella Roadmap SuperAdmin dal primo branch.
+insert into public.platform_product_roadmap (
+  roadmap_key,
+  area,
+  capability,
+  code_ready,
+  online_ready,
+  development_status,
+  branch_name,
+  pr_number,
+  note,
+  sort_order,
+  updated_by_email,
+  started_at,
+  completed_at,
+  updated_at
+) values (
+  'suite-manubot-task-hub',
+  'ManuBot',
+  'Task ManuBot dalla suite: API unica, Inbox e azioni contestuali addon',
+  false,
+  false,
+  'in_progress',
+  'feat/manubot-suite-task-hub',
+  440,
+  'Stato ufficiale: Codice su branch/PR #440. Introduce il contratto versionato satellite -> Core -> ManuBot, capability/status centralizzati e creazione task contestuale dalla Inbox. Regola prodotto: se ManuBot non e attivo, la superficie utile mostra il vantaggio specifico e una CTA di attivazione; errori/configurazioni incomplete non vengono confusi con addon inattivo. Prima di Online: CI verde, merge main, deploy prod e collaudo reale su tenant.',
+  191,
+  'repo-sync',
+  coalesce((select started_at from public.platform_product_roadmap where roadmap_key = 'suite-manubot-task-hub'), now()),
+  null,
+  now()
+)
+on conflict (roadmap_key) do update set
+  area = excluded.area,
+  capability = excluded.capability,
+  code_ready = false,
+  online_ready = false,
+  development_status = 'in_progress',
+  branch_name = excluded.branch_name,
+  pr_number = excluded.pr_number,
+  note = excluded.note,
+  sort_order = excluded.sort_order,
+  updated_by_email = excluded.updated_by_email,
+  started_at = coalesce(public.platform_product_roadmap.started_at, excluded.started_at),
+  completed_at = null,
+  updated_at = excluded.updated_at;

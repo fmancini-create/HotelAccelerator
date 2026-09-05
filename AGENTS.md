@@ -44,6 +44,21 @@ La pagina `/super-admin/roadmap` e' la memoria operativa del prodotto per il fou
 
 Questa regola e' parte della Definition of Done e non e' opzionale.
 
+## Regola fondamentale — addon contestuali, mai funzioni morte
+
+Quando una funzione sarebbe concretamente piu' utile grazie a un addon della suite, lo stato dell'addon deve essere visibile **nel punto in cui nasce il bisogno**.
+
+- Se l'addon e' attivo, mostrare l'azione operativa reale e non una promozione.
+- Se l'addon e' inattivo, non limitarsi a nascondere il bottone o mostrare un errore tecnico: spiegare in una frase il vantaggio specifico in quel contesto e offrire una CTA chiara di attivazione/acquisto.
+- La proposta deve essere contestuale e sobria, non un banner pubblicitario generico ripetuto ovunque.
+- Se entitlement/configurazione non sono leggibili o sono incoerenti, **non** dichiarare l'addon inattivo e non spingere un acquisto: mostrare invece uno stato tecnico non disponibile/configurazione da completare.
+- Lo stato commerciale/tecnico deriva dalle fonti autorevoli del Core (`suite_product_entitlements`, `tenant_modules` e link di suite); il browser e i satelliti non lo inventano.
+- La CTA non deve promettere attivazione self-service immediata se il checkout/provisioning non la supporta ancora.
+- Esempi vincolanti: Recensioni -> ManuBot per trasformare criticita' in ticket; Inbox -> ManuBot per trasformare una conversazione/risposta in attivita' operativa; costi/documenti -> HotelProfitAI quando pertinente; revenue/pricing -> Santaddeo quando pertinente.
+- Le integrazioni tra prodotti passano da API/SDK versionati del Core, non da accessi diretti ai database degli altri prodotti.
+
+Questa regola vale come criterio di Definition of Done per ogni superficie che usa o puo' valorizzare un addon.
+
 ## Stati ufficiali
 
 Usare solo questi livelli:
