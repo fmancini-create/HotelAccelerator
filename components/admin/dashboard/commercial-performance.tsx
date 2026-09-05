@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { BadgeEuro, Handshake, Target } from "lucide-react"
 
 import { Progress } from "@/components/ui/progress"
@@ -14,13 +15,16 @@ type Goals = {
 }
 
 type Commercial = {
+  enabled: boolean | null
   closedDeals30: number | null
+  closedDealsMissingValue30: number | null
   closedRevenueCents30: number | null
   quotesSent30: number | null
   customMetricValue: number | null
   customMetricUnit: "count" | "percent" | null
   customMetric: Goals["customGoalMetric"]
   customMetricPeriod: Goals["customGoalPeriod"]
+  customMetricAllowed: boolean
 }
 
 function progress(value: number | null, target: number | null) {
@@ -58,7 +62,7 @@ function ResultCard({
   target: string | null
   pct: number | null
   note: string
-  icon: React.ReactNode
+  icon: ReactNode
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -76,13 +80,16 @@ function ResultCard({
 export function CommercialPerformance({ goals, commercial }: { goals: Goals; commercial: Commercial }) {
   const closedDeals = commercial.closedDeals30 ?? 0
   const closedRevenue = commercial.closedRevenueCents30 ?? 0
-  const customValue = commercial.customMetricValue
+  const missingValue = commercial.closedDealsMissingValue30 ?? 0
+  const customValue = commercial.customMetricAllowed ? commercial.customMetricValue : null
   const customPeriod = goals.customGoalPeriod === "workday" ? "oggi" : "ultimi 30 giorni"
-  const customDisplay = customValue === null
+  const customDisplay = !commercial.customMetricAllowed
     ? "—"
-    : commercial.customMetricUnit === "percent"
-      ? `${customValue}%`
-      : customValue.toLocaleString("it-IT")
+    : customValue === null
+      ? "—"
+      : commercial.customMetricUnit === "percent"
+        ? `${customValue}%`
+        : customValue.toLocaleString("it-IT")
 
   return (
     <section className="mb-6 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -114,15 +121,17 @@ export function CommercialPerformance({ goals, commercial }: { goals: Goals; com
           <ResultCard
             label={goals.customGoalLabel || customDefaultLabel(goals.customGoalMetric)}
             value={customDisplay}
-            target={goals.customGoalTarget ? `Obiettivo ${customPeriod}: ${goals.customGoalTarget}${goals.customGoalMetric === "conversion_rate" ? "%" : ""}` : null}
-            pct={progress(customValue, goals.customGoalTarget)}
-            note={`Metrica ${customPeriod} · target non configurato`}
+            target={commercial.customMetricAllowed && goals.customGoalTarget ? `Obiettivo ${customPeriod}: ${goals.customGoalTarget}${goals.customGoalMetric === "conversion_rate" ? "%" : ""}` : null}
+            pct={commercial.customMetricAllowed ? progress(customValue, goals.customGoalTarget) : null}
+            note={commercial.customMetricAllowed ? `Metrica ${customPeriod} · target non configurato` : "Metrica non disponibile con i permessi attuali"}
             icon={<Target className="h-3.5 w-3.5 text-ha-brand" />}
           />
         ) : null}
       </div>
-      {closedDeals > 0 && closedRevenue === 0 ? (
-        <p className="border-t px-5 py-3 text-[11px] text-muted-foreground">Almeno una trattativa è chiusa ma non ha un valore economico confermato: il numero di chiusure conta, il valore non viene stimato.</p>
+      {missingValue > 0 ? (
+        <p className="border-t px-5 py-3 text-[11px] text-muted-foreground">
+          {missingValue} {missingValue === 1 ? "trattativa chiusa non ha" : "trattative chiuse non hanno"} ancora un valore economico confermato: il numero di chiusure conta, mentre il valore e l'avanzamento sul budget restano parziali.
+        </p>
       ) : null}
     </section>
   )
