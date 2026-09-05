@@ -147,7 +147,7 @@ export function GlobalCommunicationAlerts() {
           table: "messages",
           filter: `property_id=eq.${propertyId}`,
         },
-        (payload) => {
+        (payload: { new: unknown }) => {
           const row = payload.new as MessageInsertRow
           if (row.sender_type !== "customer") return
           const id = row.id ? `message:${row.id}` : `message:${Date.now()}`
