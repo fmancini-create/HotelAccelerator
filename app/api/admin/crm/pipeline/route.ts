@@ -12,6 +12,7 @@ import {
   FASI,
   type FaseKey,
 } from "@/lib/crm/date-requests"
+import { syncPipelineSalesAttribution } from "@/lib/crm/sales-attribution-store"
 
 /**
  * Pipeline commerciale: le richieste di date in `contact_date_requests`.
@@ -100,9 +101,6 @@ export async function GET(request: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // Il dominio della struttura serve a riconoscere la posta interna. Viene
-    // letto dal database e non scritto nel codice: incollarlo qui avrebbe
-    // funzionato per una struttura e smesso di funzionare alla seconda.
     const { data: struttura, error: erroreStruttura } = await supabase
       .from("properties")
       .select("domain, custom_domain")
@@ -117,8 +115,6 @@ export async function GET(request: NextRequest) {
         "id, conversation_id, contact_id, requested_check_in, requested_check_out, nights, guests_adults, outcome, source, quoted_rate_cents, stage, stage_set_by, stage_set_at, created_at",
       )
       .eq("property_id", propertyId)
-      // Le richieste più imminenti in cima; `id` come ultima chiave per un
-      // ordine univoco, altrimenti la paginazione può ripetere o saltare righe.
       .order("requested_check_in", { ascending: true, nullsFirst: false })
       .order("id", { ascending: true })
       .limit(TETTO + 1)
@@ -128,9 +124,6 @@ export async function GET(request: NextRequest) {
     const troncato = tutte.length > TETTO
     const righe = troncato ? tutte.slice(0, TETTO) : tutte
 
-    // Nomi e oggetti: si leggono dalle conversazioni collegate. `contact_id` è
-    // vuoto su tutte le righe misurate, quindi senza questo passaggio la
-    // colonna "chi" sarebbe vuota e la classificazione impossibile.
     const idConversazioni = Array.from(
       new Set(righe.map((r) => r.conversation_id).filter((v): v is string => Boolean(v))),
     )
@@ -173,7 +166,6 @@ export async function GET(request: NextRequest) {
         nota_ia: notaEsitoIA(r.outcome),
       }
 
-      // Il gestionale si riconosce prima di tutto dal `source` registrato.
       if (acquisitaDalSito(r.source ?? "")) {
         acquisite.push(arricchita)
         continue
@@ -192,8 +184,6 @@ export async function GET(request: NextRequest) {
         continue
       }
       if (classe === "conferma_gestionale") {
-        // Prenotazione già chiusa dal motore: appartiene al secondo blocco anche
-        // se il mittente non l'aveva rivelata.
         conferme_da_oggetto += 1
         acquisite.push(arricchita)
         continue
@@ -202,7 +192,6 @@ export async function GET(request: NextRequest) {
     }
 
     const per_fase = Object.fromEntries(FASI.map((f) => [f.key, 0])) as Record<FaseKey, number>
-    // SOLO sulle richieste lavorabili: è il punto per cui i blocchi sono due.
     for (const r of richieste) per_fase[r.fase] += 1
 
     const risposta: RispostaPipeline = {
@@ -230,17 +219,10 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Le due cose che una persona può decidere: la fase e la tariffa.
- *
- * La fase finisce in `stage`, con autore e istante, e NON in `outcome`:
- * `outcome` è ciò che l'IA ha letto, e alla prima rilettura della conversazione
- * l'estrattore lo riscrive. Se la decisione dell'operatore stesse lì, verrebbe
- * cancellata da un ricalcolo senza che nessuno se ne accorga.
- *
- * `stage_set_by` può restare vuoto quando chi agisce non ha un id utente valido
- * (è il caso dello sviluppo in locale): il vincolo nel database lo ammette, ma
- * pretende sempre l'istante. Meglio "deciso, non sappiamo da chi" che una
- * decisione senza traccia.
+ * Fase e valore sono decisioni umane. Oltre alla pipeline, questo endpoint
+ * aggiorna il read model commerciale usato dai KPI: una modifica futura non
+ * deve richiedere di rileggere Gmail per sapere chi ha inviato un preventivo o
+ * chi ha chiuso una trattativa.
  */
 export async function PATCH(request: NextRequest) {
   try {
@@ -258,22 +240,22 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Richiesta non indicata." }, { status: 400 })
     }
 
+    const identity = await getCallerIdentity(request)
+    const actorId = adminUserIdPerDatabase(identity?.adminUserId)
+    const actionAt = new Date().toISOString()
     const modifiche: Record<string, unknown> = {}
+    let quoteValueWasSet = false
 
-    // ── Fase ──
     if (corpo && "fase" in corpo) {
       const grezza = corpo.fase
       if (grezza === null) {
-        // Torna "Da qualificare" e cancella anche autore e istante, altrimenti
-        // resterebbe scritto "deciso da X" su una riga che nessuno ha deciso.
         modifiche.stage = null
         modifiche.stage_set_by = null
         modifiche.stage_set_at = null
       } else if (typeof grezza === "string" && FASI.some((f) => f.key === grezza)) {
-        const identity = await getCallerIdentity(request)
         modifiche.stage = grezza
-        modifiche.stage_set_by = adminUserIdPerDatabase(identity?.adminUserId)
-        modifiche.stage_set_at = new Date().toISOString()
+        modifiche.stage_set_by = actorId
+        modifiche.stage_set_at = actionAt
       } else {
         return NextResponse.json(
           { error: `Fase non valida. Ammesse: ${FASI.map((f) => f.key).join(", ")}, oppure null.` },
@@ -282,9 +264,6 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // ── Tariffa ──
-    // Validata qui e non solo nell'interfaccia: la rotta è raggiungibile anche
-    // senza passare da lei.
     if (corpo && "tariffa_cents" in corpo) {
       const grezza = corpo.tariffa_cents
       if (grezza === null) {
@@ -296,6 +275,7 @@ export async function PATCH(request: NextRequest) {
         grezza <= 100_000_000
       ) {
         modifiche.quoted_rate_cents = grezza === 0 ? null : grezza
+        quoteValueWasSet = grezza > 0
       } else {
         return NextResponse.json(
           { error: "Tariffa non valida: attesi centesimi interi fra 0 e 100.000.000, oppure null." },
@@ -309,20 +289,34 @@ export async function PATCH(request: NextRequest) {
     }
 
     const supabase = createServiceClient()
-
-    // Lo scope per `property_id` sta nella UPDATE, non in un controllo prima:
-    // così una richiesta di un'altra struttura non aggiorna nulla invece di
-    // essere trovata e poi scartata dal codice.
     const { data, error } = await supabase
       .from("contact_date_requests")
       .update(modifiche)
       .eq("id", id)
       .eq("property_id", propertyId)
-      .select("id, outcome, quoted_rate_cents, stage, stage_set_by, stage_set_at")
+      .select("id, conversation_id, outcome, quoted_rate_cents, stage, stage_set_by, stage_set_at")
       .maybeSingle()
     if (error) throw error
     if (!data) {
       return NextResponse.json({ error: "Richiesta non trovata in questa struttura." }, { status: 404 })
+    }
+
+    let salesAttributionSynced = true
+    try {
+      await syncPipelineSalesAttribution(supabase, propertyId, data, {
+        actorId,
+        at: actionAt,
+        quoteValueWasSet,
+      })
+    } catch (salesError) {
+      // La pipeline è la fonte primaria e non va fatta fallire dopo un UPDATE
+      // già riuscito. Il backfill admin può ricostruire questo read model.
+      salesAttributionSynced = false
+      console.error("[crm-pipeline] sales attribution sync failed", {
+        propertyId,
+        dateRequestId: data.id,
+        error: salesError instanceof Error ? salesError.message : "unknown",
+      })
     }
 
     return NextResponse.json({
@@ -330,10 +324,9 @@ export async function PATCH(request: NextRequest) {
       quoted_rate_cents: data.quoted_rate_cents,
       stage: data.stage,
       stage_set_at: data.stage_set_at,
-      // La fase si ricalcola qui: l'interfaccia non deve dedurla per conto suo,
-      // o le due regole divergerebbero.
       fase: faseDi(data as { stage: string | null; quoted_rate_cents: number | null }),
       nota_ia: notaEsitoIA(data.outcome),
+      sales_attribution_synced: salesAttributionSynced,
     })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
