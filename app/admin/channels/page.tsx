@@ -80,9 +80,9 @@ const CHANNEL_CATEGORIES: readonly ChannelCategory[] = [
   {
     id: "voice",
     name: "Voce",
-    description: "Centralino collegato al CRM",
+    description: "Centralino collegato al CRM tramite adapter provider",
     channels: [
-      { id: "phone", name: "Telefono IP (3CX)", description: "Chiamate dal CRM e riconoscimento del chiamante", icon: Phone, color: "bg-purple-500", configPath: "/admin/channels/phone" },
+      { id: "phone", name: "Centralino telefonico", description: "Scegli 3CX, Wildix, NethVoice, VOIspeed, Yeastar o un altro PBX supportato", icon: Phone, color: "bg-purple-500", configPath: "/admin/channels/phone" },
     ],
   },
 ]
@@ -142,7 +142,7 @@ export default function ChannelsPage() {
         fetch("/api/channels/social/instagram", { cache: "no-store" }).then((r) => r.ok ? r.json() : null),
         fetch("/api/channels/social/x", { cache: "no-store" }).then((r) => r.ok ? r.json() : null),
         fetch("/api/channels/social/linkedin", { cache: "no-store" }).then((r) => r.ok ? r.json() : null),
-        fetch("/api/telephony/3cx", { cache: "no-store" }).then((r) => r.ok ? r.json() : null),
+        fetch("/api/telephony/providers", { cache: "no-store", credentials: "include" }).then((r) => r.ok ? r.json() : null),
       ])
 
       next.email = statusFromRows("email", emailResult.data)
@@ -161,9 +161,12 @@ export default function ChannelsPage() {
       next.twitter = statusFromRows("twitter", x?.accounts)
       next.linkedin = statusFromRows("linkedin", linkedin?.accounts)
 
-      const integration = phone?.integration
-      const phoneConfigured = Boolean(integration?.base_url && integration?.has_credentials?.client_secret)
-      const phoneActive = phoneConfigured && integration?.is_active !== false && integration?.last_check_status === "ok"
+      const activePhone = phone?.active_integration
+      const phoneConfigured = Boolean(activePhone)
+      // "Attivo" significa connettore realmente verificato. Un provider solo
+      // selezionato in modalita guida/bridge resta configurato ma non viene
+      // presentato come operativo.
+      const phoneActive = phoneConfigured && activePhone?.last_check_status === "ok"
       next.phone = { id: "phone", configured: phoneConfigured, enabled: phoneActive, activeConnections: phoneActive ? 1 : 0 }
 
       setStatuses(next)
@@ -235,13 +238,13 @@ export default function ChannelsPage() {
                             ) : status.enabled ? (
                               <Badge variant="outline" className="bg-ha-success-soft text-ha-success-soft-foreground"><CheckCircle2 className="w-3 h-3 mr-1" />Attivo ({status.activeConnections})</Badge>
                             ) : (
-                              <Badge variant="outline">Disattivato</Badge>
+                              <Badge variant="outline">Configurazione da completare</Badge>
                             )}
                           </div>
                           <p className="text-sm text-muted-foreground">{channel.description}</p>
                         </div>
                         <div className="flex items-center gap-3 ml-4">
-                          {status?.configured && (
+                          {status?.configured && channel.id !== "phone" && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-muted-foreground">{status.enabled ? "Attivo" : "Spento"}</span>
                               <Switch checked={status.enabled} disabled={toggling === channel.id} onCheckedChange={(next) => void toggle(channel.id, next)} />

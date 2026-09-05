@@ -11,6 +11,7 @@ import {
   listGoogleCalendarEvents,
   type CalendarAttachment,
   type CalendarAttendee,
+  type CalendarEvent,
 } from "@/lib/calendar/google-user-calendar"
 import {
   createServiceCalendarEvent,
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
               from,
               to,
             )
-        return events.map((event) => ({
+        return events.map((event: CalendarEvent) => ({
           ...event,
           sourceId: source.id,
           sourceLabel: source.label,

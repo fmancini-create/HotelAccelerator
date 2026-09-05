@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { getAuthenticatedPropertyId } from "@/lib/auth-property"
+import { accessErrorStatus, requireTenantAdmin } from "@/lib/auth/admin-access"
 
-/** Accende/spegne un canale di comunicazione dalla scheda /admin/channels. */
 type ChannelId =
   | "email"
   | "chat"
@@ -15,15 +15,8 @@ type ChannelId =
   | "linkedin"
 
 const SUPPORTED: ChannelId[] = [
-  "email",
-  "chat",
-  "whatsapp",
-  "telegram",
-  "phone",
-  "facebook",
-  "instagram",
-  "twitter",
-  "linkedin",
+  "email", "chat", "whatsapp", "telegram", "phone",
+  "facebook", "instagram", "twitter", "linkedin",
 ]
 
 const MESSAGING_CHANNEL_TYPE: Partial<Record<ChannelId, string>> = {
@@ -36,18 +29,25 @@ const MESSAGING_CHANNEL_TYPE: Partial<Record<ChannelId, string>> = {
 }
 
 export async function POST(request: NextRequest) {
-  let propertyId: string
-  try {
-    propertyId = await getAuthenticatedPropertyId(request)
-  } catch {
-    return NextResponse.json({ error: "Non autenticato" }, { status: 401 })
-  }
-
   const body = (await request.json().catch(() => ({}))) as { channel?: string; enabled?: unknown }
   const channel = body.channel as ChannelId | undefined
   const enabled = body.enabled
   if (!channel || !SUPPORTED.includes(channel)) return NextResponse.json({ error: "Canale non supportato" }, { status: 400 })
   if (typeof enabled !== "boolean") return NextResponse.json({ error: "Stato non valido" }, { status: 400 })
+
+  let propertyId: string
+  try {
+    // La scelta/attivazione del PBX e una impostazione amministrativa. Un
+    // operatore che puo usare CRM/chiamate non deve poter cambiare centralino.
+    if (channel === "phone") {
+      const identity = await requireTenantAdmin(request)
+      propertyId = identity.propertyId
+    } else {
+      propertyId = await getAuthenticatedPropertyId(request)
+    }
+  } catch (error) {
+    return NextResponse.json({ error: "Non autorizzato" }, { status: accessErrorStatus(error) || 401 })
+  }
 
   const supabase = createServiceClient()
   const now = new Date().toISOString()
@@ -72,17 +72,43 @@ export async function POST(request: NextRequest) {
       if (error) throw error
       updated = data?.length ?? 0
     } else {
-      const { data, error } = await supabase.from("telephony_integrations").update({ is_active: enabled, updated_at: now }).eq("property_id", propertyId).select("id")
-      if (error) throw error
-      updated = data?.length ?? 0
+      if (!enabled) {
+        // Spegni SOLO quello attivo. Aggiornare tutte le righe avrebbe reso
+        // ambiguo quale provider ripristinare e, riaccendendo, violerebbe il
+        // vincolo di un solo PBX attivo per tenant.
+        const { data, error } = await supabase
+          .from("telephony_integrations")
+          .update({ is_active: false, updated_at: now })
+          .eq("property_id", propertyId)
+          .eq("is_active", true)
+          .select("id")
+        if (error) throw error
+        updated = data?.length ?? 0
+      } else {
+        const { data: selected, error: selectedError } = await supabase
+          .from("telephony_integrations")
+          .select("id, provider")
+          .eq("property_id", propertyId)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (selectedError) throw selectedError
+        if (!selected) return NextResponse.json({ error: "Prima scegli e configura un centralino." }, { status: 404 })
+        const { data, error } = await supabase
+          .from("telephony_integrations")
+          .update({ is_active: true, updated_at: now })
+          .eq("id", selected.id)
+          .eq("property_id", propertyId)
+          .select("id")
+        if (error) throw error
+        updated = data?.length ?? 0
+      }
     }
 
-    if (updated === 0) {
-      return NextResponse.json({ error: "Nessuna connessione da modificare per questo canale" }, { status: 404 })
-    }
+    if (updated === 0) return NextResponse.json({ error: "Nessuna connessione da modificare per questo canale" }, { status: 404 })
     return NextResponse.json({ ok: true, channel, enabled, updated })
   } catch (error) {
-    console.error("[v0] toggle canale fallito:", channel, error)
+    console.error("[channels] toggle fallito:", channel, error)
     return NextResponse.json({ error: "Modifica non riuscita" }, { status: 500 })
   }
 }

@@ -1,392 +1,238 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
-import { AlertCircle, Bot, CheckCircle2, Copy, KeyRound, Loader2, Phone, Save, Settings2 } from "lucide-react"
+import Image from "next/image"
+import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
+import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, Phone, Save, Settings2 } from "lucide-react"
 import { AdminHeader } from "@/components/admin/admin-header"
-import { TelephonyExtensionsCard } from "@/components/admin/telephony-extensions-card"
-import { VoiceIvrRoutingCard } from "@/components/admin/voice-ivr-routing-card"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { getTelephonyProvider, TELEPHONY_PROVIDERS, type TelephonyProviderId } from "@/lib/telephony/providers"
 
 type Integration = {
+  provider: TelephonyProviderId
   base_url: string
   client_id: string
   default_extension: string
+  provider_config: Record<string, string>
   credentials_preview: { client_secret: string }
-  has_credentials: { client_secret: boolean; inbound_secret: boolean; voice_inbound_secret: boolean }
-  last_check_at: string | null
+  has_client_secret: boolean
+  is_active: boolean
   last_check_status: string | null
   last_check_error: string | null
+  last_check_at: string | null
 }
 
-type VoiceAgentLink = {
-  key: string
-  label: string
-  fallback_extension: string
-  status: "ready" | "empty"
-  knowledge_base: { id: string; name: string; source_count: number }
-  query_url: string
+type ProviderForm = {
+  base_url: string
+  client_id: string
+  client_secret: string
+  default_extension: string
+  provider_config: Record<string, string>
 }
 
-type SetupMode = "loading" | "4bid_advanced" | "tenant_easy"
+const EMPTY_FORM: ProviderForm = { base_url: "", client_id: "", client_secret: "", default_extension: "", provider_config: {} }
+
+function capabilityLabel(value: boolean, yes: string, no: string) {
+  return <Badge variant={value ? "default" : "outline"}>{value ? yes : no}</Badge>
+}
 
 export default function PhoneChannelPage() {
+  const [integrations, setIntegrations] = useState<Integration[]>([])
+  const [activeProvider, setActiveProvider] = useState<TelephonyProviderId | null>(null)
+  const [selected, setSelected] = useState<TelephonyProviderId>("3cx")
+  const [form, setForm] = useState<ProviderForm>(EMPTY_FORM)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [integration, setIntegration] = useState<Integration | null>(null)
-  const [baseUrl, setBaseUrl] = useState("")
-  const [clientId, setClientId] = useState("")
-  const [clientSecret, setClientSecret] = useState("")
-  const [extension, setExtension] = useState("")
-  const [result, setResult] = useState<{ ok: boolean; message: string; extensions?: string[] } | null>(null)
-  const [apiKey, setApiKey] = useState("")
-  const [preparingCrm, setPreparingCrm] = useState(false)
-  const [mode, setMode] = useState<SetupMode>("loading")
+  const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
 
-  const [voicePreparing, setVoicePreparing] = useState(false)
-  const [voiceRotating, setVoiceRotating] = useState(false)
-  const [voiceApiKey, setVoiceApiKey] = useState("")
-  const [voiceCredentialMessage, setVoiceCredentialMessage] = useState<string | null>(null)
-  const [voiceAgents, setVoiceAgents] = useState<VoiceAgentLink[]>([])
-  const [selectedVoiceAgentKey, setSelectedVoiceAgentKey] = useState("")
-  const [copied, setCopied] = useState<string | null>(null)
+  const provider = useMemo(() => getTelephonyProvider(selected)!, [selected])
+  const selectedIntegration = useMemo(() => integrations.find((item) => item.provider === selected) ?? null, [integrations, selected])
 
-  const detectMode = useCallback(async () => {
+  async function load(options: { preserveSelection?: boolean } = {}) {
+    setLoading(true)
+    setError("")
     try {
-      const response = await fetch("/api/telephony/3cx/voice/routes", { cache: "no-store" })
-      setMode(response.ok ? "4bid_advanced" : "tenant_easy")
-    } catch {
-      setMode("tenant_easy")
-    }
-  }, [])
-
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch("/api/telephony/3cx", { cache: "no-store" })
-      if (!res.ok) return
-      const data = await res.json()
-      const row = data.integration as Integration | null
-      if (row) {
-        setIntegration(row)
-        setBaseUrl(row.base_url)
-        setClientId(row.client_id)
-        setExtension(row.default_extension)
-      }
+      const response = await fetch("/api/telephony/providers", { credentials: "include", cache: "no-store" })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body?.error || "Impossibile caricare i centralini.")
+      const rows = (body.integrations || []) as Integration[]
+      setIntegrations(rows)
+      const active = (body.active_integration?.provider || null) as TelephonyProviderId | null
+      setActiveProvider(active)
+      if (active && !options.preserveSelection) setSelected(active)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Impossibile caricare i centralini.")
     } finally {
       setLoading(false)
     }
-  }, [])
+  }
+
+  useEffect(() => { void load() }, [])
 
   useEffect(() => {
-    void Promise.all([load(), detectMode()])
-  }, [load, detectMode])
+    const current = integrations.find((item) => item.provider === selected)
+    const defaults: Record<string, string> = {}
+    for (const field of provider.fields) {
+      if (field.storage.startsWith("provider_config.")) {
+        const key = field.storage.slice("provider_config.".length)
+        defaults[key] = current?.provider_config?.[key] || field.defaultValue || ""
+      }
+    }
+    setForm({
+      base_url: current?.base_url || "",
+      client_id: current?.client_id || "",
+      client_secret: "",
+      default_extension: current?.default_extension || "",
+      provider_config: defaults,
+    })
+    setMessage("")
+    setError("")
+  }, [selected, integrations, provider])
 
-  const connected = integration?.last_check_status === "ok"
-  const readyVoiceAgents = useMemo(() => voiceAgents.filter((agent) => agent.status === "ready"), [voiceAgents])
-  const selectedVoiceAgent = readyVoiceAgents.find((agent) => agent.key === selectedVoiceAgentKey) ?? readyVoiceAgents[0] ?? null
+  function updateField(storage: string, value: string) {
+    if (storage.startsWith("provider_config.")) {
+      const key = storage.slice("provider_config.".length)
+      setForm((current) => ({ ...current, provider_config: { ...current.provider_config, [key]: value } }))
+      return
+    }
+    setForm((current) => ({ ...current, [storage]: value }))
+  }
+
+  function valueOf(storage: string): string {
+    if (storage.startsWith("provider_config.")) return form.provider_config[storage.slice("provider_config.".length)] || ""
+    return String(form[storage as keyof Omit<ProviderForm, "provider_config">] || "")
+  }
 
   async function save() {
     setSaving(true)
-    setResult(null)
+    setMessage("")
+    setError("")
     try {
-      const res = await fetch("/api/telephony/3cx", {
-        method: "POST",
+      const response = await fetch("/api/telephony/providers", {
+        method: "PUT",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          base_url: baseUrl,
-          client_id: clientId,
-          client_secret: clientSecret,
-          default_extension: extension,
-        }),
+        body: JSON.stringify({ provider: selected, ...form }),
       })
-      const data = await res.json().catch(() => null)
-      if (!res.ok) {
-        setResult({ ok: false, message: data?.error || "Salvataggio non riuscito." })
-        return
-      }
-      setIntegration(data.integration)
-      setClientSecret("")
-      if (data.verified) {
-        const list = Array.isArray(data.extensions)
-          ? (data.extensions as Array<{ dn: string }>).map((item) => item.dn)
-          : []
-        setResult({ ok: true, message: "Connessione 3CX verificata.", extensions: list })
-        void prepareCrmLink()
-      } else {
-        setResult({ ok: false, message: `Dati salvati, ma la verifica 3CX non riesce: ${data.error || "errore sconosciuto"}` })
-      }
-    } catch {
-      setResult({ ok: false, message: "Impossibile contattare il servizio." })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body?.error || "Configurazione non salvata.")
+      setMessage(body.message || "Configurazione salvata.")
+      await load({ preserveSelection: true })
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Configurazione non salvata.")
     } finally {
       setSaving(false)
     }
   }
 
-  async function prepareCrmLink() {
-    setPreparingCrm(true)
-    try {
-      const response = await fetch("/api/telephony/3cx/crm-link", { method: "POST" })
-      const data = await response.json().catch(() => null)
-      if (!response.ok || !data?.api_key) {
-        setResult({ ok: false, message: data?.error || "Non è stato possibile preparare il collegamento CRM." })
-        return
-      }
-      setApiKey(String(data.api_key))
-      await load()
-    } finally {
-      setPreparingCrm(false)
-    }
-  }
-
-  async function loadVoiceAgents() {
-    const response = await fetch("/api/telephony/3cx/inbound-urls", { cache: "no-store" })
-    const data = await response.json().catch(() => null)
-    if (!response.ok || !Array.isArray(data?.voice_agents)) {
-      setResult({ ok: false, message: data?.error || "Non è stato possibile leggere gli assistenti vocali." })
-      return false
-    }
-    const agents = data.voice_agents as VoiceAgentLink[]
-    setVoiceAgents(agents)
-    const firstReady = agents.find((agent) => agent.status === "ready")
-    setSelectedVoiceAgentKey((current) => current || firstReady?.key || "")
-    if (data.configuration_mode === "4bid_advanced") setMode("4bid_advanced")
-    return true
-  }
-
-  async function prepareVoiceAgents() {
-    setVoicePreparing(true)
-    setResult(null)
-    try {
-      const secretResponse = await fetch("/api/telephony/3cx/voice-link", { method: "POST" })
-      const secretData = await secretResponse.json().catch(() => null)
-      if (!secretResponse.ok) {
-        setResult({ ok: false, message: secretData?.error || "Non è stato possibile predisporre l'assistente vocale." })
-        return
-      }
-      if (!(await loadVoiceAgents())) return
-      if (typeof secretData?.api_key === "string" && secretData.api_key) {
-        setVoiceApiKey(secretData.api_key)
-        setVoiceCredentialMessage("Credenziale vocale creata. Copiala adesso in 3CX: verrà mostrata una sola volta.")
-      } else {
-        setVoiceCredentialMessage("La credenziale vocale è già configurata. Se devi recuperarla, ruotala e aggiorna 3CX.")
-      }
-      await load()
-    } catch {
-      setResult({ ok: false, message: "Impossibile preparare l'assistente vocale." })
-    } finally {
-      setVoicePreparing(false)
-    }
-  }
-
-  async function rotateVoiceCredential() {
-    if (!window.confirm("La credenziale precedente smetterà subito di funzionare. Vuoi crearne una nuova?")) return
-    setVoiceRotating(true)
-    try {
-      const response = await fetch("/api/telephony/3cx/voice-link", { method: "PUT" })
-      const data = await response.json().catch(() => null)
-      if (!response.ok || typeof data?.api_key !== "string" || !data.api_key) {
-        setResult({ ok: false, message: data?.error || "Rotazione della credenziale non riuscita." })
-        return
-      }
-      setVoiceApiKey(data.api_key)
-      setVoiceCredentialMessage("Credenziale ruotata. Aggiorna subito il parametro protetto in 3CX.")
-      await loadVoiceAgents()
-    } finally {
-      setVoiceRotating(false)
-    }
-  }
-
-  async function copy(label: string, value: string) {
-    try {
-      await navigator.clipboard.writeText(value)
-      setCopied(label)
-      window.setTimeout(() => setCopied(null), 1800)
-    } catch {
-      setCopied(null)
-    }
-  }
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Caricamento centralini...</div>
 
   return (
     <div className="min-h-full bg-background">
-      <AdminHeader
-        title="Telefono IP"
-        subtitle={mode === "4bid_advanced" ? "Centralino e assistente vocale 4BID" : "Collega il centralino e attiva l'assistente vocale"}
-      />
+      <AdminHeader title="Centralino telefonico" subtitle="Scegli il PBX della struttura: HotelAccelerator usa un adapter, non dipende da un solo fornitore." />
+      <main className="mx-auto max-w-6xl space-y-6 p-4 sm:p-6">
+        {error && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Attenzione</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
+        {message && <Alert><CheckCircle2 className="h-4 w-4" /><AlertTitle>Salvato</AlertTitle><AlertDescription>{message}</AlertDescription></Alert>}
 
-      <div className="container py-6">
-        <div className="mx-auto max-w-3xl space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ha-brand-soft">
-                    <Phone className="h-5 w-5 text-ha-brand-soft-foreground" aria-hidden="true" />
+        <Card>
+          <CardHeader>
+            <CardTitle>Scegli il centralino</CardTitle>
+            <CardDescription>Puoi aprire tutte le guide senza cambiare nulla. Un nuovo PBX API sostituisce quello attuale solo dopo una verifica riuscita.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {TELEPHONY_PROVIDERS.map((item) => {
+              const row = integrations.find((candidate) => candidate.provider === item.id)
+              const isActive = activeProvider === item.id
+              return (
+                <button type="button" key={item.id} onClick={() => setSelected(item.id)} className={`rounded-xl border p-4 text-left transition hover:border-foreground/30 ${selected === item.id ? "border-primary ring-1 ring-primary" : ""}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div><div className="font-semibold">{item.name}</div><p className="mt-1 text-xs text-muted-foreground">{item.shortDescription}</p></div>
+                    {isActive && <Badge>Attivo</Badge>}
                   </div>
-                  <div>
-                    <CardTitle className="text-xl">Centralino 3CX</CardTitle>
-                    <CardDescription>Collega una sola volta il centralino del tenant a HotelAccelerator.</CardDescription>
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {row?.last_check_status === "ok" && <Badge variant="secondary">API verificata</Badge>}
+                    {row?.last_check_status === "guided" && <Badge variant="outline">Guida salvata</Badge>}
+                    {row?.last_check_status === "bridge_required" && <Badge variant="outline">Bridge richiesto</Badge>}
+                    {row?.last_check_status === "error" && <Badge variant="destructive">Da correggere</Badge>}
                   </div>
-                </div>
-                {!loading ? <Badge variant={connected ? "default" : "secondary"}>{connected ? "Collegato" : "Da collegare"}</Badge> : null}
+                </button>
+              )
+            })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2"><Phone className="h-5 w-5" />{provider.name}</CardTitle>
+                <CardDescription className="mt-1 max-w-3xl">{provider.connectionNote}</CardDescription>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              <Dialog>
+                <DialogTrigger asChild><Button variant="outline">Guida alla configurazione</Button></DialogTrigger>
+                <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+                  <DialogHeader><DialogTitle>Configurare {provider.name}</DialogTitle><DialogDescription>{provider.guide.intro}</DialogDescription></DialogHeader>
+                  <ol className="space-y-4">
+                    {provider.guide.steps.map((step, index) => (
+                      <li key={`${step.title}-${index}`} className="flex gap-3 rounded-lg border p-4">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">{index + 1}</div>
+                        <div className="space-y-1"><div className="font-medium">{step.title}</div><p className="text-sm text-muted-foreground">{step.body}</p>{step.url && <a className="inline-flex items-center gap-1 text-sm font-medium underline" href={step.url} target="_blank" rel="noreferrer">{step.linkLabel || "Apri guida ufficiale"}<ExternalLink className="h-3 w-3" /></a>}</div>
+                      </li>
+                    ))}
+                  </ol>
+                  {provider.guide.screenshots.length > 0 ? (
+                    <div className="space-y-4"><h3 className="font-semibold">Schermate ufficiali</h3>{provider.guide.screenshots.map((shot) => <figure key={shot.src} className="overflow-hidden rounded-xl border"><a href={shot.sourceUrl} target="_blank" rel="noreferrer"><Image src={shot.src} alt={shot.alt} width={1200} height={760} className="h-auto w-full object-contain" unoptimized /></a><figcaption className="border-t p-3 text-xs text-muted-foreground">{shot.caption} · clicca l'immagine per aprire la fonte ufficiale.</figcaption></figure>)}</div>
+                  ) : (
+                    <Alert><ExternalLink className="h-4 w-4" /><AlertTitle>Schermate del produttore</AlertTitle><AlertDescription>Per questo centralino non incorporiamo immagini che potrebbero diventare obsolete: usa i link ufficiali qui sotto, che aprono la guida aggiornata del produttore.</AlertDescription></Alert>
+                  )}
+                  <div className="space-y-2"><h3 className="font-semibold">Documentazione ufficiale</h3>{provider.guide.officialDocs.map((doc) => <a key={doc.url} className="flex items-center gap-2 text-sm underline" href={doc.url} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" />{doc.label}</a>)}</div>
+                </DialogContent>
+              </Dialog>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-2">
+              {capabilityLabel(provider.capabilities.automaticCheck, "Verifica automatica", "Verifica guidata")}
+              {capabilityLabel(provider.capabilities.clickToCall, "Click-to-call", "Click-to-call non attivo")}
+              {capabilityLabel(provider.capabilities.inboundEvents, "API/eventi disponibili", "Eventi da integrare")}
+              {capabilityLabel(provider.capabilities.voiceAgent, "Voice Agent", "Voice Agent non collaudato")}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {activeProvider && activeProvider !== selected && <Alert><AlertTriangle className="h-4 w-4" /><AlertTitle>Il centralino attuale resta protetto</AlertTitle><AlertDescription>{provider.connectionMode === "api" ? "HotelAccelerator passera a questo provider solo se la verifica automatica riesce." : "Questa guida non disattiva il centralino operativo attuale."}</AlertDescription></Alert>}
+
+            {provider.fields.length > 0 ? (
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="base-url">Indirizzo 3CX</Label>
-                  <Input id="base-url" value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://azienda.my3cx.it" autoComplete="off" />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="client-id">Client ID applicazione</Label>
-                  <Input id="client-id" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder="900" autoComplete="off" />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="extension">Interno operatore</Label>
-                  <Input id="extension" value={extension} onChange={(event) => setExtension(event.target.value)} placeholder="200" autoComplete="off" />
-                </div>
-                <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor="client-secret">API key 3CX</Label>
-                  <Input
-                    id="client-secret"
-                    type="password"
-                    value={clientSecret}
-                    onChange={(event) => setClientSecret(event.target.value)}
-                    placeholder={integration?.has_credentials.client_secret ? `Già salvata (${integration.credentials_preview.client_secret})` : "Incolla la API key 3CX"}
-                    autoComplete="new-password"
-                  />
-                  <p className="text-xs text-muted-foreground">Se è già salvata, lascia il campo vuoto per non modificarla.</p>
-                </div>
+                {provider.fields.map((field) => (
+                  <div key={field.storage} className={field.storage === "base_url" ? "sm:col-span-2" : ""}>
+                    <Label htmlFor={`field-${field.storage}`}>{field.label}{field.required ? " *" : ""}</Label>
+                    <Input id={`field-${field.storage}`} className="mt-1" type={field.secret ? "password" : "text"} value={valueOf(field.storage)} onChange={(event) => updateField(field.storage, event.target.value)} placeholder={field.secret && selectedIntegration?.has_client_secret ? selectedIntegration.credentials_preview.client_secret || "Gia salvato: lascia vuoto per non cambiarlo" : field.placeholder} />
+                    <p className="mt-1 text-xs text-muted-foreground">{field.help}</p>
+                  </div>
+                ))}
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={() => void save()} disabled={saving || loading}>
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  Salva e verifica
-                </Button>
-                {integration?.last_check_at ? <span className="text-xs text-muted-foreground">Ultima verifica: {new Date(integration.last_check_at).toLocaleString("it-IT")}</span> : null}
-              </div>
-              {result ? (
-                <Alert variant={result.ok ? "default" : "destructive"}>
-                  {result.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                  <AlertTitle>{result.ok ? "Operazione riuscita" : "Controlla la configurazione"}</AlertTitle>
-                  <AlertDescription>{result.message}</AlertDescription>
-                </Alert>
-              ) : null}
-            </CardContent>
-          </Card>
+            ) : (
+              <Alert><Settings2 className="h-4 w-4" /><AlertTitle>Configurazione guidata</AlertTitle><AlertDescription>Per {provider.name} non raccogliamo ancora credenziali: prima serve il collaudo OAuth/bridge con un tenant reale. La guida si puo salvare senza creare una falsa connessione.</AlertDescription></Alert>
+            )}
 
-          {mode === "4bid_advanced" ? (
-            <>
-              <Alert>
-                <Settings2 className="h-4 w-4" />
-                <AlertTitle>Modalità 4BID superadmin</AlertTitle>
-                <AlertDescription>
-                  Qui sono disponibili routing per quattro prodotti, distinzione prospect/clienti, licenza cliente e fallback. Questi controlli non vengono mostrati ai tenant normali.
-                </AlertDescription>
-              </Alert>
-              <VoiceIvrRoutingCard />
-            </>
-          ) : mode === "tenant_easy" ? (
-            <Card>
-              <CardHeader>
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ha-brand-soft">
-                    <Bot className="h-5 w-5 text-ha-brand-soft-foreground" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-lg">Assistente vocale AI</CardTitle>
-                    <CardDescription>Configurazione semplice: scegli cosa deve conoscere e collega l'agente a 3CX.</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {voiceAgents.length === 0 ? (
-                  <div className="rounded-lg border p-4">
-                    <p className="font-medium">1. Prepara l'assistente</p>
-                    <p className="mt-1 text-sm text-muted-foreground">HotelAccelerator crea la credenziale protetta e legge le basi di conoscenza già disponibili nel tenant.</p>
-                    <Button className="mt-3" onClick={() => void prepareVoiceAgents()} disabled={voicePreparing || !connected}>
-                      {voicePreparing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bot className="mr-2 h-4 w-4" />}
-                      Prepara assistente vocale
-                    </Button>
-                    {!connected ? <p className="mt-2 text-xs text-muted-foreground">Prima collega e verifica 3CX.</p> : null}
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    <Label>Base di conoscenza dell'assistente</Label>
-                    <Select value={selectedVoiceAgent?.key ?? ""} onValueChange={setSelectedVoiceAgentKey}>
-                      <SelectTrigger><SelectValue placeholder="Scegli la base" /></SelectTrigger>
-                      <SelectContent>
-                        {readyVoiceAgents.map((agent) => (
-                          <SelectItem key={agent.key} value={agent.key}>{agent.label} · {agent.knowledge_base.source_count} fonti</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {readyVoiceAgents.length === 0 ? <p className="text-sm text-destructive">Non ci sono basi con fonti pronte. Aggiungi prima contenuti nella Knowledge Base.</p> : null}
-                  </div>
-                )}
+            {selectedIntegration?.last_check_status === "error" && selectedIntegration.last_check_error && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Ultima verifica non riuscita</AlertTitle><AlertDescription>{selectedIntegration.last_check_error}</AlertDescription></Alert>}
+            {selectedIntegration?.last_check_status === "ok" && <Alert><CheckCircle2 className="h-4 w-4" /><AlertTitle>Connessione verificata</AlertTitle><AlertDescription>L'ultima verifica automatica del provider e riuscita.</AlertDescription></Alert>}
 
-                {voiceCredentialMessage ? <p className="text-sm text-muted-foreground">{voiceCredentialMessage}</p> : null}
-
-                {voiceApiKey ? (
-                  <div className="rounded-lg border p-4">
-                    <div className="flex items-center gap-2 font-medium"><KeyRound className="h-4 w-4" /> Credenziale da copiare in 3CX</div>
-                    <div className="mt-2 flex gap-2">
-                      <Input type="password" readOnly value={voiceApiKey} />
-                      <Button variant="outline" onClick={() => void copy("voice-key", voiceApiKey)}><Copy className="mr-2 h-4 w-4" />{copied === "voice-key" ? "Copiata" : "Copia"}</Button>
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">Salvala nel parametro protetto HOTELACCELERATOR_VOICE_KEY. Non verrà mostrata di nuovo.</p>
-                  </div>
-                ) : null}
-
-                {selectedVoiceAgent ? (
-                  <div className="rounded-lg border p-4">
-                    <p className="font-medium">2. URL dell'assistente</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Questo URL è già limitato alla base selezionata e al tenant corrente.</p>
-                    <div className="mt-2 flex gap-2">
-                      <Input readOnly value={selectedVoiceAgent.query_url} />
-                      <Button variant="outline" onClick={() => void copy("voice-url", selectedVoiceAgent.query_url)}><Copy className="mr-2 h-4 w-4" />{copied === "voice-url" ? "Copiato" : "Copia"}</Button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {integration?.has_credentials.voice_inbound_secret ? (
-                  <Button variant="outline" onClick={() => void rotateVoiceCredential()} disabled={voiceRotating}>
-                    {voiceRotating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                    Ruota credenziale vocale
-                  </Button>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Collegamento CRM</CardTitle>
-              <CardDescription>Serve a riconoscere le chiamate e collegarle al CRM HotelAccelerator.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {!apiKey ? (
-                <Button variant="outline" onClick={() => void prepareCrmLink()} disabled={preparingCrm}>
-                  {preparingCrm ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}
-                  Prepara collegamento CRM
-                </Button>
-              ) : (
-                <div className="flex gap-2">
-                  <Input type="password" readOnly value={apiKey} />
-                  <Button variant="outline" onClick={() => void copy("crm-key", apiKey)}><Copy className="mr-2 h-4 w-4" />{copied === "crm-key" ? "Copiata" : "Copia"}</Button>
-                </div>
-              )}
-              {!connected ? <p className="text-xs text-muted-foreground">La chiave CRM può essere recuperata anche senza la Call Control API 3CX.</p> : null}
-            </CardContent>
-          </Card>
-
-          <TelephonyExtensionsCard />
-        </div>
-      </div>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => void save()} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                {provider.connectionMode === "api" ? (activeProvider === selected ? "Salva e verifica" : "Verifica e imposta come centralino") : "Salva questa guida"}
+              </Button>
+              {selected === "3cx" && activeProvider === "3cx" && <Button variant="outline" asChild><Link href="/admin/channels/phone/3cx"><Settings2 className="mr-2 h-4 w-4" />Configurazione avanzata 3CX</Link></Button>}
+            </div>
+          </CardContent>
+        </Card>
+      </main>
     </div>
   )
 }
