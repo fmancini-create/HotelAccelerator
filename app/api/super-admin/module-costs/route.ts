@@ -6,7 +6,11 @@ import { handleServiceError } from "@/lib/errors"
 import { margineCentesimi, prezzoVenditaCentesimi } from "@/lib/modules/pricing"
 
 /**
- * Costo e prezzo dei moduli a pagamento.
+ * Costo e prezzo dei moduli a pagamento con economics mensili/fissi.
+ *
+ * Scout e' volutamente escluso: e' un add-on a consumo con fee una tantum,
+ * credito unitario, costo provider storico e moltiplicatore dedicato. Mescolarlo
+ * qui applicherebbe per errore il moltiplicatore fisso globale dei moduli.
  *
  * Sta sotto super-admin e NON sotto /api/admin: il costo che sosteniamo noi non
  * appartiene agli hotel. La pagina dei moduli di una struttura riceve solo il
@@ -28,6 +32,7 @@ export async function GET(request: NextRequest) {
       .from("modules")
       .select("key, name, category, monthly_cost_cents")
       .in("category", ["product", "addon"])
+      .neq("key", "scout")
       .order("sort_order", { ascending: true })
 
     if (error) throw error
@@ -60,6 +65,12 @@ export async function PATCH(request: NextRequest) {
     if (!key) {
       return NextResponse.json({ error: "La chiave del modulo e obbligatoria" }, { status: 400 })
     }
+    if (key === "scout") {
+      return NextResponse.json(
+        { error: "Scout usa il listino a consumo dedicato in /super-admin/scout-billing." },
+        { status: 409 },
+      )
+    }
 
     // `null` e' un valore lecito e significa "costo non ancora deciso".
     // Va distinto da 0, che significherebbe "ci costa zero".
@@ -81,6 +92,7 @@ export async function PATCH(request: NextRequest) {
       .from("modules")
       .update({ monthly_cost_cents: costo })
       .eq("key", key)
+      .neq("key", "scout")
       .in("category", ["product", "addon"])
       .select("key, name, category, monthly_cost_cents")
       .maybeSingle()

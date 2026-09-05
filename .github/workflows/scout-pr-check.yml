@@ -1,0 +1,70 @@
+name: Scout PR check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/scout/**"
+      - "lib/integrations/apollo/client.ts"
+      - "components/crm/scout-*.tsx"
+      - "app/admin/crm/intelligence/scout/**"
+      - "app/api/admin/crm/scout/**"
+      - "app/api/cron/scout-auto-recharge/**"
+      - "app/api/admin/crm/apollo/route.ts"
+      - "app/api/super-admin/scout-billing/**"
+      - "app/super-admin/scout-billing/**"
+      - "app/api/stripe/webhook/route.ts"
+      - "supabase/migrations/*scout*.sql"
+      - "vercel.json"
+      - ".github/workflows/scout-pr-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify-scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Scout billing unit tests
+        run: pnpm exec vitest run lib/scout/__tests__/billing.test.ts
+
+      - name: Lint Scout billing files
+        run: >-
+          pnpm exec eslint
+          lib/scout/access.ts
+          lib/scout/billing.ts
+          lib/scout/auto-recharge.ts
+          lib/scout/__tests__/billing.test.ts
+          lib/integrations/apollo/client.ts
+          components/crm/scout-billing-card.tsx
+          app/admin/crm/intelligence/scout/layout.tsx
+          app/api/admin/crm/scout/billing/route.ts
+          app/api/admin/crm/scout/checkout/route.ts
+          app/api/admin/crm/scout/auto-recharge/route.ts
+          app/api/admin/crm/scout/auto-recharge/setup/route.ts
+          app/api/admin/crm/scout/auto-recharge/finalize/route.ts
+          app/api/cron/scout-auto-recharge/route.ts
+          app/api/super-admin/scout-billing/route.ts
+          app/super-admin/scout-billing/page.tsx

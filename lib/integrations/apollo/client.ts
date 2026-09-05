@@ -75,8 +75,25 @@ export type ApolloPerson = {
   emailStatus: string | null
 }
 
+export type ApolloCreditUsageItem = {
+  limit: number
+  consumed: number
+  leftOver: number
+}
+
+export type ApolloCreditUsageStats = {
+  creditTypes: Record<string, ApolloCreditUsageItem>
+  cycleStart: string | null
+  cycleEnd: string | null
+}
+
 function text(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
+}
+
+function numberOrZero(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function organizationKeywordTags(value: string) {
@@ -167,4 +184,41 @@ export async function enrichApolloPerson(apolloPersonId: string) {
   })
   const root = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
   return normalizePerson(root.person)
+}
+
+/**
+ * Endpoint gratuito Apollo per monitorare il consumo reale del piano.
+ * Solo backend/superadmin: non serializzare questi dati verso i tenant.
+ */
+export async function getApolloCreditUsageStats(): Promise<ApolloCreditUsageStats> {
+  const payload = await apolloPost("/usage_stats/credit_usage_stats", {})
+  const root = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {}
+  const usage =
+    root.credit_usage_stats && typeof root.credit_usage_stats === "object"
+      ? (root.credit_usage_stats as Record<string, unknown>)
+      : root
+  const cycle =
+    root.current_credit_cycle && typeof root.current_credit_cycle === "object"
+      ? (root.current_credit_cycle as Record<string, unknown>)
+      : usage.current_credit_cycle && typeof usage.current_credit_cycle === "object"
+        ? (usage.current_credit_cycle as Record<string, unknown>)
+        : {}
+
+  const creditTypes: Record<string, ApolloCreditUsageItem> = {}
+  for (const [key, value] of Object.entries(usage)) {
+    if (key === "current_credit_cycle" || !value || typeof value !== "object") continue
+    const row = value as Record<string, unknown>
+    if (!("limit" in row) && !("consumed" in row) && !("left_over" in row)) continue
+    creditTypes[key] = {
+      limit: numberOrZero(row.limit),
+      consumed: numberOrZero(row.consumed),
+      leftOver: numberOrZero(row.left_over),
+    }
+  }
+
+  return {
+    creditTypes,
+    cycleStart: text(cycle.start_date),
+    cycleEnd: text(cycle.end_date),
+  }
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { type NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -10,6 +11,14 @@ import {
   enrichApolloPerson,
   searchApolloPeople,
 } from "@/lib/integrations/apollo/client"
+import {
+  ScoutBillingError,
+  completeScoutUsage,
+  getScoutTenantBillingState,
+  refundScoutUsage,
+  requireScoutEntitlement,
+  reserveScoutEmailEnrichment,
+} from "@/lib/scout/billing"
 
 const searchSchema = z.object({
   action: z.literal("search"),
@@ -58,15 +67,28 @@ function splitName(fullName: string) {
 
 function providerError(error: unknown) {
   if (error instanceof ApolloConfigurationError) {
-    return NextResponse.json({ error: error.message, configured: false }, { status: 503 })
+    return NextResponse.json(
+      { error: "Servizio Scout non configurato in questo ambiente.", configured: false },
+      { status: 503 },
+    )
   }
   if (error instanceof ApolloRequestError) {
     return NextResponse.json(
-      { error: error.message, retryAfter: error.retryAfter },
+      {
+        error: error.status === 429
+          ? "Limite temporaneo del servizio Scout raggiunto. Riprova più tardi."
+          : "Il servizio Scout non ha completato la richiesta.",
+        retryAfter: error.retryAfter,
+      },
       { status: error.status === 429 ? 429 : 502 },
     )
   }
   return null
+}
+
+function billingError(error: unknown) {
+  if (!(error instanceof ScoutBillingError)) return null
+  return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
 }
 
 export async function GET(request: NextRequest) {
@@ -74,7 +96,7 @@ export async function GET(request: NextRequest) {
     await requireAreaApi("crm", request)
     const propertyId = await getCurrentProperty(request)
     const supabase = createServiceClient()
-    const [{ data, error }, { data: recentSearches, error: historyError }] = await Promise.all([
+    const [{ data, error }, { data: recentSearches, error: historyError }, billing] = await Promise.all([
       supabase
         .from("crm_apollo_prospects")
         .select("*")
@@ -88,6 +110,7 @@ export async function GET(request: NextRequest) {
         .eq("property_id", propertyId)
         .order("created_at", { ascending: false })
         .limit(20),
+      getScoutTenantBillingState(supabase, propertyId),
     ])
     if (error) throw error
     if (historyError) throw historyError
@@ -95,6 +118,7 @@ export async function GET(request: NextRequest) {
       configured: Boolean(process.env.APOLLO_API_KEY?.trim()),
       prospects: data ?? [],
       recentSearches: recentSearches ?? [],
+      billing,
       policy: {
         searchCredits: 0,
         enrichmentMaxCredits: 1,
@@ -104,8 +128,10 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
-    console.error("Apollo CRM list error:", error)
-    return NextResponse.json({ error: "Impossibile leggere i prospect Apollo." }, { status: 500 })
+    const billed = billingError(error)
+    if (billed) return billed
+    console.error("Scout CRM list error:", error)
+    return NextResponse.json({ error: "Impossibile leggere i prospect Scout." }, { status: 500 })
   }
 }
 
@@ -115,6 +141,8 @@ export async function POST(request: NextRequest) {
     const propertyId = await getCurrentProperty(request)
     const body = actionSchema.parse(await request.json())
     const supabase = createServiceClient()
+
+    await requireScoutEntitlement(supabase, propertyId)
 
     if (body.action === "search") {
       const result = await searchApolloPeople(body)
@@ -190,54 +218,82 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === "enrich") {
-      if (prospect.status === "enriched" && !prospect.email) {
-        return NextResponse.json(
-          { error: "Apollo ha già verificato questo profilo e non ha un'email disponibile." },
-          { status: 409 },
-        )
+      if (prospect.status === "enriched" || prospect.email) {
+        return NextResponse.json({ error: "Questo prospect è già stato verificato." }, { status: 409 })
       }
 
-      const enriched = await enrichApolloPerson(prospect.apollo_person_id)
-      if (!enriched) {
-        return NextResponse.json({ error: "Apollo non ha trovato dati aggiuntivi per questo profilo." }, { status: 404 })
-      }
-      const { data, error } = await supabase
-        .from("crm_apollo_prospects")
-        .update({
-          first_name: enriched.firstName ?? prospect.first_name,
-          last_name: enriched.lastName ?? prospect.last_name,
-          full_name: enriched.fullName || prospect.full_name,
-          job_title: enriched.title ?? prospect.job_title,
-          seniority: enriched.seniority ?? prospect.seniority,
-          organization_name: enriched.organizationName ?? prospect.organization_name,
-          organization_domain: enriched.organizationDomain ?? prospect.organization_domain,
-          linkedin_url: enriched.linkedinUrl ?? prospect.linkedin_url,
-          city: enriched.city ?? prospect.city,
-          region: enriched.region ?? prospect.region,
-          country: enriched.country ?? prospect.country,
-          email: enriched.email?.toLowerCase() ?? prospect.email,
-          email_status: enriched.emailStatus ?? prospect.email_status,
-          status: "enriched",
-          enriched_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", prospect.id)
-        .eq("property_id", propertyId)
-        .select()
-        .single()
-      if (error) throw error
-      return NextResponse.json({
-        prospect: data,
-        outcome: data.email ? "email_found" : "email_unavailable",
-        message: data.email
-          ? "Email trovata da Apollo."
-          : "Apollo ha verificato il profilo ma non ha un'email disponibile.",
+      const reservation = await reserveScoutEmailEnrichment(supabase, {
+        propertyId,
+        prospectId: prospect.id,
+        attemptKey: randomUUID(),
       })
+      let providerCompleted = false
+
+      try {
+        const enriched = await enrichApolloPerson(prospect.apollo_person_id)
+        if (!enriched) {
+          await refundScoutUsage(supabase, reservation.operationId)
+          return NextResponse.json(
+            { error: "Scout non ha trovato dati aggiuntivi per questo profilo." },
+            { status: 404 },
+          )
+        }
+        providerCompleted = true
+
+        const { data, error } = await supabase
+          .from("crm_apollo_prospects")
+          .update({
+            first_name: enriched.firstName ?? prospect.first_name,
+            last_name: enriched.lastName ?? prospect.last_name,
+            full_name: enriched.fullName || prospect.full_name,
+            job_title: enriched.title ?? prospect.job_title,
+            seniority: enriched.seniority ?? prospect.seniority,
+            organization_name: enriched.organizationName ?? prospect.organization_name,
+            organization_domain: enriched.organizationDomain ?? prospect.organization_domain,
+            linkedin_url: enriched.linkedinUrl ?? prospect.linkedin_url,
+            city: enriched.city ?? prospect.city,
+            region: enriched.region ?? prospect.region,
+            country: enriched.country ?? prospect.country,
+            email: enriched.email?.toLowerCase() ?? prospect.email,
+            email_status: enriched.emailStatus ?? prospect.email_status,
+            status: "enriched",
+            enriched_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", prospect.id)
+          .eq("property_id", propertyId)
+          .select()
+          .single()
+        if (error) throw error
+
+        const credits = await completeScoutUsage(supabase, reservation.operationId)
+        return NextResponse.json({
+          prospect: data,
+          credits,
+          outcome: data.email ? "email_found" : "email_unavailable",
+          message: data.email
+            ? "Email trovata da Scout. È stato utilizzato 1 credito Scout."
+            : "Profilo verificato, ma l'email non è disponibile. È stato utilizzato 1 credito Scout.",
+        })
+      } catch (error) {
+        if (providerCompleted) {
+          // Il provider ha già eseguito l'operazione: contabilizziamo il costo anche
+          // se una scrittura successiva fallisce. completeScoutUsage è idempotente.
+          await completeScoutUsage(supabase, reservation.operationId).catch((completeError) => {
+            console.error("Scout usage completion recovery failed:", completeError)
+          })
+        } else {
+          await refundScoutUsage(supabase, reservation.operationId).catch((refundError) => {
+            console.error("Scout usage refund failed:", refundError)
+          })
+        }
+        throw error
+      }
     }
 
     const email = String(prospect.email ?? "").trim().toLowerCase()
     if (!email) {
-      return NextResponse.json({ error: "Prima di importare devi ottenere un'email verificabile da Apollo." }, { status: 409 })
+      return NextResponse.json({ error: "Prima di importare devi ottenere un'email verificabile da Scout." }, { status: 409 })
     }
 
     const { data: existing, error: existingError } = await supabase
@@ -299,12 +355,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ prospect: data, contactId, existing: Boolean(existing) })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
+    const billed = billingError(error)
+    if (billed) return billed
     const apollo = providerError(error)
     if (apollo) return apollo
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "Richiesta Apollo non valida.", details: error.flatten() }, { status: 400 })
+      return NextResponse.json({ error: "Richiesta Scout non valida.", details: error.flatten() }, { status: 400 })
     }
-    console.error("Apollo CRM action error:", error)
-    return NextResponse.json({ error: "Operazione Apollo non completata." }, { status: 500 })
+    console.error("Scout CRM action error:", error)
+    return NextResponse.json({ error: "Operazione Scout non completata." }, { status: 500 })
   }
 }
