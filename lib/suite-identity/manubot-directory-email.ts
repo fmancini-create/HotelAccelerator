@@ -24,7 +24,7 @@ function requestScopedVercelOidcToken(): string | null {
   }
 }
 
-function manubotAuthHeaders() {
+function manubotAuthHeaders(): Record<string, string> {
   const oidc = requestScopedVercelOidcToken()
   if (oidc) return { Authorization: `Bearer ${oidc}` }
 
