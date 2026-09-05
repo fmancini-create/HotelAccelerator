@@ -38,21 +38,25 @@ describe("staff handoff conversation state", () => {
     expect(extractContactDetails("Filippo Manini")).toMatchObject({ firstName: "Filippo", lastName: "Manini" })
   })
 
-  it("mantiene il nome mentre il recapito arriva in un messaggio successivo", () => {
+  it("mantiene i dati progressivi e completa solo nome, cognome, email e telefono", () => {
     const withName = mergeHandoffContacts(extractContactDetails("Filippo Manini"))
-    const completed = mergeHandoffContacts(withName, extractContactDetails("filippo@example.com"))
+    const withEmail = mergeHandoffContacts(withName, extractContactDetails("filippo@example.com"))
+    const completed = mergeHandoffContacts(withEmail, extractContactDetails("+39 333 123 4567"))
 
     expect(contactIsComplete(withName)).toBe(false)
+    expect(contactIsComplete(withEmail)).toBe(false)
     expect(contactIsComplete(completed)).toBe(true)
     expect(completed).toMatchObject({
       firstName: "Filippo",
       lastName: "Manini",
       email: "filippo@example.com",
+      phone: "+39 333 123 4567",
     })
   })
 
-  it("chiede soltanto il recapito dopo che il nome è stato fornito", () => {
-    expect(handoffContactPrompt({ firstName: "Filippo", lastName: "Manini" })).toContain("recapito")
-    expect(handoffContactPrompt({ firstName: "Filippo", lastName: "Manini" })).not.toContain("nome e cognome")
+  it("chiede solo il campo mancante e non ripete dati gia noti", () => {
+    expect(handoffContactPrompt({ firstName: "Filippo", lastName: "Manini" })).toContain("email")
+    expect(handoffContactPrompt({ firstName: "Filippo", lastName: "Manini", email: "filippo@example.com" })).toContain("telefono")
+    expect(handoffContactPrompt({ firstName: "Filippo", lastName: "Manini", email: "filippo@example.com", phone: "+393331234567" })).toContain("preparando")
   })
 })
