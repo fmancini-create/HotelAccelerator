@@ -6,13 +6,15 @@ import { requireAreaApi } from "@/lib/auth/area-access"
 import { getManubotClient } from "@/lib/manubot"
 import { categorizeManubotError, logManubotError } from "@/lib/manubot/route-errors"
 import { loadManubotPropertyForCaller } from "@/lib/manubot/tenant-context"
+import { isModuleActive } from "@/lib/modules"
+import { createServiceClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
 
 /**
  * Opzioni del form task ManuBot, tenant-scoped e filtrate sul permesso Todos.
- * Espone a HotelAccelerator esattamente operatori, gruppi, asset, categorie,
- * sedi e procedure che ManuBot usa nel proprio form nativo.
+ * La stessa risposta vale anche come capability check: se il modulo non e'
+ * attivo il client NON deve mostrare l'opzione ManuBot.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -31,9 +33,17 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    const active = await isModuleActive(createServiceClient(), resolved.property.id, "manubot")
+    if (!active) {
+      return NextResponse.json({ error: "module_inactive" }, { status: 404 })
+    }
+
     const client = await getManubotClient(resolved.property)
     const data = await client.getTaskFormData()
-    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } })
+    return NextResponse.json(
+      { ...data, active: true },
+      { headers: { "Cache-Control": "no-store" } },
+    )
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
     const category = categorizeManubotError(error)
