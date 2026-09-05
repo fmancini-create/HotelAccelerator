@@ -2,22 +2,17 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { isModuleActive } from "@/lib/modules"
 import { createServiceClient } from "@/lib/supabase/server"
+import {
+  ensureReviewsWorkspace,
+  forwardReviewsConfig,
+  ReviewsFederationError,
+} from "@/lib/reviews/federation"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 function response(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } })
-}
-
-async function ensureCentralReviewsActive(base: string, provisionKey: string, hotelId: string) {
-  const res = await fetch(`${base}/api/integrations/reviews/federated/activate`, {
-    method: "POST",
-    cache: "no-store",
-    headers: { "Content-Type": "application/json", "X-4BID-Reviews-Provision-Key": provisionKey },
-    body: JSON.stringify({ hotelId }),
-  })
-  if (!res.ok) throw new Error(`reviews_activation_failed_${res.status}`)
 }
 
 async function context(request: NextRequest) {
@@ -30,75 +25,51 @@ async function context(request: NextRequest) {
     return { error: response({ error: "reviews_not_active" }, 403) } as const
   }
 
-  const [{ data: property }, { data: account }] = await Promise.all([
-    sb.from("properties").select("id,name").eq("id", identity.propertyId).maybeSingle(),
-    sb.from("customer_accounts").select("id").eq("property_id", identity.propertyId).maybeSingle(),
-  ])
-  if (!property || !account) return { error: response({ error: "suite_account_not_configured" }, 409) } as const
-
-  const provisionKey = process.env.REVIEWS_FEDERATION_PROVISION_KEY?.trim()
-  const santaddeoBase = process.env.SANTADDEO_APP_URL?.trim() || "https://www.santaddeo.com"
-  if (!provisionKey) return { error: response({ error: "reviews_provisioning_not_configured" }, 503) } as const
-
-  let { data: link } = await sb
-    .from("suite_tenant_links")
-    .select("external_tenant_id")
-    .eq("customer_account_id", account.id)
-    .eq("product_key", "santaddeo")
+  const { data: property, error } = await sb
+    .from("properties")
+    .select("id,name")
+    .eq("id", identity.propertyId)
     .maybeSingle()
+  if (error) throw error
+  if (!property) return { error: response({ error: "property_not_found" }, 404) } as const
 
-  if (!link?.external_tenant_id) {
-    const provision = await fetch(`${santaddeoBase}/api/integrations/reviews/federated/provision`, {
-      method: "POST",
-      cache: "no-store",
-      headers: { "Content-Type": "application/json", "X-4BID-Reviews-Provision-Key": provisionKey },
-      body: JSON.stringify({ workspaceKey: account.id, tenantName: property.name }),
+  try {
+    const workspace = await ensureReviewsWorkspace({
+      productKey: "hotelaccelerator",
+      externalTenantId: property.id,
+      tenantName: property.name,
+      origin: "hotelaccelerator",
     })
-    const body = (await provision.json().catch(() => null)) as { hotelId?: string } | null
-    if (!provision.ok || !body?.hotelId) return { error: response({ error: "reviews_workspace_provision_failed" }, 502) } as const
-
-    const { error: linkError } = await sb.from("suite_tenant_links").insert({
-      customer_account_id: account.id,
-      product_key: "santaddeo",
-      external_tenant_id: body.hotelId,
-    })
-    if (linkError && linkError.code !== "23505") throw linkError
-    link = { external_tenant_id: body.hotelId }
-  } else {
-    try {
-      await ensureCentralReviewsActive(santaddeoBase, provisionKey, link.external_tenant_id)
-    } catch (error) {
-      console.error("[reviews] central activation failed", {
-        propertyId: identity.propertyId,
-        hotelId: link.external_tenant_id,
-        error: error instanceof Error ? error.message : "unknown",
-      })
-      return { error: response({ error: "reviews_workspace_activation_failed" }, 502) } as const
+    return { hotelId: workspace.santaddeoHotelId } as const
+  } catch (error) {
+    if (error instanceof ReviewsFederationError) {
+      return { error: response({ error: error.code }, error.status) } as const
     }
+    throw error
   }
-
-  const key = process.env.REVIEWS_FEDERATION_KEY_HA?.trim()
-  if (!key) return { error: response({ error: "reviews_federation_not_configured" }, 503) } as const
-  return { hotelId: link.external_tenant_id, key } as const
 }
 
 async function forward(request: NextRequest, method: "GET" | "PATCH") {
-  const ctx = await context(request)
-  if ("error" in ctx) return ctx.error
+  try {
+    const ctx = await context(request)
+    if ("error" in ctx) return ctx.error
 
-  const base = process.env.SANTADDEO_APP_URL?.trim() || "https://www.santaddeo.com"
-  const upstream = await fetch(`${base}/api/integrations/reviews/federated/config?hotelId=${encodeURIComponent(ctx.hotelId)}`, {
-    method,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      "X-4BID-Origin": "hotelaccelerator",
-      "X-4BID-Reviews-Key": ctx.key,
-    },
-    ...(method === "PATCH" ? { body: await request.text() } : {}),
-  })
-  const body = await upstream.json().catch(() => ({ error: "invalid_upstream_response" }))
-  return response(body, upstream.status)
+    const upstream = await forwardReviewsConfig({
+      hotelId: ctx.hotelId,
+      method,
+      origin: "hotelaccelerator",
+      ...(method === "PATCH" ? { body: await request.text() } : {}),
+    })
+    return response(upstream.payload, upstream.status)
+  } catch (error) {
+    if (error instanceof ReviewsFederationError) {
+      return response({ error: error.code }, error.status)
+    }
+    console.error("[reviews] native configuration failed", {
+      error: error instanceof Error ? error.message : "unknown",
+    })
+    return response({ error: "reviews_config_failed" }, 500)
+  }
 }
 
 export async function GET(request: NextRequest) {
