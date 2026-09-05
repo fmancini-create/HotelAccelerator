@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "lib/scout/**"
+      - "lib/integrations/apollo/client.ts"
       - "components/crm/scout-*.tsx"
       - "app/admin/crm/intelligence/scout/**"
       - "app/api/admin/crm/scout/**"
@@ -52,6 +53,7 @@ jobs:
           pnpm exec eslint
           lib/scout/billing.ts
           lib/scout/__tests__/billing.test.ts
+          lib/integrations/apollo/client.ts
           components/crm/scout-billing-card.tsx
           app/admin/crm/intelligence/scout/layout.tsx
           app/api/admin/crm/scout/billing/route.ts
