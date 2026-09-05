@@ -6,6 +6,7 @@ import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { resolvePropertyIdForCaller } from "@/lib/auth/property-scope"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireAreaApi } from "@/lib/auth/area-access"
+import { isModuleActive } from "@/lib/modules"
 
 export async function GET(request: NextRequest) {
   try {
@@ -73,7 +74,6 @@ function photoArray(value: unknown): ManubotTaskPhoto[] {
     .filter((item) => item.url.length > 0)
 }
 
-// POST /api/admin/todos - Create a new todo, optionally mirrored to ManuBot.
 export async function POST(request: NextRequest) {
   try {
     await requireAreaApi("todos", request)
@@ -123,6 +123,14 @@ export async function POST(request: NextRequest) {
     const manubotPhotos = photoArray(body.manubot_photos)
 
     if (send_to_manubot) {
+      const active = await isModuleActive(supabase, propertyId, "manubot")
+      if (!active) {
+        return NextResponse.json(
+          { error: "Il modulo ManuBot non è attivo per questo tenant." },
+          { status: 403 },
+        )
+      }
+
       const hasResponsible =
         manubotAssigneeIds.length > 0
         || manubotGroupIds.length > 0
