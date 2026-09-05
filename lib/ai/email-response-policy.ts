@@ -151,8 +151,11 @@ export function decideEmailAiResponse(
     return { action: "skip", category: "blocked", reason: "tenant_block_rule" }
   }
 
+  // Trusted means "do not classify as machine/bulk/transactional". It never
+  // overrides the knowledge-base mode: action `autopilot` below means "follow
+  // the base mode", not "force automatic sending".
   if (senderMatches(email, policy.trusted_senders)) {
-    return { action: policy.unclassified_action, category: "trusted", reason: "tenant_trusted_sender" }
+    return { action: "autopilot", category: "trusted", reason: "tenant_trusted_sender" }
   }
 
   if (domainMatches(domain, policy.internal_domains)) {
