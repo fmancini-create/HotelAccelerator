@@ -11,8 +11,12 @@ import {
   scoutCreditPriceCents,
 } from "@/lib/scout/billing"
 
-function chain(result: { data: unknown; error: unknown }) {
-  const value = {
+// Supabase usa un fluent builder fortemente generico. Qui ci interessa il
+// contratto della utility, non riprodurre i generics interni del client.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function chain(result: { data: unknown; error: unknown }): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const value: any = {
     select: vi.fn(),
     eq: vi.fn(),
     lte: vi.fn(),
