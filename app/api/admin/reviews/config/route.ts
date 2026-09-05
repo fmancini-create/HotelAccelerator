@@ -10,6 +10,16 @@ function response(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } })
 }
 
+async function ensureCentralReviewsActive(base: string, provisionKey: string, hotelId: string) {
+  const res = await fetch(`${base}/api/integrations/reviews/federated/activate`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json", "X-4BID-Reviews-Provision-Key": provisionKey },
+    body: JSON.stringify({ hotelId }),
+  })
+  if (!res.ok) throw new Error(`reviews_activation_failed_${res.status}`)
+}
+
 async function context(request: NextRequest) {
   const identity = await getCallerIdentity(request)
   if (!identity?.propertyId) return { error: response({ error: "unauthorized" }, 401) } as const
@@ -26,6 +36,10 @@ async function context(request: NextRequest) {
   ])
   if (!property || !account) return { error: response({ error: "suite_account_not_configured" }, 409) } as const
 
+  const provisionKey = process.env.REVIEWS_FEDERATION_PROVISION_KEY?.trim()
+  const santaddeoBase = process.env.SANTADDEO_APP_URL?.trim() || "https://www.santaddeo.com"
+  if (!provisionKey) return { error: response({ error: "reviews_provisioning_not_configured" }, 503) } as const
+
   let { data: link } = await sb
     .from("suite_tenant_links")
     .select("external_tenant_id")
@@ -34,10 +48,6 @@ async function context(request: NextRequest) {
     .maybeSingle()
 
   if (!link?.external_tenant_id) {
-    const provisionKey = process.env.REVIEWS_FEDERATION_PROVISION_KEY?.trim()
-    const santaddeoBase = process.env.SANTADDEO_APP_URL?.trim() || "https://www.santaddeo.com"
-    if (!provisionKey) return { error: response({ error: "reviews_provisioning_not_configured" }, 503) } as const
-
     const provision = await fetch(`${santaddeoBase}/api/integrations/reviews/federated/provision`, {
       method: "POST",
       cache: "no-store",
@@ -47,14 +57,24 @@ async function context(request: NextRequest) {
     const body = (await provision.json().catch(() => null)) as { hotelId?: string } | null
     if (!provision.ok || !body?.hotelId) return { error: response({ error: "reviews_workspace_provision_failed" }, 502) } as const
 
-    await sb.from("suite_tenant_links").insert({
+    const { error: linkError } = await sb.from("suite_tenant_links").insert({
       customer_account_id: account.id,
       product_key: "santaddeo",
       external_tenant_id: body.hotelId,
-    }).then(({ error }) => {
-      if (error && error.code !== "23505") throw error
     })
+    if (linkError && linkError.code !== "23505") throw linkError
     link = { external_tenant_id: body.hotelId }
+  } else {
+    try {
+      await ensureCentralReviewsActive(santaddeoBase, provisionKey, link.external_tenant_id)
+    } catch (error) {
+      console.error("[reviews] central activation failed", {
+        propertyId: identity.propertyId,
+        hotelId: link.external_tenant_id,
+        error: error instanceof Error ? error.message : "unknown",
+      })
+      return { error: response({ error: "reviews_workspace_activation_failed" }, 502) } as const
+    }
   }
 
   const key = process.env.REVIEWS_FEDERATION_KEY_HA?.trim()
