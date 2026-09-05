@@ -49,6 +49,9 @@ jobs:
       - name: Test commercial dashboard goals
         run: pnpm vitest run tests/dashboard-commercial-goals.test.ts
 
+      - name: Test operator goal rewards
+        run: pnpm vitest run tests/operator-goal-rewards.test.ts
+
       - name: Test sales attribution rules
         run: pnpm vitest run tests/sales-attribution.test.ts
 

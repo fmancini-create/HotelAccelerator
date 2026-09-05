@@ -1,6 +1,6 @@
 # HotelAccelerator — Decision Log
 
-Ultimo aggiornamento: 2026-09-04
+Ultimo aggiornamento: 2026-09-05
 
 Le decisioni sono append-only. Un cambio non cancella la decisione precedente: ne aggiunge una nuova che la sostituisce.
 
@@ -213,6 +213,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata; sostituisce il modello di identita IA tenant-wide introdotto dalla PR #364.
 - Decisione: ogni riga `knowledge_bases` provisiona automaticamente una identita backend-only in `ai_virtual_users`, con nome e firma personalizzabili. La base primaria del canale determina anche l'utente virtuale che presenta e firma la risposta. Non viene creato alcun account Supabase Auth ne alcuna riga fittizia in `admin_users`.
 - Conseguenza: messaggi, draft, fallback e handoff IA sono attribuiti tramite `sender_name` e metadati dell'utente virtuale; le email usano la firma della stessa identita. Tenant e knowledge base devono coincidere in ogni lookup. Le vecchie colonne tenant-wide di `ai_agent_settings` restano temporaneamente solo per compatibilita di schema e potranno essere rimosse esclusivamente con una migrazione separata.
+
+## ADR-033 — I premi sugli obiettivi sono un ledger amministrativo separato dai KPI
+
+- Stato: accettata
+- Decisione: gli obiettivi e le loro metriche restano nelle sorgenti KPI esistenti; la policy premio vive in un registro tenant-scoped separato. L'utente vede il premio potenziale, ma soltanto un tenant admin o superadmin con tenant selezionato puo' confermarlo. I punti vengono accreditati internamente alla conferma; un premio in EUR passa prima a `approved` e diventa `settled` solo dopo una seconda azione amministrativa che attesta il pagamento avvenuto fuori da HotelAccelerator.
+- Conseguenza: HotelAccelerator non genera bonifici, cedolini o movimenti bancari da questa capability. Il ledger e' idempotente per utente/obiettivo/ciclo, conserva snapshot di regola e metrica e puo' evolvere di stato o livello soltanto con audit append-only. Gli obiettivi giornalieri usano il giorno locale del tenant; quelli rolling 30 giorni mantengono la metrica mobile ma maturano al massimo una volta per ciclo mensile. Un premio economico gia' liquidato non viene aumentato o annullato automaticamente.
 
 ## Decisioni aperte
 

@@ -8,7 +8,7 @@ La priorita non e aggiungere funzioni, ma portare quelle gia presenti da `Codice
 
 La pagina `/super-admin/roadmap` e un cruscotto tecnico: i flag **In main** e **Deploy prod** indicano presenza del codice e deploy, non maturita. Lo stato ufficiale e in `MODULE_REGISTRY.md`.
 
-Snapshot verificato: repository `main` con le capability fino alla PR #390 incluse e relative migrazioni additive applicate al Core.
+Snapshot verificato: repository `main` al 2026-09-05; le capability citate sotto riportano PR/evidenze puntuali e non vengono promosse per il solo deploy.
 
 ## P0/P1 correnti
 
@@ -83,7 +83,9 @@ Snapshot verificato: repository `main` con le capability fino alla PR #390 inclu
 - [x] Dashboard utente personalizzata (`Codice`).
 - [x] Obiettivi operativi giornata/30 giorni (`Codice`, PR #388).
 - [x] KPI commerciali individuali, budget e obiettivo extra con attribuzione auditabile (`Codice`, PR #390).
+- [x] Premi individuali sugli obiettivi in punti o EUR, livello extra, ledger per ciclo e conferma/liquidazione amministrativa (`Codice`, PR #399).
 - [ ] Eseguire recupero storico commerciale su tenant reale e validare almeno una attribuzione forte, una `needs_review`, una cancellazione successiva e un valore economico ambiguo.
+- [ ] Collaudare premi su tenant reale: due utenti, punti, premio EUR approvato/liquidato, deduplica ciclo, livello extra, blocco upgrade dopo liquidazione, permessi non-admin e isolamento fra due tenant.
 - [ ] Collaudo dashboard admin + collaboratore reale e permessi/card per ruolo, compreso il gate area CRM sui risultati commerciali.
 - [x] Launcher suite senza nuovo login (`Codice`).
 - [ ] Collaudo SSO reale coordinato.
