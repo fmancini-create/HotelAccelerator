@@ -1,11 +1,15 @@
 import { z } from "zod"
-import { SUPPORT_ATTACHMENT_MAX_BYTES, SUPPORT_ATTACHMENT_MAX_FILES } from "@/lib/support-attachments"
+
+// v1 wire-contract limits. Keep these values stable for the lifetime of v1;
+// storage/UI limits may only diverge through an explicit contract version change.
+const SUPPORT_V1_ATTACHMENT_MAX_FILES = 5
+const SUPPORT_V1_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 
 const attachmentSchema = z.object({
   id: z.string().trim().min(1).max(240),
   name: z.string().trim().min(1).max(255),
   mime_type: z.string().trim().min(1).max(160),
-  size_bytes: z.number().int().positive().max(SUPPORT_ATTACHMENT_MAX_BYTES),
+  size_bytes: z.number().int().positive().max(SUPPORT_V1_ATTACHMENT_MAX_BYTES),
   source_url: z.string().url().max(3000),
 })
 
@@ -31,7 +35,7 @@ export const federatedSupportProjectionSchema = z.object({
     created_at: z.string().datetime({ offset: true }).nullable().optional(),
     sender_name: z.string().trim().max(160).nullable().optional(),
     sender_email: z.string().trim().email().max(320).nullable().optional(),
-    attachments: z.array(attachmentSchema).max(SUPPORT_ATTACHMENT_MAX_FILES).optional(),
+    attachments: z.array(attachmentSchema).max(SUPPORT_V1_ATTACHMENT_MAX_FILES).optional(),
   })).max(200),
 })
 
