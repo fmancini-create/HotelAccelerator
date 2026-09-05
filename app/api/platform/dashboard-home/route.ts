@@ -78,6 +78,16 @@ function customMetricValue(
   return { value: null, unit: null }
 }
 
+function customMetricAllowed(
+  metric: DashboardCustomGoalMetric | null,
+  hasArea: (area: string) => boolean,
+): boolean {
+  if (!metric) return true
+  if (metric === "completed_calls") return hasArea("calls")
+  if (metric === "completed_tasks") return hasArea("todos")
+  return hasArea("crm")
+}
+
 export async function GET(request: NextRequest) {
   const identity = await getCallerIdentity(request)
   if (!identity?.propertyId) return NextResponse.json({ error: "Sessione non valida" }, { status: 401 })
@@ -104,13 +114,16 @@ export async function GET(request: NextRequest) {
   })
 
   const emptyCommercial = {
-    closedDeals30: null,
-    closedRevenueCents30: null,
-    quotesSent30: null,
-    customMetricValue: null,
-    customMetricUnit: null,
+    enabled: false as boolean | null,
+    closedDeals30: null as number | null,
+    closedDealsMissingValue30: null as number | null,
+    closedRevenueCents30: null as number | null,
+    quotesSent30: null as number | null,
+    customMetricValue: null as number | null,
+    customMetricUnit: null as "count" | "percent" | null,
     customMetric: settings.goals.customGoalMetric,
     customMetricPeriod: settings.goals.customGoalPeriod,
+    customMetricAllowed: customMetricAllowed(settings.goals.customGoalMetric, hasArea),
   }
 
   const result: Record<string, unknown> = {
@@ -152,14 +165,12 @@ export async function GET(request: NextRequest) {
         const dayStart = getTenantLocalDayStart(now, timeZone)
         const rollingStart = new Date(now.getTime() - GIORNI_PREDEFINITI * 86_400_000)
         const dailyWindowDays = Math.max((now.getTime() - dayStart.getTime()) / 86_400_000, 1 / 86_400)
-        const [performance, todayPerformance, sales] = await Promise.all([
+        const [performance, todayPerformance] = await Promise.all([
           computeOperatorPerformance(sb, propertyId, GIORNI_PREDEFINITI),
           computeOperatorPerformance(sb, propertyId, dailyWindowDays),
-          computeOperatorSalesPerformance(sb, propertyId, userId, dayStart.toISOString(), rollingStart.toISOString()),
         ])
         const me = performance.righe.find((row) => row.genere === "persona" && row.id === userId)
         const todayMe = todayPerformance.righe.find((row) => row.genere === "persona" && row.id === userId)
-        const custom = customMetricValue(sales, settings.goals.customGoalMetric, settings.goals.customGoalPeriod)
 
         result.performance = {
           enabled: true,
@@ -172,14 +183,36 @@ export async function GET(request: NextRequest) {
           todayConversations: todayMe?.conversazioni ?? 0,
           timeZone,
         }
-        result.commercial = {
-          closedDeals30: sales.closedDeals30,
-          closedRevenueCents30: sales.closedRevenueCents30,
-          quotesSent30: sales.quotesSent30,
-          customMetricValue: custom.value,
-          customMetricUnit: custom.unit,
-          customMetric: settings.goals.customGoalMetric,
-          customMetricPeriod: settings.goals.customGoalPeriod,
+
+        // I risultati di vendita derivano dal CRM e non vengono esposti sotto il
+        // solo permesso Inbox. La card ha una propria area `crm` nel manifest.
+        if (hasArea("crm")) {
+          try {
+            const sales = await computeOperatorSalesPerformance(
+              sb,
+              propertyId,
+              userId,
+              dayStart.toISOString(),
+              rollingStart.toISOString(),
+              { includeCalls: hasArea("calls"), includeTasks: hasArea("todos") },
+            )
+            const custom = customMetricValue(sales, settings.goals.customGoalMetric, settings.goals.customGoalPeriod)
+            result.commercial = {
+              enabled: true,
+              closedDeals30: sales.closedDeals30,
+              closedDealsMissingValue30: sales.closedDealsMissingValue30,
+              closedRevenueCents30: sales.closedRevenueCents30,
+              quotesSent30: sales.quotesSent30,
+              customMetricValue: custom.value,
+              customMetricUnit: custom.unit,
+              customMetric: settings.goals.customGoalMetric,
+              customMetricPeriod: settings.goals.customGoalPeriod,
+              customMetricAllowed: customMetricAllowed(settings.goals.customGoalMetric, hasArea),
+            }
+          } catch (commercialError) {
+            console.error("[dashboard-home] commercial performance unavailable", commercialError)
+            result.commercial = { ...emptyCommercial, enabled: null }
+          }
         }
       } else {
         result.performance = {
