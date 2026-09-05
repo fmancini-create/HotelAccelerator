@@ -96,6 +96,8 @@ L'ultimo punto richiede una decisione architetturale prima di `Tenant reale`: se
 7. navigazioni interne/reconnect non perdono tracce;
 8. viene scelta e collaudata la strategia multi-operatore Browserbase.
 
+Il workflow di pull request esegue inoltre typecheck e test dedicati a governance, metrica di conoscenza e aggregazione delle attivita PMS prima del merge.
+
 ## Rollback
 
 La migrazione e' additiva. Il rollback applicativo puo' disattivare observer, tracker d'uso e pannello PMS mantenendo intatti i Context Browserbase. Le nuove tabelle possono restare inutilizzate; non eliminare i Context perche' conservano il login persistente del tenant e sono indipendenti dall'apprendimento.
