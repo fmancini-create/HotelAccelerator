@@ -140,7 +140,7 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 ## ADR-023 — Registro centrale dei codici cliente e centralino 4 BID
 
 - Stato: accettata
-- Decisione: il Core assegna lo stesso numero a sette cifre alla property in ciascun prodotto della suite e lo presenta con il prefisso del prodotto (`HA`, `SNT`, `HPA`, `MB`). Il centralino 4 BID risolve il tenant soltanto dopo aver ricevuto prodotto e codice; l'assistenza usa la base del tenant risolto, mentre le informazioni commerciali usano esclusivamente la base del tenant aziendale 4 BID.
+- Decisione: il Core assegna lo stesso numero a sette cifre alla property in ciascun prodotto della suite e lo presenta con il prefisso del prodotto (`HA`, `SNT`, `HPA`, `MB`). Il centralino 4 BID risolve il tenant soltanto dopo aver ricevuto prodotto e codice; l'assistenza usa la base del tenant risolto, mentre le informazioni commerciali usano esclusivamente la base del tenant aziendale 4BID.
 - Conseguenza: il codice identifica il tenant ma non è una credenziale. Il PBX applica l'orario; il Core restituisce `transfer` o `record_message` in base a piano e deroga del tenant. I messaggi fuori orario entrano in una coda supporto centrale idempotente.
 
 ## ADR-024 — Numero cliente di suite con prefisso del prodotto
@@ -219,6 +219,12 @@ Le decisioni sono append-only. Un cambio non cancella la decisione precedente: n
 - Stato: accettata
 - Decisione: gli obiettivi e le loro metriche restano nelle sorgenti KPI esistenti; la policy premio vive in un registro tenant-scoped separato. L'utente vede il premio potenziale, ma soltanto un tenant admin o superadmin con tenant selezionato puo' confermarlo. I punti vengono accreditati internamente alla conferma; un premio in EUR passa prima a `approved` e diventa `settled` solo dopo una seconda azione amministrativa che attesta il pagamento avvenuto fuori da HotelAccelerator.
 - Conseguenza: HotelAccelerator non genera bonifici, cedolini o movimenti bancari da questa capability. Il ledger e' idempotente per utente/obiettivo/ciclo, conserva snapshot di regola e metrica e puo' evolvere di stato o livello soltanto con audit append-only. Gli obiettivi giornalieri usano il giorno locale del tenant; quelli rolling 30 giorni mantengono la metrica mobile ma maturano al massimo una volta per ciclo mensile. Un premio economico gia' liquidato non viene aumentato o annullato automaticamente.
+
+## ADR-034 — Telefonia tramite adapter provider, non tramite modello 3CX universale
+
+- Stato: accettata
+- Decisione: il Core possiede il contratto telefonico comune e `telephony_integrations` conserva una configurazione per provider, con un solo PBX attivo per tenant. 3CX, Wildix, NethVoice, VOIspeed, Yeastar, Teams Phone, Webex Calling, Asterisk/FreePBX e Avaya IP Office sono provider del registro, non modelli dati universali. Le operazioni comuni (scelta provider, verifica connessione, click-to-call quando supportato, stato e guida) passano da adapter; le funzioni specifiche 3CX come shared PBX, journal avanzato e Voice Agent restano confinate all'adapter/area 3CX.
+- Conseguenza: un nuovo provider API sostituisce quello attivo solo dopo una verifica riuscita; una configurazione guidata/OAuth non collaudata e un bridge non disattivano il PBX funzionante. URL PBX server-side sono soggette a controlli SSRF/DNS/HTTPS, i segreti restano cifrati e le modifiche provider sono admin-only e auditabili. Se il protocollo richiede un processo persistente (es. DevLink/TSPI), si usa un bridge dedicato invece di simulare la funzione con una Vercel Function. Nessun provider nuovo viene dichiarato `Tenant reale` senza prova E2E su un impianto cliente.
 
 ## Decisioni aperte
 
