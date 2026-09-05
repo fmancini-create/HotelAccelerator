@@ -6,6 +6,7 @@ import { CENTRAL_SUPPORT_SLUG, type SupportAfterHoursMode } from "@/lib/telephon
 
 export interface VoiceSupportCustomer {
   propertyId: string
+  propertyName: string
   customerCode: string
   plan: string | null
   supportAfterHoursMode: SupportAfterHoursMode
@@ -14,8 +15,9 @@ export interface VoiceSupportCustomer {
 
 /**
  * Il centralino centrale puo' interrogare questa directory; le integrazioni
- * 3CX dei singoli tenant no. Non restituiamo mai nome, email o telefono del
- * cliente al chiamante, anche quando il codice e' valido.
+ * 3CX dei singoli tenant no. Per confermare la licenza possiamo pronunciare
+ * soltanto il nome pubblico della struttura/azienda associata: non esponiamo
+ * email, telefono, contatti personali o altri dati del cliente.
  */
 export async function findVoiceSupportCustomer(
   customerCode: string,
@@ -27,7 +29,7 @@ export async function findVoiceSupportCustomer(
   const supabase = createServiceClient()
   const { data, error } = await supabase
     .from("properties")
-    .select("id, plan, subscription_status, is_active, support_after_hours_mode, support_after_hours_extension")
+    .select("id, name, plan, subscription_status, is_active, support_after_hours_mode, support_after_hours_extension")
     .eq("id", resolved.propertyId)
     .maybeSingle()
 
@@ -40,6 +42,7 @@ export async function findVoiceSupportCustomer(
 
   return {
     propertyId: data.id,
+    propertyName: String(data.name || "cliente 4BID").trim() || "cliente 4BID",
     customerCode: resolved.code,
     plan: data.plan,
     supportAfterHoursMode: mode,
