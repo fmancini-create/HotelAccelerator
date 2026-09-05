@@ -43,9 +43,6 @@ function santaddeoAuthHeaders(origin: ReviewsOrigin): Record<string, string> {
   const oidc = requestScopedVercelOidcToken()
   if (oidc) headers.Authorization = `Bearer ${oidc}`
 
-  // OIDC e' la credenziale primaria in produzione. Inviamo anche la registry
-  // key esistente, quando configurata, cosi' Santaddeo puo' usarla come fallback
-  // in preview/recovery dopo aver rifiutato intenzionalmente un token non-prod.
   const key = process.env.CUSTOMER_CODE_REGISTRY_KEY_SNT?.trim()
   if (key) headers["X-4BID-Registry-Key"] = key
 
@@ -178,8 +175,6 @@ export async function ensureReviewsWorkspace(input: {
 
   if (insertError.code !== "23505") throw insertError
 
-  // Un'altra richiesta puo' aver creato il link nello stesso istante. In quel
-  // caso il mapping di suite vince sempre sul workspace appena provisionato.
   const { data: raced, error: racedError } = await sb
     .from("suite_tenant_links")
     .select("external_tenant_id")
@@ -219,6 +214,28 @@ export async function forwardReviewsConfig(input: {
     ...(input.method === "PATCH" ? { body: input.body ?? "{}" } : {}),
   })
 
+  const payload = await upstream.json().catch(() => ({ error: "invalid_upstream_response" }))
+  return { status: upstream.status, payload }
+}
+
+export async function forwardReviewsList(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  query?: URLSearchParams
+}) {
+  const url = new URL("/api/integrations/reviews/federated/list", santaddeoBaseUrl())
+  url.searchParams.set("hotelId", input.hotelId)
+  for (const key of ["page", "pageSize", "platform", "sentiment", "q", "sort"]) {
+    const value = input.query?.get(key)
+    if (value) url.searchParams.set(key, value)
+  }
+
+  const upstream = await fetch(url, {
+    method: "GET",
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
+    headers: santaddeoAuthHeaders(input.origin),
+  })
   const payload = await upstream.json().catch(() => ({ error: "invalid_upstream_response" }))
   return { status: upstream.status, payload }
 }
