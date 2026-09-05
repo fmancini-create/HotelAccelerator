@@ -6,6 +6,8 @@ export const DASHBOARD_PANEL_IDS = DASHBOARD_PANELS.map((panel) => panel.id)
 export const DASHBOARD_PANEL_ID_SET = new Set(DASHBOARD_PANEL_IDS)
 
 export type DashboardGoals = {
+  workdayResponsesTarget: number | null
+  workdayConversationsTarget: number | null
   responsesTarget: number | null
   conversationsTarget: number | null
   medianResponseSecondsTarget: number | null
@@ -19,6 +21,8 @@ export type DashboardUserSettings = {
 export const EMPTY_DASHBOARD_USER_SETTINGS: DashboardUserSettings = {
   hiddenPanels: [],
   goals: {
+    workdayResponsesTarget: null,
+    workdayConversationsTarget: null,
     responsesTarget: null,
     conversationsTarget: null,
     medianResponseSecondsTarget: null,
@@ -40,6 +44,8 @@ function positiveIntegerOrNull(value: unknown): number | null {
 export function parseDashboardGoals(value: unknown): DashboardGoals {
   const goals = value && typeof value === "object" ? (value as Record<string, unknown>) : {}
   return {
+    workdayResponsesTarget: positiveIntegerOrNull(goals.workdayResponsesTarget),
+    workdayConversationsTarget: positiveIntegerOrNull(goals.workdayConversationsTarget),
     responsesTarget: positiveIntegerOrNull(goals.responsesTarget),
     conversationsTarget: positiveIntegerOrNull(goals.conversationsTarget),
     medianResponseSecondsTarget: positiveIntegerOrNull(goals.medianResponseSecondsTarget),
@@ -55,7 +61,7 @@ export async function readDashboardUserSettings(
 
   const { data, error } = await sb
     .from("dashboard_user_settings")
-    .select("hidden_panels, responses_target, conversations_target, median_response_seconds_target")
+    .select("hidden_panels, workday_responses_target, workday_conversations_target, responses_target, conversations_target, median_response_seconds_target")
     .eq("property_id", propertyId)
     .eq("user_id", userId)
     .maybeSingle()
@@ -66,6 +72,10 @@ export async function readDashboardUserSettings(
   return {
     hiddenPanels: sanitizeHiddenPanels(data.hidden_panels),
     goals: {
+      workdayResponsesTarget:
+        typeof data.workday_responses_target === "number" ? data.workday_responses_target : null,
+      workdayConversationsTarget:
+        typeof data.workday_conversations_target === "number" ? data.workday_conversations_target : null,
       responsesTarget: typeof data.responses_target === "number" ? data.responses_target : null,
       conversationsTarget: typeof data.conversations_target === "number" ? data.conversations_target : null,
       medianResponseSecondsTarget:
