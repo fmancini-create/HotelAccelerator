@@ -6,19 +6,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Check, PhoneMissed } from "lucide-react"
 
-/**
- * Dare un nome agli interni che compaiono nel registro.
- *
- * L'elenco NON e' digitato a mano: arriva dalle telefonate realmente registrate.
- * E' cosi' che si scopre un interno che nessuno riconosce — per esempio un
- * gruppo di squillo che risponde al posto della reception — invece di doverlo
- * indovinare.
- *
- * Gli interni gia' assegnati a una persona restano in sola lettura: la persona
- * si imposta in Canali, e permettere due nomi per lo stesso interno creerebbe
- * due verita' in disaccordo.
- */
-
 type Riga = {
   extension: string
   calls: number
@@ -26,14 +13,12 @@ type Riga = {
   last_call_at: string | null
   label: string | null
   kind: string | null
-  /**
-   * Secondi di squillo dopo i quali un gruppo lascia cadere la chiamata.
-   * NULL = non dichiarato: il registro non deduce nulla e si fida solo di cio'
-   * che dice il centralino.
-   */
   no_answer_seconds: number | null
+  group_id: string | null
   person: string | null
 }
+
+type Gruppo = { id: string; name: string }
 
 const TIPI: Array<{ value: string; label: string }> = [
   { value: "shared", label: "Telefono condiviso" },
@@ -42,23 +27,23 @@ const TIPI: Array<{ value: string; label: string }> = [
   { value: "other", label: "Altro" },
 ]
 
-/** Il valore di partenza dei campi: quello SALVATO, non un valore inventato. */
 function bozzaIniziale(r: Riga) {
   return {
     label: r.label ?? "",
     kind: r.kind ?? "other",
     secondi: r.no_answer_seconds === null ? "" : String(r.no_answer_seconds),
+    groupId: r.group_id ?? "",
   }
 }
 
+type Bozza = ReturnType<typeof bozzaIniziale>
+
 export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
   const [righe, setRighe] = useState<Riga[]>([])
+  const [gruppi, setGruppi] = useState<Gruppo[]>([])
   const [caricamento, setCaricamento] = useState(true)
   const [errore, setErrore] = useState<string | null>(null)
-  // I secondi si tengono come TESTO, non come numero: durante la digitazione il
-  // campo passa per stati intermedi (vuoto, "7") che un numero non saprebbe
-  // rappresentare senza riscrivere sotto le dita di chi scrive.
-  const [bozza, setBozza] = useState<Record<string, { label: string; kind: string; secondi: string }>>({})
+  const [bozza, setBozza] = useState<Record<string, Bozza>>({})
   const [salvando, setSalvando] = useState<string | null>(null)
   const [salvato, setSalvato] = useState<string | null>(null)
 
@@ -71,8 +56,9 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
         const j = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(j.error || "Non è stato possibile leggere gli interni.")
       }
-      const j = (await res.json()) as { extensions?: Riga[] }
+      const j = (await res.json()) as { extensions?: Riga[]; groups?: Gruppo[] }
       setRighe(j.extensions ?? [])
+      setGruppi(j.groups ?? [])
     } catch (e) {
       setErrore(e instanceof Error ? e.message : "Errore inatteso.")
     } finally {
@@ -96,11 +82,8 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
           extension: r.extension,
           label: corrente.label,
           kind: corrente.kind,
-          // I secondi si mandano SOLO per un gruppo di squillo. Cambiando tipo
-          // da gruppo a telefono condiviso il valore va via con il tipo,
-          // altrimenti resterebbe a dedurre chiamate perse su un interno che
-          // gruppo non e' piu'.
           no_answer_seconds: corrente.kind === "group" ? corrente.secondi : null,
+          group_id: corrente.kind === "group" && corrente.groupId ? corrente.groupId : null,
         }),
       })
       if (!res.ok) {
@@ -130,7 +113,7 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
   return (
     <div className="rounded-lg border border-border bg-card p-4">
       <p className="text-sm text-muted-foreground">
-        {"Gli interni sono ricavati dalle telefonate registrate. Un interno che non riconosci è spesso un gruppo di squillo o un servizio automatico del centralino, non una persona."}
+        Gli interni sono ricavati dalle telefonate registrate. Per un gruppo di squillo puoi collegare anche il gruppo utenti HotelAccelerator: questa associazione viene usata per la visibilità delle chiamate.
       </p>
 
       {errore && (
@@ -179,7 +162,16 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
                     />
                     <select
                       value={corrente.kind}
-                      onChange={(e) => setBozza((b) => ({ ...b, [r.extension]: { ...corrente, kind: e.target.value } }))}
+                      onChange={(e) =>
+                        setBozza((b) => ({
+                          ...b,
+                          [r.extension]: {
+                            ...corrente,
+                            kind: e.target.value,
+                            groupId: e.target.value === "group" ? corrente.groupId : "",
+                          },
+                        }))
+                      }
                       aria-label={`Tipo dell'interno ${r.extension}`}
                       className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
                     >
@@ -189,29 +181,44 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
                         </option>
                       ))}
                     </select>
-                    {/* Compare solo per un gruppo di squillo, perche' solo lì il
-                        numero ha un senso: su un telefono personale la durata è
-                        tempo di conversazione, e dedurne chiamate perse sarebbe
-                        sbagliato. Senza questo campo la regola resterebbe spenta
-                        per sempre e le chiamate cadute tornerebbero invisibili. */}
                     {corrente.kind === "group" && (
-                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span className="whitespace-nowrap">Squilla per</span>
-                        <Input
-                          value={corrente.secondi}
+                      <>
+                        <select
+                          value={corrente.groupId}
                           onChange={(e) =>
-                            setBozza((b) => ({
-                              ...b,
-                              [r.extension]: { ...corrente, secondi: e.target.value.replace(/\D/g, "").slice(0, 3) },
-                            }))
+                            setBozza((b) => ({ ...b, [r.extension]: { ...corrente, groupId: e.target.value } }))
                           }
-                          inputMode="numeric"
-                          placeholder="75"
-                          aria-label={`Secondi di squillo del gruppo ${r.extension}`}
-                          className="h-9 w-16 text-center"
-                        />
-                        <span className="whitespace-nowrap">secondi, poi cade</span>
-                      </label>
+                          aria-label={`Gruppo utenti associato all'interno ${r.extension}`}
+                          className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground"
+                        >
+                          <option value="">Nessun gruppo utenti</option>
+                          {gruppi.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </select>
+                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="whitespace-nowrap">Squilla per</span>
+                          <Input
+                            value={corrente.secondi}
+                            onChange={(e) =>
+                              setBozza((b) => ({
+                                ...b,
+                                [r.extension]: {
+                                  ...corrente,
+                                  secondi: e.target.value.replace(/\D/g, "").slice(0, 3),
+                                },
+                              }))
+                            }
+                            inputMode="numeric"
+                            placeholder="75"
+                            aria-label={`Secondi di squillo del gruppo ${r.extension}`}
+                            className="h-9 w-16 text-center"
+                          />
+                          <span className="whitespace-nowrap">secondi, poi cade</span>
+                        </label>
+                      </>
                     )}
                     <Button
                       size="sm"
@@ -236,10 +243,10 @@ export function ExtensionLabelsCard({ onSaved }: { onSaved?: () => void }) {
       )}
 
       <p className="mt-3 text-xs text-muted-foreground">
-        {"Svuotare il nome rimuove l'etichetta. Per attribuire le telefonate a una persona serve invece l'assegnazione dell'interno in Canali › Telefono."}
+        Svuotare il nome rimuove l'etichetta. Gli interni personali si assegnano invece in Canali › Telefono.
       </p>
       <p className="mt-1 text-xs text-muted-foreground">
-        {"Sui gruppi di squillo il centralino non dice se nessuno ha risposto: dichiarando i secondi di squillo, le chiamate durate esattamente quel tempo compaiono nel registro come «Caduta al centralino» invece di sembrare gestite."}
+        Per un gruppo di squillo, l'associazione al gruppo utenti permette a «Le chiamate dei miei gruppi» di includere anche le chiamate arrivate al gruppo prima che siano attribuite a una singola persona.
       </p>
     </div>
   )
