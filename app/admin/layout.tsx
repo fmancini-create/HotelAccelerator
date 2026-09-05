@@ -4,6 +4,7 @@ import { PlatformShell } from "@/components/platform/platform-shell"
 import { ClientToaster } from "@/components/admin/client-toaster"
 import { OperatorPresenceBeacon } from "@/components/admin/operator-presence-beacon"
 import { AutoLogoutWatchdog } from "@/components/admin/auto-logout-watchdog"
+import { InternalSupportAssistant } from "@/components/admin/internal-support-assistant"
 
 export const metadata: Metadata = {
   title: {
@@ -24,6 +25,7 @@ export default function AdminLayout({
       <ClientToaster />
       <OperatorPresenceBeacon />
       <AutoLogoutWatchdog />
+      <InternalSupportAssistant />
     </PlatformShell>
   )
 }
