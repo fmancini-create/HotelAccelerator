@@ -5,10 +5,11 @@ import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { resolveIdentity, normalizeExtension } from "@/lib/telephony/user-extension"
 
 /**
- * Assegnazione dell'interno telefonico alle persone.
+ * Assegnazione dell'interno telefonico alle persone del tenant attivo.
  *
- * "users" e' una chiave d'area VALIDA (verificata in lib/platform/areas.ts).
- * L'area "channels" non esiste: usarla negherebbe l'accesso a tutti.
+ * Fonte autorevole: tenant_user_memberships. `admin_users.property_id` resta
+ * solo il tenant primario legacy e non puo' rappresentare persone che lavorano
+ * in piu' tenant (es. Villa I Barronci + 4BID).
  */
 
 export async function GET(request: NextRequest) {
@@ -17,21 +18,32 @@ export async function GET(request: NextRequest) {
     const identity = await resolveIdentity(request)
     const supabase = createServiceClient()
 
-    // Due letture separate invece di un embed: fra `admin_users` e
-    // `telephony_user_extensions` non esiste una FK diretta, e un embed
-    // PostgREST fallirebbe (PGRST200) restituendo zero righe in silenzio.
-    const [{ data: users }, { data: rows }] = await Promise.all([
+    const [{ data: memberships, error: membershipsError }, { data: rows, error: rowsError }] = await Promise.all([
       supabase
-        .from("admin_users")
-        .select("id, name, email, role")
-        .eq("property_id", identity.propertyId)
-        .order("name"),
+        .from("tenant_user_memberships")
+        .select("user_id, role")
+        .eq("property_id", identity.propertyId),
       supabase
         .from("telephony_user_extensions")
         .select("user_id, extension, can_call")
         .eq("property_id", identity.propertyId),
     ])
+    if (membershipsError) throw membershipsError
+    if (rowsError) throw rowsError
 
+    const userIds = (memberships ?? []).map((membership) => String(membership.user_id))
+    const { data: users, error: usersError } = userIds.length
+      ? await supabase
+          .from("admin_users")
+          .select("id, name, email")
+          .in("id", userIds)
+          .order("name")
+      : { data: [], error: null }
+    if (usersError) throw usersError
+
+    const membershipByUser = new Map(
+      (memberships ?? []).map((membership) => [String(membership.user_id), String(membership.role || "editor")]),
+    )
     const byUser = new Map<string, { extension: string; can_call: boolean }>()
     for (const r of rows ?? []) {
       byUser.set(String(r.user_id), {
@@ -47,7 +59,7 @@ export async function GET(request: NextRequest) {
           id: u.id,
           name: u.name,
           email: u.email,
-          role: u.role,
+          role: membershipByUser.get(String(u.id)) ?? "editor",
           extension: assigned?.extension ?? "",
           can_call: assigned?.can_call ?? true,
           is_me: u.id === identity.userId,
@@ -77,22 +89,18 @@ export async function PUT(request: NextRequest) {
 
     const supabase = createServiceClient()
 
-    // ISOLAMENTO: l'utente da modificare deve appartenere ALLA struttura
-    // autenticata. Senza questo controllo un id altrui, passato a mano,
-    // assegnerebbe un interno a una persona di un'altra struttura.
-    const { data: target } = await supabase
-      .from("admin_users")
-      .select("id, name")
-      .eq("id", userId)
+    // Isolamento tenant basato sulla membership, non sul tenant primario legacy.
+    const { data: membership } = await supabase
+      .from("tenant_user_memberships")
+      .select("user_id")
       .eq("property_id", identity.propertyId)
+      .eq("user_id", userId)
       .maybeSingle()
 
-    if (!target) {
+    if (!membership) {
       return NextResponse.json({ error: "Utente non trovato in questa struttura." }, { status: 404 })
     }
 
-    // Campo svuotato = rimozione dell'assegnazione. Senza questo ramo un interno
-    // assegnato per errore non sarebbe piu' togliebile dall'interfaccia.
     if (rawExtension.trim() === "") {
       const { error } = await supabase
         .from("telephony_user_extensions")
@@ -124,9 +132,6 @@ export async function PUT(request: NextRequest) {
     )
 
     if (error) {
-      // 23505 = violazione di unicita'. Qui significa quasi sempre "interno
-      // gia' assegnato a un collega": un messaggio generico costringerebbe a
-      // indovinare, quindi dico CHI lo ha.
       if (error.code === "23505") {
         const { data: owner } = await supabase
           .from("telephony_user_extensions")
