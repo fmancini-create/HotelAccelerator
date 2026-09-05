@@ -4,9 +4,18 @@ import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { getMemberEffectiveAreas } from "@/lib/auth/area-access"
 import { getAccessibleChannelIds, getChannelAccess } from "@/lib/channel-access"
 import { BASELINE_AREA_KEYS } from "@/lib/platform/areas"
-import { readDashboardUserSettings } from "@/lib/platform/dashboard-user-settings"
+import {
+  EMPTY_DASHBOARD_USER_SETTINGS,
+  readDashboardUserSettings,
+  type DashboardCustomGoalMetric,
+  type DashboardCustomGoalPeriod,
+} from "@/lib/platform/dashboard-user-settings"
 import { getTenantLocalDayStart, resolveTenantTimeZone } from "@/lib/platform/local-day"
 import { computeOperatorPerformance, GIORNI_PREDEFINITI } from "@/lib/platform/operator-performance"
+import {
+  computeOperatorSalesPerformance,
+  type OperatorSalesPerformance,
+} from "@/lib/platform/operator-sales-performance"
 import { InboxReadService } from "@/lib/platform-services/inbox-read.service"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { ConversationListOptions } from "@/lib/types/inbox-read.types"
@@ -41,31 +50,37 @@ type UserLabel = { id: string; name: string | null }
 function callbackState(calls: Array<{ number: string | null; status: string | null; started_at: string | null }>) {
   const completedAt = new Map<string, number>()
   const callbacks: string[] = []
-
-  // Calls arrive newest first. At each missed call, completedAt already contains
-  // any successful contact with the same number that happened AFTER it.
   for (const call of calls) {
     const number = call.number ?? ""
     const at = call.started_at ? new Date(call.started_at).getTime() : 0
     if (!number || !at) continue
-
     if (call.status === "completed") {
       const previous = completedAt.get(number) ?? 0
       if (at > previous) completedAt.set(number, at)
       continue
     }
-
     if (call.status === "missed" && !completedAt.has(number)) callbacks.push(number)
   }
-
   return new Set(callbacks)
+}
+
+function customMetricValue(
+  sales: OperatorSalesPerformance,
+  metric: DashboardCustomGoalMetric | null,
+  period: DashboardCustomGoalPeriod | null,
+): { value: number | null; unit: "count" | "percent" | null } {
+  if (!metric) return { value: null, unit: null }
+  const workday = period === "workday"
+  if (metric === "quotes_sent") return { value: workday ? sales.quotesSentToday : sales.quotesSent30, unit: "count" }
+  if (metric === "completed_calls") return { value: workday ? sales.completedCallsToday : sales.completedCalls30, unit: "count" }
+  if (metric === "completed_tasks") return { value: workday ? sales.completedTasksToday : sales.completedTasks30, unit: "count" }
+  if (metric === "conversion_rate") return { value: workday ? sales.conversionRateToday : sales.conversionRate30, unit: "percent" }
+  return { value: null, unit: null }
 }
 
 export async function GET(request: NextRequest) {
   const identity = await getCallerIdentity(request)
-  if (!identity?.propertyId) {
-    return NextResponse.json({ error: "Sessione non valida" }, { status: 401 })
-  }
+  if (!identity?.propertyId) return NextResponse.json({ error: "Sessione non valida" }, { status: 401 })
 
   const propertyId = identity.propertyId
   const userId = identity.adminUserId ?? null
@@ -85,17 +100,18 @@ export async function GET(request: NextRequest) {
 
   const settings = await readDashboardUserSettings(sb, propertyId, userId).catch((error) => {
     console.error("[dashboard-home] user settings unavailable", error)
-    return {
-      hiddenPanels: [],
-      goals: {
-        workdayResponsesTarget: null,
-        workdayConversationsTarget: null,
-        responsesTarget: null,
-        conversationsTarget: null,
-        medianResponseSecondsTarget: null,
-      },
-    }
+    return EMPTY_DASHBOARD_USER_SETTINGS
   })
+
+  const emptyCommercial = {
+    closedDeals30: null,
+    closedRevenueCents30: null,
+    quotesSent30: null,
+    customMetricValue: null,
+    customMetricUnit: null,
+    customMetric: settings.goals.customGoalMetric,
+    customMetricPeriod: settings.goals.customGoalPeriod,
+  }
 
   const result: Record<string, unknown> = {
     hiddenPanels: settings.hiddenPanels,
@@ -111,13 +127,13 @@ export async function GET(request: NextRequest) {
       todayConversations: null,
       timeZone: "Europe/Rome",
     },
+    commercial: emptyCommercial,
     todos: [],
     messages: [],
     calls: { latest: [], callbacks: [] },
   }
 
-  // Performance is self-only here. The existing admin performance endpoint still
-  // owns team comparisons; this route never exposes another operator's row.
+  // Performance self-only: il confronto fra operatori resta sulle superfici admin.
   if (userId) {
     try {
       const [{ data: kpi }, { data: property }] = await Promise.all([
@@ -129,19 +145,22 @@ export async function GET(request: NextRequest) {
           .maybeSingle(),
         sb.from("properties").select("timezone").eq("id", propertyId).maybeSingle(),
       ])
-
       const timeZone = resolveTenantTimeZone(property?.timezone)
 
       if (kpi?.enabled) {
         const now = new Date()
         const dayStart = getTenantLocalDayStart(now, timeZone)
+        const rollingStart = new Date(now.getTime() - GIORNI_PREDEFINITI * 86_400_000)
         const dailyWindowDays = Math.max((now.getTime() - dayStart.getTime()) / 86_400_000, 1 / 86_400)
-        const [performance, todayPerformance] = await Promise.all([
+        const [performance, todayPerformance, sales] = await Promise.all([
           computeOperatorPerformance(sb, propertyId, GIORNI_PREDEFINITI),
           computeOperatorPerformance(sb, propertyId, dailyWindowDays),
+          computeOperatorSalesPerformance(sb, propertyId, userId, dayStart.toISOString(), rollingStart.toISOString()),
         ])
         const me = performance.righe.find((row) => row.genere === "persona" && row.id === userId)
         const todayMe = todayPerformance.righe.find((row) => row.genere === "persona" && row.id === userId)
+        const custom = customMetricValue(sales, settings.goals.customGoalMetric, settings.goals.customGoalPeriod)
+
         result.performance = {
           enabled: true,
           days: performance.giorni,
@@ -152,6 +171,15 @@ export async function GET(request: NextRequest) {
           todayResponses: todayMe?.risposte ?? 0,
           todayConversations: todayMe?.conversazioni ?? 0,
           timeZone,
+        }
+        result.commercial = {
+          closedDeals30: sales.closedDeals30,
+          closedRevenueCents30: sales.closedRevenueCents30,
+          quotesSent30: sales.quotesSent30,
+          customMetricValue: custom.value,
+          customMetricUnit: custom.unit,
+          customMetric: settings.goals.customGoalMetric,
+          customMetricPeriod: settings.goals.customGoalPeriod,
         }
       } else {
         result.performance = {
@@ -179,6 +207,7 @@ export async function GET(request: NextRequest) {
         todayConversations: null,
         timeZone: "Europe/Rome",
       }
+      result.commercial = emptyCommercial
     }
   }
 
