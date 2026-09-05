@@ -6,6 +6,7 @@ import { linkSuiteIdentity, SuiteIdentityError } from "@/lib/suite-identity/regi
 
 const ACTIVE_ENTITLEMENTS = new Set(["active", "trial"])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const VERCEL_REQUEST_CONTEXT_SYMBOL = Symbol.for("@vercel/request-context")
 
 const REGISTRY_KEY_BY_PRODUCT: Record<SuiteSsoProduct, string | undefined> = {
   santaddeo: process.env.CUSTOMER_CODE_REGISTRY_KEY_SNT,
@@ -54,24 +55,57 @@ type TenantLinkRow = {
   external_tenant_id: string
 }
 
+type VercelRequestContext = {
+  headers?: Record<string, string | undefined>
+}
+
+type VercelRequestContextReader = {
+  get?: () => VercelRequestContext | undefined
+}
+
+type ProductAuth = {
+  headers: Record<string, string>
+  mode: "oidc-context" | "static" | "missing"
+}
+
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase()
 }
 
-function productAuthMode(product: SuiteSsoProduct): "oidc" | "static" | "missing" {
-  if (process.env.VERCEL_OIDC_TOKEN?.trim()) return "oidc"
-  if (REGISTRY_KEY_BY_PRODUCT[product]?.trim()) return "static"
-  return "missing"
+function requestScopedVercelOidcToken(): string | null {
+  if (process.env.VERCEL !== "1") return null
+
+  try {
+    const runtime = globalThis as unknown as Record<symbol, unknown>
+    const reader = runtime[VERCEL_REQUEST_CONTEXT_SYMBOL] as VercelRequestContextReader | undefined
+    const token = reader?.get?.()?.headers?.["x-vercel-oidc-token"]?.trim()
+    return token || null
+  } catch {
+    return null
+  }
 }
 
-function productHeaders(product: SuiteSsoProduct): Record<string, string> {
-  // Production-to-production calls use the short-lived Vercel project identity.
-  // Static per-product keys remain only as a recovery/local-development fallback.
-  const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim()
-  if (oidcToken) return { Authorization: `Bearer ${oidcToken}` }
+function productAuth(product: SuiteSsoProduct): ProductAuth {
+  // Vercel injects a short-lived OIDC token in the request-scoped runtime
+  // context. Read and forward it immediately; never persist or log it.
+  const oidcToken = requestScopedVercelOidcToken()
+  if (oidcToken) {
+    return {
+      headers: { Authorization: `Bearer ${oidcToken}` },
+      mode: "oidc-context",
+    }
+  }
 
+  // Per-product static keys remain a recovery/local-development fallback.
   const key = REGISTRY_KEY_BY_PRODUCT[product]?.trim()
-  return key ? { "X-4BID-Registry-Key": key } : {}
+  if (key) {
+    return {
+      headers: { "X-4BID-Registry-Key": key },
+      mode: "static",
+    }
+  }
+
+  return { headers: {}, mode: "missing" }
 }
 
 async function customerContextForProperty(propertyId: string) {
@@ -123,18 +157,19 @@ async function customerContextForProperty(propertyId: string) {
 async function fetchSatelliteUsers(link: LinkedProduct): Promise<SatelliteUser[]> {
   const url = new URL("/api/integrations/hotelaccelerator/v1/users", SUITE_SSO_CONFIG[link.product].baseUrl)
   url.searchParams.set("tenant_id", link.externalTenantId)
+  const auth = productAuth(link.product)
 
   const response = await fetch(url, {
     method: "GET",
     cache: "no-store",
     signal: AbortSignal.timeout(4_000),
-    headers: productHeaders(link.product),
+    headers: auth.headers,
   })
   if (!response.ok) {
     console.warn("[suite-directory] satellite directory unavailable", {
       product: link.product,
       status: response.status,
-      auth_method: productAuthMode(link.product),
+      auth_method: auth.mode,
     })
     throw new Error(`${link.product}_directory_${response.status}`)
   }
