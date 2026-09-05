@@ -19,8 +19,19 @@ const nameWord = /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
 const phonePattern = /(?:\+?\d[\d\s().-]{7,}\d)/g
 
+/**
+ * An external lead/support handoff is operationally complete only when 4BID
+ * can identify and re-contact the person through both primary channels.
+ * Known channel identity is merged before this check, so WhatsApp/email users
+ * are never asked to repeat data the platform already knows.
+ */
 export function contactIsComplete(contact: HandoffContact): boolean {
-  return Boolean(clean(contact.firstName)) && Boolean(clean(contact.lastName)) && Boolean(clean(contact.email) || clean(contact.phone))
+  return Boolean(
+    clean(contact.firstName)
+    && clean(contact.lastName)
+    && clean(contact.email)
+    && clean(contact.phone),
+  )
 }
 
 export function contactFullName(contact: HandoffContact): string | null {
@@ -155,8 +166,11 @@ export function handoffContactPrompt(contact: HandoffContact): string {
   if (!clean(contact.firstName) || !clean(contact.lastName)) {
     return "Certo. Per metterla in contatto con il nostro staff, mi indica nome e cognome?"
   }
-  if (!clean(contact.email) && !clean(contact.phone)) {
-    return `Grazie${fullName ? ` ${fullName}` : ""}. Mi lascia un recapito, email o telefono, così lo staff potrà ricontattarla?`
+  if (!clean(contact.email)) {
+    return `Grazie${fullName ? ` ${fullName}` : ""}. Mi lascia anche il suo indirizzo email?`
+  }
+  if (!clean(contact.phone)) {
+    return `Grazie${fullName ? ` ${fullName}` : ""}. Mi indica anche un numero di telefono al quale lo staff può ricontattarla?`
   }
   return `Grazie${fullName ? ` ${fullName}` : ""}. Sto preparando la richiesta per il nostro staff.`
 }
