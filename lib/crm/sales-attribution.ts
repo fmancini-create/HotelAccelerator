@@ -77,10 +77,25 @@ export function isQuoteLikeMessage(subject: string, body: string): boolean {
   return quoteWord || (hospitalityContext && money)
 }
 
-export function isBookingAcceptanceMessage(subject: string, body: string): boolean {
+export function isBookingCancellationMessage(subject: string, body: string): boolean {
   const text = normalize(`${subject}\n${body}`).slice(0, 2600)
   if (!text) return false
-  if (/\b(non\s+conferm|annull|cancell|rimbor|refund|cancelled|canceled|storn)\w*/i.test(text)) return false
+  return [
+    /\bannull(?:o|iamo|are|ata|ata la)?\s+(?:la\s+)?prenotazion/i,
+    /\bcancell(?:o|iamo|are|ata|azione)\w*\s*(?:la\s+)?prenotazion?/i,
+    /\bchiedo\s+(?:il\s+)?rimborso/i,
+    /\b(?:i|we)\s+(?:need to\s+)?cancel\s+(?:the\s+)?(?:booking|reservation)/i,
+    /\bplease\s+cancel\s+(?:the\s+)?(?:booking|reservation)/i,
+    /\brefund\b/i,
+    /\bannulation\b/i,
+    /\bstornier(?:e|en|ung)\b/i,
+    /\bcancelar\s+(?:la\s+)?reserva/i,
+  ].some((pattern) => pattern.test(text))
+}
+
+export function isBookingAcceptanceMessage(subject: string, body: string): boolean {
+  const text = normalize(`${subject}\n${body}`).slice(0, 2600)
+  if (!text || isBookingCancellationMessage(subject, body)) return false
 
   return [
     /\bconferm(?:o|iamo|iamo la|o la)?\s+(?:la\s+)?prenotazion/i,
@@ -181,6 +196,12 @@ export function resolveOperatorFromSentMessage(
   return { userId: null, confidence: 0, match: "unresolved" }
 }
 
+function messageTime(message: SalesThreadMessage | null): number {
+  if (!message) return Number.NEGATIVE_INFINITY
+  const time = Date.parse(message.occurredAt)
+  return Number.isFinite(time) ? time : Number.NEGATIVE_INFINITY
+}
+
 export function analyzeSalesThread(
   messages: SalesThreadMessage[],
   operators: SalesOperatorIdentity[],
@@ -193,72 +214,113 @@ export function analyzeSalesThread(
   const quotes = ordered.filter(
     (message) => message.labels.includes("SENT") && isQuoteLikeMessage(message.subject, message.body),
   )
+  const inbound = ordered.filter((message) => !message.labels.includes("SENT"))
+  const acceptances = inbound.filter((message) => isBookingAcceptanceMessage(message.subject, message.body))
+  const cancellations = inbound.filter((message) => isBookingCancellationMessage(message.subject, message.body))
 
-  const acceptances = ordered.filter(
-    (message) => !message.labels.includes("SENT") && isBookingAcceptanceMessage(message.subject, message.body),
-  )
+  const latestAcceptance = acceptances.at(-1) ?? null
+  const latestCancellation = cancellations.at(-1) ?? null
+  const latestCustomerDecision = messageTime(latestCancellation) > messageTime(latestAcceptance)
+    ? { kind: "customer_cancellation" as const, message: latestCancellation }
+    : latestAcceptance
+      ? { kind: "customer_acceptance" as const, message: latestAcceptance }
+      : latestCancellation
+        ? { kind: "customer_cancellation" as const, message: latestCancellation }
+        : null
 
-  const firstAcceptance = acceptances[0] ?? null
-  const quote = firstAcceptance
-    ? [...quotes].reverse().find((candidate) => Date.parse(candidate.occurredAt) <= Date.parse(firstAcceptance.occurredAt)) ?? quotes.at(-1) ?? null
+  const customerDecisionAt = latestCustomerDecision?.message?.occurredAt ?? null
+  const customerDecisionMs = customerDecisionAt ? Date.parse(customerDecisionAt) : Number.NEGATIVE_INFINITY
+
+  // Il preventivo attribuibile e l'ultimo SENT che precede la decisione positiva
+  // del cliente. Con una cancellazione finale, teniamo comunque l'ultimo
+  // preventivo storico ma non generiamo una chiusura.
+  const positiveDecision = latestCustomerDecision?.kind === "customer_acceptance"
+    ? latestCustomerDecision.message
+    : null
+  const quote = positiveDecision
+    ? [...quotes].reverse().find((candidate) => Date.parse(candidate.occurredAt) <= Date.parse(positiveDecision.occurredAt)) ?? quotes.at(-1) ?? null
     : quotes.at(-1) ?? null
 
-  // Una decisione esplicita in pipeline e la fonte piu forte: ha gia autore e
-  // timestamp. Gmail serve per ricostruire lo storico, non per scavalcare una
-  // decisione umana registrata successivamente.
-  if (pipeline.stage === "confermata" && pipeline.stageSetBy && pipeline.stageSetAt) {
-    return {
-      userId: pipeline.stageSetBy,
-      quoteSentAt: quote?.occurredAt ?? null,
-      closedAt: pipeline.stageSetAt,
-      amountCents: pipeline.quotedRateCents ?? (quote ? extractSingleAmountCents(quote.subject, quote.body) : null),
-      confidence: 100,
-      verificationStatus: "confirmed",
-      source: "pipeline_stage",
-      quoteMessageId: quote?.id ?? null,
-      closeMessageId: null,
-      evidence: { operator_match: "pipeline_stage_set_by", close_signal: "human_stage", quote_detected: Boolean(quote) },
+  const operator = quote ? resolveOperatorFromSentMessage(quote, operators) : { userId: null, confidence: 0, match: "unresolved" }
+  const stageMs = pipeline.stageSetAt ? Date.parse(pipeline.stageSetAt) : Number.NEGATIVE_INFINITY
+  const finalHumanStage = pipeline.stage === "confermata" || pipeline.stage === "persa"
+
+  let closedAt = latestCustomerDecision?.kind === "customer_acceptance" ? latestCustomerDecision.message.occurredAt : null
+  let closeSignal = latestCustomerDecision?.kind ?? "none"
+  let closeMessageId = latestCustomerDecision?.message?.id ?? null
+
+  // Fra i soli esiti finali, vince la decisione piu recente: una cancellazione
+  // successiva a una conferma toglie la vendita; una conferma umana successiva a
+  // una cancellazione la ripristina. Le fasi intermedie non sovrascrivono una
+  // successiva accettazione del cliente.
+  if (finalHumanStage && Number.isFinite(stageMs) && stageMs >= customerDecisionMs) {
+    if (pipeline.stage === "confermata") {
+      closedAt = pipeline.stageSetAt
+      closeSignal = "human_stage_confirmed"
+    } else {
+      closedAt = null
+      closeSignal = "human_stage_lost"
     }
+    closeMessageId = null
   }
 
-  if (!quote) {
-    return {
-      userId: null,
-      quoteSentAt: null,
-      closedAt: null,
-      amountCents: pipeline.quotedRateCents,
-      confidence: 0,
-      verificationStatus: "unattributed",
-      source: "gmail_scan",
-      quoteMessageId: null,
-      closeMessageId: firstAcceptance?.id ?? null,
-      evidence: { operator_match: "unresolved", close_signal: firstAcceptance ? "acceptance_without_quote" : "none", quote_detected: false },
-    }
-  }
-
-  const operator = resolveOperatorFromSentMessage(quote, operators)
-  const closedAt = firstAcceptance?.occurredAt ?? null
-  const status = operator.userId
-    ? operator.confidence >= 98
+  let userId = operator.userId
+  let confidence = operator.confidence
+  let verificationStatus: SalesAttributionAnalysis["verificationStatus"] = userId
+    ? confidence >= 98
       ? "confirmed"
       : "needs_review"
     : "unattributed"
+  let source: SalesAttributionAnalysis["source"] = quote ? "gmail_scan" : "pipeline_stage"
+  let operatorMatch = operator.match
+
+  // Se la trattativa ha una decisione umana finale ma non riusciamo a trovare
+  // chi ha scritto il preventivo, chi ha cambiato la fase e solo un candidato:
+  // non gli assegniamo automaticamente il merito commerciale.
+  if (!userId && finalHumanStage && pipeline.stageSetBy) {
+    userId = pipeline.stageSetBy
+    confidence = 75
+    verificationStatus = "needs_review"
+    source = "pipeline_stage"
+    operatorMatch = "pipeline_stage_actor_candidate"
+  }
+
+  if (!quote && !userId) {
+    return {
+      userId: null,
+      quoteSentAt: null,
+      closedAt,
+      amountCents: pipeline.quotedRateCents,
+      confidence: 0,
+      verificationStatus: "unattributed",
+      source,
+      quoteMessageId: null,
+      closeMessageId,
+      evidence: {
+        operator_match: "unresolved",
+        close_signal: closeSignal,
+        quote_detected: false,
+        final_human_stage: finalHumanStage,
+      },
+    }
+  }
 
   return {
-    userId: operator.userId,
-    quoteSentAt: quote.occurredAt,
+    userId,
+    quoteSentAt: quote?.occurredAt ?? null,
     closedAt,
-    amountCents: pipeline.quotedRateCents ?? extractSingleAmountCents(quote.subject, quote.body),
-    confidence: operator.confidence,
-    verificationStatus: status,
-    source: "gmail_scan",
-    quoteMessageId: quote.id,
-    closeMessageId: firstAcceptance?.id ?? null,
+    amountCents: pipeline.quotedRateCents ?? (quote ? extractSingleAmountCents(quote.subject, quote.body) : null),
+    confidence,
+    verificationStatus,
+    source,
+    quoteMessageId: quote?.id ?? null,
+    closeMessageId,
     evidence: {
-      operator_match: operator.match,
-      close_signal: firstAcceptance ? "customer_acceptance" : "none",
-      quote_detected: true,
-      amount_source: pipeline.quotedRateCents ? "pipeline" : "single_email_amount_or_null",
+      operator_match: operatorMatch,
+      close_signal: closeSignal,
+      quote_detected: Boolean(quote),
+      amount_source: pipeline.quotedRateCents ? "pipeline" : quote ? "single_email_amount_or_null" : "none",
+      final_human_stage: finalHumanStage,
     },
   }
 }
