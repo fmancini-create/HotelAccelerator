@@ -2,6 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import type { InboundWhatsAppMessage } from "./processor"
 import type { MessagingChannelRow } from "./types"
 import { normalizeWhatsAppNumber, sendWhatsAppTemplate, sendWhatsAppText } from "./client"
+import {
+  decodePendingWhatsAppPayload,
+  encodePendingWhatsAppPayload,
+  removeStagedWhatsAppMedia,
+  sendStagedWhatsAppMedia,
+  type StagedWhatsAppMedia,
+} from "./outbound-media"
 
 export const DEFAULT_WHATSAPP_REOPEN_TEMPLATE = "hotelaccelerator_nuova_comunicazione"
 export const DEFAULT_WHATSAPP_REOPEN_LANGUAGE = "it"
@@ -55,6 +62,7 @@ export interface QueueReopenInput {
   channel: MessagingChannelRow
   toPhone: string
   body: string
+  media?: StagedWhatsAppMedia | null
   operatorAdminUserId?: string | null
   operatorActorKey?: string | null
   operatorLabel: string
@@ -90,7 +98,9 @@ export function isWhatsAppSendingAttemptStale(
 
 /**
  * Persist the operator message before contacting Meta. If Meta rejects or is
- * temporarily unavailable the text is not lost and the failure is auditable.
+ * temporarily unavailable the payload is not lost and the failure is auditable.
+ * Media payloads are encoded inside the existing text column so the feature does
+ * not require a schema migration and legacy text-only rows keep working.
  */
 export async function queueWhatsAppReopen(
   supabase: SupabaseClient,
@@ -119,6 +129,7 @@ export async function queueWhatsAppReopen(
   const name = templateName(input.channel)
   const language = templateLanguage(input.channel)
   const expiresAt = new Date(Date.now() + WHATSAPP_REOPEN_REQUEST_TTL_MS).toISOString()
+  const persistedBody = encodePendingWhatsAppPayload(input.body, input.media)
 
   const { data: pending, error: insertError } = await supabase
     .from("whatsapp_pending_messages")
@@ -128,7 +139,7 @@ export async function queueWhatsAppReopen(
       contact_id: input.contactId ?? null,
       messaging_channel_id: input.channel.id,
       to_phone: phone,
-      body: input.body,
+      body: persistedBody,
       operator_admin_user_id: input.operatorAdminUserId ?? null,
       operator_actor_key: input.operatorActorKey ?? null,
       operator_label: input.operatorLabel,
@@ -251,6 +262,7 @@ export async function handleWhatsAppReopenAction(
 
   const pending = data as PendingRow | null
   if (!pending) return { handled: true }
+  const pendingPayload = decodePendingWhatsAppPayload(pending.body)
 
   // A copied/stale payload must never authorize sending to another number.
   if (normalizeWhatsAppNumber(msg.fromPhone) !== normalizeWhatsAppNumber(pending.to_phone)) {
@@ -266,6 +278,7 @@ export async function handleWhatsAppReopenAction(
         .eq("id", pending.id)
         .eq("property_id", propertyId)
     }
+    if (pendingPayload.media) await removeStagedWhatsAppMedia(supabase, pendingPayload.media)
     return { handled: true }
   }
 
@@ -278,6 +291,7 @@ export async function handleWhatsAppReopenAction(
         .eq("property_id", propertyId)
         .neq("status", "sent")
     }
+    if (pendingPayload.media) await removeStagedWhatsAppMedia(supabase, pendingPayload.media)
     return { handled: true, delivered: false }
   }
 
@@ -311,8 +325,6 @@ export async function handleWhatsAppReopenAction(
     return { handled: true, delivered: false, error: unknownMessage }
   }
 
-  // Claim before the external call. A concurrent/retried webhook sees `sending`
-  // and cannot emit the business message a second time.
   const { data: claimed, error: claimError } = await supabase
     .from("whatsapp_pending_messages")
     .update({
@@ -330,71 +342,169 @@ export async function handleWhatsAppReopenAction(
   if (claimError) return { handled: true, requiresRetry: true, error: claimError.message }
   if (!claimed?.id) return { handled: true, requiresRetry: true, error: "Consegna già presa in carico" }
 
-  const sent = await sendWhatsAppText(channel.config, channel.credentials, pending.to_phone, pending.body)
-  if (!sent.success) {
-    const outcomeUnknown = sent.outcomeUnknown === true
-    const message = outcomeUnknown
-      ? `Esito consegna WhatsApp incerto: ${sent.error ?? "errore di rete"}. Nessun reinvio automatico.`
-      : sent.error ?? "Errore consegna WhatsApp"
+  const sentAt = new Date().toISOString()
+  const timelineRows: Array<Record<string, unknown>> = []
+  let sentMessageId: string | null = null
+  let deliveryWarning = ""
 
-    await supabase
-      .from("whatsapp_pending_messages")
-      .update({
-        status: outcomeUnknown ? "delivery_unknown" : "failed_delivery",
-        last_error: message,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", pending.id)
-      .eq("property_id", propertyId)
+  if (pendingPayload.media) {
+    const sentMedia = await sendStagedWhatsAppMedia(supabase, {
+      propertyId,
+      channel,
+      toPhone: pending.to_phone,
+      media: pendingPayload.media,
+      caption: pendingPayload.text,
+    })
 
-    return {
-      handled: true,
-      requiresRetry: !outcomeUnknown,
-      delivered: false,
-      error: message,
+    if (!sentMedia.success) {
+      const outcomeUnknown = sentMedia.outcomeUnknown === true
+      const message = outcomeUnknown
+        ? `Esito consegna media WhatsApp incerto: ${sentMedia.error ?? "errore di rete"}. Nessun reinvio automatico.`
+        : sentMedia.error ?? "Errore consegna media WhatsApp"
+
+      await supabase
+        .from("whatsapp_pending_messages")
+        .update({
+          status: outcomeUnknown ? "delivery_unknown" : "failed_delivery",
+          last_error: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pending.id)
+        .eq("property_id", propertyId)
+
+      return {
+        handled: true,
+        requiresRetry: !outcomeUnknown,
+        delivered: false,
+        error: message,
+      }
     }
+
+    sentMessageId = sentMedia.externalMessageId ?? null
+    timelineRows.push({
+      property_id: propertyId,
+      conversation_id: pending.conversation_id,
+      sender_type: "agent",
+      sender_id: pending.operator_admin_user_id,
+      sender_name: pending.operator_label,
+      content: sentMedia.contentHtml || `[${sentMedia.kind || "media"}] ${pendingPayload.media.name}`,
+      content_type: "text/html",
+      external_message_id: sentMedia.externalMessageId ?? null,
+      status: "sent",
+      stored_at: sentAt,
+      metadata: {
+        channel: "whatsapp",
+        source: "whatsapp_reopen_queue",
+        pending_message_id: pending.id,
+        wa_message_type: sentMedia.kind,
+        whatsapp_media_id: sentMedia.mediaId,
+        filename: pendingPayload.media.name,
+      },
+    })
+
+    if (pendingPayload.text && !sentMedia.captionConsumed) {
+      const sentText = await sendWhatsAppText(channel.config, channel.credentials, pending.to_phone, pendingPayload.text)
+      if (sentText.success) {
+        sentMessageId = sentText.externalMessageId ?? sentMessageId
+        timelineRows.push({
+          property_id: propertyId,
+          conversation_id: pending.conversation_id,
+          sender_type: "agent",
+          sender_id: pending.operator_admin_user_id,
+          sender_name: pending.operator_label,
+          content: pendingPayload.text,
+          content_type: "text",
+          external_message_id: sentText.externalMessageId ?? null,
+          status: "sent",
+          stored_at: sentAt,
+          metadata: {
+            channel: "whatsapp",
+            source: "whatsapp_reopen_queue",
+            pending_message_id: pending.id,
+          },
+        })
+      } else {
+        // The media is already externally delivered. Retrying the whole pending
+        // request would duplicate it, so finish as sent and surface the text failure.
+        deliveryWarning = `Media consegnato; testo aggiuntivo non inviato: ${sentText.error ?? "errore WhatsApp"}`
+      }
+    }
+  } else {
+    const sent = await sendWhatsAppText(channel.config, channel.credentials, pending.to_phone, pendingPayload.text)
+    if (!sent.success) {
+      const outcomeUnknown = sent.outcomeUnknown === true
+      const message = outcomeUnknown
+        ? `Esito consegna WhatsApp incerto: ${sent.error ?? "errore di rete"}. Nessun reinvio automatico.`
+        : sent.error ?? "Errore consegna WhatsApp"
+
+      await supabase
+        .from("whatsapp_pending_messages")
+        .update({
+          status: outcomeUnknown ? "delivery_unknown" : "failed_delivery",
+          last_error: message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", pending.id)
+        .eq("property_id", propertyId)
+
+      return {
+        handled: true,
+        requiresRetry: !outcomeUnknown,
+        delivered: false,
+        error: message,
+      }
+    }
+
+    sentMessageId = sent.externalMessageId ?? null
+    timelineRows.push({
+      property_id: propertyId,
+      conversation_id: pending.conversation_id,
+      sender_type: "agent",
+      sender_id: pending.operator_admin_user_id,
+      sender_name: pending.operator_label,
+      content: pendingPayload.text,
+      content_type: "text",
+      external_message_id: sent.externalMessageId ?? null,
+      status: "sent",
+      stored_at: sentAt,
+      metadata: {
+        channel: "whatsapp",
+        source: "whatsapp_reopen_queue",
+        pending_message_id: pending.id,
+      },
+    })
   }
 
   // Mark external delivery first. If timeline persistence fails later we must
-  // prefer one missing local row over sending the guest the same text twice.
-  const sentAt = new Date().toISOString()
+  // prefer one missing local row over sending the guest the same payload twice.
   await supabase
     .from("whatsapp_pending_messages")
     .update({
       status: "sent",
-      sent_message_id: sent.externalMessageId ?? null,
+      sent_message_id: sentMessageId,
       sent_at: sentAt,
-      last_error: null,
+      last_error: deliveryWarning || null,
       updated_at: sentAt,
     })
     .eq("id", pending.id)
     .eq("property_id", propertyId)
 
-  const { error: timelineError } = await supabase.from("messages").insert({
-    property_id: propertyId,
-    conversation_id: pending.conversation_id,
-    sender_type: "agent",
-    sender_id: pending.operator_admin_user_id,
-    sender_name: pending.operator_label,
-    content: pending.body,
-    content_type: "text",
-    external_message_id: sent.externalMessageId ?? null,
-    status: "sent",
-    stored_at: sentAt,
-    metadata: {
-      channel: "whatsapp",
-      source: "whatsapp_reopen_queue",
-      pending_message_id: pending.id,
-    },
-  })
+  const { error: timelineError } = await supabase.from("messages").insert(timelineRows)
 
   if (timelineError) {
     await supabase
       .from("whatsapp_pending_messages")
-      .update({ last_error: `Consegnato a Meta ma timeline non salvata: ${timelineError.message}`, updated_at: new Date().toISOString() })
+      .update({
+        last_error: deliveryWarning
+          ? `${deliveryWarning}; timeline non salvata: ${timelineError.message}`
+          : `Consegnato a Meta ma timeline non salvata: ${timelineError.message}`,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", pending.id)
       .eq("property_id", propertyId)
   }
+
+  if (pendingPayload.media) await removeStagedWhatsAppMedia(supabase, pendingPayload.media)
 
   await supabase
     .from("messages")
@@ -412,9 +522,10 @@ export async function handleWhatsAppReopenAction(
 
   await supabase
     .from("messaging_channels")
-    .update({ last_outbound_at: sentAt, last_error: null })
+    .update({ last_outbound_at: sentAt, last_error: deliveryWarning || null })
     .eq("id", channel.id)
     .eq("property_id", propertyId)
 
-  return { handled: true, delivered: true, error: timelineError?.message }
+  const error = [deliveryWarning, timelineError?.message].filter(Boolean).join("; ") || undefined
+  return { handled: true, delivered: true, error }
 }
