@@ -1,4 +1,4 @@
-import { ReviewsOperationsV2 } from "@/components/reviews/reviews-operations-v2"
+import { ReviewsOperationsV3 } from "@/components/reviews/reviews-operations-v3"
 import { requireAdminPage } from "@/lib/auth/require-admin-page"
 
 export const dynamic = "force-dynamic"
@@ -14,7 +14,7 @@ export default async function ReviewsPage() {
           Analizza, traduci e rispondi alle recensioni condivise; trasforma una criticità in un ticket ManuBot già arricchito con camera, asset e dettagli operativi.
         </p>
       </div>
-      <ReviewsOperationsV2 />
+      <ReviewsOperationsV3 />
     </div>
   )
 }
