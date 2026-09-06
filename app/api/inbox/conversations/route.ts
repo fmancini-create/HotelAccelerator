@@ -138,6 +138,7 @@ export async function GET(request: NextRequest) {
         p_gmail_label: gmailLabel || null,
         p_channel: options.channel || null,
         p_subchannel_id: options.subchannel_id || null,
+        p_filter: options.filter || null,
         p_restrict: access?.restrict === true,
         p_email_channel_ids: access?.emailChannelIds || [],
         p_messaging_channel_ids: access?.messagingChannelIds || [],
