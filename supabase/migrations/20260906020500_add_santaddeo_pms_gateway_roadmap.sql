@@ -1,0 +1,46 @@
+-- Ogni sviluppo di prodotto deve comparire nella Roadmap SuperAdmin dal primo branch.
+insert into public.platform_product_roadmap (
+  roadmap_key,
+  area,
+  capability,
+  code_ready,
+  online_ready,
+  development_status,
+  branch_name,
+  pr_number,
+  note,
+  sort_order,
+  updated_by_email,
+  started_at,
+  completed_at,
+  updated_at
+) values (
+  'suite-santaddeo-pms-gateway',
+  'PMS / Suite',
+  'Gateway PMS agnostico via Santaddeo: capability reali, prenotazioni/cancellazioni/contatti e azioni supportate',
+  false,
+  false,
+  'in_progress',
+  'feat/santaddeo-pms-gateway',
+  null,
+  'Stato ufficiale: sviluppo su branch. Santaddeo resta owner dei connector PMS e HotelAccelerator consuma contratti API versionati tenant-scoped. Il browser PMS resta indipendente. La UI mostra solo dati e scritture realmente supportati; endpoint disponibili ma non ancora normalizzati sono distinti da capability pronte. Prima di Online: CI verde, merge main, deploy coordinato Santaddeo + Core e collaudo reale multi-tenant.',
+  192,
+  'repo-sync',
+  coalesce((select started_at from public.platform_product_roadmap where roadmap_key = 'suite-santaddeo-pms-gateway'), now()),
+  null,
+  now()
+)
+on conflict (roadmap_key) do update set
+  area = excluded.area,
+  capability = excluded.capability,
+  code_ready = false,
+  online_ready = false,
+  development_status = 'in_progress',
+  branch_name = excluded.branch_name,
+  pr_number = excluded.pr_number,
+  note = excluded.note,
+  sort_order = excluded.sort_order,
+  updated_by_email = excluded.updated_by_email,
+  started_at = coalesce(public.platform_product_roadmap.started_at, excluded.started_at),
+  completed_at = null,
+  updated_at = excluded.updated_at;
