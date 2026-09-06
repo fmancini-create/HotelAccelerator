@@ -43,6 +43,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
+import { ReviewBookingAssign } from "@/components/reviews/review-booking-assign"
 
 type Sentiment = "positive" | "neutral" | "negative"
 type Review = {
@@ -60,8 +61,10 @@ type Review = {
   sentiment: Sentiment | null
   draft_response?: string | null
   draft_response_status?: string | null
+  booking_id?: string | null
   room_type_id?: string | null
   roomTypeName?: string | null
+  match_source?: "auto" | "manual" | null
 }
 type RoomType = { id: string; name: string }
 type Stats = {
@@ -513,7 +516,45 @@ export function ReviewsOperationsV3() {
           {loading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-28 w-full" />) : null}
           {!loading && error ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error}</div> : null}
           {!loading && !error && reviews.length === 0 ? <div className="py-10 text-center text-sm text-muted-foreground">Nessuna recensione trovata.</div> : null}
-          {!loading && !error ? reviews.map((review) => <button key={review.id} type="button" onClick={() => openReview(review)} className="block w-full rounded-lg border p-4 text-left transition hover:bg-muted/40"><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{platformLabel(review.platform)}</Badge>{review.rating != null ? <span className="flex items-center gap-1 text-sm font-semibold"><Star className="h-3.5 w-3.5 fill-current" /> {review.rating.toFixed(1)}</span> : null}{review.sentiment ? <Badge variant="secondary">{review.sentiment === "negative" ? "Negativa" : review.sentiment === "positive" ? "Positiva" : "Neutra"}</Badge> : null}{review.roomTypeName ? <Badge variant="outline">{review.roomTypeName}</Badge> : null}{review.author_name ? <span className="text-xs text-muted-foreground">{review.author_name}</span> : null}</div>{review.title ? <h3 className="mt-2 text-sm font-medium">{review.title}</h3> : null}{review.text ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{review.text}</p> : null}</div><div className="shrink-0 text-xs text-muted-foreground">{review.review_date ? new Date(review.review_date).toLocaleDateString("it-IT") : ""}</div></div></button>) : null}
+          {!loading && !error ? reviews.map((review) => (
+            <div
+              key={review.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => openReview(review)}
+              onKeyDown={(event) => {
+                if (event.currentTarget !== event.target) return
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
+                  openReview(review)
+                }
+              }}
+              className="w-full cursor-pointer rounded-lg border p-4 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{platformLabel(review.platform)}</Badge>
+                    {review.rating != null ? <span className="flex items-center gap-1 text-sm font-semibold"><Star className="h-3.5 w-3.5 fill-current" /> {review.rating.toFixed(1)}</span> : null}
+                    {review.sentiment ? <Badge variant="secondary">{review.sentiment === "negative" ? "Negativa" : review.sentiment === "positive" ? "Positiva" : "Neutra"}</Badge> : null}
+                    {review.author_name ? <span className="text-xs text-muted-foreground">{review.author_name}</span> : null}
+                  </div>
+                  {review.title ? <h3 className="mt-2 text-sm font-medium">{review.title}</h3> : null}
+                  {review.text ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{review.text}</p> : null}
+                  <div className="mt-3">
+                    <ReviewBookingAssign
+                      reviewId={review.id}
+                      initialRoomTypeName={review.roomTypeName ?? null}
+                      initialMatchSource={review.match_source ?? null}
+                      initialBookingId={review.booking_id ?? null}
+                      onChanged={() => void loadDashboard()}
+                    />
+                  </div>
+                </div>
+                <div className="shrink-0 text-xs text-muted-foreground">{review.review_date ? new Date(review.review_date).toLocaleDateString("it-IT") : ""}</div>
+              </div>
+            </div>
+          )) : null}
           {total > pageSize ? <div className="flex items-center justify-between border-t pt-4"><span className="text-xs text-muted-foreground">Pagina {page + 1} di {totalPages}</span><div className="flex gap-1"><Button variant="outline" size="icon" disabled={page === 0 || loading} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" size="icon" disabled={page + 1 >= totalPages || loading} onClick={() => setPage((value) => value + 1)}><ChevronRight className="h-4 w-4" /></Button></div></div> : null}
         </CardContent>
       </Card>
