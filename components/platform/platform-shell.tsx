@@ -12,10 +12,10 @@ export type PlatformShellScope = "tenant" | "platform"
  * Cornice tecnica condivisa, con due contesti di prodotto volutamente distinti.
  *
  * `tenant` governa una singola struttura: menu operativo, TenantSwitcher e
- * stato licenza. `platform` governa HotelAccelerator nel suo complesso: menu
- * Super Admin, dati aggregati e nessun selettore/licenza di un singolo cliente.
- * Condividere il contenitore evita di duplicare footer e comportamento di
- * scrolling senza mischiare le due navigazioni.
+ * stato licenza. `platform` governa HotelAccelerator nel suo complesso e mantiene
+ * il menu Super Admin; la barra rapida consente comunque al Super Admin di
+ * selezionare un tenant e aprire direttamente gli strumenti operativi piu' usati
+ * senza dover passare prima dalla dashboard tenant.
  */
 export function PlatformShell({
   children,
