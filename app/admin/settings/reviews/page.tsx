@@ -5,7 +5,7 @@ import { requireAdminPage } from "@/lib/auth/require-admin-page"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { isModuleActive } from "@/lib/modules"
 import { createServiceClient } from "@/lib/supabase/server"
-import { ReviewsOperations } from "@/components/reviews/reviews-operations"
+import { ReviewsOperationsV3 } from "@/components/reviews/reviews-operations-v3"
 import { ReviewsSettingsForm } from "@/components/reviews/reviews-settings-form"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,7 +24,7 @@ export default async function ReviewsSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Recensioni</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Gestisci le recensioni della struttura, crea ticket ManuBot e configura le fonti condivise della suite 4BID.
+          Gestisci le recensioni della struttura, traducile, crea ticket ManuBot arricchiti dall&apos;IA e configura le fonti condivise della suite 4BID.
         </p>
       </div>
 
@@ -34,14 +34,14 @@ export default async function ReviewsSettingsPage() {
             <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="flex items-center gap-2 font-medium"><Wrench className="h-4 w-4" /> Azioni operative</div>
-                <p className="mt-1 text-sm text-muted-foreground">Il pulsante <strong>Crea ticket</strong> è disponibile direttamente su ogni recensione.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Aprendo una recensione puoi tradurla, rispondere e creare un task con camera, asset e dettagli recuperati automaticamente.</p>
               </div>
               <Button asChild variant="outline" className="shrink-0 gap-2">
                 <Link href="/admin/reviews">Apri a pagina intera <ArrowRight className="h-4 w-4" /></Link>
               </Button>
             </CardContent>
           </Card>
-          <ReviewsOperations />
+          <ReviewsOperationsV3 />
         </>
       ) : null}
 

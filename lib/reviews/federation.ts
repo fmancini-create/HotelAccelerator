@@ -350,3 +350,18 @@ export async function forwardReviewPublishReply(input: {
     timeoutMs: 65_000,
   })
 }
+
+export async function forwardReviewTicketIntelligence(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  body?: string
+}) {
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/ticket-intelligence",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    method: "POST",
+    body: input.body,
+    timeoutMs: 65_000,
+  })
+}
