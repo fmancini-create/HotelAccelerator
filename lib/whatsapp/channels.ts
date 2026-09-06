@@ -143,7 +143,13 @@ interface ParsedWebhook {
 /**
  * Parse a Meta WhatsApp webhook body into a flat list of inbound messages and
  * delivery statuses. Tolerant of the nested entry/changes/value shape and of
- * non-text message types (mapped to a readable placeholder).
+ * non-text message types.
+ *
+ * Images and stickers are rendered through our authenticated media proxy. Meta
+ * only gives us a media id in the webhook; the actual URL is short-lived and
+ * requires a bearer token. Keeping the media id in the stored HTML lets the
+ * Inbox display the asset without ever exposing tenant Meta credentials to the
+ * browser. The proxy also caches the binary in our private storage on first use.
  */
 export function parseWhatsAppWebhook(body: any): ParsedWebhook {
   const result: ParsedWebhook = { phoneNumberId: null, messages: [], echoes: [], statuses: [] }
@@ -172,7 +178,7 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
           externalId: m.id,
           fromPhone,
           fromName: nameByWaId.get(fromPhone) || undefined,
-          body: extractBody(m),
+          body: extractBody(m, phoneNumberId),
           messageType: m.type ?? "unknown",
           timestamp: tsSeconds ? new Date(tsSeconds * 1000) : new Date(),
           raw: m,
@@ -193,7 +199,7 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
           phoneNumberId,
           externalId: m.id,
           toPhone,
-          body: extractBody(m),
+          body: extractBody(m, phoneNumberId),
           messageType: m.type ?? "unknown",
           timestamp: tsSeconds ? new Date(tsSeconds * 1000) : new Date(),
           raw: m,
@@ -234,7 +240,31 @@ export function parseWhatsAppWebhook(body: any): ParsedWebhook {
   return result
 }
 
-function extractBody(m: any): string {
+function escapeWhatsAppHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;")
+}
+
+function whatsappMediaProxyUrl(phoneNumberId: string, mediaId: string): string {
+  return `/api/channels/whatsapp/media/${encodeURIComponent(phoneNumberId)}/${encodeURIComponent(mediaId)}`
+}
+
+function renderWhatsAppImage(
+  phoneNumberId: string,
+  mediaId: string,
+  options: { caption?: string; sticker?: boolean } = {},
+): string {
+  const src = whatsappMediaProxyUrl(phoneNumberId, mediaId)
+  const label = options.sticker ? "Sticker WhatsApp" : "Foto WhatsApp"
+  const caption = options.caption?.trim()
+  return `<div data-whatsapp-media="${options.sticker ? "sticker" : "image"}" style="max-width:560px"><a href="${src}" target="_blank" rel="noopener noreferrer" style="display:inline-block;max-width:100%"><img src="${src}" alt="${label}" loading="lazy" style="display:block;max-width:100%;height:auto;max-height:680px;border-radius:12px;object-fit:contain" /></a>${caption ? `<div style="margin-top:6px;white-space:pre-wrap">${escapeWhatsAppHtml(caption)}</div>` : ""}</div>`
+}
+
+function extractBody(m: any, phoneNumberId: string): string {
   switch (m.type) {
     case "text":
       return m.text?.body ?? ""
@@ -246,8 +276,12 @@ function extractBody(m: any): string {
         m.interactive?.list_reply?.title ??
         "[messaggio interattivo]"
       )
-    case "image":
-      return m.image?.caption ? `[immagine] ${m.image.caption}` : "[immagine]"
+    case "image": {
+      const mediaId = typeof m.image?.id === "string" ? m.image.id.trim() : ""
+      const caption = typeof m.image?.caption === "string" ? m.image.caption : ""
+      if (!mediaId) return caption ? `[immagine] ${caption}` : "[immagine]"
+      return renderWhatsAppImage(phoneNumberId, mediaId, { caption })
+    }
     case "video":
       return m.video?.caption ? `[video] ${m.video.caption}` : "[video]"
     case "audio":
@@ -258,8 +292,10 @@ function extractBody(m: any): string {
       return "[posizione]"
     case "contacts":
       return "[contatto]"
-    case "sticker":
-      return "[sticker]"
+    case "sticker": {
+      const mediaId = typeof m.sticker?.id === "string" ? m.sticker.id.trim() : ""
+      return mediaId ? renderWhatsAppImage(phoneNumberId, mediaId, { sticker: true }) : "[sticker]"
+    }
     default:
       return `[messaggio ${m.type ?? "sconosciuto"}]`
   }
