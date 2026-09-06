@@ -2,10 +2,56 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createServiceClient } from "@/lib/supabase/server"
 import { richiediOperatore } from "@/lib/inbox/identity"
 import { getTelegramChannelByIdForProperty, getTelegramChannelForProperty } from "@/lib/telegram/channels"
-import { sendTelegramDocument, sendTelegramText } from "@/lib/telegram/client"
+import {
+  sendTelegramAudio,
+  sendTelegramDocument,
+  sendTelegramText,
+  sendTelegramVideo,
+  sendTelegramVoice,
+} from "@/lib/telegram/client"
 
 export const runtime = "nodejs"
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
+
+type TelegramAttachmentKind = "audio" | "voice" | "video" | "document"
+
+function baseMime(value: string): string {
+  return (value || "").split(";")[0].trim().toLowerCase()
+}
+
+function classifyTelegramAttachment(file: File): TelegramAttachmentKind {
+  const mime = baseMime(file.type)
+  const name = file.name.toLowerCase()
+
+  if (mime === "audio/ogg" || mime === "audio/opus" || name.endsWith(".ogg") || name.endsWith(".opus")) {
+    return "voice"
+  }
+  if (
+    mime === "audio/mpeg" ||
+    mime === "audio/mp4" ||
+    mime === "audio/x-m4a" ||
+    name.endsWith(".mp3") ||
+    name.endsWith(".m4a")
+  ) {
+    return "audio"
+  }
+  if (mime === "video/mp4" || name.endsWith(".mp4")) {
+    return "video"
+  }
+  return "document"
+}
+
+async function sendTelegramAttachment(
+  credentials: Parameters<typeof sendTelegramDocument>[0],
+  chatId: string,
+  file: File,
+  kind: TelegramAttachmentKind,
+) {
+  if (kind === "voice") return sendTelegramVoice(credentials, chatId, file)
+  if (kind === "audio") return sendTelegramAudio(credentials, chatId, file)
+  if (kind === "video") return sendTelegramVideo(credentials, chatId, file)
+  return sendTelegramDocument(credentials, chatId, file)
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,9 +101,15 @@ export async function POST(request: NextRequest) {
       if (sent.externalMessageId) externalIds.push(sent.externalMessageId)
     }
 
-    for (const file of attachments) {
-      const sent = await sendTelegramDocument(channel.credentials, chatId, file)
-      if (!sent.success) return NextResponse.json({ error: sent.error || `Invio di ${file.name} non riuscito.` }, { status: 502 })
+    const attachmentKinds = attachments.map(classifyTelegramAttachment)
+    for (let index = 0; index < attachments.length; index += 1) {
+      const file = attachments[index]
+      const kind = attachmentKinds[index]
+      const sent = await sendTelegramAttachment(channel.credentials, chatId, file, kind)
+      if (!sent.success) {
+        const label = kind === "video" ? "video" : kind === "audio" || kind === "voice" ? "audio" : file.name
+        return NextResponse.json({ error: sent.error || `Invio di ${label} non riuscito.` }, { status: 502 })
+      }
       if (sent.externalMessageId) externalIds.push(sent.externalMessageId)
     }
 
@@ -114,18 +166,28 @@ export async function POST(request: NextRequest) {
 
     for (let index = 0; index < attachments.length; index += 1) {
       const file = attachments[index]
+      const kind = attachmentKinds[index]
+      const contentTypeForTimeline = kind === "voice" ? "audio" : kind
+      const label = kind === "video" ? "Video" : kind === "audio" ? "Audio" : kind === "voice" ? "Vocale" : "File"
       await supabase.from("messages").insert({
         property_id: propertyId,
         conversation_id: conversationId,
         sender_type: "agent",
         sender_id: operatore.titolare.adminUserId,
         sender_name: operatore.titolare.label,
-        content: file.name,
-        content_type: "document",
+        content: `${label}: ${file.name}`,
+        content_type: contentTypeForTimeline,
         external_message_id: externalIds[(text ? 1 : 0) + index] ?? null,
         status: "sent",
         stored_at: sentAt,
-        metadata: { channel: "telegram", source: "omnichannel_compose", filename: file.name, mime_type: file.type, size: file.size },
+        metadata: {
+          channel: "telegram",
+          source: "omnichannel_compose",
+          filename: file.name,
+          mime_type: file.type,
+          size: file.size,
+          telegram_media_type: kind,
+        },
       })
     }
 
@@ -135,7 +197,12 @@ export async function POST(request: NextRequest) {
       .eq("id", conversationId)
       .eq("property_id", propertyId)
 
-    return NextResponse.json({ success: true, conversationId, externalMessageIds: externalIds })
+    return NextResponse.json({
+      success: true,
+      conversationId,
+      externalMessageIds: externalIds,
+      mediaTypes: attachmentKinds,
+    })
   } catch (error) {
     console.error("[Telegram compose] error", error)
     return NextResponse.json({ error: error instanceof Error ? error.message : "Errore durante l'invio Telegram." }, { status: 500 })

@@ -17,6 +17,38 @@ function apiUrl(token: string, method: string): string {
   return `${API_BASE}/bot${token}/${method}`
 }
 
+async function sendTelegramMultipart(
+  credentials: TelegramCredentials,
+  chatId: string,
+  method: "sendDocument" | "sendAudio" | "sendVoice" | "sendVideo",
+  field: "document" | "audio" | "voice" | "video",
+  file: File,
+  caption?: string,
+): Promise<SendTextResult> {
+  const token = credentials.bot_token
+  if (!token) return { success: false, error: "bot_token mancante nelle credenziali del canale" }
+
+  try {
+    const form = new FormData()
+    form.append("chat_id", chatId)
+    form.append(field, file, file.name || field)
+    if (caption?.trim()) form.append("caption", caption.trim().slice(0, 1024))
+    if (method === "sendVideo") form.append("supports_streaming", "true")
+
+    const res = await fetch(apiUrl(token, method), { method: "POST", body: form })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.ok) {
+      return { success: false, error: json?.description || `Telegram API error (HTTP ${res.status})` }
+    }
+    return {
+      success: true,
+      externalMessageId: json?.result?.message_id != null ? String(json.result.message_id) : undefined,
+    }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : "Errore di rete verso Telegram" }
+  }
+}
+
 /**
  * Send a free-form text message to a Telegram chat. Unlike WhatsApp, Telegram
  * has no 24h session window — a bot can message any chat that has started it.
@@ -55,27 +87,37 @@ export async function sendTelegramDocument(
   file: File,
   caption?: string,
 ): Promise<SendTextResult> {
-  const token = credentials.bot_token
-  if (!token) return { success: false, error: "bot_token mancante nelle credenziali del canale" }
+  return sendTelegramMultipart(credentials, chatId, "sendDocument", "document", file, caption)
+}
 
-  try {
-    const form = new FormData()
-    form.append("chat_id", chatId)
-    form.append("document", file, file.name || "documento")
-    if (caption?.trim()) form.append("caption", caption.trim().slice(0, 1024))
+/** Send MP3/M4A-compatible audio as a native Telegram audio player. */
+export async function sendTelegramAudio(
+  credentials: TelegramCredentials,
+  chatId: string,
+  file: File,
+  caption?: string,
+): Promise<SendTextResult> {
+  return sendTelegramMultipart(credentials, chatId, "sendAudio", "audio", file, caption)
+}
 
-    const res = await fetch(apiUrl(token, "sendDocument"), { method: "POST", body: form })
-    const json = await res.json().catch(() => null)
-    if (!res.ok || !json?.ok) {
-      return { success: false, error: json?.description || `Telegram API error (HTTP ${res.status})` }
-    }
-    return {
-      success: true,
-      externalMessageId: json?.result?.message_id != null ? String(json.result.message_id) : undefined,
-    }
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : "Errore di rete verso Telegram" }
-  }
+/** Send OGG/Opus-style audio as a Telegram voice message. */
+export async function sendTelegramVoice(
+  credentials: TelegramCredentials,
+  chatId: string,
+  file: File,
+  caption?: string,
+): Promise<SendTextResult> {
+  return sendTelegramMultipart(credentials, chatId, "sendVoice", "voice", file, caption)
+}
+
+/** Send MP4 video as a native, streamable Telegram video. */
+export async function sendTelegramVideo(
+  credentials: TelegramCredentials,
+  chatId: string,
+  file: File,
+  caption?: string,
+): Promise<SendTextResult> {
+  return sendTelegramMultipart(credentials, chatId, "sendVideo", "video", file, caption)
 }
 
 export interface GetMeResult {
