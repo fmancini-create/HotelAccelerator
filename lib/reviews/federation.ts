@@ -290,6 +290,34 @@ export async function forwardReviewsList(input: {
   })
 }
 
+export async function forwardReviewBookingCandidates(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  query?: URLSearchParams
+}) {
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/booking-candidates",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    query: input.query,
+    queryKeys: ["reviewId", "search"],
+  })
+}
+
+export async function forwardReviewBookingAssignment(input: {
+  hotelId: string
+  origin: ReviewsOrigin
+  body?: string
+}) {
+  return forwardFederatedRequest({
+    path: "/api/integrations/reviews/federated/assign-booking",
+    hotelId: input.hotelId,
+    origin: input.origin,
+    method: "POST",
+    body: input.body,
+  })
+}
+
 export async function forwardReviewsStats(input: {
   hotelId: string
   origin: ReviewsOrigin
