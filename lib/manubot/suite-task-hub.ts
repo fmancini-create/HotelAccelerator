@@ -4,7 +4,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 
 import {
   getManubotClient,
-  HA_TO_MANUBOT_PRIORITY,
   type ManubotCreateTaskPayload,
   type ManubotTask,
   type ManubotTaskFormData,
@@ -32,7 +31,8 @@ export type SuiteManubotTaskInput = {
   idempotencyKey: string
   title: string
   description?: string | null
-  priority?: "low" | "normal" | "high" | "urgent"
+  /** Nome esatto di priority_levels.name del tenant ManuBot. */
+  priority: string
   assigneeIds?: string[]
   groupIds?: string[]
   assetIds?: string[]
@@ -75,11 +75,7 @@ async function resolveCustomerAccountId(
   externalTenantId: string,
 ): Promise<string | null> {
   if (sourceProduct === "hotelaccelerator") {
-    const { data, error } = await sb
-      .from("customer_accounts")
-      .select("id")
-      .eq("property_id", externalTenantId)
-      .maybeSingle()
+    const { data, error } = await sb.from("customer_accounts").select("id").eq("property_id", externalTenantId).maybeSingle()
     if (error) throw new Error(`suite task hub account lookup: ${error.message}`)
     return data?.id ?? null
   }
@@ -102,22 +98,11 @@ async function resolveDestination(
   const customerAccountId = await resolveCustomerAccountId(sb, sourceProduct, externalTenantId)
   if (!customerAccountId) return null
 
-  const [{ data: account, error: accountError }, { data: entitlement, error: entitlementError }, { data: link, error: linkError }] =
-    await Promise.all([
-      sb.from("customer_accounts").select("property_id").eq("id", customerAccountId).maybeSingle(),
-      sb
-        .from("suite_product_entitlements")
-        .select("status,expires_at")
-        .eq("customer_account_id", customerAccountId)
-        .eq("product_key", "manubot")
-        .maybeSingle(),
-      sb
-        .from("suite_tenant_links")
-        .select("external_tenant_id")
-        .eq("customer_account_id", customerAccountId)
-        .eq("product_key", "manubot")
-        .maybeSingle(),
-    ])
+  const [{ data: account, error: accountError }, { data: entitlement, error: entitlementError }, { data: link, error: linkError }] = await Promise.all([
+    sb.from("customer_accounts").select("property_id").eq("id", customerAccountId).maybeSingle(),
+    sb.from("suite_product_entitlements").select("status,expires_at").eq("customer_account_id", customerAccountId).eq("product_key", "manubot").maybeSingle(),
+    sb.from("suite_tenant_links").select("external_tenant_id").eq("customer_account_id", customerAccountId).eq("product_key", "manubot").maybeSingle(),
+  ])
   if (accountError) throw new Error(`suite task hub account: ${accountError.message}`)
   if (entitlementError) throw new Error(`suite task hub entitlement: ${entitlementError.message}`)
   if (linkError) throw new Error(`suite task hub manubot link: ${linkError.message}`)
@@ -149,7 +134,6 @@ async function resolveDestination(
 
   let status: SuiteAddonStatus = "active"
   let reason: string | null = null
-
   if (!commerciallyActive) {
     status = "inactive"
     reason = "addon_inactive"
@@ -186,9 +170,7 @@ export async function getSuiteManubotContext(
 }
 
 async function clientFor(resolved: DestinationConfig) {
-  if (!resolved.active || !resolved.manubotCompanyId) {
-    throw new Error(resolved.reason || "manubot_not_available")
-  }
+  if (!resolved.active || !resolved.manubotCompanyId) throw new Error(resolved.reason || "manubot_not_available")
   return getManubotClient({
     manubot_company_id: resolved.manubotCompanyId,
     manubot_email: resolved.manubotEmail,
@@ -227,6 +209,9 @@ export async function createSuiteManubotTask(input: SuiteManubotTaskInput): Prom
   const groupIds = dedupe(input.groupIds)
   if (assigneeIds.length === 0 && groupIds.length === 0) throw new Error("responsible_required")
 
+  const priority = input.priority.trim()
+  if (!priority) throw new Error("priority_required")
+
   const expectedResolutionMinutes = input.expectedResolutionMinutes ?? 60
   if (!Number.isInteger(expectedResolutionMinutes) || expectedResolutionMinutes < 5 || expectedResolutionMinutes > 1440) {
     throw new Error("invalid_expected_resolution_minutes")
@@ -237,23 +222,20 @@ export async function createSuiteManubotTask(input: SuiteManubotTaskInput): Prom
     input.sourceId ? `Riferimento: ${input.sourceId}` : null,
     input.sourceUrl ? `Link origine: ${input.sourceUrl}` : null,
     input.tags?.length ? `Tag: ${input.tags.join(", ")}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n")
+  ].filter(Boolean).join("\n")
   const contextText = input.context && Object.keys(input.context).length
-    ? `\n\nContesto:\n${Object.entries(input.context)
-        .map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`)
-        .join("\n")}`
+    ? `\n\nContesto:\n${Object.entries(input.context).map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`).join("\n")}`
     : ""
 
+  const assetIds = dedupe(input.assetIds)
   const payload: ManubotCreateTaskPayload = {
     title: input.title.trim(),
     description: `${sourceHeader}${input.description ? `\n\n${input.description.trim()}` : ""}${contextText}`.trim(),
-    priority: HA_TO_MANUBOT_PRIORITY[input.priority || "normal"] || "medium",
+    priority,
     assignee_ids: assigneeIds,
     group_ids: groupIds,
-    asset_ids: dedupe(input.assetIds),
-    asset_category_id: input.assetCategoryId || null,
+    asset_ids: assetIds,
+    asset_category_id: assetIds.length > 0 ? null : input.assetCategoryId || null,
     property_id: input.propertyId || null,
     procedure_ids: dedupe(input.procedureIds),
     requires_completion_photo: input.requiresCompletionPhoto === true,
