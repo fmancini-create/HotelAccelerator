@@ -283,7 +283,7 @@ export async function POST(request: NextRequest) {
         mode: "sent",
         conversationId: resolvedConversation.id,
         messageId: messages?.[0]?.id,
-        messageIds: messages?.map((message) => message.id) ?? [],
+        messageIds: messages?.map((message: { id: string }) => message.id) ?? [],
         warning: warning || undefined,
         window,
       })
