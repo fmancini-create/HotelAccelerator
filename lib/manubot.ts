@@ -29,7 +29,8 @@ export interface ManubotTask {
   title: string
   description: string | null
   status: "pending" | "in_progress" | "completed" | "cancelled"
-  priority: "low" | "medium" | "high" | "critical"
+  /** Nome esatto della priorita configurata nel tenant ManuBot. */
+  priority: string
   assigned_to: string | null
   created_by: string | null
   scheduled_date: string | null
@@ -52,7 +53,8 @@ export interface ManubotTask {
 export interface ManubotCreateTaskPayload {
   title: string
   description?: string | null
-  priority: "low" | "medium" | "high" | "critical"
+  /** Nome esatto di `priority_levels.name` del tenant ManuBot. */
+  priority: string
   assigned_to?: string | null
   operator_group_id?: string | null
   assignee_ids?: string[]
@@ -108,17 +110,31 @@ export interface ManubotProcedureOption {
   title: string
 }
 
+export interface ManubotPriorityOption {
+  id: string
+  name: string
+  label: string | null
+  description?: string | null
+  color?: string | null
+  response_time_hours?: number | null
+  sort_order?: number | null
+  is_active?: boolean
+  is_system_default?: boolean
+}
+
 export interface ManubotTaskFormData {
   operators: Array<{ id: string; full_name: string | null }>
   assets: ManubotAsset[]
-  priorities: Array<Record<string, unknown>>
+  priorities: ManubotPriorityOption[]
   assetCategories: ManubotAssetCategory[]
   operatorGroups: ManubotOperatorGroup[]
   properties: ManubotPropertyOption[]
   procedures: ManubotProcedureOption[]
 }
 
-export const HA_TO_MANUBOT_PRIORITY: Record<string, ManubotCreateTaskPayload["priority"]> = {
+/** Mapping legacy HotelAccelerator -> nomi standard ManuBot. Non usarlo nei
+ * moduli che ricevono le priorita reali dal tenant (es. Recensioni). */
+export const HA_TO_MANUBOT_PRIORITY: Record<string, string> = {
   low: "low",
   normal: "medium",
   high: "high",
