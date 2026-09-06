@@ -1,0 +1,14 @@
+-- Production migration version: 20260906003704.
+--
+-- Historical note:
+-- this production step introduced the first Google-like fuzzy prototype by
+-- indexing the textual representation of each conversation tsvector. Real-data
+-- measurement showed ~3.4 s for a 50-result typo search, which is not acceptable
+-- for an Inbox search engine. The immediately-following migration
+-- 20260906004044 replaces that design with a compact per-tenant term dictionary
+-- and drops the prototype trigram indexes.
+--
+-- This repository intentionally keeps this migration as a no-op tombstone so
+-- fresh environments reach the same FINAL schema without ever creating the
+-- known-slow transient indexes. Production history remains aligned by version.
+select 1;

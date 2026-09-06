@@ -4,38 +4,52 @@ import { getAuthenticatedPropertyId } from "@/lib/auth-property"
 import { getChannelAccess, getAccessibleChannelIds } from "@/lib/channel-access"
 import { InboxReadService } from "@/lib/platform-services"
 import type { ConversationListOptions, GmailLabel, InboxSort } from "@/lib/types/inbox-read.types"
+import { handleServiceError } from "@/lib/errors"
+import {
+  expandInboxSearchQuery,
+  shouldEnableFuzzySearch,
+  shouldTrySemanticExpansion,
+} from "@/lib/inbox/google-search-query"
+import { buildSearchSnippet } from "@/lib/inbox/search-snippet"
+
+export const runtime = "nodejs"
+export const maxDuration = 15
 
 const ALLOWED_SORTS: InboxSort[] = ["smart", "date_desc", "date_asc", "sender_asc", "sender_desc"]
-import { handleServiceError } from "@/lib/errors"
-
-/** Quante conversazioni si possono chiedere al massimo (tetto di Supabase). */
 const LIMITE_MASSIMO = 1000
 const LIMITE_PREDEFINITO = 50
-/** Evita query-string enormi quando gli id trovati dalla FTS vengono materializzati. */
 const RICERCA_ID_PER_LOTTO = 125
-/** Un input enorme non migliora la ricerca e puo' diventare lavoro inutile per Postgres. */
 const RICERCA_TESTO_MASSIMO = 300
 
-/**
- * Interpreta il numero di conversazioni richieste.
- *
- * Prima era `Number.parseInt(valore || "50")` senza alcun controllo, e i valori
- * assurdi passavano indisturbati (misurato su questa rotta):
- *  - `limit=abc` -> `NaN` -> **inbox vuota con esito 200**: il caso peggiore,
- *    perche' sembra "non hai messaggi" invece di segnalare un errore;
- *  - `limit=0` -> zero conversazioni, sempre con esito 200;
- *  - `limit=-5` -> **500**;
- *  - `limit=99999` -> 1000 conversazioni **senza dire** che l'elenco e' troncato.
- *
- * Un valore inservibile torna al predefinito invece di svuotare l'elenco: una
- * pagina di dimensione diversa e' un inconveniente, un'inbox vuota e' una bugia.
- */
+type GoogleSearchRow = {
+  conversation_id?: string | null
+  search_rank?: number | null
+  matched_message_id?: string | null
+  match_kind?: "keyword" | "fuzzy" | "semantic_expansion" | null
+  match_quality?: number | null
+}
+
+type LegacySearchRow = {
+  conversation_id?: string | null
+  search_rank?: number | null
+}
+
+type SearchEngine = "google_hybrid" | "postgres_fts" | "legacy"
+
+function isMissingRpc(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "PGRST202" || error?.code === "42883"
+}
+
 function risolviLimite(grezzo: string | null): { richiesto: number | null; applicato: number; troncato: boolean } {
   const numero = Number(grezzo)
   const valido = grezzo !== null && grezzo.trim() !== "" && Number.isFinite(numero) && Math.floor(numero) >= 1
 
   if (!valido) {
-    return { richiesto: grezzo === null || grezzo.trim() === "" ? null : Number.isFinite(numero) ? numero : null, applicato: LIMITE_PREDEFINITO, troncato: false }
+    return {
+      richiesto: grezzo === null || grezzo.trim() === "" ? null : Number.isFinite(numero) ? numero : null,
+      applicato: LIMITE_PREDEFINITO,
+      troncato: false,
+    }
   }
 
   const richiesto = Math.floor(numero)
@@ -46,7 +60,6 @@ function risolviLimite(grezzo: string | null): { richiesto: number | null; appli
   }
 }
 
-/** Scorrimento: un valore non valido o negativo parte dall'inizio, non rompe. */
 function interoNonNegativo(grezzo: string | null): number {
   const numero = Number(grezzo)
   if (grezzo === null || grezzo.trim() === "" || !Number.isFinite(numero)) return 0
@@ -69,31 +82,22 @@ function inLotti<T>(elenco: T[], dimensione: number): T[][] {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("[v0] Inbox conversations API called")
-
     const propertyId = await getAuthenticatedPropertyId(request)
-    console.log("[v0] Property ID:", propertyId)
-
     const supabase = await createClient()
     const service = new InboxReadService(supabase)
-
     const { searchParams } = new URL(request.url)
 
     const mode = (searchParams.get("mode") as "smart" | "gmail") || "smart"
     const gmailLabel = searchParams.get("gmail_label") as GmailLabel | null
     const rawSort = searchParams.get("sort") as InboxSort | null
-    const sort: InboxSort | undefined =
-      rawSort && ALLOWED_SORTS.includes(rawSort) ? rawSort : undefined
+    const sort: InboxSort | undefined = rawSort && ALLOWED_SORTS.includes(rawSort) ? rawSort : undefined
 
-    // Resolve per-user channel access. Admins (super_admin / tenant admin) see
-    // everything; restricted users only see conversations of their assigned channels.
     const channelAccess = await getChannelAccess(request)
     let access: ConversationListOptions["access"] | undefined
     if (!channelAccess.isAdmin && channelAccess.adminUserId) {
       const ids = await getAccessibleChannelIds(channelAccess.supabase, propertyId, channelAccess.adminUserId)
       access = { restrict: true, ...ids }
     } else if (!channelAccess.isAdmin && !channelAccess.adminUserId) {
-      // Authenticated but unknown user (no admin_users record): show nothing.
       access = { restrict: true, emailChannelIds: [], messagingChannelIds: [], chatChannelIds: [] }
     }
 
@@ -108,9 +112,6 @@ export async function GET(request: NextRequest) {
       limit: limite.applicato,
       offset,
       search,
-      // Conversazioni precise, per aprire una bozza che sta fuori dalla pagina
-      // caricata. Restano dentro `propertyId` e dentro `access`: chiedere un id
-      // di un'altra struttura o di un canale non assegnato non restituisce nulla.
       ids: searchParams.get("ids")?.split(",").filter(Boolean) || undefined,
       filter: (searchParams.get("filter") as any) || undefined,
       mode,
@@ -119,21 +120,56 @@ export async function GET(request: NextRequest) {
       access,
     }
 
-    console.log("[v0] Inbox options:", options)
+    // La query puo' contenere PII (nome ospite, email, codice prenotazione):
+    // nei log entra solo la sua presenza/lunghezza, mai il testo.
+    console.log("[Inbox] list conversations", {
+      propertyId,
+      mode,
+      status: options.status,
+      channel: options.channel ?? "all",
+      subchannel: Boolean(options.subchannel_id),
+      hasSearch: Boolean(search),
+      searchLength: search?.length ?? 0,
+      limit: limite.applicato,
+      offset,
+    })
 
-    type ConversationList = Awaited<ReturnType<InboxReadService["listConversations"]>>
-    let conversations: ConversationList = []
-    let searchEngine: "postgres_fts" | "legacy" | undefined
+    let conversations: Awaited<ReturnType<InboxReadService["listConversations"]>> = []
+    let searchEngine: SearchEngine | undefined
+    let googleRows: GoogleSearchRow[] = []
+    let expandedTerms: string[] = []
+    let semanticExpansionUsed = false
+    const fuzzyEnabled = search ? shouldEnableFuzzySearch(search) : false
 
-    // La ricerca testuale usa un indice GIN su oggetto, mittente, contatto e
-    // contenuto di TUTTI i messaggi della conversazione. L'RPC applica prima
-    // tenant, stato, canale, sottocanale, cartelle nascoste e permessi utente,
-    // quindi gli id risultanti sono gia' uno spazio di ricerca autorizzato.
-    // `ids` espliciti (es. apertura di una bozza) hanno precedenza sulla ricerca.
+    const materializza = async (orderedIds: string[]) => {
+      if (orderedIds.length === 0) return []
+      const materializzate: Awaited<ReturnType<InboxReadService["listConversations"]>> = []
+
+      for (const lotto of inLotti(orderedIds, RICERCA_ID_PER_LOTTO)) {
+        const batch = await service.listConversations(propertyId, {
+          ...options,
+          ids: lotto,
+          search: undefined,
+          offset: 0,
+          limit: lotto.length,
+        })
+        materializzate.push(...batch)
+      }
+
+      const posizione = new Map(orderedIds.map((id, index) => [id, index]))
+      return materializzate.sort(
+        (a, b) =>
+          (posizione.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+          (posizione.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+      )
+    }
+
     if (search && !(options.ids && options.ids.length > 0)) {
-      const { data: matches, error: searchError } = await supabase.rpc("search_inbox_conversation_ids", {
+      const googleArgs = (terms: string[]) => ({
         p_property_id: propertyId,
         p_search: search,
+        p_expanded_terms: terms,
+        p_enable_fuzzy: fuzzyEnabled,
         p_status: options.status || "open",
         p_mode: mode,
         p_gmail_label: gmailLabel || null,
@@ -148,60 +184,149 @@ export async function GET(request: NextRequest) {
         p_offset: offset,
       })
 
-      if (searchError) {
-        // Solo ambienti in cui la migration non e' ancora arrivata degradano
-        // alla ricerca precedente. Altri errori devono essere visibili: non si
-        // nascondono problemi di auth/RLS/infrastruttura dietro risultati parziali.
-        if (searchError.code === "PGRST202" || searchError.code === "42883") {
-          console.warn("[Inbox search] FTS RPC unavailable; using legacy search", searchError.code)
+      const fast = await supabase.rpc("search_inbox_google", googleArgs([]))
+      if (fast.error && !isMissingRpc(fast.error)) throw fast.error
+
+      if (!fast.error) {
+        googleRows = (fast.data || []) as GoogleSearchRow[]
+        searchEngine = "google_hybrid"
+
+        const topQuality = googleRows.length > 0 ? Number(googleRows[0]?.match_quality ?? 0) : 0
+        if (shouldTrySemanticExpansion(search, googleRows.length, topQuality)) {
+          try {
+            const expansion = await expandInboxSearchQuery(search)
+            expandedTerms = expansion.terms
+
+            if (expandedTerms.length > 0) {
+              const enhanced = await supabase.rpc("search_inbox_google", googleArgs(expandedTerms))
+              if (!enhanced.error) {
+                googleRows = (enhanced.data || []) as GoogleSearchRow[]
+                semanticExpansionUsed = true
+              } else if (!isMissingRpc(enhanced.error)) {
+                console.warn("[Inbox search] enhanced DB pass unavailable", { code: enhanced.error.code })
+              }
+            }
+          } catch (error) {
+            // L'AI e' solo query-understanding: timeout/provider/rate-limit non
+            // possono trasformare una ricerca lessicale valida in errore 500.
+            console.info("[Inbox search] semantic expansion skipped", {
+              reason: error instanceof Error ? error.name : "unknown",
+            })
+            expandedTerms = []
+          }
+        }
+
+        const orderedIds = googleRows
+          .map((row) => row.conversation_id)
+          .filter((id): id is string => Boolean(id))
+        conversations = await materializza(orderedIds)
+
+        const matchedIds = [...new Set(
+          googleRows
+            .map((row) => row.matched_message_id)
+            .filter((id): id is string => Boolean(id)),
+        )]
+        const contentByMessage = new Map<string, string>()
+
+        // Si scarica il corpo di UN solo messaggio selezionato per risultato,
+        // non la conversazione intera: anche le mail HTML molto grandi restano
+        // fuori dal percorso normale della lista.
+        for (const lotto of inLotti(matchedIds, RICERCA_ID_PER_LOTTO)) {
+          const { data: bodies, error: bodiesError } = await supabase
+            .from("messages")
+            .select("id, content")
+            .eq("property_id", propertyId)
+            .in("id", lotto)
+
+          if (bodiesError) {
+            console.warn("[Inbox search] snippet bodies unavailable", { code: bodiesError.code })
+            break
+          }
+          for (const body of bodies || []) contentByMessage.set(body.id, body.content)
+        }
+
+        const matchByConversation = new Map(
+          googleRows
+            .filter((row) => row.conversation_id)
+            .map((row) => [row.conversation_id as string, row]),
+        )
+
+        conversations = conversations.map((conversation) => {
+          const match = matchByConversation.get(conversation.id)
+          if (!match) return conversation
+
+          const body = match.matched_message_id ? contentByMessage.get(match.matched_message_id) : undefined
+          const snippet = body ? buildSearchSnippet(body, search, expandedTerms) : null
+
+          return {
+            ...conversation,
+            // Compatibilita' immediata con la UI Inbox esistente: la riga gia'
+            // renderizza last_message.preview. Durante la ricerca le mostriamo
+            // il frammento pertinente, come fa un motore web, senza aspettare un
+            // refactor grafico della lista.
+            last_message:
+              snippet?.text && conversation.last_message
+                ? { ...conversation.last_message, preview: snippet.text }
+                : conversation.last_message,
+            search_match: {
+              matched_message_id: match.matched_message_id ?? null,
+              kind: match.match_kind ?? "keyword",
+              score: Number(match.search_rank ?? 0),
+              snippet: snippet?.text ?? null,
+              highlights: snippet?.highlights ?? [],
+              enhanced: semanticExpansionUsed,
+            },
+          }
+        })
+      } else {
+        // Ambiente non ancora migrato: prima vecchia FTS indicizzata, poi solo
+        // come ultimissima compatibilita' la ricerca legacy.
+        const { data: ftsMatches, error: ftsError } = await supabase.rpc("search_inbox_conversation_ids", {
+          p_property_id: propertyId,
+          p_search: search,
+          p_status: options.status || "open",
+          p_mode: mode,
+          p_gmail_label: gmailLabel || null,
+          p_channel: options.channel || null,
+          p_subchannel_id: options.subchannel_id || null,
+          p_filter: options.filter || null,
+          p_restrict: access?.restrict === true,
+          p_email_channel_ids: access?.emailChannelIds || [],
+          p_messaging_channel_ids: access?.messagingChannelIds || [],
+          p_sort: sort ?? (mode === "gmail" ? "date_desc" : "smart"),
+          p_limit: limite.applicato,
+          p_offset: offset,
+        })
+
+        if (ftsError && !isMissingRpc(ftsError)) throw ftsError
+
+        if (!ftsError) {
+          searchEngine = "postgres_fts"
+          const orderedIds = ((ftsMatches || []) as LegacySearchRow[])
+            .map((row) => row.conversation_id)
+            .filter((id): id is string => Boolean(id))
+          conversations = await materializza(orderedIds)
+        } else {
           searchEngine = "legacy"
           conversations = await service.listConversations(propertyId, options)
-        } else {
-          throw searchError
-        }
-      } else {
-        searchEngine = "postgres_fts"
-        const searchRows = (matches ?? []) as Array<{ conversation_id?: string | null }>
-        const orderedIds: string[] = searchRows
-          .map((row) => row.conversation_id)
-          .filter((id): id is string => typeof id === "string" && id.length > 0)
-
-        if (orderedIds.length === 0) {
-          conversations = []
-        } else {
-          // Il repository documenta un limite pratico per `.in(id, ...)` dovuto
-          // alla dimensione degli header. Materializziamo gli id a lotti, poi
-          // ricostruiamo l'ordine per rilevanza restituito dalla FTS.
-          const materializzate: ConversationList = []
-          for (const lotto of inLotti<string>(orderedIds, RICERCA_ID_PER_LOTTO)) {
-            const batch = await service.listConversations(propertyId, {
-              ...options,
-              ids: lotto,
-              search: undefined,
-              offset: 0,
-              limit: lotto.length,
-            })
-            materializzate.push(...batch)
-          }
-
-          const posizione = new Map<string, number>(orderedIds.map((id, index) => [id, index]))
-          conversations = materializzate.sort(
-            (a, b) => (posizione.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (posizione.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-          )
         }
       }
     } else {
       conversations = await service.listConversations(propertyId, options)
     }
 
-    console.log("[v0] Found conversations:", conversations.length)
-
-    // Il tetto va DICHIARATO, non subito in silenzio: chi chiede 5.000
-    // conversazioni e ne riceve 1.000 deve poter sapere che l'elenco e'
-    // troncato, altrimenti crede di vedere tutto.
     return NextResponse.json({
       conversations,
-      ...(search ? { search: { query: search, engine: searchEngine || "legacy" } } : {}),
+      ...(search
+        ? {
+            search: {
+              query: search,
+              engine: searchEngine || "legacy",
+              fuzzy: fuzzyEnabled,
+              semantic_expansion: semanticExpansionUsed,
+            },
+          }
+        : {}),
       limite: {
         richiesto: limite.richiesto,
         applicato: limite.applicato,
@@ -210,10 +335,6 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    // handleServiceError distingue gia' le condizioni di auth attese (log
-    // breve, 401) dai guasti veri (log con stack). Prima qui c'era un
-    // console.error che emetteva uno stack completo su OGNI sessione scaduta:
-    // un allarme sempre acceso, che seppellisce gli errori veri nel rumore.
     return handleServiceError(error)
   }
 }
@@ -221,10 +342,8 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const propertyId = await getAuthenticatedPropertyId(request)
-
     const supabase = await createClient()
     const body = await request.json()
-
     const { channel, contact_id, subject, metadata } = body
 
     let contactId = contact_id
@@ -246,9 +365,7 @@ export async function POST(request: NextRequest) {
           .select()
           .single()
 
-        if (contactError) {
-          return NextResponse.json({ error: contactError.message }, { status: 500 })
-        }
+        if (contactError) return NextResponse.json({ error: contactError.message }, { status: 500 })
         contactId = newContact.id
       }
     }
@@ -265,14 +382,9 @@ export async function POST(request: NextRequest) {
       .select()
       .single()
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ conversation })
   } catch (error) {
-    // Come nella GET: nessuno stack sulle sessioni scadute, che qui sono
-    // altrettanto normali.
     return handleServiceError(error)
   }
 }
