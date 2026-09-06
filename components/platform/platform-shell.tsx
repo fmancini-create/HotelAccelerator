@@ -2,6 +2,7 @@ import type React from "react"
 
 import { CustomerLicenseBadge } from "@/components/platform/customer-license-badge"
 import { PlatformFooter, PlatformFooterBar } from "@/components/platform/platform-footer"
+import { SuperAdminCrmQuickNav } from "@/components/platform/super-admin-crm-quick-nav"
 import { SuperAdminHeader } from "@/components/platform/super-admin-header"
 import { TenantHeader } from "@/components/platform/tenant-header"
 
@@ -48,6 +49,8 @@ export function PlatformShell({
           </div>
         </div>
       )}
+
+      {isPlatform && <SuperAdminCrmQuickNav />}
 
       <main className="flex-1 min-h-0 overflow-auto bg-white">
         {children}
