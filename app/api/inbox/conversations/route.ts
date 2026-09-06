@@ -121,7 +121,8 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Inbox options:", options)
 
-    let conversations
+    type ConversationList = Awaited<ReturnType<InboxReadService["listConversations"]>>
+    let conversations: ConversationList = []
     let searchEngine: "postgres_fts" | "legacy" | undefined
 
     // La ricerca testuale usa un indice GIN su oggetto, mittente, contatto e
@@ -160,9 +161,10 @@ export async function GET(request: NextRequest) {
         }
       } else {
         searchEngine = "postgres_fts"
-        const orderedIds = (matches || [])
-          .map((row: { conversation_id?: string | null }) => row.conversation_id)
-          .filter((id: string | null | undefined): id is string => Boolean(id))
+        const searchRows = (matches ?? []) as Array<{ conversation_id?: string | null }>
+        const orderedIds: string[] = searchRows
+          .map((row) => row.conversation_id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0)
 
         if (orderedIds.length === 0) {
           conversations = []
@@ -170,8 +172,8 @@ export async function GET(request: NextRequest) {
           // Il repository documenta un limite pratico per `.in(id, ...)` dovuto
           // alla dimensione degli header. Materializziamo gli id a lotti, poi
           // ricostruiamo l'ordine per rilevanza restituito dalla FTS.
-          const materializzate: Awaited<ReturnType<InboxReadService["listConversations"]>> = []
-          for (const lotto of inLotti(orderedIds, RICERCA_ID_PER_LOTTO)) {
+          const materializzate: ConversationList = []
+          for (const lotto of inLotti<string>(orderedIds, RICERCA_ID_PER_LOTTO)) {
             const batch = await service.listConversations(propertyId, {
               ...options,
               ids: lotto,
@@ -182,7 +184,7 @@ export async function GET(request: NextRequest) {
             materializzate.push(...batch)
           }
 
-          const posizione = new Map(orderedIds.map((id, index) => [id, index]))
+          const posizione = new Map<string, number>(orderedIds.map((id, index) => [id, index]))
           conversations = materializzate.sort(
             (a, b) => (posizione.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (posizione.get(b.id) ?? Number.MAX_SAFE_INTEGER),
           )
