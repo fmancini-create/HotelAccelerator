@@ -7,6 +7,7 @@ import { PlatformFooter } from "@/components/platform-footer"
 import { Button } from "@/components/ui/button"
 
 const PLATFORM_URL = "https://www.hotelaccelerator.com"
+const DEMO_URL = "https://calendar.app.google/hGkuEu5M8P8CzZkd6"
 
 export type FeatureCapability = {
   icon: LucideIcon
@@ -25,6 +26,18 @@ export type RelatedFeature = {
   description: string
 }
 
+export type FeatureTextCard = {
+  title: string
+  description: string
+}
+
+export type FeatureContentSection = {
+  title: string
+  intro?: string
+  paragraphs: string[]
+  bullets?: string[]
+}
+
 export type FeatureLandingProps = {
   slug: string
   eyebrow: string
@@ -33,9 +46,16 @@ export type FeatureLandingProps = {
   intro: string
   statusLabel: string
   statusDescription: string
+  benefitsTitle?: string
+  benefitsIntro?: string
+  benefits?: FeatureTextCard[]
   capabilitiesTitle: string
   capabilitiesIntro: string
   capabilities: FeatureCapability[]
+  workflowTitle?: string
+  workflowIntro?: string
+  workflow?: FeatureTextCard[]
+  seoSections?: FeatureContentSection[]
   availableNow: string[]
   requiresVerification: string[]
   faqs: FeatureFaq[]
@@ -64,6 +84,17 @@ export function buildFeatureMetadata({
     description,
     keywords,
     alternates: { canonical },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-video-preview": -1,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+      },
+    },
     openGraph: {
       type: "website",
       locale: "it_IT",
@@ -97,9 +128,16 @@ export function FeatureLandingPage({
   intro,
   statusLabel,
   statusDescription,
+  benefitsTitle,
+  benefitsIntro,
+  benefits = [],
   capabilitiesTitle,
   capabilitiesIntro,
   capabilities,
+  workflowTitle,
+  workflowIntro,
+  workflow = [],
+  seoSections = [],
   availableNow,
   requiresVerification,
   faqs,
@@ -126,6 +164,13 @@ export function FeatureLandingPage({
           name: "HotelAccelerator",
           url: PLATFORM_URL,
         },
+        about: {
+          "@type": "SoftwareApplication",
+          "@id": `${PLATFORM_URL}/#software`,
+          name: "HotelAccelerator",
+          applicationCategory: "BusinessApplication",
+          operatingSystem: "Web",
+        },
       },
       {
         "@type": "BreadcrumbList",
@@ -139,6 +184,12 @@ export function FeatureLandingPage({
           {
             "@type": "ListItem",
             position: 2,
+            name: "Funzionalità",
+            item: `${PLATFORM_URL}/features`,
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
             name: eyebrow,
             item: canonical,
           },
@@ -166,14 +217,23 @@ export function FeatureLandingPage({
             <HotelAcceleratorMark className="h-8 w-8" priority />
             <span className="text-xl font-semibold tracking-tight">HotelAccelerator</span>
           </Link>
+          <div className="hidden items-center gap-6 md:flex">
+            <Link href="/features" className="text-sm text-muted-foreground transition hover:text-foreground">
+              Funzionalità
+            </Link>
+            <Link href="/features/crm" className="text-sm text-muted-foreground transition hover:text-foreground">
+              CRM
+            </Link>
+            <Link href="/features/inbox-omnicanale" className="text-sm text-muted-foreground transition hover:text-foreground">
+              Inbox
+            </Link>
+          </div>
           <div className="flex items-center gap-3">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/admin">
-                Accedi
-              </Link>
+              <Link href="/admin">Accedi</Link>
             </Button>
             <Button asChild size="sm">
-              <Link href="/request-access">Richiedi demo</Link>
+              <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">Prenota una demo</a>
             </Button>
           </div>
         </nav>
@@ -183,12 +243,10 @@ export function FeatureLandingPage({
         <section className="px-4 pb-20 pt-32" aria-labelledby="feature-title">
           <div className="container mx-auto max-w-5xl text-center">
             <nav className="mb-6 text-sm text-muted-foreground" aria-label="Breadcrumb">
-              <Link href="/" className="hover:text-foreground">
-                Home
-              </Link>
-              <span className="mx-2" aria-hidden="true">
-                /
-              </span>
+              <Link href="/" className="hover:text-foreground">Home</Link>
+              <span className="mx-2" aria-hidden="true">/</span>
+              <Link href="/features" className="hover:text-foreground">Funzionalità</Link>
+              <span className="mx-2" aria-hidden="true">/</span>
               <span aria-current="page">{eyebrow}</span>
             </nav>
             <div className="mx-auto mb-8 flex w-fit items-center gap-2 rounded-full border border-ha-brand/20 bg-ha-brand-soft px-4 py-2 text-sm text-ha-brand-soft-foreground">
@@ -203,15 +261,13 @@ export function FeatureLandingPage({
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Button asChild size="lg" className="h-14 gap-2 rounded-full px-8 text-lg font-semibold">
-                <Link href="/request-access">
-                  Richiedi una demo guidata
+                <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">
+                  Prenota una demo
                   <ArrowRight className="h-5 w-5" aria-hidden="true" />
-                </Link>
+                </a>
               </Button>
               <Button asChild size="lg" variant="outline" className="h-14 rounded-full px-8 text-lg">
-                <Link href="#funzioni">
-                  Vedi cosa fa oggi
-                </Link>
+                <Link href="#funzioni">Scopri tutte le funzioni</Link>
               </Button>
             </div>
 
@@ -227,12 +283,31 @@ export function FeatureLandingPage({
           </div>
         </section>
 
-        <section id="funzioni" className="border-y border-border bg-secondary/40 px-4 py-24" aria-labelledby="capabilities-title">
+        {benefits.length > 0 ? (
+          <section className="border-y border-border bg-secondary/40 px-4 py-24" aria-labelledby="benefits-title">
+            <div className="container mx-auto max-w-6xl">
+              <div className="mx-auto mb-14 max-w-3xl text-center">
+                <h2 id="benefits-title" className="text-3xl font-bold md:text-4xl">
+                  {benefitsTitle ?? `Perché ${eyebrow} è utile in hotel`}
+                </h2>
+                {benefitsIntro ? <p className="mt-4 text-muted-foreground">{benefitsIntro}</p> : null}
+              </div>
+              <div className="grid gap-6 md:grid-cols-3">
+                {benefits.map((item) => (
+                  <article key={item.title} className="rounded-2xl border border-border bg-card p-6">
+                    <h3 className="text-xl font-semibold">{item.title}</h3>
+                    <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{item.description}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <section id="funzioni" className="px-4 py-24" aria-labelledby="capabilities-title">
           <div className="container mx-auto max-w-6xl">
             <div className="mx-auto mb-14 max-w-3xl text-center">
-              <h2 id="capabilities-title" className="text-3xl font-bold md:text-4xl">
-                {capabilitiesTitle}
-              </h2>
+              <h2 id="capabilities-title" className="text-3xl font-bold md:text-4xl">{capabilitiesTitle}</h2>
               <p className="mt-4 text-muted-foreground">{capabilitiesIntro}</p>
             </div>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -249,12 +324,63 @@ export function FeatureLandingPage({
           </div>
         </section>
 
-        <section className="px-4 py-24" aria-labelledby="availability-title">
+        {workflow.length > 0 ? (
+          <section className="border-y border-border bg-secondary/40 px-4 py-24" aria-labelledby="workflow-title">
+            <div className="container mx-auto max-w-5xl">
+              <div className="mx-auto mb-14 max-w-3xl text-center">
+                <h2 id="workflow-title" className="text-3xl font-bold md:text-4xl">
+                  {workflowTitle ?? `Come funziona ${eyebrow}`}
+                </h2>
+                {workflowIntro ? <p className="mt-4 text-muted-foreground">{workflowIntro}</p> : null}
+              </div>
+              <div className="grid gap-6 md:grid-cols-3">
+                {workflow.map((step, index) => (
+                  <article key={step.title} className="rounded-2xl border border-border bg-card p-6">
+                    <span className="text-sm font-bold text-ha-brand">{String(index + 1).padStart(2, "0")}</span>
+                    <h3 className="mt-4 text-xl font-semibold">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.description}</p>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {seoSections.length > 0 ? (
+          <section className="px-4 py-24" aria-labelledby="deep-dive-title">
+            <div className="container mx-auto max-w-5xl">
+              <h2 id="deep-dive-title" className="text-center text-3xl font-bold md:text-4xl">
+                Come si inserisce nel lavoro quotidiano dell'hotel
+              </h2>
+              <div className="mt-12 space-y-8">
+                {seoSections.map((section) => (
+                  <article key={section.title} className="rounded-3xl border border-border bg-card p-7 md:p-9">
+                    <h3 className="text-2xl font-semibold">{section.title}</h3>
+                    {section.intro ? <p className="mt-3 text-base leading-relaxed text-muted-foreground">{section.intro}</p> : null}
+                    <div className="mt-5 space-y-4 text-base leading-7 text-muted-foreground">
+                      {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+                    </div>
+                    {section.bullets?.length ? (
+                      <ul className="mt-6 grid gap-3 md:grid-cols-2">
+                        {section.bullets.map((item) => (
+                          <li key={item} className="flex items-start gap-3 text-sm leading-relaxed text-muted-foreground">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 flex-none text-ha-brand" aria-hidden="true" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="border-y border-border bg-secondary/40 px-4 py-24" aria-labelledby="availability-title">
           <div className="container mx-auto max-w-5xl">
             <div className="mb-12 text-center">
-              <h2 id="availability-title" className="text-3xl font-bold md:text-4xl">
-                Disponibilità dichiarata con chiarezza
-              </h2>
+              <h2 id="availability-title" className="text-3xl font-bold md:text-4xl">Disponibilità dichiarata con chiarezza</h2>
               <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">
                 Le funzioni vengono attivate in base al tenant, ai permessi e alle integrazioni realmente configurate.
               </p>
@@ -292,11 +418,9 @@ export function FeatureLandingPage({
           </div>
         </section>
 
-        <section className="border-y border-border bg-secondary/40 px-4 py-24" aria-labelledby="faq-title">
+        <section className="px-4 py-24" aria-labelledby="faq-title">
           <div className="container mx-auto max-w-3xl">
-            <h2 id="faq-title" className="text-center text-3xl font-bold md:text-4xl">
-              Domande frequenti
-            </h2>
+            <h2 id="faq-title" className="text-center text-3xl font-bold md:text-4xl">Domande frequenti</h2>
             <div className="mt-10 space-y-4">
               {faqs.map((faq) => (
                 <details key={faq.question} className="group rounded-2xl border border-border bg-card p-5">
@@ -308,18 +432,12 @@ export function FeatureLandingPage({
           </div>
         </section>
 
-        <section className="px-4 py-24" aria-labelledby="related-title">
+        <section className="border-y border-border bg-secondary/40 px-4 py-24" aria-labelledby="related-title">
           <div className="container mx-auto max-w-5xl">
-            <h2 id="related-title" className="text-center text-3xl font-bold">
-              Moduli collegati
-            </h2>
+            <h2 id="related-title" className="text-center text-3xl font-bold">Funzionalità collegate</h2>
             <div className="mt-10 grid gap-6 md:grid-cols-2">
               {related.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className="group rounded-2xl border border-border bg-card p-6 transition hover:border-ha-brand/40"
-                >
+                <Link key={item.href} href={item.href} className="group rounded-2xl border border-border bg-card p-6 transition hover:border-ha-brand/40">
                   <article>
                     <h3 className="flex items-center justify-between text-xl font-semibold">
                       {item.title}
@@ -330,20 +448,21 @@ export function FeatureLandingPage({
                 </Link>
               ))}
             </div>
+            <div className="mt-8 text-center">
+              <Link href="/features" className="text-sm font-medium text-ha-brand hover:underline">Vedi tutte le funzionalità di HotelAccelerator</Link>
+            </div>
           </div>
         </section>
 
-        <section className="px-4 pb-24" aria-labelledby="feature-cta-title">
+        <section className="px-4 py-24" aria-labelledby="feature-cta-title">
           <div className="container mx-auto max-w-3xl rounded-3xl border border-ha-brand/20 bg-ha-brand-soft/50 p-8 text-center md:p-12">
-            <h2 id="feature-cta-title" className="text-2xl font-bold md:text-3xl">
-              {ctaTitle}
-            </h2>
+            <h2 id="feature-cta-title" className="text-2xl font-bold md:text-3xl">{ctaTitle}</h2>
             <p className="mx-auto mt-4 max-w-2xl text-muted-foreground">{ctaDescription}</p>
             <Button asChild size="lg" className="mt-8 h-14 gap-2 rounded-full px-8 text-lg font-semibold">
-              <Link href="/request-access">
-                Richiedi la verifica per la tua struttura
+              <a href={DEMO_URL} target="_blank" rel="noopener noreferrer">
+                Prenota una demo
                 <ArrowRight className="h-5 w-5" aria-hidden="true" />
-              </Link>
+              </a>
             </Button>
           </div>
         </section>
