@@ -16,7 +16,14 @@
  */
 
 import { createServiceClient } from "@/lib/supabase/server"
-import { getSuiteAddonEntitlementForTenant } from "@/lib/suite-addons/entitlements"
+import {
+  getSuiteAddonEntitlementForTenant,
+  isSuiteAddonKey,
+  resolveSuiteCustomerAccountId,
+  setSuiteAddonEntitlementSource,
+  type SuiteAddonEntitlement,
+  type SuiteAddonKey,
+} from "@/lib/suite-addons/entitlements"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type ModuleCategory = "core" | "product" | "addon"
@@ -68,37 +75,41 @@ function mapCatalogRow(row: Record<string, unknown>): ModuleCatalogEntry {
     isCore: Boolean(row.is_core),
     sortOrder: (row.sort_order as number) ?? 100,
     isAvailable: row.is_available !== false,
-    // `?? null` e non `?? 0`: un costo che non c'e' non e' un costo di zero.
     monthlyCostCents: (row.monthly_cost_cents as number | null) ?? null,
   }
 }
 
-/** Un modulo e' "attivo" se in stato active/trial e non scaduto. */
 function isEffectivelyActive(status: ModuleStatus, expiresAt: string | null): boolean {
   if (status !== "active" && status !== "trial") return false
   if (expiresAt && new Date(expiresAt).getTime() < Date.now()) return false
   return true
 }
 
-async function reviewsSuiteEntitlement(propertyId: string) {
-  try {
-    return await getSuiteAddonEntitlementForTenant({
-      productKey: "hotelaccelerator",
-      externalTenantId: propertyId,
-      addonKey: "reviews",
-    })
-  } catch (error) {
-    console.error("[modules] reviews suite entitlement lookup failed", {
-      propertyId,
-      error: error instanceof Error ? error.message : "unknown",
-    })
-    return null
-  }
+const SHARED_MODULES: SuiteAddonKey[] = ["reviews", "web_traffic"]
+
+async function suiteEntitlements(propertyId: string) {
+  const pairs = await Promise.all(
+    SHARED_MODULES.map(async (addonKey) => {
+      try {
+        const entitlement = await getSuiteAddonEntitlementForTenant({
+          productKey: "hotelaccelerator",
+          externalTenantId: propertyId,
+          addonKey,
+        })
+        return [addonKey, entitlement] as const
+      } catch (error) {
+        console.error("[modules] suite entitlement lookup failed", {
+          propertyId,
+          addonKey,
+          error: error instanceof Error ? error.message : "unknown",
+        })
+        return [addonKey, null] as const
+      }
+    }),
+  )
+  return new Map<SuiteAddonKey, SuiteAddonEntitlement | null>(pairs)
 }
 
-/**
- * Legge l'intero catalogo dei moduli disponibili.
- */
 export async function getModuleCatalog(
   supabase: SupabaseClient,
 ): Promise<ModuleCatalogEntry[]> {
@@ -112,9 +123,6 @@ export async function getModuleCatalog(
   return (data ?? []).map(mapCatalogRow)
 }
 
-/**
- * Legge lo stato (raw) dei moduli di una struttura.
- */
 export async function getTenantModules(
   supabase: SupabaseClient,
   propertyId: string,
@@ -134,17 +142,14 @@ export async function getTenantModules(
   }))
 }
 
-/**
- * Unisce catalogo + stato della struttura in un'unica lista pronta per la UI.
- */
 export async function getModulesWithState(
   supabase: SupabaseClient,
   propertyId: string,
 ): Promise<ModuleWithState[]> {
-  const [catalog, tenant, reviewsEntitlement] = await Promise.all([
+  const [catalog, tenant, entitlements] = await Promise.all([
     getModuleCatalog(supabase),
     getTenantModules(supabase, propertyId),
-    reviewsSuiteEntitlement(propertyId),
+    suiteEntitlements(propertyId),
   ])
 
   const byKey = new Map(tenant.map((t) => [t.moduleKey, t]))
@@ -154,14 +159,15 @@ export async function getModulesWithState(
     const localStatus: ModuleStatus = state?.status ?? "inactive"
     const localExpiresAt = state?.expiresAt ?? null
     const localActive = isEffectivelyActive(localStatus, localExpiresAt)
+    const entitlement = isSuiteAddonKey(m.key) ? entitlements.get(m.key) : null
 
-    if (m.key === "reviews" && !localActive && reviewsEntitlement?.active) {
-      const status: ModuleStatus = reviewsEntitlement.status === "trial" ? "trial" : "active"
+    if (!localActive && entitlement?.active) {
+      const status: ModuleStatus = entitlement.status === "trial" ? "trial" : "active"
       return {
         ...m,
         status,
         plan: "suite",
-        expiresAt: reviewsEntitlement.expiresAt,
+        expiresAt: entitlement.expiresAt,
         active: true,
       }
     }
@@ -176,27 +182,22 @@ export async function getModulesWithState(
   })
 }
 
-/**
- * Restituisce l'insieme delle chiavi dei moduli ATTIVI per una struttura.
- * Comodo per il menu e per i controlli "questo modulo e' acceso?".
- */
 export async function getActiveModuleKeys(
   supabase: SupabaseClient,
   propertyId: string,
 ): Promise<Set<string>> {
-  const [tenant, reviewsEntitlement] = await Promise.all([
+  const [tenant, entitlements] = await Promise.all([
     getTenantModules(supabase, propertyId),
-    reviewsSuiteEntitlement(propertyId),
+    suiteEntitlements(propertyId),
   ])
   const active = tenant.filter((t) => isEffectivelyActive(t.status, t.expiresAt))
   const keys = new Set(active.map((t) => t.moduleKey))
-  if (reviewsEntitlement?.active) keys.add("reviews")
+  for (const addonKey of SHARED_MODULES) {
+    if (entitlements.get(addonKey)?.active) keys.add(addonKey)
+  }
   return keys
 }
 
-/**
- * Dice se un singolo modulo e' attivo per una struttura.
- */
 export async function isModuleActive(
   supabase: SupabaseClient,
   propertyId: string,
@@ -206,11 +207,6 @@ export async function isModuleActive(
   return keys.has(moduleKey)
 }
 
-/**
- * Attiva o disattiva un modulo per una struttura (scrittura server-side).
- * Usa il service role: chiamare SOLO da route dove l'auth e' gia' verificata.
- * Il trigger DB tiene sincronizzati i vecchi flag (cms_enabled, ...).
- */
 export async function setModuleStatus(params: {
   propertyId: string
   moduleKey: string
@@ -220,6 +216,7 @@ export async function setModuleStatus(params: {
 }): Promise<void> {
   const { propertyId, moduleKey, status, plan = null, expiresAt = null } = params
   const admin = createServiceClient()
+  const activatedAt = status === "active" || status === "trial" ? new Date().toISOString() : null
 
   const { error } = await admin
     .from("tenant_modules")
@@ -230,10 +227,40 @@ export async function setModuleStatus(params: {
         status,
         plan,
         expires_at: expiresAt,
-        activated_at: status === "active" || status === "trial" ? new Date().toISOString() : null,
+        activated_at: activatedAt,
       },
       { onConflict: "property_id,module_key" },
     )
 
   if (error) throw new Error(`setModuleStatus: ${error.message}`)
+
+  // Reviews e Visite sito sono entitlement di suite: se vengono accesi/spenti
+  // dal Core, pubblichiamo anche questa sorgente. Un eventuale abbonamento attivo
+  // su Santaddeo resta valido perché l'entitlement aggrega tutte le sorgenti.
+  if (isSuiteAddonKey(moduleKey)) {
+    try {
+      const customerAccountId = await resolveSuiteCustomerAccountId({
+        productKey: "hotelaccelerator",
+        externalTenantId: propertyId,
+      })
+      if (customerAccountId) {
+        await setSuiteAddonEntitlementSource({
+          customerAccountId,
+          addonKey: moduleKey,
+          sourceProductKey: "hotelaccelerator",
+          sourceExternalTenantId: propertyId,
+          status,
+          activatedAt,
+          expiresAt,
+          metadata: { source: "tenant_modules", plan },
+        })
+      }
+    } catch (syncError) {
+      console.error("[modules] suite entitlement publish failed", {
+        propertyId,
+        moduleKey,
+        error: syncError instanceof Error ? syncError.message : "unknown",
+      })
+    }
+  }
 }
