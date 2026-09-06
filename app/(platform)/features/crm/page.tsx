@@ -1,126 +1,73 @@
 import { BookOpenCheck, Gauge, Hotel, MailPlus, Search, ShieldCheck, UsersRound } from "lucide-react"
 import { buildFeatureMetadata, FeatureLandingPage } from "@/components/platform/feature-landing-page"
 
-const description =
-  "Centralizza contatti, consensi, segmenti e storico soggiorni. HotelAccelerator collega inbox e CRM e prepara la sincronizzazione con il PMS configurato."
+const description = "CRM alberghiero per hotel: centralizza contatti, consensi, soggiorni, workspace, pipeline e conversazioni. Collegabile a Inbox, PMS e attività commerciali in base alle integrazioni attive."
 
 export const metadata = buildFeatureMetadata({
   slug: "crm",
-  title: "CRM alberghiero per ospiti e soggiorni",
+  title: "CRM alberghiero per ospiti, vendite e soggiorni",
   description,
-  keywords: [
-    "crm alberghiero",
-    "crm per hotel",
-    "gestione ospiti hotel",
-    "database clienti hotel",
-    "storico soggiorni",
-    "consensi marketing hotel",
-  ],
+  keywords: ["crm alberghiero", "crm per hotel", "gestione ospiti hotel", "database clienti hotel", "storico soggiorni", "consensi marketing hotel", "pipeline commerciale hotel", "crm prenotazioni hotel"],
 })
 
 const capabilities = [
-  {
-    icon: UsersRound,
-    title: "Anagrafica ospiti",
-    description:
-      "Crea e modifica contatti separati per struttura, con recapiti, tag, livello VIP e informazioni utili al team.",
-  },
-  {
-    icon: Search,
-    title: "Ricerca e filtri",
-    description:
-      "Cerca per nome, email o azienda e filtra i contatti per livello VIP senza uscire dall'area CRM.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Consensi visibili",
-    description:
-      "Il CRM conserva stato del consenso marketing e disiscrizione, così il team può distinguere i contatti utilizzabili.",
-  },
-  {
-    icon: Hotel,
-    title: "Soggiorni e valore",
-    description:
-      "La scheda contatto può mostrare soggiorni, prenotazioni e ricavi quando questi dati sono stati importati dalla fonte autorizzata.",
-  },
-  {
-    icon: MailPlus,
-    title: "Contatti dall'inbox",
-    description:
-      "Le email possono creare o collegare il contatto corretto, escludendo mittenti automatici e rispettando le impostazioni del tenant.",
-  },
-  {
-    icon: Gauge,
-    title: "KPI del database",
-    description:
-      "Totale contatti, consensi, VIP, prenotazioni, ricavi e punteggio medio vengono calcolati sui dati realmente presenti.",
-  },
+  { icon: UsersRound, title: "Anagrafica ospiti", description: "Crea e modifica contatti separati per struttura, con recapiti, tag, livello VIP e informazioni utili al team." },
+  { icon: Search, title: "Ricerca e filtri", description: "Cerca per nome, email o azienda e usa filtri e workspace per organizzare il database senza uscire dall'area CRM." },
+  { icon: ShieldCheck, title: "Consensi visibili", description: "Il CRM conserva stato del consenso marketing e disiscrizione, così il team può distinguere i contatti utilizzabili." },
+  { icon: Hotel, title: "Soggiorni e valore", description: "La scheda contatto può mostrare soggiorni, prenotazioni e ricavi quando questi dati sono stati importati dalla fonte autorizzata." },
+  { icon: MailPlus, title: "Contatti dalle conversazioni", description: "Email e altri canali attivi possono creare o collegare il contatto corretto, rispettando le impostazioni e lo scope del tenant." },
+  { icon: Gauge, title: "Pipeline e KPI", description: "Il CRM dispone di pipeline, attività commerciali e indicatori costruiti sui dati realmente presenti, senza trasformare stime in risultati certi." },
 ]
 
 const faqs = [
-  {
-    question: "Il CRM importa automaticamente tutti gli ospiti dal PMS?",
-    answer:
-      "La sincronizzazione PMS è presente come flusso configurabile, ma viene attivata e collaudata per il connettore del singolo tenant. Scidoo è il primo adapter previsto; non tutti i PMS sono automaticamente compatibili.",
-  },
-  {
-    question: "Il lead score viene calcolato automaticamente?",
-    answer:
-      "Il CRM conserva e visualizza il campo di punteggio quando disponibile. Il sito non promette un motore automatico di lead scoring finché regole, test e origine del dato non sono verificati.",
-  },
-  {
-    question: "Posso creare segmenti di contatti?",
-    answer:
-      "È possibile salvare definizioni di segmento. La valutazione dinamica delle condizioni e il filtro completo dei membri sono ancora in consolidamento.",
-  },
-  {
-    question: "I contatti sono separati tra strutture?",
-    answer:
-      "Le API CRM applicano lo scope della struttura e i permessi dell'area. L'isolamento va comunque verificato nel collaudo del tenant prima di dichiarare il flusso production-ready.",
-  },
+  { question: "Il CRM importa automaticamente tutti gli ospiti dal PMS?", answer: "La sincronizzazione PMS dipende dal connettore del singolo tenant. HotelAccelerator è progettato per usare adapter differenti e non presume che tutti i PMS espongano gli stessi dati o le stesse API." },
+  { question: "Il CRM gestisce anche prospect e trattative?", answer: "Nel Core sono presenti workspace, pipeline, motore di vendita e funzioni di prospecting a livelli diversi di maturità. Le capability avanzate vengono attivate e collaudate sul tenant prima di essere considerate operative." },
+  { question: "Posso creare segmenti di contatti?", answer: "Sono presenti strutture e superfici per segmentazione e campagne. La valutazione dinamica completa e il loro uso nelle automazioni marketing devono essere verificati prima dell'invio reale." },
+  { question: "I contatti sono separati tra strutture?", answer: "Le API CRM applicano tenant scope e permessi dell'area. Il progetto richiede comunque test espliciti di isolamento prima di promuovere l'intera capability a livello multi-tenant." },
+  { question: "Il CRM è collegato a email, WhatsApp e telefono?", answer: "La direzione del prodotto è unificare il contesto del contatto tra canali. Gmail e WhatsApp hanno evidenze reali sul flusso base; telefonia e altri connettori dipendono dal provider e dal collaudo del tenant." },
 ]
 
 export default function CrmLandingPage() {
-  return (
-    <FeatureLandingPage
-      slug="crm"
-      eyebrow="CRM alberghiero"
-      icon={BookOpenCheck}
-      title="Un profilo ospite unico per contatti, consensi e soggiorni"
-      intro="Il CRM di HotelAccelerator riunisce anagrafiche e dati operativi della struttura, collegando le conversazioni ai contatti e mostrando solo le informazioni realmente disponibili."
-      statusLabel="Anagrafiche e KPI presenti nell'area riservata"
-      statusDescription="La sincronizzazione con PMS, le regole di segmentazione e la qualità dei dati vengono verificate per ogni struttura durante l'onboarding."
-      capabilitiesTitle="Le funzioni CRM già presenti"
-      capabilitiesIntro="Nessuna promessa generica di retention o aumento dei ricavi: il valore dipende dalla qualità dei dati e dai processi adottati dal team."
-      capabilities={capabilities}
-      availableNow={[
-        "Creazione, modifica, ricerca e filtri dei contatti per tenant.",
-        "Consenso marketing, stato di disiscrizione, tag e livello VIP.",
-        "Scheda con soggiorni e KPI aggregati quando i dati sono presenti.",
-        "Collegamento e acquisizione controllata dei contatti dalle email.",
-      ]}
-      requiresVerification={[
-        "Configurazione e collaudo del connettore PMS della struttura.",
-        "Valutazione dinamica dei segmenti e loro uso come destinatari di campagna.",
-        "Regole di calcolo del lead score e provenienza del dato.",
-      ]}
-      faqs={faqs}
-      related={[
-        {
-          href: "/features/inbox-omnicanale",
-          title: "Inbox per hotel",
-          description: "Collega conversazioni email e lavoro del team ai profili ospite.",
-        },
-        {
-          href: "/features/email-marketing",
-          title: "Campagne email",
-          description: "Prepara campagne usando dati e consensi del CRM verificati.",
-        },
-      ]}
-      ctaTitle="Verifichiamo insieme dati e PMS"
-      ctaDescription="La demo parte dal database ospiti e dal connettore disponibile, così distinguiamo subito ciò che è attivabile da ciò che richiede integrazione."
-      schemaName="CRM alberghiero per contatti, consensi e soggiorni"
-      schemaDescription={description}
-    />
-  )
+  return <FeatureLandingPage
+    slug="crm"
+    eyebrow="CRM alberghiero"
+    icon={BookOpenCheck}
+    title="Un CRM per hotel che collega ospiti, conversazioni e opportunità"
+    intro="HotelAccelerator riunisce anagrafiche, consensi, soggiorni, pipeline e attività commerciali in un profilo contestuale. Il CRM non vive isolato: può collegarsi a Inbox, WhatsApp, telefono e PMS quando le rispettive integrazioni sono attive."
+    statusLabel="CRM base e diverse estensioni presenti nel Core"
+    statusDescription="Anagrafiche, workspace, pipeline e componenti commerciali esistono a livelli diversi di maturità. La capability CRM ospite completa resta da verificare end-to-end prima di essere dichiarata production-ready."
+    benefitsTitle="Perché un CRM specifico per hotel"
+    benefitsIntro="Un ospite non è soltanto un indirizzo email: può avere soggiorni, richieste, conversazioni, consensi, valore e attività aperte che devono essere letti insieme."
+    benefits={[
+      { title: "Una vista più completa dell'ospite", description: "Contatti, conversazioni e dati di soggiorno possono convergere nello stesso profilo quando le fonti sono collegate." },
+      { title: "Vendite meno disperse", description: "Pipeline, follow-up e attività aiutano il team a distinguere una semplice richiesta da una vera opportunità commerciale." },
+      { title: "Dati utilizzabili con criterio", description: "Consensi, tenant scope e provenienza del dato restano parte del processo, soprattutto quando il CRM alimenta campagne o automazioni." },
+    ]}
+    capabilitiesTitle="Le principali funzioni del CRM HotelAccelerator"
+    capabilitiesIntro="Il CRM copre relazione con l'ospite e lavoro commerciale, ma ogni dato viene mostrato soltanto se esiste una fonte autorizzata e coerente."
+    capabilities={capabilities}
+    workflowTitle="Dal primo contatto alla relazione con l'ospite"
+    workflow={[
+      { title: "La richiesta entra", description: "Una email, un messaggio, una chiamata o un'importazione PMS può fornire dati utili per identificare il contatto." },
+      { title: "Il profilo viene arricchito", description: "Il CRM collega informazioni, consensi, conversazioni e soggiorni disponibili senza attraversare tenant o aree non autorizzate." },
+      { title: "Il team lavora sulla relazione", description: "Pipeline, follow-up, attività e campagne possono usare il profilo come contesto, mantenendo revisione e permessi dove richiesti." },
+    ]}
+    seoSections={[
+      { title: "CRM hotel per booking, reception e direzione commerciale", paragraphs: ["In una struttura ricettiva le informazioni sul cliente possono essere distribuite tra PMS, email, WhatsApp, telefono e fogli di lavoro. Il problema non è soltanto raccoglierle, ma ricostruire rapidamente il contesto quando una persona torna a contattare l'hotel.", "HotelAccelerator usa il CRM come punto di collegamento tra queste fonti. La scheda non inventa dati mancanti: mostra ciò che arriva dalle integrazioni realmente configurate e mantiene separati i tenant."], bullets: ["Anagrafiche e consensi", "Soggiorni quando importati dal PMS", "Conversazioni collegate", "Pipeline, follow-up e workspace commerciali"] },
+      { title: "CRM B2C e B2B nello stesso ecosistema", paragraphs: ["Oltre all'ospite individuale, HotelAccelerator dispone di workspace CRM per hotel, SPA, ristorante, aziende e agenzie. Questo permette di organizzare linee di business differenti senza dover creare database completamente scollegati.", "Le funzioni di prospecting e motore di vendita restano soggette a permessi, verifica dei dati e intervento umano nei passaggi commerciali sensibili."] },
+    ]}
+    availableNow={["Creazione, modifica, ricerca e filtri dei contatti per tenant.", "Consenso marketing, stato di disiscrizione, tag e livello VIP.", "Workspace CRM e pipeline commerciali presenti nel Core.", "Collegamento controllato tra conversazioni e contatti."]}
+    requiresVerification={["Connettore PMS e qualità dei dati della struttura.", "CRM ospite completo end-to-end, inclusi identity resolution e LTV.", "Segmentazione dinamica e automazioni lifecycle.", "Test multi-tenant e permessi su workspace e gruppi reali."]}
+    faqs={faqs}
+    related={[
+      { href: "/features/inbox-omnicanale", title: "Inbox omnicanale", description: "Collega conversazioni email e messaggi ai profili e al lavoro del team." },
+      { href: "/features/pms-hotel", title: "PMS integrato", description: "Porta nel CRM i dati supportati dal gestionale della struttura." },
+      { href: "/features/whatsapp-hotel", title: "WhatsApp per hotel", description: "Gestisci le conversazioni WhatsApp nel contesto del contatto." },
+      { href: "/features/email-marketing", title: "Email marketing", description: "Usa dati e consensi del CRM come base per campagne controllate." },
+    ]}
+    ctaTitle="Vuoi vedere il CRM sui flussi reali del tuo hotel?"
+    ctaDescription="Partiamo da PMS, caselle, WhatsApp e processi commerciali per capire quali dati possiamo collegare e con quale livello di automazione."
+    schemaName="CRM alberghiero per ospiti, vendite e soggiorni"
+    schemaDescription={description}
+  />
 }
