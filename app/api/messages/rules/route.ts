@@ -15,6 +15,21 @@ type Impression = {
   created_at: string
 }
 
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+  "Cache-Control": "private, no-store",
+}
+
+function response(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: CORS })
+}
+
+export function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS })
+}
+
 // GET - Ottiene regole attive per property_id e sessione
 export async function GET(request: NextRequest) {
   try {
@@ -24,11 +39,11 @@ export async function GET(request: NextRequest) {
     const currentPage = searchParams.get("page") || "/"
 
     if (!propertyId) {
-      return NextResponse.json({ error: "property_id is required. No default tenant allowed." }, { status: 400 })
+      return response({ error: "property_id is required. No default tenant allowed." }, 400)
     }
 
     if (!sessionId) {
-      return NextResponse.json({ error: "session_id required" }, { status: 400 })
+      return response({ error: "session_id required" }, 400)
     }
 
     // Endpoint PUBBLICO (widget sul sito del cliente, nessuna sessione):
@@ -50,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     if (rulesError) {
       console.error("Error fetching rules:", rulesError)
-      return NextResponse.json({ error: "Failed to fetch rules" }, { status: 500 })
+      return response({ error: "Failed to fetch rules" }, 500)
     }
 
     // Ottiene impressioni per questa sessione (ultime 24h)
@@ -62,15 +77,10 @@ export async function GET(request: NextRequest) {
       .eq("property_id", propertyId)
       .gte("created_at", yesterday)
 
-    // Filtra regole in base a impressioni e targeting pagina.
-    // I tipi sono annotati a mano perché `createServiceClient()` restituisce un
-    // client non tipizzato (import dinamico), a differenza di `createClient()`.
     const eligibleRules = (rules || []).filter((rule: MessageRule) => {
-      // Verifica targeting pagina
       const targetPages = rule.target_pages || []
       const excludePages = rule.exclude_pages || []
 
-      // Se ci sono target_pages, la pagina deve matchare
       if (targetPages.length > 0) {
         const matches = targetPages.some((pattern: string) => {
           const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$")
@@ -79,7 +89,6 @@ export async function GET(request: NextRequest) {
         if (!matches) return false
       }
 
-      // Se la pagina è in exclude_pages, skip
       if (excludePages.length > 0) {
         const excluded = excludePages.some((pattern: string) => {
           const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$")
@@ -88,30 +97,24 @@ export async function GET(request: NextRequest) {
         if (excluded) return false
       }
 
-      // Verifica limite impressioni per sessione
       const ruleImpressions = (impressions || []).filter(
         (i: Impression) => i.rule_id === rule.id && i.impression_type === "view",
       )
-      if (ruleImpressions.length >= rule.max_impressions_per_session) {
-        return false
-      }
+      if (ruleImpressions.length >= rule.max_impressions_per_session) return false
 
-      // Verifica limite impressioni giornaliere
       const today = new Date().toISOString().split("T")[0]
       const todayImpressions = ruleImpressions.filter((i: Impression) => i.created_at.startsWith(today))
-      if (todayImpressions.length >= rule.max_impressions_per_day) {
-        return false
-      }
+      if (todayImpressions.length >= rule.max_impressions_per_day) return false
 
       return true
     })
 
-    return NextResponse.json({
+    return response({
       rules: eligibleRules,
       session_impressions: impressions || [],
     })
   } catch (error) {
     console.error("Error in messages/rules:", error)
-    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+    return response({ error: "Internal error" }, 500)
   }
 }

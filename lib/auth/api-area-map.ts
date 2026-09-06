@@ -18,6 +18,7 @@
 export const PUBLIC_API_PREFIXES: string[] = [
   "/api/chat/widget",
   "/api/public/chat-widget",
+  "/api/public/suite",
   "/api/messages/impression",
   "/api/messages/rules",
   "/api/public/embed",
