@@ -9,6 +9,11 @@ const ACTION_TYPES = new Set(["onboarding", "adoption", "health_recovery", "rene
 const PRIORITIES = new Set(["low", "normal", "high", "critical"])
 const STATUSES = new Set(["open", "done", "cancelled"])
 
+type CustomerSuccessActionRow = {
+  status?: string | null
+  due_at?: string | null
+}
+
 async function requirePlatformAdmin(request: NextRequest) {
   const email = await getAuthenticatedUserEmail(request)
   await new SuperAdminService().verifySuperAdmin(email)
@@ -28,7 +33,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     const now = Date.now()
-    const actions = data ?? []
+    const actions = (data ?? []) as CustomerSuccessActionRow[]
     return NextResponse.json({
       actions,
       stats: {
