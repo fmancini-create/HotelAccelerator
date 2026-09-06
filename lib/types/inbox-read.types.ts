@@ -60,6 +60,21 @@ export interface IntelligenceSummary {
   }
 }
 
+export interface InboxSearchHighlight {
+  start: number
+  end: number
+}
+
+export interface InboxSearchMatch {
+  matched_message_id: string | null
+  kind: "keyword" | "fuzzy" | "semantic_expansion"
+  score: number
+  snippet: string | null
+  highlights: InboxSearchHighlight[]
+  /** true when query-understanding added synonyms/equivalent phrases. */
+  enhanced: boolean
+}
+
 // List item - minimal data for conversation list
 export interface ConversationListItem {
   id: string
@@ -77,6 +92,9 @@ export interface ConversationListItem {
 
   // Last message preview
   last_message: MessageSummary | null
+
+  // Search-specific preview, populated only when `search` is active.
+  search_match?: InboxSearchMatch | null
 
   // Intelligence summary (optional, pre-aggregated)
   intelligence_summary: IntelligenceSummary | null
@@ -203,4 +221,4 @@ export interface ConversationListOptions {
     messagingChannelIds: string[]
     chatChannelIds: string[]
   }
-  }
+}
