@@ -47,6 +47,17 @@ async function propertyFromSantaddeoHotel(hotelId: string): Promise<string | nul
   return (account?.property_id as string | null) ?? null
 }
 
+async function propertyFromTrackingKey(writeKey: string): Promise<string | null> {
+  const db = createServiceClient()
+  const { data } = await db
+    .from("tracking_sites")
+    .select("property_id,is_active")
+    .eq("write_key", writeKey)
+    .maybeSingle()
+  if (!data?.property_id || data.is_active === false) return null
+  return data.property_id as string
+}
+
 async function santaddeoHotelForProperty(propertyId: string): Promise<string | null> {
   const db = createServiceClient()
   const { data: account } = await db
@@ -107,6 +118,7 @@ export async function GET(request: NextRequest) {
   let propertyId = q.get("property_id")?.trim() || ""
   const santaddeoHotelId = q.get("santaddeo_hotel_id")?.trim() || ""
   const chatKey = q.get("chat_key")?.trim() || ""
+  const trackingKey = q.get("tracking_key")?.trim() || ""
 
   if (!propertyId && santaddeoHotelId) {
     propertyId = (await propertyFromSantaddeoHotel(santaddeoHotelId)) || ""
@@ -115,6 +127,10 @@ export async function GET(request: NextRequest) {
   if (!propertyId && chatKey) {
     const widget = await getChatWidgetByPublicKey(chatKey)
     propertyId = widget?.propertyId || ""
+  }
+
+  if (!propertyId && trackingKey) {
+    propertyId = (await propertyFromTrackingKey(trackingKey)) || ""
   }
 
   if (!propertyId) return json({ error: "suite_tenant_not_resolved" }, 404)
