@@ -72,7 +72,11 @@ function findApproximateWord(text: string, terms: string[]): { start: number; en
   return best
 }
 
-function collectHighlights(text: string, terms: string[], approximate?: { start: number; end: number } | null): SearchHighlight[] {
+function collectHighlights(
+  text: string,
+  terms: string[],
+  approximate?: { start: number; end: number } | null,
+): SearchHighlight[] {
   const lower = text.toLocaleLowerCase()
   const ranges: SearchHighlight[] = []
 
@@ -151,16 +155,21 @@ export function buildSearchSnippet(
     if (previousSpace > start + Math.floor(maxLength * 0.65)) end = previousSpace
   }
 
-  const body = readable.slice(start, end).trim()
+  const rawWindow = readable.slice(start, end)
+  const leadingTrim = rawWindow.length - rawWindow.trimStart().length
+  const body = rawWindow.trim()
   const prefix = start > 0 ? "…" : ""
   const suffix = end < readable.length ? "…" : ""
   const text = `${prefix}${body}${suffix}`
-  const bodyOffset = prefix.length - start + (readable.slice(start, end).length - readable.slice(start, end).trimStart().length)
+
+  // source index -> snippet index. The left trim moves source indexes LEFT in
+  // the rendered body, so it must be subtracted (not added).
+  const bodyOffset = prefix.length - start - leadingTrim
 
   const sourceHighlights = collectHighlights(readable, uniqueTerms, approximate)
-    .filter((range) => range.end > start && range.start < end)
+    .filter((range) => range.end > start + leadingTrim && range.start < end)
     .map((range) => ({
-      start: Math.max(0, range.start + bodyOffset),
+      start: Math.max(prefix.length, range.start + bodyOffset),
       end: Math.min(text.length - suffix.length, range.end + bodyOffset),
     }))
     .filter((range) => range.end > range.start)
