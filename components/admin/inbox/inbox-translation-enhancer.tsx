@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { Languages, Loader2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
@@ -65,7 +65,8 @@ function findReplyTextarea(): HTMLTextAreaElement | null {
       return (
         placeholder.includes("scrivi una risposta") ||
         placeholder.includes("aggiungi un messaggio e inoltra") ||
-        placeholder.includes("rispondi")
+        placeholder.includes("rispondi") ||
+        placeholder.includes("scrivi il tuo messaggio")
       )
     }) ?? null
   )
@@ -84,19 +85,9 @@ function findDetailBackButton(): HTMLButtonElement | null {
   )
 }
 
-function ensureToolbarTarget(): HTMLElement | null {
-  const backButton = findDetailBackButton()
-  if (!backButton?.parentElement) return null
-
-  const host = backButton.parentElement
-  let marker = host.querySelector<HTMLElement>("[data-inbox-translation-toolbar-target]")
-  if (!marker) {
-    marker = document.createElement("span")
-    marker.dataset.inboxTranslationToolbarTarget = "true"
-    marker.className = "relative inline-flex items-center"
-    backButton.insertAdjacentElement("afterend", marker)
-  }
-  return marker
+function findTranslationSlot(): HTMLElement | null {
+  if (!findDetailBackButton()) return null
+  return document.querySelector<HTMLElement>("[data-inbox-translation-slot]")
 }
 
 function replaceReactTextareaValue(textarea: HTMLTextAreaElement, value: string) {
@@ -128,10 +119,9 @@ async function translate(payload: {
 /**
  * Translation controls for the open Inbox thread.
  *
- * The controls live in the thread toolbar, so "Traduci messaggio" is visible
- * immediately after opening a conversation and does not depend on the reply
- * composer being open. "Traduci risposta" still works on the visible draft
- * textarea and never modifies persisted messages directly.
+ * The controls are rendered in a stable slot supplied by InboxShell, never in
+ * the already crowded message action/filter toolbar. This keeps the controls
+ * visible while preventing horizontal overflow in the operational toolbar.
  */
 export function InboxTranslationEnhancer() {
   const [target, setTarget] = useState<TranslationTarget | null>(null)
@@ -141,10 +131,8 @@ export function InboxTranslationEnhancer() {
   const [incomingLoading, setIncomingLoading] = useState(false)
   const [replyLoading, setReplyLoading] = useState(false)
   const [originalReply, setOriginalReply] = useState<string | null>(null)
-  const targetRef = useRef<TranslationTarget | null>(null)
 
   const resetForTarget = useCallback((next: TranslationTarget, nextMessages: InboxMessage[]) => {
-    targetRef.current = next
     setTarget(next)
     setMessages(nextMessages)
     setIncomingTranslation(null)
@@ -184,11 +172,17 @@ export function InboxTranslationEnhancer() {
   }, [resetForTarget])
 
   useEffect(() => {
-    targetRef.current = target
-  }, [target])
+    const locate = () => {
+      const nextTarget = findTranslationSlot()
+      setToolbarTarget(nextTarget)
 
-  useEffect(() => {
-    const locate = () => setToolbarTarget(ensureToolbarTarget())
+      if (!nextTarget) {
+        setTarget(null)
+        setMessages([])
+        setIncomingTranslation(null)
+        setOriginalReply(null)
+      }
+    }
 
     locate()
     const observer = new MutationObserver(locate)
@@ -256,46 +250,46 @@ export function InboxTranslationEnhancer() {
     toast.success("Risposta originale ripristinata")
   }
 
-  if (!toolbarTarget) return null
+  if (!toolbarTarget || !target) return null
 
   return createPortal(
-    <div className="relative ml-1 flex items-center gap-1.5" data-inbox-translation-ui>
+    <div className="relative flex min-w-0 items-center gap-1.5" data-inbox-translation-ui>
       <button
         type="button"
         onClick={() => void translateIncoming()}
         disabled={incomingLoading || !latestCustomerText}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         title="Traduce in italiano l'ultimo messaggio ricevuto dal cliente"
       >
         {incomingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
-        Traduci messaggio
+        <span className="hidden xl:inline">Traduci messaggio</span>
       </button>
 
       <button
         type="button"
         onClick={() => void translateReply()}
         disabled={replyLoading || !latestCustomerText}
-        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-input bg-background px-2 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         title="Traduce la tua bozza nella lingua usata dal cliente"
       >
         {replyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
-        Traduci risposta
+        <span className="hidden xl:inline">Traduci risposta</span>
       </button>
 
       {originalReply !== null ? (
         <button
           type="button"
           onClick={restoreReply}
-          className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="inline-flex h-8 shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
           title="Ripristina la bozza prima della traduzione"
         >
           <RotateCcw className="h-3.5 w-3.5" />
-          Ripristina originale
+          <span className="hidden 2xl:inline">Ripristina</span>
         </button>
       ) : null}
 
       {incomingTranslation ? (
-        <div className="absolute left-0 top-full z-[100] mt-2 w-[min(520px,80vw)] max-h-80 overflow-auto rounded-lg border border-border bg-background p-3 text-sm shadow-lg">
+        <div className="absolute right-0 top-full z-[100] mt-2 max-h-80 w-[min(520px,calc(100vw-2rem))] overflow-auto rounded-lg border border-border bg-background p-3 text-sm shadow-lg">
           <div className="mb-1 flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Languages className="h-3.5 w-3.5" />
