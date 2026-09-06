@@ -13,35 +13,25 @@ describe("HR time-clock login gate", () => {
     expect(isMobileUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/152 Safari/537.36")).toBe(false)
   })
 
-  it("routes only active employees explicitly required to punch on mobile", () => {
-    expect(
-      shouldRouteToMobileTimeClock({
-        mobile: true,
-        moduleStatus: "active",
-        moduleExpiresAt: null,
-        employmentStatus: "active",
-        requiresTimeClock: true,
-      }),
-    ).toBe(true)
+  it("routes a required mobile employee only when the check-in is actually missing", () => {
+    const requiredMobile = {
+      mobile: true,
+      moduleStatus: "active",
+      moduleExpiresAt: null,
+      employmentStatus: "active",
+      requiresTimeClock: true,
+    }
+
+    expect(shouldRouteToMobileTimeClock({ ...requiredMobile, hasOpenTimeEntry: false })).toBe(true)
+    expect(shouldRouteToMobileTimeClock({ ...requiredMobile, hasOpenTimeEntry: true })).toBe(false)
+    expect(shouldRouteToMobileTimeClock({ ...requiredMobile, hasOpenTimeEntry: undefined })).toBe(false)
 
     expect(
-      shouldRouteToMobileTimeClock({
-        mobile: false,
-        moduleStatus: "active",
-        moduleExpiresAt: null,
-        employmentStatus: "active",
-        requiresTimeClock: true,
-      }),
+      shouldRouteToMobileTimeClock({ ...requiredMobile, mobile: false, hasOpenTimeEntry: false }),
     ).toBe(false)
 
     expect(
-      shouldRouteToMobileTimeClock({
-        mobile: true,
-        moduleStatus: "active",
-        moduleExpiresAt: null,
-        employmentStatus: "active",
-        requiresTimeClock: false,
-      }),
+      shouldRouteToMobileTimeClock({ ...requiredMobile, requiresTimeClock: false, hasOpenTimeEntry: false }),
     ).toBe(false)
   })
 
@@ -95,6 +85,7 @@ describe("HR time-clock login gate", () => {
           moduleExpiresAt: "2026-09-06T14:00:00Z",
           employmentStatus: "active",
           requiresTimeClock: true,
+          hasOpenTimeEntry: false,
         },
         now,
       ),
@@ -122,6 +113,7 @@ describe("HR time-clock login gate", () => {
           moduleExpiresAt: "2026-09-04T14:00:00Z",
           employmentStatus: "active",
           requiresTimeClock: true,
+          hasOpenTimeEntry: false,
         },
         now,
       ),
@@ -142,7 +134,7 @@ describe("HR time-clock login gate", () => {
     ).toBe(false)
   })
 
-  it("fails open when requirement data is missing or the employee is not active", () => {
+  it("fails open when requirement or open-entry data is missing", () => {
     expect(
       shouldRouteToMobileTimeClock({
         mobile: true,
@@ -150,6 +142,18 @@ describe("HR time-clock login gate", () => {
         moduleExpiresAt: null,
         employmentStatus: "active",
         requiresTimeClock: true,
+        hasOpenTimeEntry: false,
+      }),
+    ).toBe(false)
+
+    expect(
+      shouldRouteToMobileTimeClock({
+        mobile: true,
+        moduleStatus: "active",
+        moduleExpiresAt: null,
+        employmentStatus: "active",
+        requiresTimeClock: true,
+        hasOpenTimeEntry: undefined,
       }),
     ).toBe(false)
 
