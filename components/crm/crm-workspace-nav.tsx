@@ -7,10 +7,6 @@ import { BarChart3, BrainCircuit, Database, Building2, CalendarDays, KanbanSquar
 // Ogni sezione dell'area CRM va elencata qui: questa barra e' l'unico indice completo
 // del perimetro. Una pagina che esiste ma non compare sembra un pezzo mancante del
 // prodotto, anche quando e' raggiungibile da un link altrove.
-//
-// L'elenco e' sorvegliato da `pnpm check:crm-nav`, che confronta le voci con le
-// cartelle reali sotto app/admin/crm nei due versi: una sezione senza voce e una voce
-// senza pagina fanno arrossire la prova.
 const items = [
   { href: "/admin/crm", label: "Dashboard", icon: BarChart3, exact: true },
   { href: "/admin/crm/workspaces", label: "Aree CRM", icon: LayoutGrid },
@@ -22,16 +18,10 @@ const items = [
   { href: "/admin/crm/activities", label: "Attività", icon: ListTodo },
   { href: "/admin/crm/calls", label: "Chiamate", icon: Phone },
   { href: "/admin/crm/calendar", label: "Calendario", icon: CalendarDays },
-  // "PMS" e' l'etichetta che la dashboard CRM usa già per questa pagina: tenerla
-  // identica evita due nomi per la stessa cosa, e fa stare le voci nella barra
-  // senza tracimare (misurato a schermo: oltre ~95 caratteri l'ultima viene tagliata).
-  //
-  // Punta al GESTIONALE, non alla configurazione: il gestionale e' quello che si
-  // apre ogni giorno, mentre le credenziali si impostano una volta. La
-  // configurazione ora sta fra le Impostazioni (voce "Collegamento gestionale"),
-  // e `pnpm check:crm-nav` verifica che ci sia davvero: se qualcuno la togliesse
-  // da la', quella pagina resterebbe senza nessuna porta d'ingresso.
-  { href: "/admin/crm/pms-sync/gestionale", label: "PMS", icon: Database },
+  // Il punto di ingresso PMS mostra prima cosa HotelAccelerator puo' realmente
+  // leggere/scrivere per il PMS collegato. Da li' resta disponibile il pulsante
+  // "Apri il gestionale" per la sessione Browserbase, che e' indipendente.
+  { href: "/admin/crm/pms-sync/dati", label: "PMS", icon: Database },
   { href: "/admin/crm/settings", label: "Impostazioni", icon: Settings },
 ]
 
@@ -41,7 +31,7 @@ export function CrmWorkspaceNav() {
     <nav data-crm-workspace-nav className="border-b bg-white px-4 sm:px-6" aria-label="Sezioni CRM">
       <div className="mx-auto flex max-w-[1600px] gap-1 overflow-x-auto py-2">
         {items.map((item) => {
-          const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+          const active = item.exact ? pathname === item.href : pathname.startsWith(item.href.replace(/\/dati$/, ""))
           const Icon = item.icon
           return (
             <Link
