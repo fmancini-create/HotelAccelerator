@@ -59,14 +59,44 @@ function latestCustomerMessage(messages: InboxMessage[]): InboxMessage | null {
 }
 
 function findReplyTextarea(): HTMLTextAreaElement | null {
-  return Array.from(document.querySelectorAll<HTMLTextAreaElement>("textarea")).find((element) => {
-    const placeholder = element.placeholder.toLowerCase()
-    return (
-      placeholder.includes("scrivi una risposta") ||
-      placeholder.includes("aggiungi un messaggio e inoltra") ||
-      placeholder.includes("rispondi")
-    )
-  }) ?? null
+  return (
+    Array.from(document.querySelectorAll<HTMLTextAreaElement>("textarea")).find((element) => {
+      const placeholder = element.placeholder.toLowerCase()
+      return (
+        placeholder.includes("scrivi una risposta") ||
+        placeholder.includes("aggiungi un messaggio e inoltra") ||
+        placeholder.includes("rispondi")
+      )
+    }) ?? null
+  )
+}
+
+function findDetailBackButton(): HTMLButtonElement | null {
+  const exact = document.querySelector<HTMLButtonElement>("button.h-9.w-9.mr-1")
+  if (exact?.querySelector("svg.lucide-chevron-left")) return exact
+
+  return (
+    Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => {
+      if (!button.querySelector("svg.lucide-chevron-left")) return false
+      if (button.title.toLowerCase().includes("pagina precedente")) return false
+      return (button.textContent || "").trim() === ""
+    }) ?? null
+  )
+}
+
+function ensureToolbarTarget(): HTMLElement | null {
+  const backButton = findDetailBackButton()
+  if (!backButton?.parentElement) return null
+
+  const host = backButton.parentElement
+  let marker = host.querySelector<HTMLElement>("[data-inbox-translation-toolbar-target]")
+  if (!marker) {
+    marker = document.createElement("span")
+    marker.dataset.inboxTranslationToolbarTarget = "true"
+    marker.className = "relative inline-flex items-center"
+    backButton.insertAdjacentElement("afterend", marker)
+  }
+  return marker
 }
 
 function replaceReactTextareaValue(textarea: HTMLTextAreaElement, value: string) {
@@ -96,16 +126,17 @@ async function translate(payload: {
 }
 
 /**
- * Barra leggera sopra il composer della Inbox.
+ * Translation controls for the open Inbox thread.
  *
- * Non modifica mai il messaggio originale salvato. Per la risposta tradotta
- * aggiorna soltanto la bozza visibile del textarea; l'operatore puo' quindi
- * rileggerla prima dell'invio e ripristinare l'originale con un click.
+ * The controls live in the thread toolbar, so "Traduci messaggio" is visible
+ * immediately after opening a conversation and does not depend on the reply
+ * composer being open. "Traduci risposta" still works on the visible draft
+ * textarea and never modifies persisted messages directly.
  */
 export function InboxTranslationEnhancer() {
   const [target, setTarget] = useState<TranslationTarget | null>(null)
   const [messages, setMessages] = useState<InboxMessage[]>([])
-  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null)
+  const [toolbarTarget, setToolbarTarget] = useState<HTMLElement | null>(null)
   const [incomingTranslation, setIncomingTranslation] = useState<string | null>(null)
   const [incomingLoading, setIncomingLoading] = useState(false)
   const [replyLoading, setReplyLoading] = useState(false)
@@ -131,14 +162,17 @@ export function InboxTranslationEnhancer() {
 
       if ((conversationMatch || gmailMatch) && response.ok) {
         const clone = response.clone()
-        void clone.json().then((body) => {
-          const nextMessages = Array.isArray(body?.messages) ? (body.messages as InboxMessage[]) : []
-          if (conversationMatch) {
-            resetForTarget({ kind: "conversation", key: decodeURIComponent(conversationMatch[1]) }, nextMessages)
-          } else if (gmailMatch) {
-            resetForTarget({ kind: "gmail_thread", key: decodeURIComponent(gmailMatch[1]) }, nextMessages)
-          }
-        }).catch(() => undefined)
+        void clone
+          .json()
+          .then((body) => {
+            const nextMessages = Array.isArray(body?.messages) ? (body.messages as InboxMessage[]) : []
+            if (conversationMatch) {
+              resetForTarget({ kind: "conversation", key: decodeURIComponent(conversationMatch[1]) }, nextMessages)
+            } else if (gmailMatch) {
+              resetForTarget({ kind: "gmail_thread", key: decodeURIComponent(gmailMatch[1]) }, nextMessages)
+            }
+          })
+          .catch(() => undefined)
       }
 
       return response
@@ -154,21 +188,7 @@ export function InboxTranslationEnhancer() {
   }, [target])
 
   useEffect(() => {
-    const locate = () => {
-      const textarea = findReplyTextarea()
-      if (!textarea?.parentElement) {
-        setPortalTarget(null)
-        return
-      }
-      const host = textarea.parentElement
-      let marker = host.querySelector<HTMLElement>("[data-inbox-translation-target]")
-      if (!marker) {
-        marker = document.createElement("div")
-        marker.dataset.inboxTranslationTarget = "true"
-        host.insertBefore(marker, textarea)
-      }
-      setPortalTarget(marker)
-    }
+    const locate = () => setToolbarTarget(ensureToolbarTarget())
 
     locate()
     const observer = new MutationObserver(locate)
@@ -198,7 +218,11 @@ export function InboxTranslationEnhancer() {
   const translateReply = async () => {
     const textarea = findReplyTextarea()
     const reply = textarea?.value.trim() || ""
-    if (!textarea || !reply) {
+    if (!textarea) {
+      toast.error("Apri Rispondi e scrivi prima la risposta da tradurre")
+      return
+    }
+    if (!reply) {
       toast.error("Scrivi prima la risposta da tradurre")
       return
     }
@@ -232,55 +256,63 @@ export function InboxTranslationEnhancer() {
     toast.success("Risposta originale ripristinata")
   }
 
-  if (!portalTarget || !target) return null
+  if (!toolbarTarget) return null
 
   return createPortal(
-    <div className="mb-2 space-y-2" data-inbox-translation-ui>
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="relative ml-1 flex items-center gap-1.5" data-inbox-translation-ui>
+      <button
+        type="button"
+        onClick={() => void translateIncoming()}
+        disabled={incomingLoading || !latestCustomerText}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        title="Traduce in italiano l'ultimo messaggio ricevuto dal cliente"
+      >
+        {incomingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
+        Traduci messaggio
+      </button>
+
+      <button
+        type="button"
+        onClick={() => void translateReply()}
+        disabled={replyLoading || !latestCustomerText}
+        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+        title="Traduce la tua bozza nella lingua usata dal cliente"
+      >
+        {replyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
+        Traduci risposta
+      </button>
+
+      {originalReply !== null ? (
         <button
           type="button"
-          onClick={() => void translateIncoming()}
-          disabled={incomingLoading || !latestCustomerText}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-          title="Traduce in italiano l'ultimo messaggio ricevuto dal cliente"
+          onClick={restoreReply}
+          className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          title="Ripristina la bozza prima della traduzione"
         >
-          {incomingLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
-          Traduci messaggio
+          <RotateCcw className="h-3.5 w-3.5" />
+          Ripristina originale
         </button>
-
-        <button
-          type="button"
-          onClick={() => void translateReply()}
-          disabled={replyLoading || !latestCustomerText}
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-          title="Traduce la tua bozza nella lingua usata dal cliente"
-        >
-          {replyLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Languages className="h-3.5 w-3.5" />}
-          Traduci risposta
-        </button>
-
-        {originalReply !== null ? (
-          <button
-            type="button"
-            onClick={restoreReply}
-            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Ripristina originale
-          </button>
-        ) : null}
-      </div>
+      ) : null}
 
       {incomingTranslation ? (
-        <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Languages className="h-3.5 w-3.5" />
-            Traduzione in italiano
+        <div className="absolute left-0 top-full z-[100] mt-2 w-[min(520px,80vw)] max-h-80 overflow-auto rounded-lg border border-border bg-background p-3 text-sm shadow-lg">
+          <div className="mb-1 flex items-center justify-between gap-3 text-xs font-medium text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Languages className="h-3.5 w-3.5" />
+              Traduzione in italiano
+            </span>
+            <button
+              type="button"
+              onClick={() => setIncomingTranslation(null)}
+              className="rounded px-1.5 py-0.5 text-xs hover:bg-muted hover:text-foreground"
+            >
+              Chiudi
+            </button>
           </div>
           <div className="whitespace-pre-wrap leading-relaxed">{incomingTranslation}</div>
         </div>
       ) : null}
     </div>,
-    portalTarget,
+    toolbarTarget,
   )
 }
