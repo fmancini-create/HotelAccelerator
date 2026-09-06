@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 const BUCKET = "support-private"
-const MAX_MEDIA_BYTES = 25 * 1024 * 1024
+// WhatsApp Cloud API currently allows documents up to 100 MB; video/audio are
+// smaller (16 MB), but using the platform maximum here avoids rejecting a valid
+// document while still keeping a hard cap on server-side buffering.
+const MAX_MEDIA_BYTES = 100 * 1024 * 1024
 
 function accessToken(channel: Awaited<ReturnType<typeof getWhatsAppChannelByPhoneNumberId>>) {
   return channel?.credentials?.access_token || getPlatformWhatsAppConfig().systemUserToken || ""
@@ -21,13 +24,31 @@ function safeMime(value: string | null) {
 }
 
 function extensionForMime(mime: string) {
-  if (mime === "image/jpeg") return "jpg"
-  if (mime === "image/png") return "png"
-  if (mime === "image/webp") return "webp"
-  if (mime === "image/gif") return "gif"
-  if (mime === "image/heic") return "heic"
-  if (mime === "image/heif") return "heif"
-  return "bin"
+  const known: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "video/mp4": "mp4",
+    "video/3gp": "3gp",
+    "video/3gpp": "3gp",
+    "audio/aac": "aac",
+    "audio/amr": "amr",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/ogg": "ogg",
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "text/plain": "txt",
+  }
+  return known[mime] || "bin"
 }
 
 export async function GET(

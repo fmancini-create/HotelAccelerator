@@ -145,11 +145,11 @@ interface ParsedWebhook {
  * delivery statuses. Tolerant of the nested entry/changes/value shape and of
  * non-text message types.
  *
- * Images and stickers are rendered through our authenticated media proxy. Meta
- * only gives us a media id in the webhook; the actual URL is short-lived and
+ * Media messages are rendered through our authenticated media proxy. Meta only
+ * gives us a media id in the webhook; the actual URL is short-lived and
  * requires a bearer token. Keeping the media id in the stored HTML lets the
- * Inbox display the asset without ever exposing tenant Meta credentials to the
- * browser. The proxy also caches the binary in our private storage on first use.
+ * Inbox display/play/download the asset without ever exposing tenant Meta
+ * credentials to the browser. The proxy caches the binary in private storage.
  */
 export function parseWhatsAppWebhook(body: any): ParsedWebhook {
   const result: ParsedWebhook = { phoneNumberId: null, messages: [], echoes: [], statuses: [] }
@@ -253,6 +253,11 @@ function whatsappMediaProxyUrl(phoneNumberId: string, mediaId: string): string {
   return `/api/channels/whatsapp/media/${encodeURIComponent(phoneNumberId)}/${encodeURIComponent(mediaId)}`
 }
 
+function renderCaption(caption?: string): string {
+  const value = caption?.trim()
+  return value ? `<div style="margin-top:6px;white-space:pre-wrap">${escapeWhatsAppHtml(value)}</div>` : ""
+}
+
 function renderWhatsAppImage(
   phoneNumberId: string,
   mediaId: string,
@@ -260,8 +265,24 @@ function renderWhatsAppImage(
 ): string {
   const src = whatsappMediaProxyUrl(phoneNumberId, mediaId)
   const label = options.sticker ? "Sticker WhatsApp" : "Foto WhatsApp"
-  const caption = options.caption?.trim()
-  return `<div data-whatsapp-media="${options.sticker ? "sticker" : "image"}" style="max-width:560px"><a href="${src}" target="_blank" rel="noopener noreferrer" style="display:inline-block;max-width:100%"><img src="${src}" alt="${label}" loading="lazy" style="display:block;max-width:100%;height:auto;max-height:680px;border-radius:12px;object-fit:contain" /></a>${caption ? `<div style="margin-top:6px;white-space:pre-wrap">${escapeWhatsAppHtml(caption)}</div>` : ""}</div>`
+  return `<div data-whatsapp-media="${options.sticker ? "sticker" : "image"}" style="max-width:560px"><a href="${src}" target="_blank" rel="noopener noreferrer" style="display:inline-block;max-width:100%"><img src="${src}" alt="${label}" loading="lazy" style="display:block;max-width:100%;height:auto;max-height:680px;border-radius:12px;object-fit:contain" /></a>${renderCaption(options.caption)}</div>`
+}
+
+function renderWhatsAppVideo(phoneNumberId: string, mediaId: string, caption?: string): string {
+  const src = whatsappMediaProxyUrl(phoneNumberId, mediaId)
+  return `<div data-whatsapp-media="video" style="max-width:640px"><video controls preload="metadata" playsinline style="display:block;width:100%;max-height:680px;border-radius:12px;background:#000"><source src="${src}" />Il browser non supporta la riproduzione video.</video>${renderCaption(caption)}</div>`
+}
+
+function renderWhatsAppAudio(phoneNumberId: string, mediaId: string, voice: boolean): string {
+  const src = whatsappMediaProxyUrl(phoneNumberId, mediaId)
+  const label = voice ? "Messaggio vocale WhatsApp" : "Audio WhatsApp"
+  return `<div data-whatsapp-media="audio" style="max-width:560px"><div style="margin-bottom:6px;font-size:12px;color:#5f6368">${label}</div><audio controls preload="metadata" style="display:block;width:100%"><source src="${src}" />Il browser non supporta la riproduzione audio.</audio></div>`
+}
+
+function renderWhatsAppDocument(phoneNumberId: string, mediaId: string, filename?: string, caption?: string): string {
+  const src = whatsappMediaProxyUrl(phoneNumberId, mediaId)
+  const safeName = escapeWhatsAppHtml(filename?.trim() || "Documento WhatsApp")
+  return `<div data-whatsapp-media="document" style="max-width:560px"><a href="${src}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #dadce0;border-radius:10px;text-decoration:none;color:#1a73e8;font-weight:500">Apri documento: ${safeName}</a>${renderCaption(caption)}</div>`
 }
 
 function extractBody(m: any, phoneNumberId: string): string {
@@ -282,12 +303,24 @@ function extractBody(m: any, phoneNumberId: string): string {
       if (!mediaId) return caption ? `[immagine] ${caption}` : "[immagine]"
       return renderWhatsAppImage(phoneNumberId, mediaId, { caption })
     }
-    case "video":
-      return m.video?.caption ? `[video] ${m.video.caption}` : "[video]"
-    case "audio":
-      return "[messaggio vocale]"
-    case "document":
-      return m.document?.filename ? `[documento] ${m.document.filename}` : "[documento]"
+    case "video": {
+      const mediaId = typeof m.video?.id === "string" ? m.video.id.trim() : ""
+      const caption = typeof m.video?.caption === "string" ? m.video.caption : ""
+      if (!mediaId) return caption ? `[video] ${caption}` : "[video]"
+      return renderWhatsAppVideo(phoneNumberId, mediaId, caption)
+    }
+    case "audio": {
+      const mediaId = typeof m.audio?.id === "string" ? m.audio.id.trim() : ""
+      if (!mediaId) return "[messaggio vocale]"
+      return renderWhatsAppAudio(phoneNumberId, mediaId, m.audio?.voice === true)
+    }
+    case "document": {
+      const mediaId = typeof m.document?.id === "string" ? m.document.id.trim() : ""
+      const filename = typeof m.document?.filename === "string" ? m.document.filename : ""
+      const caption = typeof m.document?.caption === "string" ? m.document.caption : ""
+      if (!mediaId) return filename ? `[documento] ${filename}` : "[documento]"
+      return renderWhatsAppDocument(phoneNumberId, mediaId, filename, caption)
+    }
     case "location":
       return "[posizione]"
     case "contacts":
