@@ -44,7 +44,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 
 type Sentiment = "positive" | "neutral" | "negative"
-type Priority = "low" | "normal" | "high" | "urgent"
+type InsightPriority = "low" | "normal" | "high" | "urgent"
 
 type Review = {
   id: string
@@ -96,7 +96,7 @@ type InsightAction = {
   title: string
   action: string
   reason: string
-  priority: Priority
+  priority: InsightPriority
   area: string
   expected_result: string
   kpi_to_watch: string
@@ -112,6 +112,16 @@ type Insights = {
   reviews_count?: number
 }
 
+type ManuBotPriority = {
+  id: string
+  name: string
+  label?: string | null
+  description?: string | null
+  color?: string | null
+  response_time_hours?: number | null
+  sort_order?: number | null
+}
+
 type ManuBotContext = {
   status?: "active" | "inactive" | "configuration_required"
   active?: boolean
@@ -120,6 +130,7 @@ type ManuBotContext = {
   task_data?: {
     operators?: Array<{ id: string; full_name: string | null }>
     operatorGroups?: Array<{ id: string; name: string; member_count?: number | null }>
+    priorities?: ManuBotPriority[]
   } | null
 }
 
@@ -140,12 +151,6 @@ function monthLabel(month: string) {
   const [year, value] = month.split("-").map(Number)
   if (!year || !value) return month
   return new Date(year, value - 1, 1).toLocaleDateString("it-IT", { month: "short", year: "2-digit" })
-}
-
-function defaultPriority(review: Review): Priority {
-  if (review.rating != null && review.rating <= 1.5) return "urgent"
-  if ((review.rating != null && review.rating <= 2.5) || review.sentiment === "negative") return "high"
-  return "normal"
 }
 
 function defaultTitle(review: Review) {
@@ -215,7 +220,7 @@ export function ReviewsOperations() {
   const [minutes, setMinutes] = useState("60")
   const [taskTitle, setTaskTitle] = useState("")
   const [taskDescription, setTaskDescription] = useState("")
-  const [priority, setPriority] = useState<Priority>("normal")
+  const [priority, setPriority] = useState("")
   const [savingTask, setSavingTask] = useState(false)
 
   useEffect(() => {
@@ -269,9 +274,7 @@ export function ReviewsOperations() {
     }
   }, [makeFilterParams])
 
-  useEffect(() => {
-    void loadDashboard()
-  }, [loadDashboard])
+  useEffect(() => { void loadDashboard() }, [loadDashboard])
 
   const loadInsights = useCallback(async () => {
     setInsightsLoading(true)
@@ -287,9 +290,7 @@ export function ReviewsOperations() {
     }
   }, [])
 
-  useEffect(() => {
-    void loadInsights()
-  }, [loadInsights])
+  useEffect(() => { void loadInsights() }, [loadInsights])
 
   useEffect(() => {
     let cancelled = false
@@ -300,26 +301,16 @@ export function ReviewsOperations() {
         if (!cancelled) setManubot(body)
       })
       .catch((err) => {
-        if (!cancelled) setManubot({
-          status: "configuration_required",
-          active: false,
-          reason: err instanceof Error ? err.message : "manubot_unavailable",
-        })
+        if (!cancelled) setManubot({ status: "configuration_required", active: false, reason: err instanceof Error ? err.message : "manubot_unavailable" })
       })
-      .finally(() => {
-        if (!cancelled) setManubotLoading(false)
-      })
+      .finally(() => { if (!cancelled) setManubotLoading(false) })
     return () => { cancelled = true }
   }, [])
 
   const regenerateInsights = async () => {
     setInsightsRegenerating(true)
     try {
-      const res = await fetch("/api/admin/reviews/insights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: "{}",
-      })
+      const res = await fetch("/api/admin/reviews/insights", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || "Impossibile rigenerare gli insights")
       setInsights(body.insights || null)
@@ -332,13 +323,12 @@ export function ReviewsOperations() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const sentimentTotal = stats
-    ? stats.sentiment.positive + stats.sentiment.neutral + stats.sentiment.negative
-    : 0
+  const sentimentTotal = stats ? stats.sentiment.positive + stats.sentiment.neutral + stats.sentiment.negative : 0
   const trendData = (stats?.monthly || []).map((item) => ({ ...item, label: monthLabel(item.month) }))
-
   const operators = manubot?.task_data?.operators || []
   const groups = manubot?.task_data?.operatorGroups || []
+  const priorities = manubot?.task_data?.priorities || []
+
   const manubotMessage = useMemo(() => {
     if (manubotLoading) return "Verifico ManuBot…"
     if (manubot?.status === "inactive") return "ManuBot non è attivo per questa struttura."
@@ -354,7 +344,7 @@ export function ReviewsOperations() {
     setShowMaintenance(false)
     setResponsible("")
     setMinutes("60")
-    setPriority(defaultPriority(review))
+    setPriority("")
     setTaskTitle(defaultTitle(review))
     setTaskDescription(defaultDescription(review))
   }
@@ -368,31 +358,21 @@ export function ReviewsOperations() {
     if (!selected) return
     setGeneratingReply(true)
     try {
-      const res = await fetch("/api/admin/reviews/reply-draft", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewId: selected.id, instructions: replyInstructions.trim() || undefined }),
-      })
+      const res = await fetch("/api/admin/reviews/reply-draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewId: selected.id, instructions: replyInstructions.trim() || undefined }) })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || "Errore nella generazione")
       setReplyDraft(body.draft || "")
       toast.success("Bozza generata")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore nella generazione")
-    } finally {
-      setGeneratingReply(false)
-    }
+    } finally { setGeneratingReply(false) }
   }
 
   const saveReply = async (status: "draft" | "copied") => {
     if (!selected) return false
     setSavingReply(true)
     try {
-      const res = await fetch("/api/admin/reviews/reply-draft", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewId: selected.id, draft: replyDraft, status }),
-      })
+      const res = await fetch("/api/admin/reviews/reply-draft", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewId: selected.id, draft: replyDraft, status }) })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || "Errore nel salvataggio")
       patchReview(selected.id, { draft_response: replyDraft, draft_response_status: status })
@@ -401,9 +381,7 @@ export function ReviewsOperations() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore nel salvataggio")
       return false
-    } finally {
-      setSavingReply(false)
-    }
+    } finally { setSavingReply(false) }
   }
 
   const copyReply = async () => {
@@ -414,44 +392,30 @@ export function ReviewsOperations() {
       window.setTimeout(() => setCopied(false), 1800)
       void saveReply("copied")
       toast.success("Risposta copiata negli appunti")
-    } catch {
-      toast.error("Impossibile copiare")
-    }
+    } catch { toast.error("Impossibile copiare") }
   }
 
   const publishReply = async () => {
     if (!selected || !replyDraft.trim()) return
     setPublishingReply(true)
     try {
-      const res = await fetch("/api/admin/reviews/publish-reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewId: selected.id, text: replyDraft.trim() }),
-      })
+      const res = await fetch("/api/admin/reviews/publish-reply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewId: selected.id, text: replyDraft.trim() }) })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body.error || "Errore nella pubblicazione")
       const publishedAt = body.publishedAt || new Date().toISOString()
-      patchReview(selected.id, {
-        response_text: replyDraft.trim(),
-        response_published_at: publishedAt,
-        draft_response: replyDraft.trim(),
-        draft_response_status: "published",
-      })
+      patchReview(selected.id, { response_text: replyDraft.trim(), response_published_at: publishedAt, draft_response: replyDraft.trim(), draft_response_status: "published" })
       toast.success("Risposta pubblicata su Google")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Errore nella pubblicazione")
-    } finally {
-      setPublishingReply(false)
-    }
+    } finally { setPublishingReply(false) }
   }
 
   const createMaintenanceTask = async () => {
     if (!selected) return
     const expectedResolutionMinutes = Number(minutes)
     if (!responsible) return toast.error("Scegli un responsabile")
-    if (!Number.isInteger(expectedResolutionMinutes) || expectedResolutionMinutes < 5 || expectedResolutionMinutes > 1440) {
-      return toast.error("Il tempo stimato deve essere tra 5 e 1440 minuti")
-    }
+    if (!priority) return toast.error("Scegli una priorità configurata in ManuBot")
+    if (!Number.isInteger(expectedResolutionMinutes) || expectedResolutionMinutes < 5 || expectedResolutionMinutes > 1440) return toast.error("Il tempo stimato deve essere tra 5 e 1440 minuti")
     if (!taskTitle.trim()) return toast.error("Inserisci un titolo")
 
     setSavingTask(true)
@@ -466,13 +430,7 @@ export function ReviewsOperations() {
           priority,
           responsible,
           expectedResolutionMinutes,
-          review: {
-            platform: selected.platform,
-            rating: selected.rating,
-            author_name: selected.author_name,
-            review_date: selected.review_date,
-            sentiment: selected.sentiment,
-          },
+          review: { platform: selected.platform, rating: selected.rating, author_name: selected.author_name, review_date: selected.review_date, sentiment: selected.sentiment },
         }),
       })
       const body = await res.json().catch(() => ({}))
@@ -481,287 +439,62 @@ export function ReviewsOperations() {
       setShowMaintenance(false)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Creazione task non riuscita")
-    } finally {
-      setSavingTask(false)
-    }
+    } finally { setSavingTask(false) }
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[220px] flex-1 space-y-1.5">
-          <Label htmlFor="reviews-search">Cerca</Label>
-          <Input id="reviews-search" placeholder="Testo, titolo o autore" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} />
-        </div>
-        <div className="w-[160px] space-y-1.5">
-          <Label>Canale</Label>
-          <Select value={platform} onValueChange={setPlatform}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tutti</SelectItem>
-              {PLATFORM_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-[150px] space-y-1.5">
-          <Label>Sentiment</Label>
-          <Select value={sentiment} onValueChange={setSentiment}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tutti</SelectItem>
-              <SelectItem value="negative">Negative</SelectItem>
-              <SelectItem value="neutral">Neutre</SelectItem>
-              <SelectItem value="positive">Positive</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-[125px] space-y-1.5">
-          <Label>Voto</Label>
-          <Select value={rating} onValueChange={setRating}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tutti</SelectItem>
-              {[5, 4, 3, 2, 1].map((value) => <SelectItem key={value} value={String(value)}>{value} stelle</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-[170px] space-y-1.5">
-          <Label>Camera</Label>
-          <Select value={roomTypeId} onValueChange={setRoomTypeId}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tutte</SelectItem>
-              <SelectItem value="none">Non abbinata</SelectItem>
-              {roomTypes.map((roomType) => <SelectItem key={roomType.id} value={roomType.id}>{roomType.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="w-[150px] space-y-1.5">
-          <Label>Ordina</Label>
-          <Select value={sort} onValueChange={setSort}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Più recenti</SelectItem>
-              <SelectItem value="oldest">Più vecchie</SelectItem>
-              <SelectItem value="lowest">Voto più basso</SelectItem>
-              <SelectItem value="highest">Voto più alto</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <Button type="button" variant="outline" size="icon" onClick={() => void loadDashboard()} aria-label="Aggiorna recensioni">
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-        <Button asChild variant="outline" className="gap-2">
-          <Link href="/admin/settings/reviews"><Settings className="h-4 w-4" /> Impostazioni</Link>
-        </Button>
+        <div className="min-w-[220px] flex-1 space-y-1.5"><Label htmlFor="reviews-search">Cerca</Label><Input id="reviews-search" placeholder="Testo, titolo o autore" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} /></div>
+        <div className="w-[160px] space-y-1.5"><Label>Canale</Label><Select value={platform} onValueChange={setPlatform}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tutti</SelectItem>{PLATFORM_OPTIONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>
+        <div className="w-[150px] space-y-1.5"><Label>Sentiment</Label><Select value={sentiment} onValueChange={setSentiment}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tutti</SelectItem><SelectItem value="negative">Negative</SelectItem><SelectItem value="neutral">Neutre</SelectItem><SelectItem value="positive">Positive</SelectItem></SelectContent></Select></div>
+        <div className="w-[125px] space-y-1.5"><Label>Voto</Label><Select value={rating} onValueChange={setRating}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tutti</SelectItem>{[5, 4, 3, 2, 1].map((value) => <SelectItem key={value} value={String(value)}>{value} stelle</SelectItem>)}</SelectContent></Select></div>
+        <div className="w-[170px] space-y-1.5"><Label>Camera</Label><Select value={roomTypeId} onValueChange={setRoomTypeId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tutte</SelectItem><SelectItem value="none">Non abbinata</SelectItem>{roomTypes.map((roomType) => <SelectItem key={roomType.id} value={roomType.id}>{roomType.name}</SelectItem>)}</SelectContent></Select></div>
+        <div className="w-[150px] space-y-1.5"><Label>Ordina</Label><Select value={sort} onValueChange={setSort}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="newest">Più recenti</SelectItem><SelectItem value="oldest">Più vecchie</SelectItem><SelectItem value="lowest">Voto più basso</SelectItem><SelectItem value="highest">Voto più alto</SelectItem></SelectContent></Select></div>
+        <Button type="button" variant="outline" size="icon" onClick={() => void loadDashboard()} aria-label="Aggiorna recensioni"><RefreshCw className="h-4 w-4" /></Button>
+        <Button asChild variant="outline" className="gap-2"><Link href="/admin/settings/reviews"><Settings className="h-4 w-4" /> Impostazioni</Link></Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Reputation score</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-semibold">{loading ? "—" : stats?.reputation?.score != null ? stats.reputation.score.toFixed(1) : "n/d"}</div><p className="mt-1 text-xs text-muted-foreground">{stats?.reputation?.reviews_180d ?? 0} recensioni negli ultimi 180 giorni</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Valutazione media</CardTitle></CardHeader>
-          <CardContent><div className="flex items-center gap-2 text-3xl font-semibold"><Star className="h-6 w-6 fill-current" />{loading ? "—" : stats?.avg_rating != null ? stats.avg_rating.toFixed(2) : "n/d"}</div><p className="mt-1 text-xs text-muted-foreground">Ultimi 30 gg: {stats?.reputation?.rating_30d != null ? stats.reputation.rating_30d.toFixed(2) : "n/d"}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Recensioni</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-semibold">{loading ? "—" : stats?.total ?? total}</div><p className="mt-1 text-xs text-muted-foreground">{stats?.filtered ? "Risultato dei filtri correnti" : "Archivio condiviso Santaddeo"}</p></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Sentiment positivo</CardTitle></CardHeader>
-          <CardContent><div className="text-3xl font-semibold">{loading ? "—" : `${percentage(stats?.sentiment.positive || 0, sentimentTotal)}%`}</div><p className="mt-1 text-xs text-muted-foreground">{stats?.sentiment.positive || 0} positive · {stats?.sentiment.negative || 0} negative</p></CardContent>
-        </Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Reputation score</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{loading ? "—" : stats?.reputation?.score != null ? stats.reputation.score.toFixed(1) : "n/d"}</div><p className="mt-1 text-xs text-muted-foreground">{stats?.reputation?.reviews_180d ?? 0} recensioni negli ultimi 180 giorni</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Valutazione media</CardTitle></CardHeader><CardContent><div className="flex items-center gap-2 text-3xl font-semibold"><Star className="h-6 w-6 fill-current" />{loading ? "—" : stats?.avg_rating != null ? stats.avg_rating.toFixed(2) : "n/d"}</div><p className="mt-1 text-xs text-muted-foreground">Ultimi 30 gg: {stats?.reputation?.rating_30d != null ? stats.reputation.rating_30d.toFixed(2) : "n/d"}</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Recensioni</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{loading ? "—" : stats?.total ?? total}</div><p className="mt-1 text-xs text-muted-foreground">{stats?.filtered ? "Risultato dei filtri correnti" : "Archivio condiviso Santaddeo"}</p></CardContent></Card>
+        <Card><CardHeader className="pb-2"><CardTitle className="text-xs font-medium text-muted-foreground">Sentiment positivo</CardTitle></CardHeader><CardContent><div className="text-3xl font-semibold">{loading ? "—" : `${percentage(stats?.sentiment.positive || 0, sentimentTotal)}%`}</div><p className="mt-1 text-xs text-muted-foreground">{stats?.sentiment.positive || 0} positive · {stats?.sentiment.negative || 0} negative</p></CardContent></Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="text-base">Andamento recensioni · ultimi 12 mesi</CardTitle></CardHeader>
-          <CardContent className="h-[320px]">
-            {loading ? <Skeleton className="h-full w-full" /> : (
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <YAxis yAxisId="right" orientation="right" domain={[0, 5]} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="count" name="Recensioni" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                  <Line yAxisId="right" type="monotone" dataKey="avg" name="Voto medio" stroke="#f59e0b" strokeWidth={2.5} connectNulls />
-                </ComposedChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle className="text-base">Sentiment</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            {loading ? <Skeleton className="h-32 w-full" /> : (
-              <>
-                <div className="flex h-4 overflow-hidden rounded-full bg-muted">
-                  <div className="bg-emerald-500" style={{ width: `${percentage(stats?.sentiment.positive || 0, sentimentTotal)}%` }} />
-                  <div className="bg-slate-400" style={{ width: `${percentage(stats?.sentiment.neutral || 0, sentimentTotal)}%` }} />
-                  <div className="bg-rose-500" style={{ width: `${percentage(stats?.sentiment.negative || 0, sentimentTotal)}%` }} />
-                </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between"><span>Positive</span><strong>{stats?.sentiment.positive || 0} · {percentage(stats?.sentiment.positive || 0, sentimentTotal)}%</strong></div>
-                  <div className="flex justify-between"><span>Neutre</span><strong>{stats?.sentiment.neutral || 0} · {percentage(stats?.sentiment.neutral || 0, sentimentTotal)}%</strong></div>
-                  <div className="flex justify-between"><span>Negative</span><strong>{stats?.sentiment.negative || 0} · {percentage(stats?.sentiment.negative || 0, sentimentTotal)}%</strong></div>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Andamento recensioni · ultimi 12 mesi</CardTitle></CardHeader><CardContent className="h-[320px]">{loading ? <Skeleton className="h-full w-full" /> : <ResponsiveContainer width="100%" height="100%"><ComposedChart data={trendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="label" tick={{ fontSize: 11 }} /><YAxis yAxisId="left" allowDecimals={false} tick={{ fontSize: 11 }} /><YAxis yAxisId="right" orientation="right" domain={[0, 5]} tick={{ fontSize: 11 }} /><Tooltip /><Legend /><Bar yAxisId="left" dataKey="count" name="Recensioni" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} /><Line yAxisId="right" type="monotone" dataKey="avg" name="Voto medio" stroke="#f59e0b" strokeWidth={2.5} connectNulls /></ComposedChart></ResponsiveContainer>}</CardContent></Card>
+        <Card><CardHeader><CardTitle className="text-base">Sentiment</CardTitle></CardHeader><CardContent className="space-y-4">{loading ? <Skeleton className="h-32 w-full" /> : <><div className="flex h-4 overflow-hidden rounded-full bg-muted"><div className="bg-emerald-500" style={{ width: `${percentage(stats?.sentiment.positive || 0, sentimentTotal)}%` }} /><div className="bg-slate-400" style={{ width: `${percentage(stats?.sentiment.neutral || 0, sentimentTotal)}%` }} /><div className="bg-rose-500" style={{ width: `${percentage(stats?.sentiment.negative || 0, sentimentTotal)}%` }} /></div><div className="space-y-2 text-sm"><div className="flex justify-between"><span>Positive</span><strong>{stats?.sentiment.positive || 0} · {percentage(stats?.sentiment.positive || 0, sentimentTotal)}%</strong></div><div className="flex justify-between"><span>Neutre</span><strong>{stats?.sentiment.neutral || 0} · {percentage(stats?.sentiment.neutral || 0, sentimentTotal)}%</strong></div><div className="flex justify-between"><span>Negative</span><strong>{stats?.sentiment.negative || 0} · {percentage(stats?.sentiment.negative || 0, sentimentTotal)}%</strong></div></div></>}</CardContent></Card>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle className="text-base">Canali</CardTitle></CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-32 w-full" /> : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {(stats?.platforms || []).map((item) => (
-                  <div key={item.platform} className="rounded-lg border p-3">
-                    <div className="flex items-center justify-between gap-2"><span className="font-medium">{platformLabel(item.platform)}</span><Badge variant="outline">{item.count}</Badge></div>
-                    <div className="mt-2 flex items-center gap-1 text-sm text-muted-foreground"><Star className="h-3.5 w-3.5 fill-current" /> {item.avg != null ? item.avg.toFixed(2) : "n/d"}</div>
-                  </div>
-                ))}
-                {(stats?.platforms || []).length === 0 ? <p className="text-sm text-muted-foreground">Nessun dato canale con i filtri correnti.</p> : null}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between gap-2">
-              <CardTitle className="flex items-center gap-2 text-base"><Sparkles className="h-4 w-4" /> Insights AI</CardTitle>
-              <Button size="sm" variant="ghost" onClick={() => void regenerateInsights()} disabled={insightsRegenerating} className="h-7 gap-1 text-xs">
-                <RefreshCw className={`h-3 w-3 ${insightsRegenerating ? "animate-spin" : ""}`} /> Ricalcola
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {insightsLoading ? <><Skeleton className="h-16 w-full" /><Skeleton className="h-20 w-full" /></> : !insights ? <p className="text-sm text-muted-foreground">Nessun insight disponibile. Usa “Ricalcola” per generarli.</p> : (
-              <>
-                {insights.summary ? <p className="text-sm leading-relaxed">{insights.summary}</p> : null}
-                {(insights.strengths?.length || 0) > 0 ? <div><div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><ThumbsUp className="h-3.5 w-3.5" /> Punti di forza</div><div className="space-y-2">{insights.strengths!.slice(0, 3).map((item, index) => <div key={`${item.title}-${index}`} className="text-xs"><strong>{item.title}</strong>{item.mentions ? <span className="text-muted-foreground"> · {item.mentions}</span> : null}<p className="mt-0.5 text-muted-foreground">{item.description}</p></div>)}</div></div> : null}
-                {(insights.weaknesses?.length || 0) > 0 ? <div><div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-rose-700"><ThumbsDown className="h-3.5 w-3.5" /> Aree di miglioramento</div><div className="space-y-2">{insights.weaknesses!.slice(0, 3).map((item, index) => <div key={`${item.title}-${index}`} className="text-xs"><strong>{item.title}</strong>{item.mentions ? <span className="text-muted-foreground"> · {item.mentions}</span> : null}<p className="mt-0.5 text-muted-foreground">{item.description}</p></div>)}</div></div> : null}
-                {(insights.recurring_topics?.length || 0) > 0 ? <div className="flex flex-wrap gap-1.5">{insights.recurring_topics!.slice(0, 8).map((topic) => <Badge key={topic.topic} variant="secondary" className="text-[10px]">{topic.topic} {topic.count ? `· ${topic.count}` : ""}</Badge>)}</div> : null}
-                {(insights.action_plan?.length || 0) > 0 ? <div className="border-t pt-3"><div className="mb-2 text-xs font-semibold">Piano d&apos;azione</div><div className="space-y-2">{insights.action_plan!.slice(0, 4).map((action) => <div key={`${action.step}-${action.title}`} className="rounded-md border p-2 text-xs"><div className="flex items-center gap-2"><Badge variant="outline">{action.step}</Badge><strong>{action.title}</strong></div><p className="mt-1 text-muted-foreground">{action.action}</p></div>)}</div></div> : null}
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Canali</CardTitle></CardHeader><CardContent>{loading ? <Skeleton className="h-32 w-full" /> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(stats?.platforms || []).map((item) => <div key={item.platform} className="rounded-lg border p-3"><div className="flex items-center justify-between gap-2"><span className="font-medium">{platformLabel(item.platform)}</span><Badge variant="outline">{item.count}</Badge></div><div className="mt-2 flex items-center gap-1 text-sm text-muted-foreground"><Star className="h-3.5 w-3.5 fill-current" /> {item.avg != null ? item.avg.toFixed(2) : "n/d"}</div></div>)}{(stats?.platforms || []).length === 0 ? <p className="text-sm text-muted-foreground">Nessun dato canale con i filtri correnti.</p> : null}</div>}</CardContent></Card>
+        <Card><CardHeader className="pb-3"><div className="flex items-center justify-between gap-2"><CardTitle className="flex items-center gap-2 text-base"><Sparkles className="h-4 w-4" /> Insights AI</CardTitle><Button size="sm" variant="ghost" onClick={() => void regenerateInsights()} disabled={insightsRegenerating} className="h-7 gap-1 text-xs"><RefreshCw className={`h-3 w-3 ${insightsRegenerating ? "animate-spin" : ""}`} /> Ricalcola</Button></div></CardHeader><CardContent className="space-y-4">{insightsLoading ? <><Skeleton className="h-16 w-full" /><Skeleton className="h-20 w-full" /></> : !insights ? <p className="text-sm text-muted-foreground">Nessun insight disponibile. Usa “Ricalcola” per generarli.</p> : <>{insights.summary ? <p className="text-sm leading-relaxed">{insights.summary}</p> : null}{(insights.strengths?.length || 0) > 0 ? <div><div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><ThumbsUp className="h-3.5 w-3.5" /> Punti di forza</div><div className="space-y-2">{insights.strengths!.slice(0, 3).map((item, index) => <div key={`${item.title}-${index}`} className="text-xs"><strong>{item.title}</strong>{item.mentions ? <span className="text-muted-foreground"> · {item.mentions}</span> : null}<p className="mt-0.5 text-muted-foreground">{item.description}</p></div>)}</div></div> : null}{(insights.weaknesses?.length || 0) > 0 ? <div><div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-rose-700"><ThumbsDown className="h-3.5 w-3.5" /> Aree di miglioramento</div><div className="space-y-2">{insights.weaknesses!.slice(0, 3).map((item, index) => <div key={`${item.title}-${index}`} className="text-xs"><strong>{item.title}</strong>{item.mentions ? <span className="text-muted-foreground"> · {item.mentions}</span> : null}<p className="mt-0.5 text-muted-foreground">{item.description}</p></div>)}</div></div> : null}{(insights.recurring_topics?.length || 0) > 0 ? <div className="flex flex-wrap gap-1.5">{insights.recurring_topics!.slice(0, 8).map((topic) => <Badge key={topic.topic} variant="secondary" className="text-[10px]">{topic.topic} {topic.count ? `· ${topic.count}` : ""}</Badge>)}</div> : null}{(insights.action_plan?.length || 0) > 0 ? <div className="border-t pt-3"><div className="mb-2 text-xs font-semibold">Piano d&apos;azione</div><div className="space-y-2">{insights.action_plan!.slice(0, 4).map((action) => <div key={`${action.step}-${action.title}`} className="rounded-md border p-2 text-xs"><div className="flex items-center gap-2"><Badge variant="outline">{action.step}</Badge><strong>{action.title}</strong></div><p className="mt-1 text-muted-foreground">{action.action}</p></div>)}</div></div> : null}</>}</CardContent></Card>
       </div>
 
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-base">Recensioni {total > 0 ? `(${total})` : ""}</CardTitle>
-            <span className="text-xs text-muted-foreground">Clicca una recensione per aprirla e rispondere</span>
-          </div>
-        </CardHeader>
+        <CardHeader className="pb-3"><div className="flex items-center justify-between gap-3"><CardTitle className="text-base">Recensioni {total > 0 ? `(${total})` : ""}</CardTitle><span className="text-xs text-muted-foreground">Clicca una recensione per aprirla e rispondere</span></div></CardHeader>
         <CardContent className="space-y-3">
           {loading ? [0, 1, 2].map((i) => <Skeleton key={i} className="h-28 w-full" />) : null}
           {!loading && error ? <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{error}</div> : null}
           {!loading && !error && reviews.length === 0 ? <div className="py-10 text-center text-sm text-muted-foreground">Nessuna recensione trovata.</div> : null}
-          {!loading && !error ? reviews.map((review) => (
-            <button key={review.id} type="button" onClick={() => openReview(review)} className="block w-full rounded-lg border p-4 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{platformLabel(review.platform)}</Badge>
-                    {review.rating != null ? <span className="flex items-center gap-1 text-sm font-semibold"><Star className="h-3.5 w-3.5 fill-current" /> {Number(review.rating).toFixed(1)}</span> : null}
-                    {review.sentiment ? <Badge variant="secondary">{review.sentiment === "negative" ? "Negativa" : review.sentiment === "positive" ? "Positiva" : "Neutra"}</Badge> : null}
-                    {review.roomTypeName ? <Badge variant="outline" className="font-normal">{review.roomTypeName}</Badge> : null}
-                    {review.author_name ? <span className="text-xs text-muted-foreground">{review.author_name}</span> : null}
-                  </div>
-                  {review.title ? <h3 className="mt-2 text-sm font-medium">{review.title}</h3> : null}
-                  {review.text ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{review.text}</p> : null}
-                  {review.response_text ? <div className="mt-3 border-l-2 border-primary/40 pl-3 text-xs text-muted-foreground"><span className="font-medium text-primary">Risposta hotel:</span> {review.response_text}</div> : review.draft_response ? <div className="mt-3 border-l-2 border-amber-400 pl-3 text-xs text-muted-foreground"><span className="font-medium text-amber-700">Bozza:</span> {review.draft_response}</div> : null}
-                </div>
-                <div className="shrink-0 text-xs text-muted-foreground">{review.review_date ? new Date(review.review_date).toLocaleDateString("it-IT") : ""}</div>
-              </div>
-            </button>
-          )) : null}
-
-          {total > pageSize ? (
-            <div className="flex items-center justify-between border-t pt-4">
-              <span className="text-xs text-muted-foreground">Pagina {page + 1} di {totalPages}</span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="icon" disabled={page === 0 || loading} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft className="h-4 w-4" /></Button>
-                <Button variant="outline" size="icon" disabled={page + 1 >= totalPages || loading} onClick={() => setPage((value) => value + 1)}><ChevronRight className="h-4 w-4" /></Button>
-              </div>
-            </div>
-          ) : null}
+          {!loading && !error ? reviews.map((review) => <button key={review.id} type="button" onClick={() => openReview(review)} className="block w-full rounded-lg border p-4 text-left transition hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><div className="flex items-start justify-between gap-3"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline">{platformLabel(review.platform)}</Badge>{review.rating != null ? <span className="flex items-center gap-1 text-sm font-semibold"><Star className="h-3.5 w-3.5 fill-current" /> {Number(review.rating).toFixed(1)}</span> : null}{review.sentiment ? <Badge variant="secondary">{review.sentiment === "negative" ? "Negativa" : review.sentiment === "positive" ? "Positiva" : "Neutra"}</Badge> : null}{review.roomTypeName ? <Badge variant="outline" className="font-normal">{review.roomTypeName}</Badge> : null}{review.author_name ? <span className="text-xs text-muted-foreground">{review.author_name}</span> : null}</div>{review.title ? <h3 className="mt-2 text-sm font-medium">{review.title}</h3> : null}{review.text ? <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{review.text}</p> : null}{review.response_text ? <div className="mt-3 border-l-2 border-primary/40 pl-3 text-xs text-muted-foreground"><span className="font-medium text-primary">Risposta hotel:</span> {review.response_text}</div> : review.draft_response ? <div className="mt-3 border-l-2 border-amber-400 pl-3 text-xs text-muted-foreground"><span className="font-medium text-amber-700">Bozza:</span> {review.draft_response}</div> : null}</div><div className="shrink-0 text-xs text-muted-foreground">{review.review_date ? new Date(review.review_date).toLocaleDateString("it-IT") : ""}</div></div></button>) : null}
+          {total > pageSize ? <div className="flex items-center justify-between border-t pt-4"><span className="text-xs text-muted-foreground">Pagina {page + 1} di {totalPages}</span><div className="flex gap-1"><Button variant="outline" size="icon" disabled={page === 0 || loading} onClick={() => setPage((value) => Math.max(0, value - 1))}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" size="icon" disabled={page + 1 >= totalPages || loading} onClick={() => setPage((value) => value + 1)}><ChevronRight className="h-4 w-4" /></Button></div></div> : null}
         </CardContent>
       </Card>
 
       <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open && !savingTask && !savingReply && !publishingReply) setSelected(null) }}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
-          {selected ? (
-            <div className="space-y-5">
-              <DialogHeader>
-                <DialogTitle>Recensione · {platformLabel(selected.platform)}</DialogTitle>
-              </DialogHeader>
+          {selected ? <div className="space-y-5">
+            <DialogHeader><DialogTitle>Recensione · {platformLabel(selected.platform)}</DialogTitle></DialogHeader>
+            <div className="rounded-lg border bg-muted/20 p-4"><div className="flex flex-wrap items-center gap-2">{selected.rating != null ? <span className="flex items-center gap-1 font-semibold"><Star className="h-4 w-4 fill-current" /> {selected.rating.toFixed(1)}/5</span> : null}{selected.sentiment ? <Badge variant="secondary">{selected.sentiment === "positive" ? "Positiva" : selected.sentiment === "negative" ? "Negativa" : "Neutra"}</Badge> : null}{selected.author_name ? <span className="text-sm text-muted-foreground">{selected.author_name}</span> : null}{selected.review_date ? <span className="text-xs text-muted-foreground">{new Date(selected.review_date).toLocaleDateString("it-IT")}</span> : null}</div>{selected.title ? <h3 className="mt-3 font-semibold">{selected.title}</h3> : null}{selected.text ? <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{selected.text}</p> : null}{selected.response_text ? <div className="mt-4 rounded-md border-l-2 border-primary bg-background p-3 text-sm"><div className="mb-1 flex items-center gap-1.5 font-medium text-primary"><MessageCircle className="h-4 w-4" /> Risposta dell&apos;hotel</div>{selected.response_text}</div> : null}</div>
 
-              <div className="rounded-lg border bg-muted/20 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  {selected.rating != null ? <span className="flex items-center gap-1 font-semibold"><Star className="h-4 w-4 fill-current" /> {selected.rating.toFixed(1)}/5</span> : null}
-                  {selected.sentiment ? <Badge variant="secondary">{selected.sentiment === "positive" ? "Positiva" : selected.sentiment === "negative" ? "Negativa" : "Neutra"}</Badge> : null}
-                  {selected.author_name ? <span className="text-sm text-muted-foreground">{selected.author_name}</span> : null}
-                  {selected.review_date ? <span className="text-xs text-muted-foreground">{new Date(selected.review_date).toLocaleDateString("it-IT")}</span> : null}
-                </div>
-                {selected.title ? <h3 className="mt-3 font-semibold">{selected.title}</h3> : null}
-                {selected.text ? <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed">{selected.text}</p> : null}
-                {selected.response_text ? <div className="mt-4 rounded-md border-l-2 border-primary bg-background p-3 text-sm"><div className="mb-1 flex items-center gap-1.5 font-medium text-primary"><MessageCircle className="h-4 w-4" /> Risposta dell&apos;hotel</div>{selected.response_text}</div> : null}
-              </div>
-
-              <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 font-semibold"><Wrench className="h-4 w-4 text-amber-700" /> Problema di manutenzione?</div>
-                    <p className="mt-1 text-xs text-muted-foreground">Segnala direttamente un task ManuBot collegato a questa recensione.</p>
-                  </div>
-                  <Button type="button" variant="outline" className="gap-2 bg-background" onClick={() => setShowMaintenance((value) => !value)}><Wrench className="h-4 w-4" /> {showMaintenance ? "Chiudi task" : "Segnala task manutenzione"}</Button>
-                </div>
-
-                {showMaintenance ? (
-                  <div className="mt-4 space-y-4 border-t border-amber-200 pt-4">
-                    {manubotMessage ? <div className="rounded-md border bg-background p-3 text-sm"><p>{manubotMessage}</p>{manubot?.status === "inactive" ? <Button asChild size="sm" className="mt-3"><a href={manubot.activation_url || "https://www.manubot.it/prezzi"} target="_blank" rel="noreferrer">Attiva ManuBot <ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}</div> : (
-                      <>
-                        <div className="space-y-1.5"><Label>Titolo task</Label><Input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} maxLength={240} /></div>
-                        <div className="space-y-1.5"><Label>Descrizione</Label><Textarea rows={4} value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} /></div>
-                        <div className="grid gap-4 sm:grid-cols-3">
-                          <div className="space-y-1.5"><Label>Responsabile *</Label><Select value={responsible || "none"} onValueChange={(value) => setResponsible(value === "none" ? "" : value)}><SelectTrigger><SelectValue placeholder="Tecnico o gruppo" /></SelectTrigger><SelectContent><SelectItem value="none">Seleziona</SelectItem>{operators.map((operator) => <SelectItem key={operator.id} value={`operator:${operator.id}`}>{operator.full_name || "Operatore"}</SelectItem>)}{groups.map((group) => <SelectItem key={group.id} value={`group:${group.id}`} disabled={group.member_count === 0}>Gruppo · {group.name}{group.member_count === 0 ? " (senza membri)" : ""}</SelectItem>)}</SelectContent></Select></div>
-                          <div className="space-y-1.5"><Label>Priorità</Label><Select value={priority} onValueChange={(value) => setPriority(value as Priority)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Bassa</SelectItem><SelectItem value="normal">Normale</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="urgent">Urgente</SelectItem></SelectContent></Select></div>
-                          <div className="space-y-1.5"><Label>Tempo (min)</Label><Input type="number" min={5} max={1440} value={minutes} onChange={(event) => setMinutes(event.target.value)} /></div>
-                        </div>
-                        <div className="flex justify-end"><Button type="button" onClick={() => void createMaintenanceTask()} disabled={savingTask} className="gap-2">{savingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Crea task manutenzione</Button></div>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="space-y-3 border-t pt-5">
-                <div className="flex items-center gap-2 text-base font-semibold"><Reply className="h-4 w-4" /> Rispondi alla recensione</div>
-                <div className="space-y-1.5"><Label>Indicazioni per l&apos;AI (facoltative)</Label><Input value={replyInstructions} onChange={(event) => setReplyInstructions(event.target.value)} placeholder="Es. ringrazia, chiarisci il problema della SPA, tono più formale…" /></div>
-                <Button type="button" variant="secondary" onClick={() => void generateReply()} disabled={generatingReply} className="w-full gap-2">{generatingReply ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {replyDraft ? "Rigenera bozza con AI" : "Genera bozza con AI"}</Button>
-                <Textarea rows={8} value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="La risposta apparirà qui e può essere modificata liberamente." />
-                <div className="flex flex-wrap justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => void copyReply()} disabled={!replyDraft.trim() || savingReply} className="gap-2">{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} {copied ? "Copiata" : "Copia"}</Button>
-                  <Button type="button" variant="outline" onClick={() => void saveReply("draft")} disabled={!replyDraft.trim() || savingReply} className="gap-2">{savingReply ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salva bozza</Button>
-                  {selected.platform.toLowerCase() === "google" ? <Button type="button" onClick={() => void publishReply()} disabled={!replyDraft.trim() || publishingReply} className="gap-2">{publishingReply ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Pubblica su Google</Button> : null}
-                </div>
-                {selected.platform.toLowerCase() !== "google" ? <p className="text-xs text-muted-foreground">Per questo canale la piattaforma salva/genera la risposta e consente di copiarla nell&apos;extranet; la pubblicazione diretta dipende dall&apos;API ufficiale disponibile.</p> : null}
-              </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-2 font-semibold"><Wrench className="h-4 w-4 text-amber-700" /> Problema di manutenzione?</div><p className="mt-1 text-xs text-muted-foreground">Segnala direttamente un task ManuBot collegato a questa recensione.</p></div><Button type="button" variant="outline" className="gap-2 bg-background" onClick={() => setShowMaintenance((value) => !value)}><Wrench className="h-4 w-4" /> {showMaintenance ? "Chiudi task" : "Segnala task manutenzione"}</Button></div>
+              {showMaintenance ? <div className="mt-4 space-y-4 border-t border-amber-200 pt-4">{manubotMessage ? <div className="rounded-md border bg-background p-3 text-sm"><p>{manubotMessage}</p>{manubot?.status === "inactive" ? <Button asChild size="sm" className="mt-3"><a href={manubot.activation_url || "https://www.manubot.it/prezzi"} target="_blank" rel="noreferrer">Attiva ManuBot <ExternalLink className="ml-2 h-4 w-4" /></a></Button> : null}</div> : <><div className="space-y-1.5"><Label>Titolo task</Label><Input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} maxLength={240} /></div><div className="space-y-1.5"><Label>Descrizione</Label><Textarea rows={4} value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} /></div><div className="grid gap-4 sm:grid-cols-3"><div className="space-y-1.5"><Label>Responsabile *</Label><Select value={responsible || "none"} onValueChange={(value) => setResponsible(value === "none" ? "" : value)}><SelectTrigger><SelectValue placeholder="Tecnico o gruppo" /></SelectTrigger><SelectContent><SelectItem value="none">Seleziona</SelectItem>{operators.map((operator) => <SelectItem key={operator.id} value={`operator:${operator.id}`}>{operator.full_name || "Operatore"}</SelectItem>)}{groups.map((group) => <SelectItem key={group.id} value={`group:${group.id}`} disabled={group.member_count === 0}>Gruppo · {group.name}{group.member_count === 0 ? " (senza membri)" : ""}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1.5"><Label>Priorità ManuBot *</Label><Select value={priority || "none"} onValueChange={(value) => setPriority(value === "none" ? "" : value)}><SelectTrigger><SelectValue placeholder="Priorità configurata" /></SelectTrigger><SelectContent><SelectItem value="none">Seleziona</SelectItem>{priorities.map((item) => <SelectItem key={item.id || item.name} value={item.name}>{item.label || item.name}{item.response_time_hours != null ? ` · ${item.response_time_hours}h` : ""}</SelectItem>)}</SelectContent></Select>{priorities.length === 0 ? <p className="text-xs text-destructive">Nessuna priorità attiva trovata in ManuBot.</p> : null}</div><div className="space-y-1.5"><Label>Tempo (min)</Label><Input type="number" min={5} max={1440} value={minutes} onChange={(event) => setMinutes(event.target.value)} /></div></div><div className="flex justify-end"><Button type="button" onClick={() => void createMaintenanceTask()} disabled={savingTask || !priority} className="gap-2">{savingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Crea task manutenzione</Button></div></>}</div> : null}
             </div>
-          ) : null}
+
+            <div className="space-y-3 border-t pt-5"><div className="flex items-center gap-2 text-base font-semibold"><Reply className="h-4 w-4" /> Rispondi alla recensione</div><div className="space-y-1.5"><Label>Indicazioni per l&apos;AI (facoltative)</Label><Input value={replyInstructions} onChange={(event) => setReplyInstructions(event.target.value)} placeholder="Es. ringrazia, chiarisci il problema della SPA, tono più formale…" /></div><Button type="button" variant="secondary" onClick={() => void generateReply()} disabled={generatingReply} className="w-full gap-2">{generatingReply ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} {replyDraft ? "Rigenera bozza con AI" : "Genera bozza con AI"}</Button><Textarea rows={8} value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} placeholder="La risposta apparirà qui e può essere modificata liberamente." /><div className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" onClick={() => void copyReply()} disabled={!replyDraft.trim() || savingReply} className="gap-2">{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} {copied ? "Copiata" : "Copia"}</Button><Button type="button" variant="outline" onClick={() => void saveReply("draft")} disabled={!replyDraft.trim() || savingReply} className="gap-2">{savingReply ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Salva bozza</Button>{selected.platform.toLowerCase() === "google" ? <Button type="button" onClick={() => void publishReply()} disabled={!replyDraft.trim() || publishingReply} className="gap-2">{publishingReply ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Pubblica su Google</Button> : null}</div>{selected.platform.toLowerCase() !== "google" ? <p className="text-xs text-muted-foreground">Per questo canale la piattaforma salva/genera la risposta e consente di copiarla nell&apos;extranet; la pubblicazione diretta dipende dall&apos;API ufficiale disponibile.</p> : null}</div>
+          </div> : null}
         </DialogContent>
       </Dialog>
     </div>
