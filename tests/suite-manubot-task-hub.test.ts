@@ -52,6 +52,20 @@ describe("Suite ManuBot task hub", () => {
     expect(areaMap).toContain('"/api/admin/manubot/addon-context": "todos"')
   })
 
+  it("makes the Todos page a ManuBot-only addon surface with no local fallback toggle", () => {
+    const todosPage = source("app/admin/todos/page.tsx")
+    const todoPatch = source("app/api/admin/todos/[id]/route.ts")
+
+    expect(todosPage).toContain('fetch("/api/admin/manubot/addon-context"')
+    expect(todosPage).toContain("Attiva ManuBot")
+    expect(todosPage).toContain("non verranno creati To-Do locali")
+    expect(todosPage).toContain('send_to_manubot: true')
+    expect(todosPage).toContain('todo.external_source === "manubot"')
+    expect(todosPage).not.toContain("Invia a Manubot")
+    expect(todosPage).not.toContain("send_to_manubot: !")
+    expect(todoPatch).toContain("manubot_company_id")
+  })
+
   it("records the contextual addon rule as a repository invariant", () => {
     const agents = source("AGENTS.md")
     expect(agents).toContain("addon contestuali, mai funzioni morte")
