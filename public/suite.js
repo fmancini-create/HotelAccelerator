@@ -15,19 +15,28 @@
       var scripts = document.querySelectorAll("script[src*='/suite.js']")
       return scripts.length ? scripts[scripts.length - 1] : null
     })()
-  if (!self) return
+  if (!self) {
+    window.__4BID_SUITE_BOOTSTRAP_RUNNING__ = false
+    return
+  }
 
   var BASE = ""
   try {
     BASE = new URL(self.getAttribute("src"), window.location.href).origin
   } catch (_) {}
-  if (!BASE) return
+  if (!BASE) {
+    window.__4BID_SUITE_BOOTSTRAP_RUNNING__ = false
+    return
+  }
 
   var PROPERTY = self.getAttribute("data-property") || ""
   var SANTADDEO_TOKEN = self.getAttribute("data-santaddeo-token") || ""
   var SANTADDEO_BASE = self.getAttribute("data-santaddeo-base") || "https://www.santaddeo.com"
   var CHAT_KEY = self.getAttribute("data-chat-key") || ""
   var SOURCE = self.getAttribute("data-source") || (SANTADDEO_TOKEN ? "santaddeo" : CHAT_KEY ? "chat" : "hotelaccelerator")
+  var ALLOW_TRACKING = self.getAttribute("data-tracking") !== "false"
+  var ALLOW_CHAT = self.getAttribute("data-chat") !== "false"
+  var ALLOW_MESSAGES = self.getAttribute("data-messages") !== "false"
 
   var state = (window.__4BID_SUITE__ = window.__4BID_SUITE__ || {})
   state.source = SOURCE
@@ -106,7 +115,7 @@
   }
 
   function loadTracking(feature) {
-    if (!feature || !feature.enabled || feature.alreadyPresent) return
+    if (!ALLOW_TRACKING || !feature || !feature.enabled || feature.alreadyPresent) return
     if (!feature.publicToken || !feature.scriptUrl) return
     var selector = "script[data-token='" + String(feature.publicToken).replace(/'/g, "") + "']"
     loadScript(
@@ -121,7 +130,7 @@
   }
 
   function loadChat(feature) {
-    if (!feature || !feature.enabled || !feature.publicKey) return
+    if (!ALLOW_CHAT || !feature || !feature.enabled || !feature.publicKey) return
     if (window.__chatWidgetCaricato === feature.publicKey) return
     var src = feature.scriptUrl || "/widget/chat.js"
     if (src.charAt(0) === "/") src = BASE + src
@@ -162,7 +171,7 @@
       ".__4bid_promo{position:relative;width:min(420px,calc(100vw - 36px));padding:28px;border-radius:16px;background:#fff;color:#202124;box-shadow:0 20px 70px rgba(0,0,0,.28);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;text-align:center}",
       ".__4bid_promo_x{position:absolute;right:10px;top:8px;border:0;background:transparent;font-size:25px;cursor:pointer;opacity:.55}",
       ".__4bid_promo_img{display:block;max-width:100%;max-height:240px;object-fit:cover;margin:0 auto 14px;border-radius:10px}",
-      ".__4bid_promo h3{margin:0 0 10px;font-size:22px;line-height:1.2}. __4bid_promo p{margin:0 0 18px;line-height:1.5}",
+      ".__4bid_promo h3{margin:0 0 10px;font-size:22px;line-height:1.2}.__4bid_promo p{margin:0 0 18px;line-height:1.5}",
       ".__4bid_promo a{display:inline-block;padding:11px 22px;border-radius:9px;text-decoration:none;font-weight:600}",
     ].join("")
     document.head.appendChild(s)
@@ -274,7 +283,7 @@
     state.sessionId = suiteSession(PROPERTY)
     loadTracking(data.features.tracking)
     loadChat(data.features.chat)
-    if (data.features.messages && data.features.messages.enabled) initMessages(PROPERTY, state.sessionId)
+    if (ALLOW_MESSAGES && data.features.messages && data.features.messages.enabled) initMessages(PROPERTY, state.sessionId)
     state.ready = true
     try { window.dispatchEvent(new CustomEvent("4bid:suite-ready", { detail: state })) } catch (_) {}
   }
@@ -284,5 +293,6 @@
     .then(start)
     .catch(function () {
       state.ready = false
+      window.__4BID_SUITE_BOOTSTRAP_RUNNING__ = false
     })
 })()
