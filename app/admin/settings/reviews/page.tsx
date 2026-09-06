@@ -5,7 +5,7 @@ import { requireAdminPage } from "@/lib/auth/require-admin-page"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { isModuleActive } from "@/lib/modules"
 import { createServiceClient } from "@/lib/supabase/server"
-import { ReviewsOperationsV2 } from "@/components/reviews/reviews-operations-v2"
+import { ReviewsOperationsV3 } from "@/components/reviews/reviews-operations-v3"
 import { ReviewsSettingsForm } from "@/components/reviews/reviews-settings-form"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -41,7 +41,7 @@ export default async function ReviewsSettingsPage() {
               </Button>
             </CardContent>
           </Card>
-          <ReviewsOperationsV2 />
+          <ReviewsOperationsV3 />
         </>
       ) : null}
 
