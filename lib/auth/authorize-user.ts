@@ -73,18 +73,12 @@ async function timeClockLoginDestination(
 
   if (!hasActiveTimeClockRequirement(requirement)) return null
 
-  // Mobile mantiene il comportamento vincolante gia' in produzione: si passa
-  // dalla schermata presenza, che propone entrata oppure uscita in base allo stato.
-  if (shouldRouteToMobileTimeClock({ ...requirement, mobile })) {
-    return "/admin/time-clock"
-  }
-
   const employeeId = employeeResult.data?.id
   if (!employeeId) return null
 
-  // Desktop: il promemoria serve soltanto quando manca un check-in aperto.
-  // La query resta esplicitamente tenant + employee scoped anche se RLS applica
-  // gia' il confine property.
+  // La decisione di login dipende dallo stato REALE della presenza sia su mobile
+  // sia su desktop. Prima il mobile saltava questa query e rimandava alla
+  // timbratura ad ogni accesso, anche con un ingresso gia' aperto.
   const openEntryResult = await supabase
     .from("hr_time_entries")
     .select("id")
@@ -94,7 +88,7 @@ async function timeClockLoginDestination(
     .limit(1)
 
   if (openEntryResult.error) {
-    console.error("[auth] desktop HR open time-entry lookup failed", {
+    console.error("[auth] HR open time-entry lookup failed", {
       property_id: propertyId,
       admin_user_id: adminUserId,
       employee_id: employeeId,
@@ -103,11 +97,17 @@ async function timeClockLoginDestination(
     return null
   }
 
+  const hasOpenTimeEntry = (openEntryResult.data?.length ?? 0) > 0
+
+  if (shouldRouteToMobileTimeClock({ ...requirement, mobile, hasOpenTimeEntry })) {
+    return "/admin/time-clock"
+  }
+
   if (
     shouldPromptDesktopTimeClock({
       ...requirement,
       mobile,
-      hasOpenTimeEntry: (openEntryResult.data?.length ?? 0) > 0,
+      hasOpenTimeEntry,
     })
   ) {
     return "/admin/dashboard?time_clock_prompt=1"
@@ -125,7 +125,8 @@ async function timeClockLoginDestination(
  * esclusivamente Super Admin atterra invece direttamente in `/super-admin`.
  *
  * Per gli utenti tenant con `requires_time_clock=true`:
- * - smartphone: gate su `/admin/time-clock`;
+ * - smartphone senza check-in aperto: gate su `/admin/time-clock`;
+ * - smartphone con check-in aperto: dashboard normale;
  * - desktop senza check-in aperto: dashboard + promemoria non bloccante;
  * - desktop con check-in aperto: dashboard normale.
  */
