@@ -45,4 +45,31 @@ describe("WhatsApp Business App coexistence webhooks", () => {
       phoneNumberId: "pn_tenant_b", externalId: "wamid.echo.b", toPhone: "393339998888",
     })
   })
+
+  it("keeps WhatsApp image media ids renderable through the authenticated proxy", () => {
+    const parsed = parseWhatsAppWebhook({
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "pn_tenant_a" },
+          contacts: [{ wa_id: "393331112233", profile: { name: "Cliente A" } }],
+          messages: [{
+            id: "wamid.image.1",
+            from: "393331112233",
+            timestamp: "1787738403",
+            type: "image",
+            image: { id: "media_123", mime_type: "image/jpeg", caption: "Camera <vista> & piscina" },
+          }],
+        },
+      }] }],
+    })
+
+    expect(parsed.messages).toHaveLength(1)
+    expect(parsed.messages[0].messageType).toBe("image")
+    expect(parsed.messages[0].body).toContain("/api/channels/whatsapp/media/pn_tenant_a/media_123")
+    expect(parsed.messages[0].body).toContain("<img")
+    expect(parsed.messages[0].body).toContain("Camera &lt;vista&gt; &amp; piscina")
+    expect(parsed.messages[0].body).not.toContain("Camera <vista>")
+  })
 })
