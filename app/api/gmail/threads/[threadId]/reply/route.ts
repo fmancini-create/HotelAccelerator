@@ -6,7 +6,9 @@ import { resolveGmailChannelId } from "@/lib/gmail-channel-resolver"
 import { getUserSignature, appendSignatureHtml } from "@/lib/email/signature"
 import { captureOutboundRecipients, parseRecipientList } from "@/lib/crm/auto-capture"
 import { richiediOperatore } from "@/lib/inbox/identity"
-import { registraAttivita, cancellaBozza, rilasciaBlocco } from "@/lib/inbox/collaboration"
+import { registraAttivita, cancellaBozza } from "@/lib/inbox/collaboration"
+import { assicuraAccessoScrittura, concludiLavorazioneDopoInvio } from "@/lib/inbox/coassignment"
+import { handleServiceError } from "@/lib/errors"
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ threadId: string }> }) {
   const { threadId } = await params
@@ -57,6 +59,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!channelData) {
       return NextResponse.json({ error: "Canale Gmail non configurato" }, { status: 404 })
     }
+
+    const operatore = await richiediOperatore(request)
+    if (!channelData.property_id || operatore.propertyId !== channelData.property_id) {
+      return NextResponse.json({ error: "Casella non disponibile nel tenant corrente" }, { status: 403 })
+    }
+    const bersaglio = { kind: "gmail_thread" as const, key: threadId }
+    const accesso = await assicuraAccessoScrittura({
+      propertyId: channelData.property_id,
+      target: bersaglio,
+      actor: operatore.titolare,
+    })
 
     const { token, error: tokenError } = await getValidGmailToken(channelId)
     if (!token) {
@@ -173,25 +186,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       )
     }
 
-    // Stessa chiusura del ciclo del multicanale, sul bersaglio 'gmail_thread':
-    // il thread vive su Google, ma la lavorazione e' nostra e va chiusa qui,
-    // altrimenti resterebbe offuscato ai colleghi anche dopo la risposta.
-    // La cronologia dell'invio la registriamo comunque: la cartella "Inviata" di
-    // Gmail dice che l'email e' partita dalla casella, non QUALE operatore l'ha
-    // scritta, che e' esattamente l'informazione richiesta.
-    if (channelData.property_id) {
-      const bersaglio = { kind: "gmail_thread" as const, key: threadId }
-      const operatore = await richiediOperatore(request)
-      await registraAttivita({
-        propertyId: channelData.property_id,
-        bersaglio,
-        titolare: operatore.titolare,
-        azione: "message_sent",
-        dettagli: { messageId: sendData.id, canale: "gmail", destinatari: finalToList },
-      })
-      await cancellaBozza(channelData.property_id, bersaglio)
-      await rilasciaBlocco({ propertyId: channelData.property_id, bersaglio, titolare: operatore.titolare })
-    }
+    await registraAttivita({
+      propertyId: channelData.property_id,
+      bersaglio,
+      titolare: operatore.titolare,
+      azione: "message_sent",
+      dettagli: {
+        messageId: sendData.id,
+        canale: "gmail",
+        destinatari: finalToList,
+        collaboration_role: accesso.role,
+      },
+    })
+    await cancellaBozza(channelData.property_id, bersaglio)
+    await concludiLavorazioneDopoInvio({
+      propertyId: channelData.property_id,
+      target: bersaglio,
+      actor: operatore.titolare,
+      holderKey: accesso.holderKey,
+    })
 
     return NextResponse.json({
       success: true,
@@ -200,6 +213,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     })
   } catch (error) {
     console.error("[v0] Gmail reply error:", error)
-    return NextResponse.json({ error: "Errore durante l'invio" }, { status: 500 })
+    return handleServiceError(error)
   }
 }
