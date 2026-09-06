@@ -16,13 +16,9 @@ export const runtime = "nodejs"
 export const maxDuration = 15
 
 const ALLOWED_SORTS: InboxSort[] = ["smart", "date_desc", "date_asc", "sender_asc", "sender_desc"]
-
-/** Quante conversazioni si possono chiedere al massimo (tetto di Supabase). */
 const LIMITE_MASSIMO = 1000
 const LIMITE_PREDEFINITO = 50
-/** Evita query-string enormi quando gli id trovati dalla ricerca vengono materializzati. */
 const RICERCA_ID_PER_LOTTO = 125
-/** Un input enorme non migliora la ricerca e puo' diventare lavoro inutile per Postgres. */
 const RICERCA_TESTO_MASSIMO = 300
 
 type GoogleSearchRow = {
@@ -44,12 +40,6 @@ function isMissingRpc(error: { code?: string } | null | undefined): boolean {
   return error?.code === "PGRST202" || error?.code === "42883"
 }
 
-/**
- * Interpreta il numero di conversazioni richieste.
- *
- * Un valore inservibile torna al predefinito invece di svuotare l'elenco: una
- * pagina di dimensione diversa e' un inconveniente, un'inbox vuota e' una bugia.
- */
 function risolviLimite(grezzo: string | null): { richiesto: number | null; applicato: number; troncato: boolean } {
   const numero = Number(grezzo)
   const valido = grezzo !== null && grezzo.trim() !== "" && Number.isFinite(numero) && Math.floor(numero) >= 1
@@ -70,7 +60,6 @@ function risolviLimite(grezzo: string | null): { richiesto: number | null; appli
   }
 }
 
-/** Scorrimento: un valore non valido o negativo parte dall'inizio, non rompe. */
 function interoNonNegativo(grezzo: string | null): number {
   const numero = Number(grezzo)
   if (grezzo === null || grezzo.trim() === "" || !Number.isFinite(numero)) return 0
@@ -96,15 +85,13 @@ export async function GET(request: NextRequest) {
     const propertyId = await getAuthenticatedPropertyId(request)
     const supabase = await createClient()
     const service = new InboxReadService(supabase)
-
     const { searchParams } = new URL(request.url)
+
     const mode = (searchParams.get("mode") as "smart" | "gmail") || "smart"
     const gmailLabel = searchParams.get("gmail_label") as GmailLabel | null
     const rawSort = searchParams.get("sort") as InboxSort | null
     const sort: InboxSort | undefined = rawSort && ALLOWED_SORTS.includes(rawSort) ? rawSort : undefined
 
-    // Resolve per-user channel access. Admins see everything in the tenant;
-    // restricted users only see conversations of their assigned channels.
     const channelAccess = await getChannelAccess(request)
     let access: ConversationListOptions["access"] | undefined
     if (!channelAccess.isAdmin && channelAccess.adminUserId) {
@@ -133,8 +120,8 @@ export async function GET(request: NextRequest) {
       access,
     }
 
-    // Search text can contain guest names, emails, booking codes and other PII.
-    // Never echo the raw query into server logs.
+    // La query puo' contenere PII (nome ospite, email, codice prenotazione):
+    // nei log entra solo la sua presenza/lunghezza, mai il testo.
     console.log("[Inbox] list conversations", {
       propertyId,
       mode,
@@ -198,7 +185,6 @@ export async function GET(request: NextRequest) {
       })
 
       const fast = await supabase.rpc("search_inbox_google", googleArgs([]))
-
       if (fast.error && !isMissingRpc(fast.error)) throw fast.error
 
       if (!fast.error) {
@@ -217,14 +203,12 @@ export async function GET(request: NextRequest) {
                 googleRows = (enhanced.data || []) as GoogleSearchRow[]
                 semanticExpansionUsed = true
               } else if (!isMissingRpc(enhanced.error)) {
-                // Query-understanding is an enhancement: if this second pass
-                // fails, the already-computed deterministic results stay valid.
                 console.warn("[Inbox search] enhanced DB pass unavailable", { code: enhanced.error.code })
               }
             }
           } catch (error) {
-            // Timeout/provider/rate-limit must never turn a usable Inbox search
-            // into a 500. Do not log the query or model output.
+            // L'AI e' solo query-understanding: timeout/provider/rate-limit non
+            // possono trasformare una ricerca lessicale valida in errore 500.
             console.info("[Inbox search] semantic expansion skipped", {
               reason: error instanceof Error ? error.name : "unknown",
             })
@@ -237,8 +221,6 @@ export async function GET(request: NextRequest) {
           .filter((id): id is string => Boolean(id))
         conversations = await materializza(orderedIds)
 
-        // Fetch only the specific message chosen as the best match, not every
-        // body in every result. This keeps snippets cheap even with long emails.
         const matchedIds = [...new Set(
           googleRows
             .map((row) => row.matched_message_id)
@@ -246,6 +228,9 @@ export async function GET(request: NextRequest) {
         )]
         const contentByMessage = new Map<string, string>()
 
+        // Si scarica il corpo di UN solo messaggio selezionato per risultato,
+        // non la conversazione intera: anche le mail HTML molto grandi restano
+        // fuori dal percorso normale della lista.
         for (const lotto of inLotti(matchedIds, RICERCA_ID_PER_LOTTO)) {
           const { data: bodies, error: bodiesError } = await supabase
             .from("messages")
@@ -269,11 +254,20 @@ export async function GET(request: NextRequest) {
         conversations = conversations.map((conversation) => {
           const match = matchByConversation.get(conversation.id)
           if (!match) return conversation
+
           const body = match.matched_message_id ? contentByMessage.get(match.matched_message_id) : undefined
           const snippet = body ? buildSearchSnippet(body, search, expandedTerms) : null
 
           return {
             ...conversation,
+            // Compatibilita' immediata con la UI Inbox esistente: la riga gia'
+            // renderizza last_message.preview. Durante la ricerca le mostriamo
+            // il frammento pertinente, come fa un motore web, senza aspettare un
+            // refactor grafico della lista.
+            last_message:
+              snippet?.text && conversation.last_message
+                ? { ...conversation.last_message, preview: snippet.text }
+                : conversation.last_message,
             search_match: {
               matched_message_id: match.matched_message_id ?? null,
               kind: match.match_kind ?? "keyword",
@@ -285,7 +279,8 @@ export async function GET(request: NextRequest) {
           }
         })
       } else {
-        // Environment not migrated yet: use the previous indexed FTS RPC.
+        // Ambiente non ancora migrato: prima vecchia FTS indicizzata, poi solo
+        // come ultimissima compatibilita' la ricerca legacy.
         const { data: ftsMatches, error: ftsError } = await supabase.rpc("search_inbox_conversation_ids", {
           p_property_id: propertyId,
           p_search: search,
@@ -312,8 +307,6 @@ export async function GET(request: NextRequest) {
             .filter((id): id is string => Boolean(id))
           conversations = await materializza(orderedIds)
         } else {
-          // Last-resort backward compatibility only. This route should disappear
-          // naturally once every environment has the indexed search migrations.
           searchEngine = "legacy"
           conversations = await service.listConversations(propertyId, options)
         }
@@ -379,7 +372,13 @@ export async function POST(request: NextRequest) {
 
     const { data: conversation, error } = await supabase
       .from("conversations")
-      .insert({ channel, contact_id: contactId, subject, metadata: metadata || {}, property_id: propertyId })
+      .insert({
+        channel,
+        contact_id: contactId,
+        subject,
+        metadata: metadata || {},
+        property_id: propertyId,
+      })
       .select()
       .single()
 
