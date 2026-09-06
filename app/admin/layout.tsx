@@ -7,6 +7,7 @@ import { AutoLogoutWatchdog } from "@/components/admin/auto-logout-watchdog"
 import { InternalSupportAssistant } from "@/components/admin/internal-support-assistant"
 import { GlobalCommunicationAlerts } from "@/components/admin/global-communication-alerts"
 import { DashboardCardQuickActionMounts } from "@/components/admin/dashboard/dashboard-card-quick-action-mounts"
+import { WhatsAppMediaRecorderCompat } from "@/components/admin/whatsapp-media-recorder-compat"
 
 export const metadata: Metadata = {
   title: {
@@ -24,6 +25,7 @@ export default function AdminLayout({
   return (
     <PlatformShell scope="tenant">
       {children}
+      <WhatsAppMediaRecorderCompat />
       <ClientToaster />
       <OperatorPresenceBeacon />
       <AutoLogoutWatchdog />
