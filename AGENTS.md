@@ -121,3 +121,23 @@ Per qualunque sviluppo di prodotto, la Definition of Done include inoltre la roa
 ## CTA commerciale delle home
 
 - Nelle home pubbliche la CTA per richiesta commerciale deve essere **“Prenota una demo”** e aprire il calendario di prenotazione; non usare form contatti, link mail o diciture “Parla con un consulente/team”.
+
+## REGOLA FERREA — un solo script 4BID per sito, tutte le funzioni da remoto
+
+Questa e' un'invariante architetturale della suite ed e' **BUILD/REVIEW BLOCKER**. Una PR che la viola non deve essere mergiata, anche se la singola funzione sembra funzionare.
+
+1. **Installazione una volta sola.** Se sul sito del cliente esiste gia' almeno uno script pubblico compatibile di una piattaforma 4BID, e' vietato chiedere di installare un secondo snippet per attivare chat, tracking, messaggi promo, recensioni o future capability web.
+2. **Ogni script 4BID e' un ingresso della suite.** Gli entrypoint pubblici storici devono delegare al `4BID Suite Loader`/bootstrap condiviso oppure essere da esso orchestrati. Nuovi entrypoint standalone che bypassano il loader sono vietati salvo impossibilita' tecnica documentata.
+3. **Accensione e spegnimento sono server-side.** Il browser riceve un manifest/configurazione risolto dal server in base a tenant, entitlement, configurazione, dominio/origin e stato reale dei servizi. Il browser non inventa entitlement, tenant o feature flag commerciali.
+4. **Nuova capability = manifest + loader, non nuovo snippet.** Qualunque nuova funzione destinata al sito del cliente deve estendere il manifest e il runtime condiviso. Creare uno script separato per comodita' locale e' una regressione architetturale.
+5. **Tracking unico.** Santaddeo Analytics Intelligence e' il proprietario canonico del tracking comportamentale web della suite. Non devono esistere due motori che generano pageview, sessioni, engagement o attribuzione paralleli. HotelAccelerator puo' ricevere eventi custom/identity CRM, ma deve cucirli alla stessa sessione canonica e non creare un secondo flusso di pageview.
+6. **Compatibilita' retroattiva obbligatoria.** URL, attributi e snippet gia' installati presso clienti devono restare funzionanti. Una nuova funzione non puo' richiedere la sostituzione manuale del codice gia' presente sul sito.
+7. **Deduplica obbligatoria.** Se sullo stesso sito convivono piu' script storici 4BID, per ogni tenant/token/capability deve avviarsi una sola istanza runtime. Vietati doppie pageview, doppie impression, doppi listener, doppie patch di `fetch`/`sendBeacon`, doppi widget o doppie sessioni.
+8. **Tenant e origin si risolvono sul server.** Un `property_id`/tenant ricevuto liberamente dal browser non e' mai autorevole. Il tenant va risolto da chiavi pubbliche, token, write key e mapping di suite controllati server-side; dominio/origin deve essere verificato secondo allowlist/configurazione.
+9. **Failure isolation.** Un errore del loader, di Santaddeo, della chat o di una singola capability non deve rompere il sito del cliente ne' impedire alle altre capability sane di funzionare. I loader pubblici degradano in sicurezza e non lanciano errori bloccanti sull'host.
+10. **Un solo proprietario per capability.** Il motore di una funzione vive in un solo prodotto autorevole. Le altre piattaforme possono esporre una UI locale di configurazione e chiamare API versionate del proprietario, ma non devono clonare logica, dati o job per "averli anche qui".
+11. **Nessun accesso cross-DB per il bootstrap.** Risoluzione tenant, entitlement, configurazione e azioni cross-prodotto passano da contratti/API versionati e auditabili; niente letture dirette del database di un altro prodotto come scorciatoia.
+12. **Test minimi obbligatori.** Ogni modifica al loader o a una capability web deve provare: almeno un entrypoint storico; attivazione/disattivazione remota senza modifica HTML; deduplica con piu' script presenti; tenant isolation; rifiuto di origin non ammesso; assenza di doppio tracking; fallback se un provider e' indisponibile.
+13. **Non estendere un'architettura sbagliata.** Se una capability esistente viola queste regole, prima di aggiungerle nuove funzioni va ricondotta al loader unico oppure la PR deve dichiarare esplicitamente il blocco/debito tecnico e non presentarla come soluzione definitiva.
+
+Ownership attuale: HotelAccelerator Core orchestra manifest/entitlement/tenant context e il runtime di suite; Santaddeo resta la fonte unica per Analytics Intelligence. Questa separazione non puo' essere invertita implicitamente da una feature locale.
