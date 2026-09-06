@@ -8,11 +8,12 @@ afterEach(() => {
 })
 
 function mockTelegramOk() {
-  const fetchMock = vi.fn(async () =>
-    new Response(JSON.stringify({ ok: true, result: { message_id: 321 } }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    }),
+  const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+    async () =>
+      new Response(JSON.stringify({ ok: true, result: { message_id: 321 } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
   )
   vi.stubGlobal("fetch", fetchMock)
   return fetchMock
@@ -26,8 +27,9 @@ describe("Telegram native outbound media", () => {
     const result = await sendTelegramVideo(credentials, "123", file)
 
     expect(result).toEqual({ success: true, externalMessageId: "321" })
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/sendVideo")
-    const form = fetchMock.mock.calls[0]?.[1]?.body as FormData
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain("/sendVideo")
+    const form = init?.body as FormData
     expect(form.get("video")).toBeInstanceOf(File)
     expect(form.get("supports_streaming")).toBe("true")
   })
@@ -39,8 +41,9 @@ describe("Telegram native outbound media", () => {
     const result = await sendTelegramAudio(credentials, "123", file)
 
     expect(result.success).toBe(true)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/sendAudio")
-    const form = fetchMock.mock.calls[0]?.[1]?.body as FormData
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain("/sendAudio")
+    const form = init?.body as FormData
     expect(form.get("audio")).toBeInstanceOf(File)
   })
 
@@ -51,8 +54,9 @@ describe("Telegram native outbound media", () => {
     const result = await sendTelegramVoice(credentials, "123", file)
 
     expect(result.success).toBe(true)
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("/sendVoice")
-    const form = fetchMock.mock.calls[0]?.[1]?.body as FormData
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain("/sendVoice")
+    const form = init?.body as FormData
     expect(form.get("voice")).toBeInstanceOf(File)
   })
 })
