@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { Geist } from "next/font/google"
 import "./globals.css"
+import "./santaddeo-ui-parity.css"
 import RootClientLayout from "./RootClientLayout"
 import { headers } from "next/headers"
 

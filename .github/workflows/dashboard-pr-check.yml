@@ -91,5 +91,8 @@ jobs:
       - name: Test telephony provider security boundary
         run: pnpm vitest run tests/telephony-provider-boundary.test.ts
 
+      - name: Test Santaddeo UI parity
+        run: pnpm vitest run app/__tests__/santaddeo-ui-parity.test.ts
+
       - name: Check dashboard manifest
         run: pnpm run check:dashboard
