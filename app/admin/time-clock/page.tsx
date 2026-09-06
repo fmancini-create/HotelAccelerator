@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { CheckCircle2, Loader2, MapPin } from "lucide-react"
+import { CheckCircle2, Loader2, MapPin, RefreshCw } from "lucide-react"
 
 import { AdminHeader } from "@/components/admin/admin-header"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,7 @@ type TimeClockSettings = {
 }
 
 type TimeClockResponse = {
+  open?: Pick<TimeEntry, "id" | "clock_in_at" | "status"> | null
   recent?: TimeEntry[]
   settings?: TimeClockSettings | null
 }
@@ -43,30 +44,50 @@ function errorMessage(code: string, distance?: number) {
 
 export default function MobileTimeClockPage() {
   const [times, setTimes] = useState<TimeEntry[]>([])
+  const [openPunch, setOpenPunch] = useState<TimeClockResponse["open"]>(undefined)
   const [settings, setSettings] = useState<TimeClockSettings | null>(null)
   const [loading, setLoading] = useState(true)
+  const [stateVerified, setStateVerified] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
   const load = useCallback(async () => {
-    const response = await fetch("/api/hr/time-clock", { cache: "no-store" })
-    const body = (await response.json().catch(() => ({}))) as TimeClockResponse & { error?: string }
-    if (!response.ok) throw new Error(body.error || "time_clock_load_failed")
-    setTimes(Array.isArray(body.recent) ? body.recent : [])
-    setSettings(body.settings ?? null)
+    setLoading(true)
+    setStateVerified(false)
+    setError("")
+
+    try {
+      const response = await fetch("/api/hr/time-clock", { cache: "no-store" })
+      const body = (await response.json().catch(() => ({}))) as TimeClockResponse & { error?: string }
+      if (!response.ok) throw new Error(body.error || "time_clock_load_failed")
+
+      setTimes(Array.isArray(body.recent) ? body.recent : [])
+      setOpenPunch(body.open ?? null)
+      setSettings(body.settings ?? null)
+      setStateVerified(true)
+    } catch (caught) {
+      const code = caught instanceof Error ? caught.message : "time_clock_load_failed"
+      setError(
+        code === "employee_not_linked"
+          ? "Il tuo account non è collegato a una scheda dipendente attiva."
+          : "Non riesco a verificare se hai già timbrato. Per sicurezza non registro una nuova entrata finché lo stato non è certo.",
+      )
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
-    load()
-      .catch(() => setError("Non riesco a caricare la timbratura. Puoi comunque accedere alla dashboard."))
-      .finally(() => setLoading(false))
+    void load()
   }, [load])
 
-  const hasOpenPunch = times.some((entry) => !entry.clock_out_at)
+  const hasOpenPunch = stateVerified && Boolean(openPunch)
   const action: "clock_in" | "clock_out" = hasOpenPunch ? "clock_out" : "clock_in"
 
   async function submit(position?: { latitude: number; longitude: number; accuracy_m: number }) {
+    if (!stateVerified) throw new Error("time_clock_state_unverified")
+
     const response = await fetch("/api/hr/time-clock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -79,14 +100,16 @@ export default function MobileTimeClockPage() {
       throw failure
     }
 
-    setSuccess(action === "clock_in" ? "Entrata registrata." : "Uscita registrata.")
-    // Il server ha confermato la scrittura della presenza: soltanto adesso si
-    // supera il gate e si entra nella dashboard.
+    // Non dichiariamo successo finché il server non ci restituisce proprio la
+    // riga persistita. Evita il caso peggiore: UI verde ma nessuna presenza a DB.
+    if (!body?.id || !body?.clock_in_at) throw new Error("time_clock_write_unconfirmed")
+
+    setSuccess(action === "clock_in" ? "Entrata registrata e verificata." : "Uscita registrata e verificata.")
     window.location.replace("/admin/dashboard")
   }
 
   async function clock() {
-    if (busy) return
+    if (busy || !stateVerified) return
     setBusy(true)
     setError("")
     setSuccess("")
@@ -134,7 +157,13 @@ export default function MobileTimeClockPage() {
       }
 
       if (caught instanceof Error) {
-        setError(errorMessage(caught.message, (caught as Error & { distance_m?: number }).distance_m))
+        if (caught.message === "time_clock_state_unverified") {
+          setError("Stato presenza non verificato. Ricarica prima di timbrare.")
+        } else if (caught.message === "time_clock_write_unconfirmed") {
+          setError("Il server non ha confermato la registrazione. La timbratura NON è considerata effettuata.")
+        } else {
+          setError(errorMessage(caught.message, (caught as Error & { distance_m?: number }).distance_m))
+        }
       } else {
         setError("Timbratura non riuscita. Riprova.")
       }
@@ -147,7 +176,7 @@ export default function MobileTimeClockPage() {
     return (
       <div className="flex min-h-[70vh] items-center justify-center px-4">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Caricamento timbratura…
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden /> Verifico la presenza già registrata…
         </div>
       </div>
     )
@@ -155,7 +184,7 @@ export default function MobileTimeClockPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <AdminHeader title="Timbratura presenza" subtitle="Registra la presenza prima di entrare in HotelAccelerator" />
+      <AdminHeader title="Timbratura presenza" subtitle="Entrata e uscita con stato verificato sul server" />
       <main className="mx-auto flex max-w-lg flex-col gap-4 px-3 py-5 sm:px-4 sm:py-8">
         {error && (
           <div role="alert" className="rounded border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
@@ -168,36 +197,56 @@ export default function MobileTimeClockPage() {
           </div>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{hasOpenPunch ? "Registra uscita" : "Registra entrata"}</CardTitle>
-            <CardDescription>
-              {hasOpenPunch
-                ? "Hai già un'entrata aperta. Conferma l'uscita quando stai terminando il turno."
-                : "Conferma l'entrata per registrare la presenza e accedere alla dashboard."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button className="min-h-14 w-full text-base" size="lg" onClick={clock} disabled={busy}>
-              {busy && <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />}
-              {busy ? "Rilevamento posizione…" : hasOpenPunch ? "Conferma uscita" : "Conferma entrata"}
-            </Button>
+        {!stateVerified ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Stato presenza non verificato</CardTitle>
+              <CardDescription>
+                Non mostro un falso pulsante di entrata o uscita finché HotelAccelerator non legge lo stato reale dal database.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button className="w-full" onClick={() => void load()}>
+                <RefreshCw className="mr-2 h-4 w-4" aria-hidden /> Riprova verifica
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => window.location.replace("/admin/dashboard")}>
+                Vai alla dashboard senza timbrare
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>{hasOpenPunch ? "Registra uscita" : "Registra entrata"}</CardTitle>
+              <CardDescription>
+                {hasOpenPunch
+                  ? `Hai già un ingresso aperto${openPunch?.clock_in_at ? ` dalle ${new Date(openPunch.clock_in_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : ""}. Registra l'uscita solo quando termini il lavoro.`
+                  : "Non risulta alcun ingresso aperto. Conferma l'entrata per registrare la presenza."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Button className="min-h-14 w-full text-base" size="lg" onClick={clock} disabled={busy}>
+                {busy && <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden />}
+                {busy ? "Rilevamento posizione…" : hasOpenPunch ? "Conferma uscita" : "Conferma entrata"}
+              </Button>
 
-            <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              <p>
-                {settings?.require_geolocation === false
-                  ? "La posizione non è obbligatoria per questa struttura."
-                  : `La posizione viene acquisita solo al momento della timbratura${settings?.location_name ? ` e verificata rispetto a ${settings.location_name}` : ""}.`}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex items-start gap-2 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                <p>
+                  {settings?.require_geolocation === false
+                    ? "La posizione non è obbligatoria per questa struttura."
+                    : `La posizione viene acquisita solo al momento della timbratura${settings?.location_name ? ` e verificata rispetto a ${settings.location_name}` : ""}.`}
+                </p>
+              </div>
 
-        {error && (
-          <Button variant="ghost" className="w-full" onClick={() => window.location.replace("/admin/dashboard")}>
-            Accedi comunque alla dashboard
-          </Button>
+              {times.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Ultima timbratura: {new Date(times[0].clock_in_at).toLocaleString("it-IT")}
+                  {times[0].clock_out_at ? ` · uscita ${new Date(times[0].clock_out_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : " · ancora aperta"}.
+                </p>
+              )}
+            </CardContent>
+          </Card>
         )}
       </main>
     </div>
