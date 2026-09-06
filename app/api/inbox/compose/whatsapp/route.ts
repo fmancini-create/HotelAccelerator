@@ -7,6 +7,13 @@ import { normalizeWhatsAppNumber, sendWhatsAppText } from "@/lib/whatsapp/client
 import { getWhatsAppWindowState } from "@/lib/whatsapp/window"
 import { queueWhatsAppReopen } from "@/lib/whatsapp/pending"
 import { ensureWhatsAppReopenTemplateForChannel } from "@/lib/whatsapp/template-provisioning"
+import {
+  expectedOutboundStagingPrefix,
+  removeStagedWhatsAppMedia,
+  sendStagedWhatsAppMedia,
+  validateWhatsAppOutboundMedia,
+  type StagedWhatsAppMedia,
+} from "@/lib/whatsapp/outbound-media"
 
 export const runtime = "nodejs"
 
@@ -16,21 +23,25 @@ interface ComposeBody {
   contactId?: string
   contactName?: string
   channelId?: string
+  media?: StagedWhatsAppMedia | null
 }
 
 export async function POST(request: NextRequest) {
+  let mediaToCleanup: StagedWhatsAppMedia | null = null
   try {
     const operatore = await richiediOperatore(request)
     const propertyId = operatore.propertyId
     const payload = (await request.json()) as ComposeBody
     const phone = normalizeWhatsAppNumber(payload.to || "")
     const text = payload.body?.trim() || ""
+    const media = payload.media ?? null
+    mediaToCleanup = media
 
     if (phone.length < 8 || phone.length > 15) {
       return NextResponse.json({ error: "Inserisci un numero WhatsApp valido con prefisso internazionale." }, { status: 400 })
     }
-    if (!text) {
-      return NextResponse.json({ error: "Il messaggio non può essere vuoto." }, { status: 400 })
+    if (!text && !media) {
+      return NextResponse.json({ error: "Scrivi un messaggio oppure allega una foto, un video, un vocale o un documento." }, { status: 400 })
     }
 
     const supabase = createServiceClient()
@@ -39,7 +50,22 @@ export async function POST(request: NextRequest) {
       : await getWhatsAppChannelForProperty(supabase, propertyId)
 
     if (!channel) {
+      if (media) await removeStagedWhatsAppMedia(supabase, media)
+      mediaToCleanup = null
       return NextResponse.json({ error: "Nessun canale WhatsApp attivo configurato per questa struttura." }, { status: 404 })
+    }
+
+    if (media) {
+      const validation = validateWhatsAppOutboundMedia(media.name, media.mimeType, media.size)
+      const expectedPrefix = expectedOutboundStagingPrefix(propertyId, channel.id)
+      if (!validation.ok || !media.path.startsWith(expectedPrefix)) {
+        await removeStagedWhatsAppMedia(supabase, media)
+        mediaToCleanup = null
+        return NextResponse.json(
+          { error: validation.ok ? "Allegato WhatsApp non valido per questo tenant o numero." : validation.error },
+          { status: 400 },
+        )
+      }
     }
 
     let contact: { id: string; name?: string | null } | null = null
@@ -52,6 +78,8 @@ export async function POST(request: NextRequest) {
         .maybeSingle()
       contact = data
       if (!contact) {
+        if (media) await removeStagedWhatsAppMedia(supabase, media)
+        mediaToCleanup = null
         return NextResponse.json({ error: "Contatto non disponibile per questa struttura." }, { status: 404 })
       }
     }
@@ -79,7 +107,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!contact) {
-      return NextResponse.json({ error: "Impossibile risolvere o creare il contatto WhatsApp." }, { status: 500 })
+      throw new Error("Impossibile risolvere o creare il contatto WhatsApp.")
     }
     const resolvedContact = contact
 
@@ -124,28 +152,83 @@ export async function POST(request: NextRequest) {
       conversation = created
     }
 
-    if (!conversation) {
-      return NextResponse.json({ error: "Impossibile risolvere o creare la conversazione WhatsApp." }, { status: 500 })
-    }
+    if (!conversation) throw new Error("Impossibile risolvere o creare la conversazione WhatsApp.")
     const resolvedConversation = conversation
-
     const window = await getWhatsAppWindowState(supabase, propertyId, resolvedConversation.id)
 
     if (window.isOpen) {
-      const sent = await sendWhatsAppText(channel.config, channel.credentials, phone, text)
-      if (!sent.success) {
-        await supabase
-          .from("messaging_channels")
-          .update({ last_error: sent.error ?? "Errore invio WhatsApp" })
-          .eq("id", channel.id)
-          .eq("property_id", propertyId)
-        return NextResponse.json({ error: sent.error ?? "Errore invio WhatsApp." }, { status: 502 })
-      }
-
       const sentAt = new Date().toISOString()
-      const { data: message, error: messageError } = await supabase
-        .from("messages")
-        .insert({
+      const timelineRows: Array<Record<string, unknown>> = []
+      let warning = ""
+
+      if (media) {
+        const sentMedia = await sendStagedWhatsAppMedia(supabase, {
+          propertyId,
+          channel,
+          toPhone: phone,
+          media,
+          caption: text,
+        })
+        if (!sentMedia.success) {
+          await supabase
+            .from("messaging_channels")
+            .update({ last_error: sentMedia.error ?? "Errore invio media WhatsApp" })
+            .eq("id", channel.id)
+            .eq("property_id", propertyId)
+          return NextResponse.json({ error: sentMedia.error ?? "Errore invio media WhatsApp." }, { status: 502 })
+        }
+
+        timelineRows.push({
+          property_id: propertyId,
+          conversation_id: resolvedConversation.id,
+          sender_type: "agent",
+          sender_id: operatore.titolare.adminUserId,
+          sender_name: operatore.titolare.label,
+          content: sentMedia.contentHtml || `[${sentMedia.kind || "media"}] ${media.name}`,
+          content_type: "text/html",
+          external_message_id: sentMedia.externalMessageId ?? null,
+          status: "sent",
+          stored_at: sentAt,
+          metadata: {
+            channel: "whatsapp",
+            source: "omnichannel_compose",
+            wa_message_type: sentMedia.kind,
+            whatsapp_media_id: sentMedia.mediaId,
+            filename: media.name,
+          },
+        })
+
+        if (text && !sentMedia.captionConsumed) {
+          const sentText = await sendWhatsAppText(channel.config, channel.credentials, phone, text)
+          if (sentText.success) {
+            timelineRows.push({
+              property_id: propertyId,
+              conversation_id: resolvedConversation.id,
+              sender_type: "agent",
+              sender_id: operatore.titolare.adminUserId,
+              sender_name: operatore.titolare.label,
+              content: text,
+              content_type: "text",
+              external_message_id: sentText.externalMessageId ?? null,
+              status: "sent",
+              stored_at: sentAt,
+              metadata: { channel: "whatsapp", source: "omnichannel_compose" },
+            })
+          } else {
+            warning = `Il media è stato inviato, ma il testo aggiuntivo non è partito: ${sentText.error ?? "errore WhatsApp"}`
+          }
+        }
+      } else {
+        const sent = await sendWhatsAppText(channel.config, channel.credentials, phone, text)
+        if (!sent.success) {
+          await supabase
+            .from("messaging_channels")
+            .update({ last_error: sent.error ?? "Errore invio WhatsApp" })
+            .eq("id", channel.id)
+            .eq("property_id", propertyId)
+          return NextResponse.json({ error: sent.error ?? "Errore invio WhatsApp." }, { status: 502 })
+        }
+        timelineRows.push({
           property_id: propertyId,
           conversation_id: resolvedConversation.id,
           sender_type: "agent",
@@ -158,9 +241,17 @@ export async function POST(request: NextRequest) {
           stored_at: sentAt,
           metadata: { channel: "whatsapp", source: "omnichannel_compose" },
         })
+      }
+
+      const { data: messages, error: messageError } = await supabase
+        .from("messages")
+        .insert(timelineRows)
         .select("id")
-        .single()
-      if (messageError) throw messageError
+      if (messageError) {
+        warning = warning
+          ? `${warning} Inoltre la timeline locale non è stata aggiornata: ${messageError.message}`
+          : `Messaggio consegnato a WhatsApp, ma timeline locale non aggiornata: ${messageError.message}`
+      }
 
       await Promise.all([
         supabase
@@ -170,7 +261,7 @@ export async function POST(request: NextRequest) {
           .eq("property_id", propertyId),
         supabase
           .from("messaging_channels")
-          .update({ last_outbound_at: sentAt, last_error: null })
+          .update({ last_outbound_at: sentAt, last_error: warning || null })
           .eq("id", channel.id)
           .eq("property_id", propertyId),
         supabase
@@ -182,18 +273,22 @@ export async function POST(request: NextRequest) {
           .in("status", ["received", "read"]),
       ])
 
+      if (media) {
+        await removeStagedWhatsAppMedia(supabase, media)
+        mediaToCleanup = null
+      }
+
       return NextResponse.json({
         success: true,
         mode: "sent",
         conversationId: resolvedConversation.id,
-        messageId: message.id,
+        messageId: messages?.[0]?.id,
+        messageIds: messages?.map((message: { id: string }) => message.id) ?? [],
+        warning: warning || undefined,
         window,
       })
     }
 
-    // The tenant never configures templates manually. If onboarding provisioning
-    // failed or Meta was still reviewing the template, this check re-fetches the
-    // status and recreates a missing template before any business-initiated send.
     const { data: property } = await supabase
       .from("properties")
       .select("name")
@@ -207,6 +302,10 @@ export async function POST(request: NextRequest) {
     )
 
     if (!template.ok || template.status !== "APPROVED") {
+      if (media) {
+        await removeStagedWhatsAppMedia(supabase, media)
+        mediaToCleanup = null
+      }
       const isReviewing = template.ok && ["PENDING", "IN_APPEAL"].includes(template.status)
       return NextResponse.json(
         {
@@ -229,27 +328,45 @@ export async function POST(request: NextRequest) {
       channel,
       toPhone: phone,
       body: text,
+      media,
       operatorAdminUserId: operatore.titolare.adminUserId,
       operatorActorKey: operatore.titolare.key,
       operatorLabel: operatore.titolare.label,
     })
 
     if (!queued.ok) {
+      if (media) {
+        await removeStagedWhatsAppMedia(supabase, media)
+        mediaToCleanup = null
+      }
       const status = queued.code === "ALREADY_PENDING" ? 409 : 502
       return NextResponse.json({ error: queued.error, code: queued.code, conversationId: resolvedConversation.id }, { status })
     }
 
+    // The pending row owns the staged media from this point until delivery,
+    // decline or expiry. Never clean it in the request-finalizer below.
+    mediaToCleanup = null
     return NextResponse.json({
       success: true,
       mode: "queued",
       conversationId: resolvedConversation.id,
       pendingId: queued.pendingId,
-      message: "Finestra WhatsApp chiusa: richiesta di apertura inviata al cliente.",
+      message: media
+        ? "Finestra WhatsApp chiusa: richiesta di apertura inviata. Il media partirà automaticamente dopo l'accettazione."
+        : "Finestra WhatsApp chiusa: richiesta di apertura inviata al cliente.",
       window,
     })
   } catch (error) {
-    const status = typeof (error as any)?.status === "number" ? (error as any).status : 500
     console.error("[WhatsApp compose] error:", error)
+    if (mediaToCleanup) {
+      try {
+        const supabase = createServiceClient()
+        await removeStagedWhatsAppMedia(supabase, mediaToCleanup)
+      } catch {
+        // Best-effort cleanup; the staged object is private and cannot leak cross-tenant.
+      }
+    }
+    const status = typeof (error as any)?.status === "number" ? (error as any).status : 500
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Errore durante la creazione del messaggio WhatsApp." },
       { status },
