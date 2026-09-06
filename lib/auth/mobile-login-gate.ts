@@ -7,6 +7,7 @@ export type TimeClockRequirementInput = {
 
 export type MobileTimeClockGateInput = TimeClockRequirementInput & {
   mobile: boolean
+  hasOpenTimeEntry: boolean | null | undefined
 }
 
 export type DesktopTimeClockPromptInput = TimeClockRequirementInput & {
@@ -54,14 +55,18 @@ export function hasActiveTimeClockRequirement(
 }
 
 /**
- * Regola pura del gate mobile post-login. Su smartphone l'utente obbligato passa
- * sempre dalla schermata di timbratura, che decide poi se proporre entrata o uscita.
+ * Su smartphone il gate serve a registrare l'INGRESSO mancante, non a forzare
+ * una nuova azione ad ogni riapertura dell'app. Se esiste gia' una presenza
+ * aperta il dipendente entra normalmente in dashboard e registrera' l'uscita
+ * quando termina davvero il turno. `hasOpenTimeEntry` deve essere esplicitamente
+ * false: in caso di lookup incerto il login resta fail-open.
  */
 export function shouldRouteToMobileTimeClock(
   input: MobileTimeClockGateInput,
   nowMs = Date.now(),
 ): boolean {
-  return input.mobile && hasActiveTimeClockRequirement(input, nowMs)
+  if (!input.mobile || input.hasOpenTimeEntry !== false) return false
+  return hasActiveTimeClockRequirement(input, nowMs)
 }
 
 /**
