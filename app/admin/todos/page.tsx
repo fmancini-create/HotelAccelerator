@@ -1,678 +1,601 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
+import { useCallback, useEffect, useState, type FormEvent } from "react"
 import {
-  Plus, CheckCircle2, Circle, Clock, AlertCircle,
-  Trash2, ExternalLink, Calendar, Filter, RefreshCw,
-  Users, User, Send, Wrench, Tag, Edit2, Settings
+  AlertCircle,
+  Calendar,
+  CheckCircle2,
+  Circle,
+  Clock,
+  ExternalLink,
+  Filter,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Wrench,
 } from "lucide-react"
+import { format, isPast, isToday, isTomorrow } from "date-fns"
+import { it } from "date-fns/locale"
+
+import { AdminHeader } from "@/components/admin/admin-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { AdminHeader } from "@/components/admin/admin-header"
+import { Textarea } from "@/components/ui/textarea"
 import { useAdminAuth } from "@/lib/admin-hooks"
-import { format, isToday, isPast, isTomorrow } from "date-fns"
-import { it } from "date-fns/locale"
-import { Badge } from "@/components/ui/badge"
-
-interface ManubotTeamMember { id: string; full_name: string; email: string; role: string }
-interface ManubotAsset { id: string; name: string; location: string }
 
 type TodoStatus = "open" | "in_progress" | "done" | "cancelled"
 type TodoPriority = "low" | "normal" | "high" | "urgent"
+type AddonState =
+  | "loading"
+  | "active"
+  | "inactive"
+  | "configuration_required"
+  | "forbidden"
+  | "unavailable"
 
-interface AdminUser {
-  id: string
-  name: string
-  email: string
-  role: string
+type ManubotOperator = { id: string; full_name: string | null }
+type ManubotGroup = { id: string; name: string; member_count?: number | null }
+type ManubotAsset = { id: string; name: string; location?: string | null }
+type ManubotTaskData = {
+  operators?: ManubotOperator[]
+  operatorGroups?: ManubotGroup[]
+  assets?: ManubotAsset[]
+}
+type AddonContext = {
+  status?: "active" | "inactive" | "configuration_required"
+  active?: boolean
+  reason?: string | null
+  task_data?: ManubotTaskData | null
 }
 
 interface Todo {
   id: string
   title: string
-  description?: string
+  description?: string | null
   status: TodoStatus
   priority: TodoPriority
-  assigned_to?: string
-  assigned_to_name?: string
-  due_date?: string
-  external_id?: string
-  external_source?: string
-  external_url?: string
-  tags: string[]
-  send_to_manubot?: boolean
-  manubot_synced?: boolean
+  due_date?: string | null
+  external_id?: string | null
+  external_source?: string | null
+  external_url?: string | null
+  external_data?: {
+    assigned_to_name?: string | null
+    asset_name?: string | null
+    asset_location?: string | null
+  } | null
   created_at: string
   updated_at: string
-  completed_at?: string
+  completed_at?: string | null
 }
 
 const STATUS_CONFIG: Record<TodoStatus, { label: string; icon: typeof Circle; color: string }> = {
-  open:        { label: "Da fare",     icon: Circle,       color: "text-muted-foreground"  },
-  in_progress: { label: "In corso",   icon: Clock,        color: "text-ha-info-soft-foreground"  },
-  done:        { label: "Completato", icon: CheckCircle2, color: "text-ha-success-soft-foreground" },
-  cancelled:   { label: "Annullato",  icon: AlertCircle,  color: "text-ha-error-soft-foreground"   },
+  open: { label: "Da fare", icon: Circle, color: "text-muted-foreground" },
+  in_progress: { label: "In corso", icon: Clock, color: "text-ha-info-soft-foreground" },
+  done: { label: "Completato", icon: CheckCircle2, color: "text-ha-success-soft-foreground" },
+  cancelled: { label: "Annullato", icon: AlertCircle, color: "text-ha-error-soft-foreground" },
 }
 
 const PRIORITY_CONFIG: Record<TodoPriority, { label: string; dot: string; text: string }> = {
-  low:    { label: "Bassa",   dot: "bg-gray-300",   text: "text-gray-500"  },
-  normal: { label: "Normale", dot: "bg-ha-info",   text: "text-ha-info-soft-foreground"  },
-  high:   { label: "Alta",    dot: "bg-ha-warning", text: "text-ha-warning-soft-foreground"},
-  urgent: { label: "Urgente", dot: "bg-ha-error",    text: "text-ha-error-soft-foreground"   },
+  low: { label: "Bassa", dot: "bg-gray-300", text: "text-gray-500" },
+  normal: { label: "Normale", dot: "bg-ha-info", text: "text-ha-info-soft-foreground" },
+  high: { label: "Alta", dot: "bg-ha-warning", text: "text-ha-warning-soft-foreground" },
+  urgent: { label: "Urgente", dot: "bg-ha-error", text: "text-ha-error-soft-foreground" },
 }
 
-function DueDateBadge({ date }: { date?: string }) {
+function createEmptyForm() {
+  return {
+    title: "",
+    description: "",
+    priority: "normal" as TodoPriority,
+    responsible: "",
+    assetId: "",
+    expectedResolutionMinutes: "60",
+  }
+}
+
+function DueDateBadge({ date }: { date?: string | null }) {
   if (!date) return null
-  const d = new Date(date)
-  const overdue = isPast(d) && !isToday(d)
-  const today = isToday(d)
-  const tomorrow = isTomorrow(d)
-  return (
-    <span className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded font-medium ${
-      overdue  ? "bg-ha-error-soft text-ha-error-soft-foreground" :
-      today    ? "bg-ha-warning-soft text-ha-warning-soft-foreground" :
-      tomorrow ? "bg-ha-warning-soft text-ha-warning-soft-foreground" :
-                 "bg-muted text-muted-foreground"
-    }`}>
-      <Calendar className="w-3 h-3" />
-      {overdue ? "Scaduto" : today ? "Oggi" : tomorrow ? "Domani" : format(d, "d MMM", { locale: it })}
-    </span>
-  )
-}
+  const parsed = new Date(date)
+  const overdue = isPast(parsed) && !isToday(parsed)
+  const today = isToday(parsed)
+  const tomorrow = isTomorrow(parsed)
 
-function Avatar({ name, size = "sm" }: { name?: string; size?: "sm" | "md" }) {
-  if (!name) return null
-  const s = size === "sm" ? "w-5 h-5 text-[10px]" : "w-6 h-6 text-xs"
   return (
-    <span className={`${s} rounded-full bg-border text-ha-brand-soft-foreground flex items-center justify-center font-semibold flex-shrink-0`}>
-      {name.charAt(0).toUpperCase()}
+    <span
+      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium ${
+        overdue
+          ? "bg-ha-error-soft text-ha-error-soft-foreground"
+          : today
+            ? "bg-ha-warning-soft text-ha-warning-soft-foreground"
+            : tomorrow
+              ? "bg-ha-warning-soft text-ha-warning-soft-foreground"
+              : "bg-muted text-muted-foreground"
+      }`}
+    >
+      <Calendar className="h-3 w-3" />
+      {overdue ? "Scaduto" : today ? "Oggi" : tomorrow ? "Domani" : format(parsed, "d MMM", { locale: it })}
     </span>
   )
 }
 
 export default function TodosPage() {
   const { isLoading: authLoading, adminUser } = useAdminAuth()
+  const [addonState, setAddonState] = useState<AddonState>("loading")
+  const [taskData, setTaskData] = useState<ManubotTaskData | null>(null)
   const [todos, setTodos] = useState<Todo[]>([])
-  const [users, setUsers] = useState<AdminUser[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loadingTodos, setLoadingTodos] = useState(true)
   const [filterStatus, setFilterStatus] = useState<string>("all")
-  const [filterAssignee, setFilterAssignee] = useState<string>("all")
   const [showForm, setShowForm] = useState(false)
-  const [editingTodo, setEditingTodo] = useState<Todo | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [form, setForm] = useState(createEmptyForm)
 
-  const [manubotTeam, setManubotTeam] = useState<ManubotTeamMember[]>([])
-  const [manubotAssets, setManubotAssets] = useState<ManubotAsset[]>([])
+  const loadAddonContext = useCallback(async () => {
+    setAddonState("loading")
+    setTaskData(null)
+    setError("")
 
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    priority: "normal" as TodoPriority,
-    assigned_to: "",
-    due_date: "",
-    tags: "",
-    send_to_manubot: false,
-    manubot_assigned_to: "",
-    manubot_asset_id: "",
-  })
-
-  const loadUsers = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/users")
-      if (res.ok) {
-        const data = await res.json()
-        setUsers(data.users || [])
+      const res = await fetch("/api/admin/manubot/addon-context", { cache: "no-store" })
+      const data = (await res.json().catch(() => ({}))) as AddonContext & { error?: string }
+
+      if (res.status === 401 || res.status === 403) {
+        setAddonState("forbidden")
+        return
       }
-    } catch { /* silent */ }
+      if (!res.ok) {
+        setAddonState("unavailable")
+        return
+      }
+      if (data.status === "inactive") {
+        setAddonState("inactive")
+        return
+      }
+      if (data.status === "configuration_required") {
+        setAddonState("configuration_required")
+        return
+      }
+      if (data.status !== "active" || data.active !== true || !data.task_data) {
+        setAddonState("unavailable")
+        return
+      }
+
+      setTaskData(data.task_data)
+      setAddonState("active")
+    } catch {
+      setAddonState("unavailable")
+    }
   }, [])
 
   const loadTodos = useCallback(async () => {
-    setLoading(true)
+    setLoadingTodos(true)
+    setError("")
+
     try {
       const params = new URLSearchParams()
       if (filterStatus !== "all") params.set("status", filterStatus)
-      if (filterAssignee !== "all") params.set("assigned_to", filterAssignee)
-      const res = await fetch(`/api/admin/todos?${params}`)
-      if (res.ok) {
-        const data = await res.json()
-        setTodos(data.todos || [])
-      }
-    } catch { setError("Errore nel caricamento") }
-    finally { setLoading(false) }
-  }, [filterStatus, filterAssignee])
+      const res = await fetch(`/api/admin/todos?${params}`, { cache: "no-store" })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Errore nel caricamento")
 
-  useEffect(() => { loadUsers() }, [loadUsers])
-  useEffect(() => { loadTodos() }, [loadTodos])
-
-  // Carica team e asset Manubot quando send_to_manubot viene attivato
-  useEffect(() => {
-    if (!form.send_to_manubot) return
-    const loadManubot = async () => {
-      try {
-        const [teamRes, assetsRes] = await Promise.all([
-          fetch("/api/admin/manubot/team"),
-          fetch("/api/admin/manubot/assets"),
-        ])
-        if (teamRes.ok) { const d = await teamRes.json(); setManubotTeam(d.team || []) }
-        if (assetsRes.ok) { const d = await assetsRes.json(); setManubotAssets(d.assets || []) }
-      } catch { /* silent */ }
+      // La pagina To-Do e' la superficie ManuBot: i vecchi task locali non
+      // devono ricreare visivamente un secondo modulo parallelo.
+      const manubotTodos = Array.isArray(data.todos)
+        ? (data.todos as Todo[]).filter((todo) => todo.external_source === "manubot")
+        : []
+      setTodos(manubotTodos)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Errore nel caricamento")
+    } finally {
+      setLoadingTodos(false)
     }
-    loadManubot()
-  }, [form.send_to_manubot])
+  }, [filterStatus])
+
+  useEffect(() => {
+    if (!authLoading && adminUser) void loadAddonContext()
+  }, [adminUser, authLoading, loadAddonContext])
+
+  useEffect(() => {
+    if (addonState === "active") void loadTodos()
+  }, [addonState, loadTodos])
 
   const resetForm = () => {
-    setForm({ title: "", description: "", priority: "normal", assigned_to: "", due_date: "", tags: "", send_to_manubot: false, manubot_assigned_to: "", manubot_asset_id: "" })
-    setEditingTodo(null)
+    setForm(createEmptyForm())
     setShowForm(false)
     setError("")
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.title.trim()) { setError("Titolo obbligatorio"); return }
-    setSubmitting(true)
-
-    const assignedUser = users.find(u => u.id === form.assigned_to)
-    const payload = {
-      title: form.title.trim(),
-      description: form.description.trim() || undefined,
-      priority: form.priority,
-      assigned_to: form.assigned_to || null,
-      due_date: form.due_date || undefined,
-      tags: form.tags ? form.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
-      send_to_manubot: form.send_to_manubot,
-      manubot_assigned_to: form.manubot_assigned_to || null,
-      manubot_asset_id: form.manubot_asset_id || null,
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!form.title.trim()) {
+      setError("Inserisci il titolo dell'attività")
+      return
+    }
+    if (!form.responsible) {
+      setError("Scegli un tecnico o un gruppo responsabile")
+      return
     }
 
+    const expectedMinutes = Number(form.expectedResolutionMinutes)
+    if (!Number.isInteger(expectedMinutes) || expectedMinutes < 5 || expectedMinutes > 1440) {
+      setError("Il tempo stimato deve essere compreso tra 5 e 1440 minuti")
+      return
+    }
+
+    const assigneeIds = form.responsible.startsWith("operator:") ? [form.responsible.slice(9)] : []
+    const groupIds = form.responsible.startsWith("group:") ? [form.responsible.slice(6)] : []
+
+    setSubmitting(true)
+    setError("")
     try {
-      const res = await fetch(
-        editingTodo ? `/api/admin/todos/${editingTodo.id}` : "/api/admin/todos",
-        { method: editingTodo ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
-      )
-      if (!res.ok) throw new Error("Errore nel salvataggio")
-      await loadTodos()
+      const res = await fetch("/api/admin/todos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          description: form.description.trim() || undefined,
+          priority: form.priority,
+          tags: ["manubot"],
+          send_to_manubot: true,
+          manubot_assignee_ids: assigneeIds,
+          manubot_group_ids: groupIds,
+          manubot_asset_ids: form.assetId ? [form.assetId] : [],
+          manubot_expected_resolution_minutes: expectedMinutes,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Creazione attività non riuscita")
+      if (data.manubot_synced !== true) throw new Error("ManuBot non ha confermato la creazione dell'attività")
+
       resetForm()
-    } catch (e: any) {
-      setError(e.message)
+      await loadTodos()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Creazione attività non riuscita")
     } finally {
       setSubmitting(false)
     }
   }
 
   const updateStatus = async (todo: Todo, status: TodoStatus) => {
-    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status } : t))
+    setTodos((current) => current.map((item) => (item.id === todo.id ? { ...item, status } : item)))
     try {
-      await fetch(`/api/admin/todos/${todo.id}`, {
+      const res = await fetch(`/api/admin/todos/${todo.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       })
-    } catch {
-      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, status: todo.status } : t))
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Aggiornamento non riuscito")
+    } catch (cause) {
+      setTodos((current) => current.map((item) => (item.id === todo.id ? { ...item, status: todo.status } : item)))
+      setError(cause instanceof Error ? cause.message : "Aggiornamento non riuscito")
     }
-  }
-
-  const deleteTodo = async (id: string) => {
-    if (!confirm("Eliminare questo task?")) return
-    setTodos(prev => prev.filter(t => t.id !== id))
-    await fetch(`/api/admin/todos/${id}`, { method: "DELETE" })
-  }
-
-  const openEdit = (todo: Todo) => {
-    setForm({
-      title: todo.title,
-      description: todo.description || "",
-      priority: todo.priority,
-      assigned_to: todo.assigned_to || "",
-      due_date: todo.due_date ? todo.due_date.slice(0, 10) : "",
-      tags: todo.tags.join(", "),
-      send_to_manubot: todo.send_to_manubot || false,
-      manubot_assigned_to: "",
-      manubot_asset_id: "",
-    })
-    setEditingTodo(todo)
-    setShowForm(true)
   }
 
   if (authLoading) {
     return (
-      <div className="min-h-full bg-muted flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ha-brand" />
+      <div className="flex min-h-full items-center justify-center bg-muted">
+        <Loader2 className="h-8 w-8 animate-spin text-ha-brand" />
       </div>
     )
   }
   if (!adminUser) return null
 
   const stats = {
-    open:        todos.filter(t => t.status === "open").length,
-    in_progress: todos.filter(t => t.status === "in_progress").length,
-    done:        todos.filter(t => t.status === "done").length,
-    urgent:      todos.filter(t => t.priority === "urgent" && t.status !== "done").length,
+    open: todos.filter((todo) => todo.status === "open").length,
+    inProgress: todos.filter((todo) => todo.status === "in_progress").length,
+    done: todos.filter((todo) => todo.status === "done").length,
+    urgent: todos.filter((todo) => todo.priority === "urgent" && todo.status !== "done").length,
   }
+
+  const operators = taskData?.operators || []
+  const groups = taskData?.operatorGroups || []
+  const assets = taskData?.assets || []
+  const active = addonState === "active"
 
   return (
     <div className="min-h-full bg-muted">
       <AdminHeader
-        title="Task & To-Do"
-        subtitle="Gestisci attività e deleghe al team"
+        title="To-Do · ManuBot"
+        subtitle="Le attività operative di HotelAccelerator sono gestite da ManuBot"
         actions={
-          <Button
-            onClick={() => { resetForm(); setShowForm(true) }}
-            className="bg-ha-brand hover:bg-ha-brand/90 text-white h-8 px-3 text-sm gap-1.5"
-          >
-            <Plus className="w-4 h-4" />
-            Nuovo task
-          </Button>
+          active ? (
+            <Button
+              onClick={() => {
+                resetForm()
+                setShowForm(true)
+              }}
+              className="h-8 gap-1.5 bg-ha-brand px-3 text-sm text-white hover:bg-ha-brand/90"
+            >
+              <Plus className="h-4 w-4" />
+              Nuova attività
+            </Button>
+          ) : undefined
         }
       />
 
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { label: "Da fare",    value: stats.open,        border: "border-border" },
-            { label: "In corso",   value: stats.in_progress, border: "border-ha-info-soft" },
-            { label: "Completati", value: stats.done,        border: "border-ha-success-soft" },
-            { label: "Urgenti",    value: stats.urgent,      border: "border-ha-error-soft" },
-          ].map(s => (
-            <div key={s.label} className={`bg-card rounded-xl border-l-4 ${s.border} px-4 py-3 shadow-sm`}>
-              <p className="text-2xl font-semibold text-foreground">{s.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{s.label}</p>
+      <div className="mx-auto max-w-5xl space-y-4 px-4 py-6">
+        {addonState === "loading" ? (
+          <div className="flex items-center justify-center gap-2 rounded-2xl border border-border bg-card py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" /> Verifico il modulo ManuBot…
+          </div>
+        ) : addonState === "inactive" ? (
+          <div className="rounded-2xl border border-dashed border-ha-brand/35 bg-card p-8 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-ha-brand-soft">
+              <Wrench className="h-6 w-6 text-ha-brand" />
             </div>
-          ))}
-        </div>
-
-        {/* Form */}
-        {showForm && (
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-5">
-            <h3 className="text-sm font-semibold text-foreground mb-4">
-              {editingTodo ? "Modifica task" : "Nuovo task"}
-            </h3>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <Input
-                placeholder="Titolo del task *"
-                value={form.title}
-                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                className="text-sm"
-                autoFocus
-              />
-              <Textarea
-                placeholder="Descrizione (opzionale)"
-                value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                rows={2}
-                className="text-sm resize-none"
-              />
-
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {/* Priority */}
-                <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v as TodoPriority }))}>
-                  <SelectTrigger className="text-sm h-9">
-                    <SelectValue placeholder="Priorità" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Bassa</SelectItem>
-                    <SelectItem value="normal">Normale</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                    <SelectItem value="urgent">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {/* Assignee */}
-                <Select
-                  value={form.assigned_to || "unassigned"}
-                  onValueChange={v => setForm(f => ({ ...f, assigned_to: v === "unassigned" ? "" : v }))}
-                >
-                  <SelectTrigger className="text-sm h-9">
-                    <SelectValue placeholder="Assegna a..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">
-                      <span className="flex items-center gap-2 text-muted-foreground">
-                        <User className="w-3.5 h-3.5" />
-                        Non assegnato
-                      </span>
-                    </SelectItem>
-                    {users.map(u => (
-                      <SelectItem key={u.id} value={u.id}>
-                        <span className="flex items-center gap-2">
-                          <Avatar name={u.name} size="sm" />
-                          {u.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {/* Due date */}
-                <Input
-                  type="date"
-                  value={form.due_date}
-                  onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}
-                  className="text-sm h-9"
-                />
-
-                {/* Tags */}
-                <Input
-                  placeholder="Tag (es: manutenzione)"
-                  value={form.tags}
-                  onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-                  className="text-sm h-9"
-                />
-              </div>
-
-              {/* Send to Manubot toggle */}
-              <div className="border border-border rounded-xl p-3 bg-muted/50 space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer group w-fit">
-                  <div
-                    onClick={() => setForm(f => ({ ...f, send_to_manubot: !f.send_to_manubot }))}
-                    className={`w-10 h-5 rounded-full transition-colors flex-shrink-0 relative ${
-                      form.send_to_manubot ? "bg-ha-brand" : "bg-muted"
-                    }`}
-                  >
-                    <span className={`absolute top-0.5 w-4 h-4 bg-card rounded-full shadow transition-all ${
-                      form.send_to_manubot ? "left-5" : "left-0.5"
-                    }`} />
-                  </div>
-                  <span className="flex items-center gap-1.5 text-sm text-foreground font-medium group-hover:text-foreground">
-                    <Wrench className="w-3.5 h-3.5 text-ha-brand-soft-foreground" />
-                    Invia a Manubot
-                    <span className="text-xs text-muted-foreground font-normal">(crea intervento di manutenzione)</span>
-                  </span>
-                </label>
-
-                {/* Campi Manubot — visibili solo se send_to_manubot è attivo */}
-                {form.send_to_manubot && (
-                  <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border">
-                    {/* Tecnico Manubot */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        <Wrench className="w-3 h-3" /> Tecnico Manubot
-                      </label>
-                      <Select
-                        value={form.manubot_assigned_to || "none"}
-                        onValueChange={v => setForm(f => ({ ...f, manubot_assigned_to: v === "none" ? "" : v }))}
-                      >
-                        <SelectTrigger className="text-sm h-9 bg-card">
-                          <SelectValue placeholder="Seleziona tecnico..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">
-                            <span className="text-muted-foreground">Nessun tecnico</span>
-                          </SelectItem>
-                          {manubotTeam.map(m => (
-                            <SelectItem key={m.id} value={m.id}>
-                              <span className="flex items-center gap-2">
-                                <Avatar name={m.full_name} size="sm" />
-                                {m.full_name}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* Impianto/Asset Manubot */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        <Settings className="w-3 h-3" /> Impianto / Asset
-                      </label>
-                      <Select
-                        value={form.manubot_asset_id || "none"}
-                        onValueChange={v => setForm(f => ({ ...f, manubot_asset_id: v === "none" ? "" : v }))}
-                      >
-                        <SelectTrigger className="text-sm h-9 bg-card">
-                          <SelectValue placeholder="Seleziona impianto..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">
-                            <span className="text-muted-foreground">Nessun impianto</span>
-                          </SelectItem>
-                          {manubotAssets.map(a => (
-                            <SelectItem key={a.id} value={a.id}>
-                              <span className="flex flex-col">
-                                <span>{a.name}</span>
-                                {a.location && <span className="text-xs text-muted-foreground">{a.location}</span>}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {error && <p className="text-xs text-ha-error-soft-foreground">{error}</p>}
-
-              <div className="flex gap-2 justify-end pt-1">
-                <Button type="button" variant="ghost" size="sm" onClick={resetForm}>
-                  Annulla
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  disabled={submitting}
-                  className="bg-ha-brand hover:bg-ha-brand/90 text-white"
-                >
-                  {submitting ? "Salvataggio..." : editingTodo ? "Salva modifiche" : form.send_to_manubot ? "Crea e invia a Manubot" : "Crea task"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-            {(["all", "open", "in_progress", "done", "cancelled"] as const).map(s => (
-              <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className={`text-xs px-3 py-1 rounded-full transition-colors ${
-                  filterStatus === s
-                    ? "bg-ha-brand text-white"
-                    : "bg-card text-muted-foreground border border-border hover:border-ha-brand hover:text-ha-brand-soft-foreground"
-                }`}
-              >
-                {s === "all" ? "Tutti" : STATUS_CONFIG[s].label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-muted-foreground" />
-              <Select value={filterAssignee} onValueChange={setFilterAssignee}>
-                <SelectTrigger className="h-7 text-xs border-border w-36">
-                  <SelectValue placeholder="Tutti" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tutti</SelectItem>
-                  {users.map(u => (
-                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <button
-              onClick={loadTodos}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Todo list */}
-        {loading ? (
-          <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-ha-brand" />
-          </div>
-        ) : todos.length === 0 ? (
-          <div className="bg-card rounded-2xl border border-dashed border-border py-16 text-center">
-            <CheckCircle2 className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">
-              {filterStatus === "all" && filterAssignee === "all"
-                ? "Nessun task. Crea il primo."
-                : "Nessun task con questo filtro."}
+            <h2 className="text-lg font-semibold text-foreground">I To-Do di Accelerator sono gestiti da ManuBot</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Non esiste una seconda lista To-Do separata. Attiva l'addon ManuBot per creare, assegnare e seguire tutte le attività operative direttamente dalla suite.
             </p>
+            <Button asChild className="mt-5 bg-ha-brand text-white hover:bg-ha-brand/90">
+              <Link href="/admin/modules?focus=manubot">Attiva ManuBot</Link>
+            </Button>
+          </div>
+        ) : addonState === "configuration_required" ? (
+          <div className="rounded-2xl border border-dashed border-ha-warning-soft bg-card p-8 text-center shadow-sm">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-ha-warning-soft">
+              <Wrench className="h-6 w-6 text-ha-warning-soft-foreground" />
+            </div>
+            <h2 className="text-lg font-semibold text-foreground">ManuBot è attivo, manca il collegamento tecnico</h2>
+            <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              L'addon risulta già previsto per questa struttura. Completa la configurazione: non verrà proposta una seconda attivazione e non verranno creati To-Do locali.
+            </p>
+            <Button asChild variant="outline" className="mt-5">
+              <Link href="/admin/modules?focus=manubot">Completa configurazione</Link>
+            </Button>
+          </div>
+        ) : addonState === "forbidden" ? (
+          <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+            <AlertCircle className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Non hai i permessi per accedere alle attività ManuBot.</p>
+          </div>
+        ) : addonState === "unavailable" ? (
+          <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
+            <AlertCircle className="mx-auto mb-3 h-8 w-8 text-ha-error-soft-foreground" />
+            <h2 className="text-base font-semibold text-foreground">ManuBot momentaneamente non disponibile</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Non mostro un To-Do locale come ripiego, per evitare due sistemi paralleli.</p>
+            <Button variant="outline" className="mt-4" onClick={() => void loadAddonContext()}>
+              Riprova
+            </Button>
           </div>
         ) : (
-          <div className="space-y-2">
-            {todos.map(todo => {
-              const cfg = STATUS_CONFIG[todo.status]
-              const pCfg = PRIORITY_CONFIG[todo.priority]
-              const StatusIcon = cfg.icon
-              const isDone = todo.status === "done"
-              const assigneeName = users.find(u => u.id === todo.assigned_to)?.name || todo.assigned_to_name
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ha-brand/20 bg-ha-brand-soft/30 px-4 py-3">
+              <div className="flex items-center gap-2 text-sm">
+                <Wrench className="h-4 w-4 text-ha-brand" />
+                <span className="font-medium text-foreground">Un solo sistema attività: ManuBot</span>
+                <span className="text-muted-foreground">· Accelerator ne mostra e gestisce la vista integrata.</span>
+              </div>
+              <Button asChild size="sm" variant="ghost" className="h-7 text-xs">
+                <Link href="/admin/modules?focus=manubot">Impostazioni ManuBot</Link>
+              </Button>
+            </div>
 
-              return (
-                <div
-                  key={todo.id}
-                  className={`bg-card rounded-xl border border-border px-4 py-3 flex items-start gap-3 group hover:border-ha-brand/40 transition-all ${isDone ? "opacity-55" : ""}`}
-                >
-                  {/* Status toggle */}
-                  <button
-                    onClick={() => updateStatus(todo, isDone ? "open" : "done")}
-                    className="mt-0.5 flex-shrink-0"
-                    title={isDone ? "Riapri" : "Segna come completato"}
-                  >
-                    <StatusIcon className={`w-5 h-5 ${cfg.color} hover:scale-110 transition-transform`} />
-                  </button>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Da fare", value: stats.open, border: "border-border" },
+                { label: "In corso", value: stats.inProgress, border: "border-ha-info-soft" },
+                { label: "Completati", value: stats.done, border: "border-ha-success-soft" },
+                { label: "Urgenti", value: stats.urgent, border: "border-ha-error-soft" },
+              ].map((stat) => (
+                <div key={stat.label} className={`rounded-xl border-l-4 ${stat.border} bg-card px-4 py-3 shadow-sm`}>
+                  <p className="text-2xl font-semibold text-foreground">{stat.value}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{stat.label}</p>
+                </div>
+              ))}
+            </div>
 
-                  {/* Main content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 flex-wrap">
-                      <button
-                        onClick={() => openEdit(todo)}
-                        className={`text-sm font-medium text-left hover:text-ha-brand-soft-foreground transition-colors ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}
-                      >
-                        {todo.title}
-                      </button>
+            {showForm && (
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="mb-4 flex items-center gap-2">
+                  <Wrench className="h-4 w-4 text-ha-brand" />
+                  <h3 className="text-sm font-semibold text-foreground">Nuova attività ManuBot</h3>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      placeholder="Cosa c'è da fare? *"
+                      value={form.title}
+                      onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
+                      className="sm:col-span-2"
+                      autoFocus
+                    />
+                    <Textarea
+                      placeholder="Descrizione (opzionale)"
+                      value={form.description}
+                      onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                      rows={3}
+                      className="resize-none sm:col-span-2"
+                    />
 
-                      {/* Actions (visible on hover) */}
-                      <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {todo.external_url && (
-                          <a href={todo.external_url} target="_blank" rel="noopener noreferrer"
-                            className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-muted-foreground"
-                            title="Apri in Manubot"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                        <button
-                          onClick={() => openEdit(todo)}
-                          className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-muted-foreground"
-                          title="Modifica"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => deleteTodo(todo.id)}
-                          className="p-1.5 hover:bg-ha-error-soft rounded text-muted-foreground hover:text-ha-error-soft-foreground"
-                          title="Elimina"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
+                    <Select
+                      value={form.priority}
+                      onValueChange={(value) => setForm((current) => ({ ...current, priority: value as TodoPriority }))}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Priorità" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Bassa</SelectItem>
+                        <SelectItem value="normal">Normale</SelectItem>
+                        <SelectItem value="high">Alta</SelectItem>
+                        <SelectItem value="urgent">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
 
-                    {todo.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{todo.description}</p>
-                    )}
+                    <Select
+                      value={form.responsible || "none"}
+                      onValueChange={(value) => setForm((current) => ({ ...current, responsible: value === "none" ? "" : value }))}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Responsabile *" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Scegli responsabile</SelectItem>
+                        {operators.map((operator) => (
+                          <SelectItem key={operator.id} value={`operator:${operator.id}`}>
+                            {operator.full_name || "Operatore"}
+                          </SelectItem>
+                        ))}
+                        {groups.map((group) => (
+                          <SelectItem key={group.id} value={`group:${group.id}`} disabled={group.member_count === 0}>
+                            Gruppo · {group.name}{group.member_count === 0 ? " (senza membri)" : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                    {/* Footer row */}
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                    <Select
+                      value={form.assetId || "none"}
+                      onValueChange={(value) => setForm((current) => ({ ...current, assetId: value === "none" ? "" : value }))}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Asset / impianto" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nessun asset specifico</SelectItem>
+                        {assets.map((asset) => (
+                          <SelectItem key={asset.id} value={asset.id}>
+                            {asset.name}{asset.location ? ` · ${asset.location}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                      {/* Priority dot */}
-                      <span className={`inline-flex items-center gap-1 text-xs ${pCfg.text}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${pCfg.dot}`} />
-                        {pCfg.label}
-                      </span>
-
-                      {/* Status change */}
-                      {!isDone && (
-                        <Select
-                          value={todo.status}
-                          onValueChange={(v) => updateStatus(todo, v as TodoStatus)}
-                        >
-                          <SelectTrigger className="h-5 text-xs border-0 shadow-none p-0 w-auto gap-1 text-muted-foreground hover:text-muted-foreground focus:ring-0">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="open">Da fare</SelectItem>
-                            <SelectItem value="in_progress">In corso</SelectItem>
-                            <SelectItem value="done">Completato</SelectItem>
-                            <SelectItem value="cancelled">Annullato</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-
-                      {/* Assignee */}
-                      {assigneeName ? (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <Avatar name={assigneeName} size="sm" />
-                          {assigneeName}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                          <User className="w-3 h-3" />
-                          Non assegnato
-                        </span>
-                      )}
-
-                      {/* Due date */}
-                      <DueDateBadge date={todo.due_date} />
-
-                      {/* Tags */}
-                      {todo.tags?.map(tag => (
-                        <span key={tag} className="inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 bg-muted text-muted-foreground rounded">
-                          <Tag className="w-2.5 h-2.5" />
-                          {tag}
-                        </span>
-                      ))}
-
-                      {/* Manubot badge */}
-                      {todo.external_source === "manubot" && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-ha-warning-soft text-ha-warning-soft-foreground bg-ha-warning-soft gap-1">
-                          <Wrench className="w-2.5 h-2.5" />
-                          Manubot {todo.external_id && `#${todo.external_id}`}
-                        </Badge>
-                      )}
-
-                      {/* Pending sync to Manubot */}
-                      {todo.send_to_manubot && todo.external_source !== "manubot" && (
-                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-ha-info-soft text-ha-info-soft-foreground bg-ha-info-soft gap-1">
-                          <Send className="w-2.5 h-2.5" />
-                          Da inviare a Manubot
-                        </Badge>
-                      )}
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        min={5}
+                        max={1440}
+                        step={5}
+                        value={form.expectedResolutionMinutes}
+                        onChange={(event) => setForm((current) => ({ ...current, expectedResolutionMinutes: event.target.value }))}
+                        aria-label="Tempo stimato in minuti"
+                        className="pr-16"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">minuti</span>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+
+                  {error && <p className="text-xs text-ha-error-soft-foreground">{error}</p>}
+
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={resetForm}>Annulla</Button>
+                    <Button type="submit" size="sm" disabled={submitting} className="bg-ha-brand text-white hover:bg-ha-brand/90">
+                      {submitting ? "Creazione…" : "Crea in ManuBot"}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {!showForm && error && (
+              <div className="rounded-lg border border-ha-error-soft bg-ha-error-soft/40 px-3 py-2 text-sm text-ha-error-soft-foreground">
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {(["all", "open", "in_progress", "done", "cancelled"] as const).map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setFilterStatus(status)}
+                    className={`rounded-full px-3 py-1 text-xs transition-colors ${
+                      filterStatus === status
+                        ? "bg-ha-brand text-white"
+                        : "border border-border bg-card text-muted-foreground hover:border-ha-brand hover:text-ha-brand-soft-foreground"
+                    }`}
+                  >
+                    {status === "all" ? "Tutti" : STATUS_CONFIG[status].label}
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadTodos()}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loadingTodos ? "animate-spin" : ""}`} />
+                Aggiorna
+              </button>
+            </div>
+
+            {loadingTodos ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-ha-brand" />
+              </div>
+            ) : todos.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-card py-16 text-center">
+                <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-gray-200" />
+                <p className="text-sm text-muted-foreground">
+                  {filterStatus === "all" ? "Nessuna attività ManuBot." : "Nessuna attività ManuBot con questo filtro."}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {todos.map((todo) => {
+                  const statusConfig = STATUS_CONFIG[todo.status]
+                  const priorityConfig = PRIORITY_CONFIG[todo.priority] || PRIORITY_CONFIG.normal
+                  const StatusIcon = statusConfig.icon
+                  const isDone = todo.status === "done"
+                  const assignedToName = todo.external_data?.assigned_to_name
+                  const assetName = todo.external_data?.asset_name
+                  const assetLocation = todo.external_data?.asset_location
+
+                  return (
+                    <div
+                      key={todo.id}
+                      className={`group flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-all hover:border-ha-brand/40 ${isDone ? "opacity-60" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => void updateStatus(todo, isDone ? "open" : "done")}
+                        className="mt-0.5 shrink-0"
+                        title={isDone ? "Riapri in ManuBot" : "Segna come completato in ManuBot"}
+                      >
+                        <StatusIcon className={`h-5 w-5 ${statusConfig.color} transition-transform hover:scale-110`} />
+                      </button>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className={`text-sm font-medium ${isDone ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                              {todo.title}
+                            </p>
+                            {todo.description && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{todo.description}</p>}
+                          </div>
+
+                          {todo.external_url && (
+                            <Button asChild variant="ghost" size="sm" className="h-7 shrink-0 gap-1 px-2 text-xs">
+                              <a href={todo.external_url} target="_blank" rel="noreferrer">
+                                Apri in ManuBot <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                          <span className={`inline-flex items-center gap-1 text-xs ${priorityConfig.text}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${priorityConfig.dot}`} />
+                            {priorityConfig.label}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{statusConfig.label}</span>
+                          <DueDateBadge date={todo.due_date} />
+                          {assignedToName && <span className="text-xs text-muted-foreground">Responsabile: {assignedToName}</span>}
+                          {assetName && (
+                            <span className="text-xs text-muted-foreground">
+                              {assetName}{assetLocation ? ` · ${assetLocation}` : ""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
         )}
-
-        {/* Manubot info box */}
-        <div className="bg-ha-warning-soft border border-ha-warning-soft rounded-xl p-4 flex gap-3">
-          <Wrench className="w-4 h-4 text-ha-warning-soft-foreground flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-ha-warning-soft-foreground space-y-1">
-            <p className="font-semibold">Integrazione Manubot</p>
-            <p>I task con badge arancione provengono da Manubot. I task creati qui con "Invia a Manubot" attivo vengono inviati come nuovi interventi non appena Manubot configura il webhook ricevente.</p>
-            <p className="font-mono text-[10px] bg-ha-warning-soft px-2 py-1 rounded mt-1">
-              POST {typeof window !== "undefined" ? window.location.origin : "https://tuodominio"}/api/external/manubot
-            </p>
-          </div>
-        </div>
-
       </div>
     </div>
   )

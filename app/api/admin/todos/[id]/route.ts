@@ -40,12 +40,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (error) throw error
     if (!todo) return NextResponse.json({ error: "Todo non trovato" }, { status: 404 })
 
-    // Se il todo ha external_id Manubot, sincronizza status/priority su Manubot
+    // Se il todo ha external_id ManuBot, sincronizza status/priority anche sul
+    // tenant ManuBot corretto. `manubot_company_id` e' obbligatorio nel client:
+    // senza questo campo l'update restava locale e la vista poteva divergere.
     if (todo.external_source === "manubot" && todo.external_id && (body.status || body.priority)) {
       try {
         const { data: property } = await supabase
           .from("properties")
-          .select("manubot_email, manubot_password, manubot_supabase_url")
+          .select("manubot_email, manubot_password, manubot_supabase_url, manubot_company_id")
           .eq("id", propertyId)
           .single()
 
