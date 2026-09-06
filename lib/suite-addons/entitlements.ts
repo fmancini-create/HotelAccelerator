@@ -3,7 +3,7 @@ import "server-only"
 import { createServiceClient } from "@/lib/supabase/server"
 import type { SuiteProductKey } from "@/lib/customer-codes/product"
 
-export const SUITE_ADDONS = ["reviews"] as const
+export const SUITE_ADDONS = ["reviews", "web_traffic"] as const
 export type SuiteAddonKey = (typeof SUITE_ADDONS)[number]
 export type SuiteAddonStatus = "active" | "trial" | "inactive" | "suspended" | "cancelled"
 

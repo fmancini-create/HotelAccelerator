@@ -1,31 +1,31 @@
 /**
  * CMS tracker auto-injection.
  *
- * When a tenant serves a page from our CMS (custom_domain or subdomain), we
- * inject the tracker automatically using the tenant's default tracking_site.
- * Admins get zero-config tracking on everything we host; the only moment they
- * need to touch /admin/tracking/sites is to activate the site (is_active=true).
- *
- * Selection rules:
- *   1. The property must have at least one tracking_site with is_active=true.
- *   2. If multiple sites exist, the one with is_default=true wins.
- *   3. If no default is set, the oldest active site is used as a fallback.
- *
- * Returned shape is intentionally minimal so the layout can inline a tiny
- * <Script> snippet without additional data fetches on the client.
+ * HotelAccelerator has two complementary tracking layers:
+ * - HAB tracker: live sessions + CRM identity/events inside Accelerator;
+ * - Santaddeo Web Traffic: anonymous/aggregated Analytics Intelligence shared
+ *   across the suite. When the shared add-on is active, CMS pages get it
+ *   automatically as well, so the customer never installs two snippets by hand.
  */
 import { createServiceClient } from "@/lib/supabase/server"
+import { isModuleActive } from "@/lib/modules"
+import { ensureWebTrafficWorkspace, forwardWebTrafficSetup } from "@/lib/web-traffic/federation"
 
 export interface InjectableSite {
   siteId: string
   writeKey: string
 }
 
-// Per-property cache with a short TTL. The layout renders per-request but this
-// avoids hammering Supabase when a tenant has heavy traffic.
-type CacheEntry = { value: InjectableSite | null; expiresAt: number }
-const cache = new Map<string, CacheEntry>()
+export interface SharedWebTrafficTracker {
+  publicToken: string
+  scriptUrl: string
+}
+
+type CacheEntry<T> = { value: T | null; expiresAt: number }
+const cache = new Map<string, CacheEntry<InjectableSite>>()
+const sharedCache = new Map<string, CacheEntry<SharedWebTrafficTracker>>()
 const CACHE_TTL_MS = 60_000
+const SHARED_CACHE_TTL_MS = 5 * 60_000
 
 export async function getDefaultTrackingSite(propertyId: string): Promise<InjectableSite | null> {
   if (!propertyId) return null
@@ -54,4 +54,49 @@ export async function getDefaultTrackingSite(propertyId: string): Promise<Inject
   const value: InjectableSite | null = row ? { siteId: row.id, writeKey: row.write_key } : null
   cache.set(propertyId, { value, expiresAt: now + CACHE_TTL_MS })
   return value
+}
+
+export async function getSharedWebTrafficTracker(
+  propertyId: string,
+  tenantName: string,
+): Promise<SharedWebTrafficTracker | null> {
+  if (!propertyId || !tenantName) return null
+
+  const now = Date.now()
+  const hit = sharedCache.get(propertyId)
+  if (hit && hit.expiresAt > now) return hit.value
+
+  try {
+    const db = createServiceClient()
+    if (!(await isModuleActive(db, propertyId, "web_traffic"))) {
+      sharedCache.set(propertyId, { value: null, expiresAt: now + SHARED_CACHE_TTL_MS })
+      return null
+    }
+
+    const workspace = await ensureWebTrafficWorkspace({ externalTenantId: propertyId, tenantName })
+    const setup = await forwardWebTrafficSetup(workspace.santaddeoHotelId)
+    const payload = setup.payload as { publicToken?: unknown; scriptUrl?: unknown; error?: unknown }
+    const value =
+      setup.status === 200 && typeof payload.publicToken === "string" && typeof payload.scriptUrl === "string"
+        ? { publicToken: payload.publicToken, scriptUrl: payload.scriptUrl }
+        : null
+
+    if (!value) {
+      console.error("[tracking/cms-injection] shared tracker setup failed", {
+        propertyId,
+        status: setup.status,
+        error: payload.error,
+      })
+    }
+    sharedCache.set(propertyId, { value, expiresAt: now + SHARED_CACHE_TTL_MS })
+    return value
+  } catch (error) {
+    // Tracking must never make the customer's website unavailable.
+    console.error("[tracking/cms-injection] shared tracker lookup failed", {
+      propertyId,
+      error: error instanceof Error ? error.message : "unknown",
+    })
+    sharedCache.set(propertyId, { value: null, expiresAt: now + CACHE_TTL_MS })
+    return null
+  }
 }
