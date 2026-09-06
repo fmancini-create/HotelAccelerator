@@ -82,6 +82,9 @@ jobs:
       - name: Test omnichannel Sent access
         run: pnpm vitest run lib/inbox/__tests__/sent-access.test.ts
 
+      - name: Test Google-like Inbox search
+        run: pnpm vitest run lib/inbox/__tests__/google-search-query.test.ts lib/inbox/__tests__/search-snippet.test.ts
+
       - name: Test telephony provider registry
         run: pnpm vitest run tests/telephony-provider-adapters.test.ts
 
