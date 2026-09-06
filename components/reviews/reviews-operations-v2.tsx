@@ -45,57 +45,49 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 
 type Sentiment = "positive" | "neutral" | "negative"
-type Priority = "low" | "normal" | "high" | "urgent"
-
 type Review = {
   id: string
   platform: string
-  review_id?: string
   author_name: string | null
   rating: number | null
   title: string | null
   text: string | null
-  language?: string | null
   review_date: string | null
   stay_date?: string | null
   response_text?: string | null
   response_published_at?: string | null
   sentiment: Sentiment | null
-  topics?: unknown
   draft_response?: string | null
-  draft_response_at?: string | null
   draft_response_status?: string | null
   room_type_id?: string | null
   roomTypeName?: string | null
 }
-
 type RoomType = { id: string; name: string }
-
 type Stats = {
   total: number
   avg_rating: number | null
-  reputation: {
-    score: number | null
-    reviews_180d: number
-    rating_30d: number | null
-  } | null
+  reputation: { score: number | null; reviews_180d: number; rating_30d: number | null } | null
   platforms: Array<{ platform: string; count: number; avg: number | null }>
   sentiment: { positive: number; neutral: number; negative: number }
   monthly: Array<{ month: string; count: number; avg: number | null }>
   filtered?: boolean
 }
-
 type InsightItem = { title: string; description: string; mentions: number }
 type InsightTopic = { topic: string; count: number; sentiment: Sentiment | "mixed" }
-type InsightAction = { step: number; title: string; action: string }
 type Insights = {
   strengths?: InsightItem[]
   weaknesses?: InsightItem[]
   recurring_topics?: InsightTopic[]
   summary?: string
-  action_plan?: InsightAction[]
 }
-
+type PriorityOption = {
+  id: string
+  name: string
+  label?: string | null
+  description?: string | null
+  response_time_hours?: number | null
+  sort_order?: number | null
+}
 type ManuBotContext = {
   status?: "active" | "inactive" | "configuration_required"
   active?: boolean
@@ -104,9 +96,9 @@ type ManuBotContext = {
   task_data?: {
     operators?: Array<{ id: string; full_name: string | null }>
     operatorGroups?: Array<{ id: string; name: string; member_count?: number | null }>
+    priorities?: PriorityOption[]
   } | null
 }
-
 type TicketIntelligence = {
   language?: string | null
   translation: { title_it: string | null; text_it: string | null }
@@ -125,7 +117,7 @@ type TicketIntelligence = {
   ticket: {
     title: string
     description: string
-    priority: Priority
+    priority: "low" | "normal" | "high" | "urgent"
     asset_ids: string[]
     asset_category_id: string | null
     property_id: string | null
@@ -150,26 +142,17 @@ const PLATFORM_OPTIONS = [
 function platformLabel(value: string) {
   return PLATFORM_OPTIONS.find(([key]) => key === value.toLowerCase())?.[1] || value
 }
-
 function monthLabel(month: string) {
   const [year, value] = month.split("-").map(Number)
   if (!year || !value) return month
   return new Date(year, value - 1, 1).toLocaleDateString("it-IT", { month: "short", year: "2-digit" })
 }
-
-function defaultPriority(review: Review): Priority {
-  if (review.rating != null && review.rating <= 1.5) return "urgent"
-  if ((review.rating != null && review.rating <= 2.5) || review.sentiment === "negative") return "high"
-  return "normal"
-}
-
 function defaultTitle(review: Review) {
   const score = review.rating != null ? ` ${Number(review.rating).toFixed(1)}/5` : ""
   return review.title?.trim()
     ? `Recensione ${platformLabel(review.platform)}${score}: ${review.title.trim()}`.slice(0, 240)
     : `Recensione ${platformLabel(review.platform)}${score} da gestire`
 }
-
 function defaultDescription(review: Review) {
   return [
     review.author_name ? `Ospite: ${review.author_name}` : null,
@@ -179,7 +162,6 @@ function defaultDescription(review: Review) {
     review.text ? `Recensione:\n${review.text}` : null,
   ].filter(Boolean).join("\n")
 }
-
 function applyRatingFilter(params: URLSearchParams, rating: string) {
   if (rating === "all") return
   const value = Number(rating)
@@ -187,7 +169,6 @@ function applyRatingFilter(params: URLSearchParams, rating: string) {
   params.set("minRating", String(value))
   params.set("maxRating", String(value === 5 ? 5 : value + 0.99))
 }
-
 function percentage(value: number, total: number) {
   return total > 0 ? Math.round((value / total) * 100) : 0
 }
@@ -232,14 +213,13 @@ export function ReviewsOperationsV2() {
   const [minutes, setMinutes] = useState("60")
   const [taskTitle, setTaskTitle] = useState("")
   const [taskDescription, setTaskDescription] = useState("")
-  const [priority, setPriority] = useState<Priority>("normal")
+  const [priority, setPriority] = useState("")
   const [savingTask, setSavingTask] = useState(false)
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQ(searchInput.trim()), 350)
     return () => window.clearTimeout(timer)
   }, [searchInput])
-
   useEffect(() => setPage(0), [q, platform, sentiment, rating, roomTypeId, sort])
 
   const makeFilterParams = useCallback((includeList: boolean) => {
@@ -281,7 +261,6 @@ export function ReviewsOperationsV2() {
       setLoading(false)
     }
   }, [makeFilterParams])
-
   useEffect(() => { void loadDashboard() }, [loadDashboard])
 
   const loadInsights = useCallback(async () => {
@@ -294,7 +273,6 @@ export function ReviewsOperationsV2() {
       setInsightsLoading(false)
     }
   }, [])
-
   useEffect(() => { void loadInsights() }, [loadInsights])
 
   useEffect(() => {
@@ -332,6 +310,7 @@ export function ReviewsOperationsV2() {
   const trendData = (stats?.monthly || []).map((item) => ({ ...item, label: monthLabel(item.month) }))
   const operators = manubot?.task_data?.operators || []
   const groups = manubot?.task_data?.operatorGroups || []
+  const priorities = [...(manubot?.task_data?.priorities || [])].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
 
   const manubotMessage = useMemo(() => {
     if (manubotLoading) return "Verifico ManuBot…"
@@ -350,7 +329,7 @@ export function ReviewsOperationsV2() {
     setShowMaintenance(false)
     setResponsible("")
     setMinutes("60")
-    setPriority(defaultPriority(review))
+    setPriority("")
     setTaskTitle(defaultTitle(review))
     setTaskDescription(defaultDescription(review))
   }
@@ -359,6 +338,10 @@ export function ReviewsOperationsV2() {
     if (!selected) return null
     if (intelligence) {
       if (purpose === "translate") setShowTranslation(true)
+      if (purpose === "maintenance") {
+        setTaskTitle(intelligence.ticket.title)
+        setTaskDescription(intelligence.ticket.description)
+      }
       return intelligence
     }
     if (intelligenceLoading) return null
@@ -377,7 +360,6 @@ export function ReviewsOperationsV2() {
       if (purpose === "maintenance") {
         setTaskTitle(next.ticket.title)
         setTaskDescription(next.ticket.description)
-        setPriority(next.ticket.priority)
       }
       return next
     } catch (err) {
@@ -477,7 +459,10 @@ export function ReviewsOperationsV2() {
     if (!selected) return
     const expectedResolutionMinutes = Number(minutes)
     if (!responsible) return toast.error("Scegli un responsabile")
-    if (!Number.isInteger(expectedResolutionMinutes) || expectedResolutionMinutes < 5 || expectedResolutionMinutes > 1440) return toast.error("Il tempo stimato deve essere tra 5 e 1440 minuti")
+    if (!priority) return toast.error("Scegli una priorità configurata in ManuBot")
+    if (!Number.isInteger(expectedResolutionMinutes) || expectedResolutionMinutes < 5 || expectedResolutionMinutes > 1440) {
+      return toast.error("Il tempo stimato deve essere tra 5 e 1440 minuti")
+    }
     if (!taskTitle.trim()) return toast.error("Inserisci un titolo")
 
     setSavingTask(true)
@@ -507,7 +492,10 @@ export function ReviewsOperationsV2() {
         }),
       })
       const body = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(body.error || "Creazione task non riuscita")
+      if (!res.ok) {
+        if (body.error === "invalid_priority") throw new Error("La priorità scelta non è più attiva in ManuBot")
+        throw new Error(body.error || "Creazione task non riuscita")
+      }
       toast.success("Task manutenzione creato con tutte le informazioni recuperate")
       setShowMaintenance(false)
     } catch (err) {
@@ -587,8 +575,12 @@ export function ReviewsOperationsV2() {
                 {intelligenceLoading ? <div className="flex items-center gap-2 rounded-md border border-violet-200 bg-violet-50/60 p-3 text-sm"><Loader2 className="h-4 w-4 animate-spin text-violet-700" /><span><strong>L&apos;IA sta recuperando tutte le informazioni possibili…</strong></span></div> : intelligence ? <div className="space-y-2 rounded-md border border-violet-200 bg-violet-50/60 p-3"><div className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="h-4 w-4 text-violet-700" /> Dati riconosciuti</div>{detectedLabels.length ? <div className="flex flex-wrap gap-1.5">{detectedLabels.map((label) => <Badge key={label} variant="outline" className="bg-white">{label}</Badge>)}</div> : <p className="text-xs text-muted-foreground">Nessun asset/camera identificato con certezza; i dettagli testuali sono comunque inclusi.</p>}{intelligence.detected.safety_risks.length ? <p className="text-xs font-medium text-red-700">Rischi: {intelligence.detected.safety_risks.join("; ")}</p> : null}</div> : null}
                 <div className="space-y-1.5"><Label>Titolo task</Label><Input value={taskTitle} onChange={(event) => setTaskTitle(event.target.value)} maxLength={240} /></div>
                 <div className="space-y-1.5"><Label>Descrizione completa</Label><Textarea rows={12} value={taskDescription} onChange={(event) => setTaskDescription(event.target.value)} /><p className="text-[11px] text-muted-foreground">Puoi correggere o integrare il testo. Gli asset vengono verificati nuovamente lato server prima della creazione.</p></div>
-                <div className="grid gap-4 sm:grid-cols-3"><div className="space-y-1.5"><Label>Responsabile *</Label><Select value={responsible || "none"} onValueChange={(value) => setResponsible(value === "none" ? "" : value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Seleziona</SelectItem>{operators.map((operator) => <SelectItem key={operator.id} value={`operator:${operator.id}`}>{operator.full_name || "Operatore"}</SelectItem>)}{groups.map((group) => <SelectItem key={group.id} value={`group:${group.id}`} disabled={group.member_count === 0}>Gruppo · {group.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1.5"><Label>Priorità</Label><Select value={priority} onValueChange={(value) => setPriority(value as Priority)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Bassa</SelectItem><SelectItem value="normal">Normale</SelectItem><SelectItem value="high">Alta</SelectItem><SelectItem value="urgent">Urgente</SelectItem></SelectContent></Select></div><div className="space-y-1.5"><Label>Tempo (min)</Label><Input type="number" min={5} max={1440} value={minutes} onChange={(event) => setMinutes(event.target.value)} /></div></div>
-                <div className="flex justify-end"><Button type="button" onClick={() => void createMaintenanceTask()} disabled={savingTask || intelligenceLoading} className="gap-2">{savingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Crea task manutenzione</Button></div>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-1.5"><Label>Responsabile *</Label><Select value={responsible || "none"} onValueChange={(value) => setResponsible(value === "none" ? "" : value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Seleziona</SelectItem>{operators.map((operator) => <SelectItem key={operator.id} value={`operator:${operator.id}`}>{operator.full_name || "Operatore"}</SelectItem>)}{groups.map((group) => <SelectItem key={group.id} value={`group:${group.id}`} disabled={group.member_count === 0}>Gruppo · {group.name}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-1.5"><Label>Priorità ManuBot *</Label><Select value={priority || "none"} onValueChange={(value) => setPriority(value === "none" ? "" : value)}><SelectTrigger><SelectValue placeholder="Priorità configurata" /></SelectTrigger><SelectContent><SelectItem value="none">Seleziona</SelectItem>{priorities.map((item) => <SelectItem key={item.id || item.name} value={item.name}>{item.label || item.name}{item.response_time_hours != null ? ` · ${item.response_time_hours}h` : ""}</SelectItem>)}</SelectContent></Select>{priorities.length === 0 ? <p className="text-xs text-destructive">Nessuna priorità attiva trovata in ManuBot.</p> : null}</div>
+                  <div className="space-y-1.5"><Label>Tempo (min)</Label><Input type="number" min={5} max={1440} value={minutes} onChange={(event) => setMinutes(event.target.value)} /></div>
+                </div>
+                <div className="flex justify-end"><Button type="button" onClick={() => void createMaintenanceTask()} disabled={savingTask || intelligenceLoading || !priority} className="gap-2">{savingTask ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />} Crea task manutenzione</Button></div>
               </>}</div> : null}
             </div>
 
