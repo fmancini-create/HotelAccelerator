@@ -17,12 +17,14 @@ const CRM_AREAS = [
     label: "Assistenza",
     description: "Ticket e SLA",
     icon: Headphones,
+    exact: false,
   },
   {
     href: "/super-admin/crm/success",
     label: "Customer Success",
     description: "Health e rinnovi",
     icon: HeartHandshake,
+    exact: false,
   },
 ] as const
 
