@@ -1,5 +1,6 @@
 import "server-only"
 
+import type { NextRequest } from "next/server"
 import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { isModuleActive } from "@/lib/modules"
 import { createServiceClient } from "@/lib/supabase/server"
@@ -11,7 +12,7 @@ export type WebTrafficRouteContext = {
   santaddeoHotelId: string
 }
 
-export async function getWebTrafficRouteContext(request: Request): Promise<WebTrafficRouteContext> {
+export async function getWebTrafficRouteContext(request: NextRequest): Promise<WebTrafficRouteContext> {
   const identity = await getCallerIdentity(request)
   if (!identity?.propertyId) throw new WebTrafficFederationError("unauthorized", 401)
 
