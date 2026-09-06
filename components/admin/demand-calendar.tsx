@@ -1,7 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { ChevronLeft, ChevronRight, TrendingUp, Globe, MessageSquare, Mail, Phone, Code } from "lucide-react"
+import Link from "next/link"
+import { useEffect, useRef, useState } from "react"
+import {
+  ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
+  Code,
+  Globe,
+  Loader2,
+  Mail,
+  MessageSquare,
+  Phone,
+  TrendingUp,
+  Users,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -39,6 +52,27 @@ interface DemandSummary {
   // il campo, e leggerlo senza guardia mostrerebbe "undefined telefonate".
   calls?: { received: number; missed: number }
 }
+
+interface PipelineRequest {
+  id: string
+  conversation_id: string | null
+  requested_check_in: string | null
+  requested_check_out: string | null
+  nights: number | null
+  guests_adults: number | null
+  source: string | null
+  fase: string | null
+  chi: string | null
+  canale: string | null
+  oggetto: string | null
+}
+
+interface PipelineResponse {
+  richieste?: PipelineRequest[]
+  acquisite?: PipelineRequest[]
+}
+
+type DayRequest = PipelineRequest & { tipo: "richiesta" | "acquisita" }
 
 interface DemandCalendarProps {
   propertyId?: string // Added propertyId prop
@@ -78,6 +112,14 @@ const INTENSITY_LABELS = {
   very_high: "Molto Alta",
 }
 
+const FASE_LABELS: Record<string, string> = {
+  da_qualificare: "Da qualificare",
+  aperta: "Richiesta aperta",
+  preventivo_inviato: "Preventivo inviato",
+  confermata: "Confermata",
+  persa: "Persa",
+}
+
 export function DemandCalendar({
   propertyId,
   compact = false,
@@ -89,6 +131,11 @@ export function DemandCalendar({
   const [demandData, setDemandData] = useState<DemandSummary | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [dayRequests, setDayRequests] = useState<DayRequest[]>([])
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsError, setDetailsError] = useState("")
+  const pipelineCache = useRef<PipelineResponse | null>(null)
+  const detailsRequestId = useRef(0)
 
   const year = currentDate.getFullYear()
   const month = currentDate.getMonth() + 1
@@ -96,6 +143,15 @@ export function DemandCalendar({
   useEffect(() => {
     loadDemandData()
   }, [year, month, propertyId]) // Added propertyId to deps
+
+  useEffect(() => {
+    // Se cambia struttura, il dettaglio CRM in cache non deve sopravvivere al
+    // cambio tenant: altrimenti il primo click mostrerebbe le righe precedenti.
+    pipelineCache.current = null
+    setSelectedDate(null)
+    setDayRequests([])
+    setDetailsError("")
+  }, [propertyId])
 
   async function loadDemandData() {
     setIsLoading(true)
@@ -119,11 +175,62 @@ export function DemandCalendar({
     }
   }
 
+  async function loadDateDetails(dateStr: string) {
+    const requestId = ++detailsRequestId.current
+    setDetailsLoading(true)
+    setDetailsError("")
+    setDayRequests([])
+
+    try {
+      let pipeline = pipelineCache.current
+      if (!pipeline) {
+        const res = await fetch("/api/admin/crm/pipeline")
+        const body = (await res.json().catch(() => null)) as (PipelineResponse & { error?: string }) | null
+        if (!res.ok) {
+          if (requestId !== detailsRequestId.current) return
+          setDetailsError(
+            res.status === 403
+              ? "Non hai il permesso CRM necessario per vedere le singole richieste."
+              : body?.error || "Non è stato possibile leggere il dettaglio delle richieste.",
+          )
+          return
+        }
+        pipeline = body ?? {}
+        pipelineCache.current = pipeline
+      }
+
+      const rows: DayRequest[] = [
+        ...(pipeline.richieste ?? []).map((row) => ({ ...row, tipo: "richiesta" as const })),
+        ...(pipeline.acquisite ?? []).map((row) => ({ ...row, tipo: "acquisita" as const })),
+      ]
+        .filter((row) => String(row.requested_check_in ?? "").slice(0, 10) === dateStr)
+        .sort((a, b) => (a.chi ?? a.oggetto ?? "").localeCompare(b.chi ?? b.oggetto ?? "", "it"))
+
+      if (requestId === detailsRequestId.current) setDayRequests(rows)
+    } catch {
+      if (requestId === detailsRequestId.current) {
+        setDetailsError("Non è stato possibile contattare il server per il dettaglio delle richieste.")
+      }
+    } finally {
+      if (requestId === detailsRequestId.current) setDetailsLoading(false)
+    }
+  }
+
+  function resetSelectedDay() {
+    detailsRequestId.current += 1
+    setSelectedDate(null)
+    setDayRequests([])
+    setDetailsError("")
+    setDetailsLoading(false)
+  }
+
   function goToPreviousMonth() {
+    resetSelectedDay()
     setCurrentDate(new Date(year, month - 2, 1))
   }
 
   function goToNextMonth() {
+    resetSelectedDay()
     setCurrentDate(new Date(year, month, 1))
   }
 
@@ -144,10 +251,12 @@ export function DemandCalendar({
     setSelectedDate(dateStr)
     const data = getDemandForDate(dateStr)
     onDateSelect?.(dateStr, data)
+    if (!compact) void loadDateDetails(dateStr)
   }
 
   const daysInMonth = getDaysInMonth(year, month)
   const firstDay = getFirstDayOfMonth(year, month)
+  const selectedDemand = selectedDate ? getDemandForDate(selectedDate) : null
 
   // Crea array di giorni con padding
   const days: (number | null)[] = []
@@ -195,7 +304,7 @@ export function DemandCalendar({
         )}
 
         {/* Calendario */}
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-1" aria-busy={isLoading}>
           {/* Header giorni */}
           {DAYS_IT.map((day) => (
             <div
@@ -227,7 +336,10 @@ export function DemandCalendar({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
+                        type="button"
                         onClick={() => handleDateClick(dateStr)}
+                        aria-pressed={isSelected}
+                        aria-label={`${day} ${MONTHS_IT[month - 1]} ${year}${demand ? `, ${demand.searchCount} richieste` : ", nessuna richiesta"}`}
                         className={cn(
                           "aspect-square rounded-md flex items-center justify-center transition-all",
                           compact ? "text-xs" : "text-sm",
@@ -259,6 +371,58 @@ export function DemandCalendar({
             }),
           )}
         </div>
+
+        {/* Dettaglio operativo: una riga per ogni richiesta CRM con arrivo nel
+            giorno selezionato. L'intera riga apre la conversazione d'origine. */}
+        {!compact && selectedDate && (
+          <div className="mt-5 border-t pt-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground">Richieste del {formatDateLongIT(selectedDate)}</h4>
+                <p className="mt-0.5 text-xs text-muted-foreground text-pretty">
+                  {selectedDemand
+                    ? `${selectedDemand.searchCount} segnali di domanda nel calendario. Qui sotto trovi le richieste CRM con arrivo in questa data.`
+                    : "Nessun segnale aggregato nel calendario. Qui sotto trovi comunque le eventuali richieste CRM collegate alla data."}
+                </p>
+              </div>
+              {!detailsLoading && !detailsError && dayRequests.length > 0 && (
+                <Badge variant="secondary" className="shrink-0">
+                  {dayRequests.length} {dayRequests.length === 1 ? "richiesta" : "richieste"}
+                </Badge>
+              )}
+            </div>
+
+            {detailsLoading ? (
+              <div className="mt-3 flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Carico le richieste collegate a questa data…
+              </div>
+            ) : detailsError ? (
+              <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-3 text-sm text-destructive" role="alert">
+                {detailsError}
+              </div>
+            ) : dayRequests.length === 0 ? (
+              <div className="mt-3 rounded-lg border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
+                Nessuna richiesta CRM con arrivo in questa data. Il numero colorato del calendario può includere altri
+                segnali di domanda non ancora collegati alla pipeline, per esempio dati di tracciamento o altri flussi.
+              </div>
+            ) : (
+              <div className="mt-3 overflow-hidden rounded-lg border">
+                <div className="hidden grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,.7fr)_auto] gap-3 border-b bg-muted/30 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground md:grid">
+                  <span>Richiesta</span>
+                  <span>Soggiorno</span>
+                  <span>Ospiti / stato</span>
+                  <span className="sr-only">Apri</span>
+                </div>
+                <div className="divide-y">
+                  {dayRequests.map((request) => (
+                    <DemandRequestRow key={`${request.tipo}-${request.id}`} request={request} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Statistiche sorgenti (solo versione estesa) */}
         {!compact && demandData && (
@@ -352,6 +516,65 @@ export function DemandCalendar({
   )
 }
 
+function DemandRequestRow({ request }: { request: DayRequest }) {
+  const label = request.tipo === "acquisita" ? "Acquisita dal sito" : FASE_LABELS[request.fase ?? ""] ?? "Richiesta"
+  const details = (
+    <>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate font-medium text-foreground">{request.chi ?? "Senza nome"}</span>
+          {request.canale ? (
+            <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-normal">
+              {request.canale}
+            </Badge>
+          ) : null}
+        </div>
+        {request.oggetto ? (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground" title={request.oggetto}>
+            {request.oggetto}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="text-xs text-muted-foreground">
+        <span className="block text-foreground">{formatStay(request)}</span>
+        {request.nights ? <span>{request.nights} {request.nights === 1 ? "notte" : "notti"}</span> : null}
+      </div>
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground md:block">
+        <span className="inline-flex items-center gap-1">
+          <Users className="h-3.5 w-3.5" aria-hidden="true" />
+          {request.guests_adults ?? "—"}
+        </span>
+        <span className="md:mt-1 md:block">{label}</span>
+      </div>
+    </>
+  )
+
+  const rowClass =
+    "grid gap-2 px-3 py-3 text-sm transition-colors md:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,.7fr)_auto] md:items-center md:gap-3"
+
+  if (!request.conversation_id) {
+    return (
+      <div className={cn(rowClass, "bg-muted/10")}>
+        {details}
+        <span className="text-xs text-muted-foreground">Conversazione non collegata</span>
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      href={`/admin/inbox?conversation=${request.conversation_id}`}
+      className={cn(rowClass, "group hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset")}
+      aria-label={`Apri la conversazione di ${request.chi ?? "questa richiesta"}`}
+    >
+      {details}
+      <ArrowUpRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground" aria-hidden="true" />
+    </Link>
+  )
+}
+
 function SourceStat({ icon: Icon, label, count }: { icon: any; label: string; count: number }) {
   return (
     <div className="flex items-center gap-2 text-sm">
@@ -363,6 +586,18 @@ function SourceStat({ icon: Icon, label, count }: { icon: any; label: string; co
 }
 
 function formatDateIT(dateStr: string): string {
-  const date = new Date(dateStr)
+  const date = new Date(`${dateStr}T12:00:00`)
   return date.toLocaleDateString("it-IT", { day: "numeric", month: "short" })
+}
+
+function formatDateLongIT(dateStr: string): string {
+  const date = new Date(`${dateStr}T12:00:00`)
+  return date.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+}
+
+function formatStay(request: PipelineRequest): string {
+  const checkIn = request.requested_check_in ? formatDateIT(String(request.requested_check_in).slice(0, 10)) : "—"
+  if (!request.requested_check_out) return `Arrivo ${checkIn}`
+  const checkOut = formatDateIT(String(request.requested_check_out).slice(0, 10))
+  return `${checkIn} → ${checkOut}`
 }
