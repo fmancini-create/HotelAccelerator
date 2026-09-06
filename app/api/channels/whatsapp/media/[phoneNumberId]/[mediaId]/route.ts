@@ -52,7 +52,7 @@ export async function GET(
     search: mediaId,
     limit: 5,
   })
-  const cachedFile = cached?.find((item) => item.name.startsWith(mediaId + "."))
+  const cachedFile = cached?.find((item: { name: string }) => item.name.startsWith(mediaId + "."))
   if (cachedFile) {
     const { data } = await supabase.storage.from(BUCKET).createSignedUrl(`${propertyId}/whatsapp/${channel.id}/${cachedFile.name}`, 120)
     if (data?.signedUrl) return NextResponse.redirect(data.signedUrl, 302)
