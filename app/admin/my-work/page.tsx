@@ -27,6 +27,7 @@ const statoAssenza: Record<string, string> = {
   pending: "In attesa",
   approved: "Approvata",
   rejected: "Rifiutata",
+  cancelled: "Annullata",
 }
 
 export default function Page() {
@@ -38,14 +39,15 @@ export default function Page() {
   const [error, setError] = useState("")
   const [clockStatus, setClockStatus] = useState("")
   const [clockBusy, setClockBusy] = useState(false)
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
   const today = new Date().toISOString().slice(0, 10)
   const [form, setForm] = useState({ kind: "holiday", starts_on: today, ends_on: today })
 
   const load = useCallback(async () => {
     const [r, tr, dr] = await Promise.all([
-      fetch("/api/hr/me"),
-      fetch("/api/hr/time-clock"),
-      fetch("/api/hr/documents"),
+      fetch("/api/hr/me", { cache: "no-store" }),
+      fetch("/api/hr/time-clock", { cache: "no-store" }),
+      fetch("/api/hr/documents", { cache: "no-store" }),
     ])
     const [d, td, dd] = await Promise.all([
       r.json().catch(() => ({})),
@@ -72,14 +74,32 @@ export default function Page() {
     )
   }, [load])
 
-  async function post(body: object) {
-    const r = await fetch("/api/hr/me", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-    if (r.ok) await load()
-    else setError("Operazione non riuscita.")
+  async function post(body: object, busyKey?: string) {
+    setError("")
+    if (busyKey) setActionBusy(busyKey)
+    try {
+      const r = await fetch("/api/hr/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) {
+        const messages: Record<string, string> = {
+          invalid_range: "La data finale non può precedere quella iniziale.",
+          shift_not_respondable: "Questo turno non è più disponibile per la risposta.",
+          leave_not_cancellable: "La richiesta non è più annullabile perché è già stata gestita.",
+          leave_failed: "Non sono riuscito a registrare la richiesta di assenza.",
+          leave_cancel_failed: "Non sono riuscito ad annullare la richiesta.",
+        }
+        setError(messages[d.error] || "Operazione non riuscita.")
+        return false
+      }
+      await load()
+      return true
+    } finally {
+      if (busyKey) setActionBusy(null)
+    }
   }
 
   const timeClockError = (code: string, distance?: number) => {
@@ -279,10 +299,19 @@ export default function Page() {
                   <Badge variant="outline">{statoRisposta[s.response_status] ?? s.response_status}</Badge>
                   {s.response_status === "pending" && (
                     <>
-                      <Button size="sm" onClick={() => post({ action: "respond", shift_id: s.id, response: "confirmed" })}>
+                      <Button
+                        size="sm"
+                        disabled={actionBusy === `shift:${s.id}`}
+                        onClick={() => post({ action: "respond", shift_id: s.id, response: "confirmed" }, `shift:${s.id}`)}
+                      >
                         Confermo
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => post({ action: "respond", shift_id: s.id, response: "declined" })}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={actionBusy === `shift:${s.id}`}
+                        onClick={() => post({ action: "respond", shift_id: s.id, response: "declined" }, `shift:${s.id}`)}
+                      >
                         Non posso
                       </Button>
                     </>
@@ -313,12 +342,33 @@ export default function Page() {
               <Input type="date" value={form.starts_on} onChange={(e) => setForm({ ...form, starts_on: e.target.value })} />
               <Input type="date" value={form.ends_on} onChange={(e) => setForm({ ...form, ends_on: e.target.value })} />
             </div>
-            <Button className="w-full sm:w-auto" onClick={() => post({ action: "leave", ...form })}>Invia richiesta</Button>
+            <Button
+              className="w-full sm:w-auto"
+              disabled={actionBusy === "new-leave"}
+              onClick={async () => {
+                const ok = await post({ action: "leave", ...form }, "new-leave")
+                if (ok) setForm({ ...form, starts_on: today, ends_on: today })
+              }}
+            >
+              Invia richiesta
+            </Button>
             <div className="space-y-2 pt-3">
               {leaves.map((l) => (
                 <div key={l.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm">
-                  <span>{l.starts_on}–{l.ends_on}</span>
-                  <Badge variant="outline">{statoAssenza[l.status] ?? l.status}</Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{l.starts_on}–{l.ends_on}</span>
+                    <Badge variant="outline">{statoAssenza[l.status] ?? l.status}</Badge>
+                  </div>
+                  {l.status === "pending" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={actionBusy === `leave:${l.id}`}
+                      onClick={() => post({ action: "cancel_leave", request_id: l.id }, `leave:${l.id}`)}
+                    >
+                      Annulla richiesta
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
