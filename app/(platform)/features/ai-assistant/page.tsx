@@ -1,127 +1,73 @@
 import { BookOpenText, Bot, CircleGauge, FileUp, HandHelping, SearchCheck } from "lucide-react"
 import { buildFeatureMetadata, FeatureLandingPage } from "@/components/platform/feature-landing-page"
 
-const description =
-  "Genera bozze di risposta da knowledge base con confidenza, fonti e passaggio all'operatore. L'AI assiste il team: l'invio resta sotto controllo umano."
+const description = "AI per hotel con knowledge base, bozze contestuali, fonti, confidenza, analisi e handoff all'operatore. Automazioni e risposte restano controllabili in base al rischio e allo stato reale del flusso."
 
 export const metadata = buildFeatureMetadata({
   slug: "ai-assistant",
-  title: "AI per hotel con controllo umano",
+  title: "AI per hotel con knowledge base e controllo umano",
   description,
-  keywords: [
-    "ai hotel",
-    "assistente ai hotel",
-    "bozze risposta ospiti",
-    "knowledge base hotel",
-    "ai reception hotel",
-    "risposte email hotel",
-  ],
+  keywords: ["ai hotel", "intelligenza artificiale hotel", "assistente ai hotel", "knowledge base hotel", "ai reception hotel", "risposte ospiti hotel", "automazione hotel ai"],
 })
 
 const capabilities = [
-  {
-    icon: BookOpenText,
-    title: "Knowledge base della struttura",
-    description:
-      "Organizza le informazioni approvate dell'hotel in fonti separate per tenant, così la bozza parte dal contesto disponibile.",
-  },
-  {
-    icon: FileUp,
-    title: "Import da URL e documenti",
-    description:
-      "Le fonti possono essere alimentate tramite scansione di pagine e caricamento di documenti, da rivedere prima dell'uso operativo.",
-  },
-  {
-    icon: Bot,
-    title: "Bozza su richiesta",
-    description:
-      "L'operatore genera una risposta a partire dall'ultimo messaggio del cliente e dalla cronologia disponibile, poi decide come modificarla.",
-  },
-  {
-    icon: SearchCheck,
-    title: "Fonti richiamate",
-    description:
-      "La risposta assistita restituisce i riferimenti alle fonti usate, così il team può controllare il fondamento della bozza.",
-  },
-  {
-    icon: CircleGauge,
-    title: "Confidenza e lacune",
-    description:
-      "Un indicatore di confidenza e la rilevazione dei gap aiutano a riconoscere i casi in cui la knowledge base va migliorata.",
-  },
-  {
-    icon: HandHelping,
-    title: "Revisione e passaggio umano",
-    description:
-      "L'operatore mantiene il controllo dell'invio e può prendere in carico richieste delicate, ambigue o prive di fonti sufficienti.",
-  },
+  { icon: BookOpenText, title: "Knowledge base della struttura", description: "Organizza informazioni approvate in basi separate per tenant e canale, così l'AI usa il contesto realmente disponibile." },
+  { icon: FileUp, title: "Fonti da URL e documenti", description: "Le basi possono essere alimentate da contenuti supportati e devono essere curate, aggiornate e verificate prima dell'uso operativo." },
+  { icon: Bot, title: "Bozze e assistenza", description: "L'AI può preparare risposte nel contesto della conversazione e assistere classificazione, sintesi e altre attività previste dal workflow." },
+  { icon: SearchCheck, title: "Fonti richiamate", description: "Quando il flusso lo supporta, la risposta assistita restituisce riferimenti alle fonti usate per rendere più semplice la verifica." },
+  { icon: CircleGauge, title: "Confidenza e gap", description: "Confidenza e lacune informative aiutano a distinguere una risposta ben fondata da un caso che richiede conoscenza aggiuntiva o revisione." },
+  { icon: HandHelping, title: "Handoff umano", description: "I casi delicati o incompleti possono essere passati al personale mantenendo il contesto e una traccia operativa durevole." },
 ]
 
 const faqs = [
-  {
-    question: "L'AI risponde e invia messaggi autonomamente 24/7?",
-    answer:
-      "No. La funzione pubblicizzata qui genera una bozza assistita su richiesta. Un operatore la verifica, la modifica se necessario e decide se inviarla.",
-  },
-  {
-    question: "Come si limita il rischio di risposte inventate?",
-    answer:
-      "Le bozze usano le fonti della knowledge base e restituiscono riferimenti e confidenza. Questi controlli aiutano, ma non sostituiscono la revisione umana.",
-  },
-  {
-    question: "Quali contenuti può usare la knowledge base?",
-    answer:
-      "Può acquisire contenuti da URL e documenti supportati. Il team deve verificare accuratezza, aggiornamento, diritti d'uso e presenza di dati non necessari.",
-  },
-  {
-    question: "L'AI può lavorare in più lingue?",
-    answer:
-      "Il modello può gestire più lingue, ma qualità, tono e terminologia devono essere collaudati sui contenuti e sui casi d'uso della struttura prima dell'attivazione.",
-  },
+  { question: "L'AI risponde automaticamente agli ospiti?", answer: "HotelAccelerator dispone di funzioni AI per bozze, classificazione, knowledge base e handoff. L'autonomia dipende dal workflow specifico: le azioni commerciali, reputazionali o operative ad alto impatto restano sotto controllo umano finché non esiste evidenza sufficiente per automatizzarle in sicurezza." },
+  { question: "Come si riducono le risposte inventate?", answer: "Le funzioni pubbliche privilegiano knowledge base, fonti, confidenza e revisione. Nessun controllo elimina completamente l'errore del modello, perciò qualità delle fonti ed evaluation restano parte essenziale dell'attivazione." },
+  { question: "Ogni canale può avere una knowledge base diversa?", answer: "Il Core separa le basi e le associazioni ai canali; inoltre ogni knowledge base può avere una propria identità virtuale AI. L'isolamento per tenant e la corretta associazione devono essere mantenuti in ogni lookup." },
+  { question: "L'AI può passare la conversazione a una persona?", answer: "Sì. Il progetto dispone di un workflow durevole per handoff allo staff: l'offerta di contatto e l'accettazione dell'ospite sono eventi distinti e il passaggio deve lasciare una traccia operativa." },
+  { question: "L'AI può usare dati del PMS o del CRM?", answer: "Può usare soltanto il contesto che il workflow autorizzato le mette a disposizione. L'accesso non deve attraversare tenant, ruoli o sistemi proprietari senza un contratto esplicito." },
 ]
 
 export default function AIAssistantLandingPage() {
-  return (
-    <FeatureLandingPage
-      slug="ai-assistant"
-      eyebrow="AI assistita per hotel"
-      icon={Bot}
-      title="Bozze fondate sulle tue fonti, invio sotto controllo umano"
-      intro="HotelAccelerator aiuta il team a preparare risposte usando la knowledge base della struttura. Confidenza, fonti e revisione restano visibili prima dell'invio."
-      statusLabel="Generazione assistita presente nel codice"
-      statusDescription="La funzione genera bozze on demand dalla knowledge base. Non viene presentata come concierge autonomo né come garanzia di risposta continua o priva di errori."
-      capabilitiesTitle="Come assiste il lavoro del team"
-      capabilitiesIntro="L'obiettivo è ridurre la ricerca manuale delle informazioni mantenendo responsabilità, contesto e decisione finale nelle mani dell'operatore."
-      capabilities={capabilities}
-      availableNow={[
-        "Knowledge base separate per tenant con contenuti da URL e documenti.",
-        "Bozza contestuale generata su richiesta dalla conversazione disponibile.",
-        "Confidenza e identificativi delle fonti restituiti insieme alla risposta.",
-        "Rilevazione dei gap informativi e passaggio all'operatore.",
-      ]}
-      requiresVerification={[
-        "Qualità, aggiornamento e copertura della knowledge base della struttura.",
-        "Tono di voce e qualità linguistica sui casi d'uso reali.",
-        "Policy per dati personali, contenuti sensibili e richieste ad alto rischio.",
-        "Qualsiasi flusso automatico futuro prima di rimuovere la revisione umana.",
-      ]}
-      faqs={faqs}
-      related={[
-        {
-          href: "/features/inbox-omnicanale",
-          title: "Inbox per hotel",
-          description: "Genera la bozza nel contesto della conversazione e lascia l'invio all'operatore.",
-        },
-        {
-          href: "/features/crm",
-          title: "CRM alberghiero",
-          description: "Collega la conversazione al profilo autorizzato senza esporre dati di altri tenant.",
-        },
-      ]}
-      ctaTitle="Valutiamo l'AI sui contenuti della tua struttura"
-      ctaDescription="La demo mostra fonti, confidenza e revisione della bozza: nessuna promessa di autonomia viene data senza collaudo."
-      schemaName="AI per hotel con knowledge base e controllo umano"
-      schemaDescription={description}
-    />
-  )
+  return <FeatureLandingPage
+    slug="ai-assistant"
+    eyebrow="AI per hotel"
+    icon={Bot}
+    title="Un'AI che assiste il team usando la conoscenza reale dell'hotel"
+    intro="HotelAccelerator usa l'intelligenza artificiale come livello di assistenza sopra conversazioni, knowledge base e processi della struttura. Il punto non è far rispondere un modello a tutto: è ridurre lavoro ripetitivo, mostrare le fonti e passare alle persone i casi in cui il contesto non è sufficiente."
+    statusLabel="Knowledge base, bozze e componenti AI presenti nel Core"
+    statusDescription="L'insieme dell'AI Inbox resta una capability da valutare con eval, privacy e guardrail. Le singole funzioni vengono comunicate in base all'evidenza reale e non come concierge autonomo universale."
+    benefitsTitle="Dove l'AI può aiutare davvero un hotel"
+    benefitsIntro="L'AI è più utile quando riduce ricerca e attività ripetitive senza nascondere incertezza o responsabilità."
+    benefits={[
+      { title: "Risposte più rapide da preparare", description: "L'operatore può partire da una bozza fondata sui contenuti della struttura invece di ricercare manualmente ogni informazione." },
+      { title: "Conoscenza meno dispersa", description: "FAQ, policy, servizi e procedure possono vivere in basi curate e riutilizzabili nei canali autorizzati." },
+      { title: "Escalation più ordinata", description: "Quando il modello non ha abbastanza contesto, il caso può essere trasferito allo staff conservando domanda e informazioni già raccolte." },
+    ]}
+    capabilitiesTitle="Funzioni AI disponibili o in consolidamento"
+    capabilitiesIntro="HotelAccelerator separa modello, knowledge, policy e workflow, così un cambio di provider AI non deve riscrivere la logica operativa dell'hotel."
+    capabilities={capabilities}
+    workflowTitle="Come nasce una risposta assistita"
+    workflow={[
+      { title: "Il sistema raccoglie il contesto", description: "Conversazione, canale e knowledge base autorizzata determinano quali informazioni possono entrare nella richiesta al modello." },
+      { title: "L'AI prepara il risultato", description: "La funzione genera bozza, sintesi o classificazione e, dove previsto, restituisce confidenza e riferimenti alle fonti." },
+      { title: "Il workflow decide il passo successivo", description: "L'operatore può correggere e inviare oppure il sistema può avviare un handoff controllato nei casi che richiedono una persona." },
+    ]}
+    seoSections={[
+      { title: "AI per reception, booking e customer care", paragraphs: ["Le richieste più frequenti in hotel riguardano orari, servizi, disponibilità di informazioni, policy e indicazioni operative. Una knowledge base ben curata permette all'AI di aiutare il team a recuperare queste risposte in modo più coerente.", "Per richieste delicate, reclami, decisioni economiche o casi senza fonti sufficienti, la strategia di HotelAccelerator è mantenere un passaggio umano esplicito invece di nascondere l'incertezza del modello."], bullets: ["Bozze nel contesto della conversazione", "Knowledge base tenant-scoped", "Fonti e confidenza quando disponibili", "Handoff allo staff con contesto preservato"] },
+      { title: "Automazione controllata invece di autopilot opaco", paragraphs: ["L'AI può diventare più autonoma soltanto quando il workflow dispone di dati affidabili, guardrail, audit e misure di qualità. HotelAccelerator tratta quindi l'automazione come un livello progressivo, non come una promessa unica valida per ogni hotel e ogni canale."] },
+    ]}
+    availableNow={["Knowledge base separate per tenant e associazioni ai canali.", "Bozze contestuali e funzioni di assistenza AI nel Core.", "Identità virtuali AI per knowledge base presenti nel codice.", "Workflow durevole di handoff verso lo staff."]}
+    requiresVerification={["Evaluation di qualità sui casi reali della struttura.", "Privacy, retention e dati sensibili nelle fonti e nei prompt.", "Tono di voce e qualità multilingua sui contenuti del tenant.", "Qualsiasi automazione ad alto impatto prima di ridurre la revisione umana."]}
+    faqs={faqs}
+    related={[
+      { href: "/features/inbox-omnicanale", title: "Inbox omnicanale", description: "Usa l'AI nel contesto delle conversazioni del team." },
+      { href: "/features/telefono-hotel", title: "Telefonia e Voice Agent", description: "Scopri il flusso vocale e le integrazioni con centralino dove configurate." },
+      { href: "/features/pms-hotel", title: "PMS integrato", description: "Osserva procedure operative e costruisci conoscenza controllata sul gestionale." },
+      { href: "/features/crm", title: "CRM alberghiero", description: "Collega il contesto della conversazione al profilo autorizzato dell'ospite." },
+    ]}
+    ctaTitle="Vuoi provare l'AI sui contenuti reali della tua struttura?"
+    ctaDescription="Nella demo partiamo dalla knowledge base e da casi concreti per verificare qualità, fonti, limiti e livello di controllo necessario."
+    schemaName="AI per hotel con knowledge base e controllo umano"
+    schemaDescription={description}
+  />
 }
