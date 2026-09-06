@@ -44,4 +44,15 @@ describe("unified Inbox navigation", () => {
     expect(shell).toContain('height: 2.25rem !important')
     expect(shell).toContain('height: 3.25rem !important')
   })
+
+  it("keeps the tenant switcher above the Inbox toolbar", () => {
+    const shell = source("components/admin/inbox/inbox-shell.tsx")
+    const switcher = source("components/admin/tenant-switcher.tsx")
+    const toolbarLayer = shell.match(/"z-\[(\d+)\] flex min-h-11/)?.[1]
+    const switcherLayer = switcher.match(/DropdownMenuContent align="end" className="z-\[(\d+)\]/)?.[1]
+
+    expect(toolbarLayer).toBeDefined()
+    expect(switcherLayer).toBeDefined()
+    expect(Number(switcherLayer)).toBeGreaterThan(Number(toolbarLayer))
+  })
 })
