@@ -573,9 +573,9 @@ export default function CrmPipelinePage() {
                       <span className="tabular-nums text-foreground">{r?.richieste ?? 0}</span>.
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      La loro distribuzione per data è in{" "}
-                      <Link href="/admin/crm/calendar" className="underline">
-                        Calendario
+                      La loro distribuzione per data è nel{" "}
+                      <Link href="/admin/tracking/demand" className="underline">
+                        Calendario della domanda
                       </Link>
                       .
                     </p>
