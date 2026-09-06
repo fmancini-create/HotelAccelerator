@@ -21,13 +21,30 @@ function safeMime(value: string | null) {
 }
 
 function extensionForMime(mime: string) {
-  if (mime === "image/jpeg") return "jpg"
-  if (mime === "image/png") return "png"
-  if (mime === "image/webp") return "webp"
-  if (mime === "image/gif") return "gif"
-  if (mime === "image/heic") return "heic"
-  if (mime === "image/heif") return "heif"
-  return "bin"
+  const known: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "video/mp4": "mp4",
+    "video/3gpp": "3gp",
+    "audio/aac": "aac",
+    "audio/amr": "amr",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/ogg": "ogg",
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-powerpoint": "ppt",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx",
+    "text/plain": "txt",
+  }
+  return known[mime] || "bin"
 }
 
 export async function GET(
