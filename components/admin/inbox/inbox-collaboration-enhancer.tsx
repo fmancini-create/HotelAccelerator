@@ -113,7 +113,12 @@ export function InboxCollaborationEnhancer() {
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = pathFromFetch(input)
       const method = methodFromFetch(input, init)
-      const conversationMatch = method === "GET" ? path.match(/^\/api\/inbox\/([^/]+)$/) : null
+      // Solo il dettaglio di una conversazione UUID deve attivare CRM/lock.
+      // La regex precedente prendeva anche `/api/inbox/conversations` e usava
+      // letteralmente "conversations" come conversationId, generando una 500.
+      const conversationMatch = method === "GET"
+        ? path.match(/^\/api\/inbox\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i)
+        : null
       const gmailMatch = method === "GET" ? path.match(/^\/api\/gmail\/threads\/([^/]+)$/) : null
       const response = await nativeFetch(input, init)
 
