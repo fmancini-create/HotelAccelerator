@@ -4,6 +4,7 @@ import { InboxShell } from "@/components/admin/inbox/inbox-shell"
 import { MultichannelReplyEnhancer } from "@/components/admin/inbox/multichannel-reply-enhancer"
 import { InboxManubotTaskEnhancer } from "@/components/admin/inbox/inbox-manubot-task-enhancer"
 import { InboxCollaborationEnhancer } from "@/components/admin/inbox/inbox-collaboration-enhancer"
+import { InboxTranslationEnhancer } from "@/components/admin/inbox/inbox-translation-enhancer"
 
 /**
  * Route-local shell for a single user-facing Inbox.
@@ -19,6 +20,7 @@ export default function InboxLayout({ children }: { children: React.ReactNode })
       <MultichannelReplyEnhancer />
       <InboxManubotTaskEnhancer />
       <InboxCollaborationEnhancer />
+      <InboxTranslationEnhancer />
       {children}
     </InboxShell>
   )
