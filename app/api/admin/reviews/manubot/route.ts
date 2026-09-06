@@ -11,8 +11,6 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 export const maxDuration = 60
 
-const PRIORITIES = new Set(["low", "normal", "high", "urgent"])
-
 type TicketIntelligence = {
   detected?: {
     room_number?: string | null
@@ -28,7 +26,6 @@ type TicketIntelligence = {
   ticket?: {
     title?: string
     description?: string
-    priority?: "low" | "normal" | "high" | "urgent"
     asset_ids?: string[]
     asset_category_id?: string | null
     property_id?: string | null
@@ -48,13 +45,6 @@ function response(body: unknown, status = 200) {
 function numberOrNull(value: unknown) {
   const number = typeof value === "number" ? value : Number(value)
   return Number.isFinite(number) ? number : null
-}
-
-function legacyPriority(review: Record<string, unknown>) {
-  const rating = numberOrNull(review.rating)
-  if (rating != null && rating <= 1.5) return "urgent" as const
-  if ((rating != null && rating <= 2.5) || review.sentiment === "negative") return "high" as const
-  return "normal" as const
 }
 
 function legacyTitle(review: Record<string, unknown>) {
@@ -107,18 +97,37 @@ export async function POST(request: NextRequest) {
   const requestedDescription = typeof body.description === "string" ? body.description.trim() : ""
   const responsible = typeof body.responsible === "string" ? body.responsible.trim() : ""
   const expectedResolutionMinutes = Number(body.expectedResolutionMinutes ?? 60)
-  const requestedPriority = typeof body.priority === "string" && PRIORITIES.has(body.priority)
-    ? (body.priority as "low" | "normal" | "high" | "urgent")
-    : null
+  const priority = typeof body.priority === "string" ? body.priority.trim() : ""
 
   if (!reviewId) return response({ error: "review_required" }, 400)
   if (requestedTitle.length > 240) return response({ error: "invalid_title" }, 400)
   if (!responsible || (!responsible.startsWith("operator:") && !responsible.startsWith("group:"))) {
     return response({ error: "responsible_required" }, 400)
   }
+  if (!priority) return response({ error: "priority_required" }, 400)
   if (!Number.isInteger(expectedResolutionMinutes) || expectedResolutionMinutes < 5 || expectedResolutionMinutes > 1440) {
     return response({ error: "invalid_expected_resolution_minutes" }, 400)
   }
+
+  let taskForm: Awaited<ReturnType<typeof getSuiteManubotTaskFormData>>
+  try {
+    taskForm = await getSuiteManubotTaskFormData("hotelaccelerator", context.property!.id)
+  } catch (error) {
+    console.error("[reviews] priority form lookup failed", { error: error instanceof Error ? error.message : "unknown" })
+    return response({ error: "manubot_context_unavailable" }, 502)
+  }
+  if (!taskForm) return response({ error: "suite_customer_not_linked" }, 404)
+  if (!taskForm.context.active) {
+    return response(
+      {
+        error: taskForm.context.status === "inactive" ? "addon_inactive" : "addon_configuration_required",
+        activation_url: taskForm.context.activationUrl,
+      },
+      taskForm.context.status === "inactive" ? 403 : 409,
+    )
+  }
+  const validPriority = taskForm.taskData?.priorities?.some((item) => item.name === priority) === true
+  if (!validPriority) return response({ error: "invalid_priority", available_priorities: taskForm.taskData?.priorities || [] }, 400)
 
   const assigneeIds = responsible.startsWith("operator:") ? [responsible.slice("operator:".length)] : []
   const groupIds = responsible.startsWith("group:") ? [responsible.slice("group:".length)] : []
@@ -146,7 +155,6 @@ export async function POST(request: NextRequest) {
 
   const oldTitle = legacyTitle(reviewContext)
   const oldDescription = legacyDescription(reviewContext)
-  const oldPriority = legacyPriority(reviewContext)
   const title = (
     requestedTitle && requestedTitle !== oldTitle
       ? requestedTitle
@@ -154,18 +162,14 @@ export async function POST(request: NextRequest) {
   ).slice(0, 240)
   if (!title) return response({ error: "invalid_title" }, 400)
 
-  const manualNotes = requestedDescription && requestedDescription !== oldDescription
-    ? requestedDescription
-    : ""
+  const manualNotes = requestedDescription && requestedDescription !== oldDescription ? requestedDescription : ""
   const description = intelligence?.ticket?.description
     ? `${intelligence.ticket.description}${manualNotes ? `\n\nNOTE OPERATORE\n${manualNotes}` : ""}`
     : requestedDescription || oldDescription
-  const priority = requestedPriority && requestedPriority !== oldPriority
-    ? requestedPriority
-    : intelligence?.ticket?.priority || requestedPriority || oldPriority
 
   const basePlatform = typeof reviewContext.platform === "string" ? reviewContext.platform : "hotelaccelerator"
   const tags = Array.from(new Set(["recensione", basePlatform, ...(intelligence?.ticket?.tags || [])]))
+  const assetIds = intelligence?.ticket?.asset_ids || []
 
   try {
     const created = await createSuiteManubotTask({
@@ -177,8 +181,8 @@ export async function POST(request: NextRequest) {
       priority,
       assigneeIds,
       groupIds,
-      assetIds: intelligence?.ticket?.asset_ids || [],
-      assetCategoryId: intelligence?.ticket?.asset_category_id || null,
+      assetIds,
+      assetCategoryId: assetIds.length > 0 ? null : intelligence?.ticket?.asset_category_id || null,
       propertyId: intelligence?.ticket?.property_id || null,
       expectedResolutionMinutes,
       tags,
@@ -194,9 +198,10 @@ export async function POST(request: NextRequest) {
         safety_risks: intelligence?.detected?.safety_risks || [],
         guest_impact: intelligence?.detected?.guest_impact || null,
         matched_assets: intelligence?.matched?.assets || [],
-        matched_asset_category: intelligence?.matched?.asset_category || null,
+        matched_asset_category: assetIds.length > 0 ? null : intelligence?.matched?.asset_category || null,
         matched_property: intelligence?.matched?.property || null,
         ticket_intelligence_confidence: intelligence?.detected?.confidence ?? null,
+        manubot_priority_name: priority,
       },
       sourceType: "review",
       sourceId: reviewId,
@@ -209,7 +214,7 @@ export async function POST(request: NextRequest) {
     if (message === "local_module_not_provisioned" || message === "manubot_tenant_not_linked" || message === "addon_configuration_required") {
       return response({ error: "addon_configuration_required" }, 409)
     }
-    if (message === "responsible_required" || message === "invalid_expected_resolution_minutes") {
+    if (message === "responsible_required" || message === "invalid_expected_resolution_minutes" || message === "priority_required") {
       return response({ error: message }, 400)
     }
     console.error("[reviews] ManuBot task failed", { error: message })
