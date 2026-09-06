@@ -60,6 +60,7 @@ export default function CrmLandingPage() {
     requiresVerification={["Connettore PMS e qualità dei dati della struttura.", "CRM ospite completo end-to-end, inclusi identity resolution e LTV.", "Segmentazione dinamica e automazioni lifecycle.", "Test multi-tenant e permessi su workspace e gruppi reali."]}
     faqs={faqs}
     related={[
+      { href: "/crm-hotel-confronto", title: "Confronto CRM hotel", description: "Confronta HotelAccelerator con CRM alberghieri e generalisti sulle funzioni davvero utili in struttura." },
       { href: "/features/inbox-omnicanale", title: "Inbox omnicanale", description: "Collega conversazioni email e messaggi ai profili e al lavoro del team." },
       { href: "/features/pms-hotel", title: "PMS integrato", description: "Porta nel CRM i dati supportati dal gestionale della struttura." },
       { href: "/features/whatsapp-hotel", title: "WhatsApp per hotel", description: "Gestisci le conversazioni WhatsApp nel contesto del contatto." },

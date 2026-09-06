@@ -59,6 +59,7 @@ const groups = [
       { href: "/features/inbox-omnicanale", icon: MessageSquare, title: "Inbox omnicanale", text: "Email, WhatsApp, Telegram e canali social in una vista unificata, in base alle integrazioni attive." },
       { href: "/features/whatsapp-hotel", icon: MessageCircle, title: "WhatsApp per hotel", text: "Conversazioni WhatsApp Business collegate a contatti, operatori e storico del tenant." },
       { href: "/features/crm", icon: UsersRound, title: "CRM alberghiero", text: "Contatti, soggiorni, consensi, pipeline, workspace e attività commerciali." },
+      { href: "/crm-hotel-confronto", icon: BarChart3, title: "Confronto CRM hotel", text: "Tabella comparativa tra HotelAccelerator, CRM alberghieri e generalisti per PMS, canali, AI e operations." },
       { href: "/features/telefono-hotel", icon: Phone, title: "Telefonia e centralino", text: "Integrazione con centralini, click-to-call, journal e flussi vocali assistiti dall'AI dove configurati." },
       { href: "/features/email-marketing", icon: Mail, title: "Email marketing", text: "Campagne e segmenti collegati ai dati e ai consensi presenti nel CRM." },
       { href: "/features/ai-assistant", icon: Bot, title: "AI assistita", text: "Knowledge base, bozze, classificazione e handoff verso operatori con controllo umano." },
