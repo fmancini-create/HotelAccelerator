@@ -10,6 +10,15 @@ const PRIORITIES = new Set(["low", "normal", "high", "critical"])
 const STATUSES = new Set(["new", "assigned", "waiting_customer", "in_progress", "resolved", "closed"])
 const CHANNELS = new Set(["manual", "email", "phone", "chat", "whatsapp", "federated"])
 
+type SupportCaseRow = {
+  status?: string | null
+  priority?: string | null
+  first_responded_at?: string | null
+  resolved_at?: string | null
+  sla_first_response_due_at?: string | null
+  sla_resolution_due_at?: string | null
+}
+
 async function requirePlatformAdmin(request: NextRequest) {
   const email = await getAuthenticatedUserEmail(request)
   await new SuperAdminService().verifySuperAdmin(email)
@@ -33,12 +42,12 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     const now = Date.now()
-    const cases = data ?? []
+    const cases = (data ?? []) as SupportCaseRow[]
     const isOpen = (status: string) => !["resolved", "closed"].includes(status)
-    const isOverdue = (row: Record<string, unknown>) => {
+    const isOverdue = (row: SupportCaseRow) => {
       if (!isOpen(String(row.status))) return false
-      const firstDue = row.sla_first_response_due_at ? new Date(String(row.sla_first_response_due_at)).getTime() : null
-      const resolutionDue = row.sla_resolution_due_at ? new Date(String(row.sla_resolution_due_at)).getTime() : null
+      const firstDue = row.sla_first_response_due_at ? new Date(row.sla_first_response_due_at).getTime() : null
+      const resolutionDue = row.sla_resolution_due_at ? new Date(row.sla_resolution_due_at).getTime() : null
       const firstBreached = !row.first_responded_at && firstDue !== null && firstDue < now
       const resolutionBreached = !row.resolved_at && resolutionDue !== null && resolutionDue < now
       return firstBreached || resolutionBreached
