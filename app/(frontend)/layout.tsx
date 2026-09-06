@@ -12,9 +12,23 @@ export async function generateMetadata(): Promise<Metadata> {
   const isPlatform = await isPlatformDomain()
   if (isPlatform) {
     return {
-      title: { absolute: "Software gestionale modulare per hotel | HotelAccelerator" },
+      title: { absolute: "Software gestionale per hotel con CRM, PMS, Revenue e AI | HotelAccelerator" },
       description:
-        "Inbox Gmail, CRM alberghiero, CMS, tracking e AI assistita in moduli attivati in base al tenant e alle integrazioni realmente configurate.",
+        "Piattaforma gestionale modulare per hotel con CRM, Inbox omnicanale, WhatsApp, telefonia, PMS, revenue management, controllo di gestione, manutenzioni, HR, analytics e AI.",
+      keywords: [
+        "software gestionale hotel",
+        "software hotel all in one",
+        "crm hotel",
+        "inbox omnicanale hotel",
+        "whatsapp hotel",
+        "centralino hotel",
+        "pms hotel integrazione",
+        "revenue management hotel",
+        "controllo di gestione hotel",
+        "software manutenzioni hotel",
+        "software hr hotel",
+        "intelligenza artificiale hotel",
+      ],
       metadataBase: new URL("https://www.hotelaccelerator.com"),
       alternates: {
         canonical: "https://www.hotelaccelerator.com",
@@ -25,22 +39,22 @@ export async function generateMetadata(): Promise<Metadata> {
         locale: "it_IT",
         url: "https://www.hotelaccelerator.com",
         siteName: "HotelAccelerator",
-        title: "Software gestionale modulare per hotel | HotelAccelerator",
+        title: "Software gestionale per hotel con CRM, PMS, Revenue e AI | HotelAccelerator",
         description:
-          "Inbox Gmail, CRM alberghiero, CMS, tracking e AI assistita, con stato delle funzioni e verifiche dichiarati.",
+          "CRM, Inbox, WhatsApp, telefonia, PMS, revenue, controllo economico, manutenzioni, HR e AI in una piattaforma modulare per hotel.",
         images: [
           {
             url: "/og-image.png",
             width: 1200,
             height: 630,
-            alt: "HotelAccelerator - software gestionale modulare per hotel",
+            alt: "HotelAccelerator - piattaforma gestionale modulare per hotel",
           },
         ],
       },
       twitter: {
         card: "summary_large_image",
-        title: "Software gestionale modulare per hotel | HotelAccelerator",
-        description: "Inbox Gmail, CRM, CMS, tracking e AI assistita con attivazione guidata.",
+        title: "Software gestionale per hotel con CRM, PMS, Revenue e AI | HotelAccelerator",
+        description: "Piattaforma modulare per relazione ospite, vendite, revenue, operatività e controllo dell'hotel.",
         images: ["/og-image.png"],
       },
       robots: { index: true, follow: true },
@@ -97,15 +111,6 @@ export async function generateMetadata(): Promise<Metadata> {
       index: true,
       follow: true,
     },
-    /*
-     * Il sito pubblico di un CLIENTE non deve mai mostrare il marchio della
-     * piattaforma. Senza questa riga il layout radice, che dichiara le icone
-     * di HotelAccelerator, verrebbe ereditato e il razzo comparirebbe nella
-     * scheda del browser di ogni hotel.
-     *
-     * Se il tenant ha un logo si usa quello; altrimenti si preferisce
-     * NESSUNA icona al marchio sbagliato.
-     */
     icons: tenant?.logo_url ? { icon: [{ url: tenant.logo_url }] } : { icon: [] },
   }
 }
@@ -115,10 +120,6 @@ export default async function FrontendLayout({
 }: {
   children: React.ReactNode
 }) {
-  // IMPORTANT: Reject any /admin or /super-admin routes - they should never be in this layout
-  // These routes need special handling and are not part of the frontend group
-  // This prevents the issue where admin routes get caught by frontend layout and redirected
-  
   const isPlatform = await isPlatformDomain()
 
   console.log("[v0] FrontendLayout - isPlatform:", isPlatform)
@@ -145,7 +146,6 @@ export default async function FrontendLayout({
     )
   }
 
-  // Se il frontend è disabilitato per questo tenant
   if (!tenant.frontend_enabled) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -157,9 +157,6 @@ export default async function FrontendLayout({
     )
   }
 
-  // Script-first tracking: auto-inject the HotelAccelerator tracker for this
-  // tenant's default active site. If no active site exists for this property,
-  // injection is silently skipped (nothing leaks and nothing breaks).
   const trackingSite = await getDefaultTrackingSite(tenant.id)
 
   return (
@@ -173,7 +170,6 @@ export default async function FrontendLayout({
         </Script>
       )}
       {trackingSite && <Script src="/tracker.js" strategy="afterInteractive" />}
-
 
       <Script id="google-tag-manager" strategy="afterInteractive">
         {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
