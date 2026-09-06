@@ -13,6 +13,8 @@ export interface StagedWhatsAppMedia {
   name: string
   mimeType: string
   size: number
+  /** True only for browser-recorded OGG/Opus audio that Meta can render as a voice-note bubble. */
+  voice?: boolean
 }
 
 export interface PendingWhatsAppPayload {
@@ -107,7 +109,10 @@ export function decodePendingWhatsAppPayload(value: string): PendingWhatsAppPayl
       typeof media.mimeType === "string" &&
       typeof media.size === "number"
     ) {
-      return { text: typeof parsed.text === "string" ? parsed.text : "", media }
+      return {
+        text: typeof parsed.text === "string" ? parsed.text : "",
+        media: { ...media, voice: media.voice === true },
+      }
     }
   } catch {
     // Fall back to the raw text if a legacy/manually edited row looks like our prefix.
@@ -138,6 +143,7 @@ function renderSentMedia(
   kind: WhatsAppOutboundMediaKind,
   name: string,
   caption: string,
+  voice = false,
 ): string {
   const src = mediaProxyUrl(phoneNumberId, mediaId)
   const safeCaption = caption.trim() ? `<div style="margin-top:6px;white-space:pre-wrap">${escapeHtml(caption.trim())}</div>` : ""
@@ -148,7 +154,8 @@ function renderSentMedia(
     return `<div data-whatsapp-media="video" style="max-width:560px"><video controls preload="metadata" playsinline style="display:block;width:100%;max-height:680px;border-radius:12px;background:#000"><source src="${src}" /></video>${safeCaption}</div>`
   }
   if (kind === "audio") {
-    return `<div data-whatsapp-media="audio" style="max-width:560px"><div style="margin-bottom:6px;font-size:13px;color:#5f6368">Messaggio vocale</div><audio controls preload="metadata" style="width:100%"><source src="${src}" /></audio></div>`
+    const label = voice ? "Messaggio vocale" : "Audio WhatsApp"
+    return `<div data-whatsapp-media="audio" style="max-width:560px"><div style="margin-bottom:6px;font-size:13px;color:#5f6368">${label}</div><audio controls preload="metadata" style="width:100%"><source src="${src}" /></audio></div>`
   }
   const label = escapeHtml(name || "Documento WhatsApp")
   return `<div data-whatsapp-media="document" style="max-width:560px"><a href="${src}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #dadce0;border-radius:10px;text-decoration:none">📎 ${label}</a>${safeCaption}</div>`
@@ -238,6 +245,8 @@ export async function sendStagedWhatsAppMedia(
   const mediaObject: Record<string, unknown> = { id: uploadedMediaId }
   if (caption) mediaObject.caption = caption
   if (validation.kind === "document" && media.name) mediaObject.filename = media.name
+  const sendsAsVoiceNote = validation.kind === "audio" && media.voice === true && validation.mimeType === "audio/ogg"
+  if (sendsAsVoiceNote) mediaObject.voice = true
 
   const messageUrl = `https://graph.facebook.com/${version}/${encodeURIComponent(phoneNumberId)}/messages`
   try {
@@ -270,7 +279,7 @@ export async function sendStagedWhatsAppMedia(
       mediaId: uploadedMediaId,
       kind: validation.kind,
       captionConsumed: Boolean(caption),
-      contentHtml: renderSentMedia(phoneNumberId, uploadedMediaId, validation.kind, media.name, caption),
+      contentHtml: renderSentMedia(phoneNumberId, uploadedMediaId, validation.kind, media.name, caption, sendsAsVoiceNote),
     }
   } catch (error) {
     return {
