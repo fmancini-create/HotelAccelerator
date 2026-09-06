@@ -7,6 +7,7 @@ const PLATFORM_PAGES = [
   { path: "/", changeFrequency: "weekly" as const, priority: 1.0 },
   { path: "/features", changeFrequency: "weekly" as const, priority: 0.95 },
   { path: "/features/crm", changeFrequency: "monthly" as const, priority: 0.9 },
+  { path: "/crm-hotel-confronto", changeFrequency: "monthly" as const, priority: 0.9 },
   { path: "/features/inbox-omnicanale", changeFrequency: "monthly" as const, priority: 0.9 },
   { path: "/features/whatsapp-hotel", changeFrequency: "monthly" as const, priority: 0.9 },
   { path: "/features/telefono-hotel", changeFrequency: "monthly" as const, priority: 0.9 },
