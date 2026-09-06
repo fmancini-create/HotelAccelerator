@@ -3,7 +3,7 @@ import {
   hasAdvancedSearchSyntax,
   shouldEnableFuzzySearch,
   shouldTrySemanticExpansion,
-} from "../google-search-query"
+} from "../google-search-policy"
 
 describe("Google-like Inbox search query decisions", () => {
   it("recognises web-search operators and preserves their semantics", () => {
