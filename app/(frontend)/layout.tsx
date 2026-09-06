@@ -6,7 +6,7 @@ import { getCurrentTenant, isPlatformDomain } from "@/lib/get-tenant"
 import { getCurrentDomain } from "@/lib/seo-utils"
 import { ChatWidget } from "@/components/chat-widget"
 import { HotelSchema, LocalBusinessSchema } from "@/components/schema-org"
-import { getDefaultTrackingSite } from "@/lib/tracking/cms-injection"
+import { getDefaultTrackingSite, getSharedWebTrafficTracker } from "@/lib/tracking/cms-injection"
 
 export async function generateMetadata(): Promise<Metadata> {
   const isPlatform = await isPlatformDomain()
@@ -157,7 +157,10 @@ export default async function FrontendLayout({
     )
   }
 
-  const trackingSite = await getDefaultTrackingSite(tenant.id)
+  const [trackingSite, sharedWebTraffic] = await Promise.all([
+    getDefaultTrackingSite(tenant.id),
+    getSharedWebTrafficTracker(tenant.id, tenant.name || tenant.slug || "Hotel"),
+  ])
 
   return (
     <div data-tenant-id={tenant.id} data-tenant-slug={tenant.slug}>
@@ -170,6 +173,16 @@ export default async function FrontendLayout({
         </Script>
       )}
       {trackingSite && <Script src="/tracker.js" strategy="afterInteractive" />}
+
+      {sharedWebTraffic && (
+        <Script
+          id="santaddeo-web-traffic"
+          src={sharedWebTraffic.scriptUrl}
+          data-token={sharedWebTraffic.publicToken}
+          data-widget="track"
+          strategy="afterInteractive"
+        />
+      )}
 
       <Script id="google-tag-manager" strategy="afterInteractive">
         {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
