@@ -1,43 +1,33 @@
 /**
- * Admin: update or delete a single tracking_site.
+ * Admin: update or delete a single tracking_site for the selected tenant.
  * PATCH accepts { name?, allowed_origins?, is_active?, rotate_key? }.
- * DELETE removes the site (cascading events.site_id => NULL via ON DELETE SET NULL).
  */
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-/**
- * La guardia di area sta DENTRO l'aiutante: questo file restituisce l'errore
- * invece di lanciarlo, quindi un'eccezione nel gestore diventerebbe un 500 al
- * posto del 403. Un punto solo, attraversato sia da PATCH sia da DELETE.
- */
 async function requireProperty(request?: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { supabase, error: NextResponse.json({ error: "unauthenticated" }, { status: 401 }) }
-
-  const { data: admin } = await supabase
-    .from("admin_users")
-    .select("property_id")
-    .eq("email", user.email)
-    .maybeSingle()
-
-  if (!admin?.property_id)
-    return { supabase, error: NextResponse.json({ error: "no property" }, { status: 403 }) }
+  const identity = await getCallerIdentity(request)
+  if (!identity) {
+    return { supabase: null, propertyId: null, error: NextResponse.json({ error: "unauthenticated" }, { status: 401 }) }
+  }
+  if (!identity.propertyId) {
+    return { supabase: null, propertyId: null, error: NextResponse.json({ error: "no property" }, { status: 400 }) }
+  }
 
   try {
     await requireAreaApi("tracking", request)
   } catch (e) {
-    if (isAreaDenied(e)) return { supabase, error: areaDeniedResponse(e) }
+    if (isAreaDenied(e)) return { supabase: null, propertyId: null, error: areaDeniedResponse(e) }
     throw e
   }
 
-  return { supabase, propertyId: admin.property_id as string, error: null }
+  return { supabase: createServiceClient(), propertyId: identity.propertyId, error: null }
 }
 
 function generateWriteKey(): string {
@@ -50,7 +40,7 @@ function generateWriteKey(): string {
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
   const { supabase, propertyId, error } = await requireProperty(req)
-  if (error) return error
+  if (error || !supabase || !propertyId) return error!
 
   const body = await req.json().catch(() => ({}))
   const patch: Record<string, unknown> = {}
@@ -67,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ si
     .from("tracking_sites")
     .update(patch)
     .eq("id", siteId)
-    .eq("property_id", propertyId!) // belt-and-suspenders beside RLS
+    .eq("property_id", propertyId)
     .select("id, name, write_key, allowed_origins, is_active, created_at, updated_at")
     .single()
 
@@ -75,18 +65,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ si
   return NextResponse.json({ site: data })
 }
 
-// `req` (non piu' `_req`): ora serve davvero, per far vedere i cookie alla
-// guardia di area. Lasciare il nome con l'underscore direbbe il falso.
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
   const { supabase, propertyId, error } = await requireProperty(req)
-  if (error) return error
+  if (error || !supabase || !propertyId) return error!
 
   const { error: dbErr } = await supabase
     .from("tracking_sites")
     .delete()
     .eq("id", siteId)
-    .eq("property_id", propertyId!)
+    .eq("property_id", propertyId)
 
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
   return NextResponse.json({ success: true })

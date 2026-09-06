@@ -1,9 +1,10 @@
 /**
- * Admin: list recent tracking sessions for the caller's tenant.
+ * Admin: list recent tracking sessions for the selected tenant.
  * Accepts ?limit (max 100), ?identified (true|false), ?q (email/session prefix).
  */
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createServiceClient } from "@/lib/supabase/server"
+import { getCallerIdentity } from "@/lib/auth/admin-access"
 import { requireAreaApi } from "@/lib/auth/area-access"
 import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 
@@ -11,28 +12,23 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+  const identity = await getCallerIdentity(req)
+  if (!identity) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+  if (!identity.propertyId) return NextResponse.json({ error: "no property" }, { status: 400 })
 
-  const { data: admin } = await supabase
-    .from("admin_users")
-    .select("property_id")
-    .eq("email", user.email)
-    .maybeSingle()
-  if (!admin?.property_id) return NextResponse.json({ error: "no property" }, { status: 403 })
-
-  // Permesso di sezione. Qui i controlli sono in linea e restituiscono la
-  // risposta (niente try/catch attorno al gestore), quindi il diniego va
-  // convertito subito: lanciato, diventerebbe un 500 invece di un 403.
   try {
     await requireAreaApi("tracking", req)
   } catch (e) {
     if (isAreaDenied(e)) return areaDeniedResponse(e)
     throw e
   }
+
+  // Service role is intentional here: a platform superadmin can switch tenant
+  // through the platform-context override, while the legacy RLS policy only
+  // knows the property_id stored on admin_users. Tenant isolation is enforced
+  // explicitly with identity.propertyId after authentication + area guard.
+  const supabase = createServiceClient()
+  const propertyId = identity.propertyId
 
   const url = new URL(req.url)
   const rawLimit = parseInt(url.searchParams.get("limit") || "50", 10)
@@ -45,7 +41,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, session_id, email, contact_id, anonymous_id, first_seen_at, last_seen_at, event_count, landing_page, last_page, referrer, utm_source, utm_medium, utm_campaign, country, city, device_type, browser, os, site_id",
     )
-    .eq("property_id", admin.property_id)
+    .eq("property_id", propertyId)
     .order("last_seen_at", { ascending: false })
     .limit(limit)
 
