@@ -72,4 +72,67 @@ describe("WhatsApp Business App coexistence webhooks", () => {
     expect(parsed.messages[0].body).toContain("Camera &lt;vista&gt; &amp; piscina")
     expect(parsed.messages[0].body).not.toContain("Camera <vista>")
   })
+
+  it("renders WhatsApp video with native controls and caption", () => {
+    const parsed = parseWhatsAppWebhook({
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "pn_video" },
+          messages: [{
+            id: "wamid.video.1", from: "393331112233", timestamp: "1787738404", type: "video",
+            video: { id: "media_video_1", mime_type: "video/mp4", caption: "Tour <suite>" },
+          }],
+        },
+      }] }],
+    })
+
+    expect(parsed.messages[0].messageType).toBe("video")
+    expect(parsed.messages[0].body).toContain("<video controls")
+    expect(parsed.messages[0].body).toContain("/api/channels/whatsapp/media/pn_video/media_video_1")
+    expect(parsed.messages[0].body).toContain("Tour &lt;suite&gt;")
+  })
+
+  it("renders WhatsApp voice notes with native audio controls", () => {
+    const parsed = parseWhatsAppWebhook({
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "pn_audio" },
+          messages: [{
+            id: "wamid.audio.1", from: "393331112233", timestamp: "1787738405", type: "audio",
+            audio: { id: "media_audio_1", mime_type: "audio/ogg", voice: true },
+          }],
+        },
+      }] }],
+    })
+
+    expect(parsed.messages[0].messageType).toBe("audio")
+    expect(parsed.messages[0].body).toContain("Messaggio vocale WhatsApp")
+    expect(parsed.messages[0].body).toContain("<audio controls")
+    expect(parsed.messages[0].body).toContain("/api/channels/whatsapp/media/pn_audio/media_audio_1")
+  })
+
+  it("renders WhatsApp documents as safe authenticated links", () => {
+    const parsed = parseWhatsAppWebhook({
+      object: "whatsapp_business_account",
+      entry: [{ changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "pn_docs" },
+          messages: [{
+            id: "wamid.doc.1", from: "393331112233", timestamp: "1787738406", type: "document",
+            document: { id: "media_doc_1", mime_type: "application/pdf", filename: "Preventivo <VIP>.pdf", caption: "Per voi" },
+          }],
+        },
+      }] }],
+    })
+
+    expect(parsed.messages[0].messageType).toBe("document")
+    expect(parsed.messages[0].body).toContain("/api/channels/whatsapp/media/pn_docs/media_doc_1")
+    expect(parsed.messages[0].body).toContain("Apri documento: Preventivo &lt;VIP&gt;.pdf")
+    expect(parsed.messages[0].body).not.toContain("Preventivo <VIP>.pdf")
+  })
 })
