@@ -5,6 +5,7 @@ import { isAreaDenied, areaDeniedResponse } from "@/lib/auth/area-denied"
 import { requireAreaApi } from "@/lib/auth/area-access"
 
 type AttackAction = { id: string; text: string; done: boolean }
+type AttackPlanDayRow = Record<string, unknown> & { plan_date: string | null }
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error
 
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())
-    const rows = data ?? []
+    const rows = (data ?? []) as AttackPlanDayRow[]
     return NextResponse.json({ days: rows, today: rows.find((row) => row.plan_date === today) ?? null, today_date: today })
   } catch (error) {
     if (isAreaDenied(error)) return areaDeniedResponse(error)
