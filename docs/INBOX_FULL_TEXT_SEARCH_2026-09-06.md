@@ -25,7 +25,7 @@ Il contenuto di `messages.content` non partecipava alla ricerca. Sul database re
 - indice GIN sulle conversazioni e sui contatti.
 - trigger `SECURITY INVOKER` con `search_path=''` per mantenere aggiornato l'indice quando un messaggio viene inserito, modificato, spostato o cancellato.
 - RPC `search_inbox_conversation_ids` `SECURITY INVOKER`, eseguibile solo da `authenticated`/`service_role`.
-- la RPC applica `property_id`, stato, canale/sottocanale, cartelle nascoste e assegnazioni canale prima di restituire i risultati.
+- la RPC applica `property_id`, stato, canale/sottocanale, cartelle nascoste, filtri `high_priority`/`action_needed` e assegnazioni canale prima di restituire i risultati.
 - l'API `/api/inbox/conversations` usa la FTS quando `search` e' valorizzato e mantiene il percorso legacy solo come fallback se la migration non esiste ancora nell'ambiente.
 - input di ricerca normalizzato e limitato a 300 caratteri.
 - materializzazione degli id a lotti da 125 per evitare `UND_ERR_HEADERS_OVERFLOW` gia' documentato dal repository con grandi query `.in(...)`.
@@ -44,6 +44,7 @@ Il contenuto di `messages.content` non partecipava alla ricerca. Sul database re
 1. `20260906001338_inbox_full_text_search_v2.sql`
 2. `20260906001528_inbox_full_text_search_safe_channel_match.sql`
 3. `20260906001907_inbox_full_text_search_drop_aggregate.sql`
+4. `20260906002021_inbox_full_text_search_filter_compat.sql`
 
 Le versioni corrispondono alla migration history del progetto Supabase di produzione.
 
