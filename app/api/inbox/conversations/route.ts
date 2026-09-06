@@ -11,6 +11,10 @@ import { handleServiceError } from "@/lib/errors"
 /** Quante conversazioni si possono chiedere al massimo (tetto di Supabase). */
 const LIMITE_MASSIMO = 1000
 const LIMITE_PREDEFINITO = 50
+/** Evita query-string enormi quando gli id trovati dalla FTS vengono materializzati. */
+const RICERCA_ID_PER_LOTTO = 125
+/** Un input enorme non migliora la ricerca e puo' diventare lavoro inutile per Postgres. */
+const RICERCA_TESTO_MASSIMO = 300
 
 /**
  * Interpreta il numero di conversazioni richieste.
@@ -49,6 +53,20 @@ function interoNonNegativo(grezzo: string | null): number {
   return Math.max(0, Math.floor(numero))
 }
 
+function normalizzaRicerca(grezzo: string | null): string | undefined {
+  const testo = grezzo?.trim().replace(/\s+/g, " ")
+  if (!testo) return undefined
+  return testo.slice(0, RICERCA_TESTO_MASSIMO)
+}
+
+function inLotti<T>(elenco: T[], dimensione: number): T[][] {
+  const risultato: T[][] = []
+  for (let indice = 0; indice < elenco.length; indice += dimensione) {
+    risultato.push(elenco.slice(indice, indice + dimensione))
+  }
+  return risultato
+}
+
 export async function GET(request: NextRequest) {
   try {
     console.log("[v0] Inbox conversations API called")
@@ -80,14 +98,16 @@ export async function GET(request: NextRequest) {
     }
 
     const limite = risolviLimite(searchParams.get("limit"))
+    const offset = interoNonNegativo(searchParams.get("offset"))
+    const search = normalizzaRicerca(searchParams.get("search"))
 
     const options: ConversationListOptions = {
       status: (searchParams.get("status") as any) || "open",
       channel: (searchParams.get("channel") as any) || undefined,
       subchannel_id: searchParams.get("subchannel_id") || undefined,
       limit: limite.applicato,
-      offset: interoNonNegativo(searchParams.get("offset")),
-      search: searchParams.get("search") || undefined,
+      offset,
+      search,
       // Conversazioni precise, per aprire una bozza che sta fuori dalla pagina
       // caricata. Restano dentro `propertyId` e dentro `access`: chiedere un id
       // di un'altra struttura o di un canale non assegnato non restituisce nulla.
@@ -101,7 +121,77 @@ export async function GET(request: NextRequest) {
 
     console.log("[v0] Inbox options:", options)
 
-    const conversations = await service.listConversations(propertyId, options)
+    let conversations
+    let searchEngine: "postgres_fts" | "legacy" | undefined
+
+    // La ricerca testuale usa un indice GIN su oggetto, mittente, contatto e
+    // contenuto di TUTTI i messaggi della conversazione. L'RPC applica prima
+    // tenant, stato, canale, sottocanale, cartelle nascoste e permessi utente,
+    // quindi gli id risultanti sono gia' uno spazio di ricerca autorizzato.
+    // `ids` espliciti (es. apertura di una bozza) hanno precedenza sulla ricerca.
+    if (search && !(options.ids && options.ids.length > 0)) {
+      const { data: matches, error: searchError } = await supabase.rpc("search_inbox_conversation_ids", {
+        p_property_id: propertyId,
+        p_search: search,
+        p_status: options.status || "open",
+        p_mode: mode,
+        p_gmail_label: gmailLabel || null,
+        p_channel: options.channel || null,
+        p_subchannel_id: options.subchannel_id || null,
+        p_filter: options.filter || null,
+        p_restrict: access?.restrict === true,
+        p_email_channel_ids: access?.emailChannelIds || [],
+        p_messaging_channel_ids: access?.messagingChannelIds || [],
+        p_sort: sort ?? (mode === "gmail" ? "date_desc" : "smart"),
+        p_limit: limite.applicato,
+        p_offset: offset,
+      })
+
+      if (searchError) {
+        // Solo ambienti in cui la migration non e' ancora arrivata degradano
+        // alla ricerca precedente. Altri errori devono essere visibili: non si
+        // nascondono problemi di auth/RLS/infrastruttura dietro risultati parziali.
+        if (searchError.code === "PGRST202" || searchError.code === "42883") {
+          console.warn("[Inbox search] FTS RPC unavailable; using legacy search", searchError.code)
+          searchEngine = "legacy"
+          conversations = await service.listConversations(propertyId, options)
+        } else {
+          throw searchError
+        }
+      } else {
+        searchEngine = "postgres_fts"
+        const orderedIds = (matches || [])
+          .map((row: { conversation_id?: string | null }) => row.conversation_id)
+          .filter((id: string | null | undefined): id is string => Boolean(id))
+
+        if (orderedIds.length === 0) {
+          conversations = []
+        } else {
+          // Il repository documenta un limite pratico per `.in(id, ...)` dovuto
+          // alla dimensione degli header. Materializziamo gli id a lotti, poi
+          // ricostruiamo l'ordine per rilevanza restituito dalla FTS.
+          const materializzate: Awaited<ReturnType<InboxReadService["listConversations"]>> = []
+          for (const lotto of inLotti(orderedIds, RICERCA_ID_PER_LOTTO)) {
+            const batch = await service.listConversations(propertyId, {
+              ...options,
+              ids: lotto,
+              search: undefined,
+              offset: 0,
+              limit: lotto.length,
+            })
+            materializzate.push(...batch)
+          }
+
+          const posizione = new Map(orderedIds.map((id, index) => [id, index]))
+          conversations = materializzate.sort(
+            (a, b) => (posizione.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (posizione.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+          )
+        }
+      }
+    } else {
+      conversations = await service.listConversations(propertyId, options)
+    }
+
     console.log("[v0] Found conversations:", conversations.length)
 
     // Il tetto va DICHIARATO, non subito in silenzio: chi chiede 5.000
@@ -109,6 +199,7 @@ export async function GET(request: NextRequest) {
     // troncato, altrimenti crede di vedere tutto.
     return NextResponse.json({
       conversations,
+      ...(search ? { search: { query: search, engine: searchEngine || "legacy" } } : {}),
       limite: {
         richiesto: limite.richiesto,
         applicato: limite.applicato,
