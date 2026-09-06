@@ -21,16 +21,39 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
   const subviewOpen = emailFoldersOpen || sentOpen
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      {/* Barra azioni comune: deve restare presente in tutte le sottoviste, ma
-          non rubare altezza alla posta. Il titolo visibile resta solo su mobile,
-          dove aiuta l'orientamento; su desktop la pagina Inbox lo mostra gia'. */}
-      <div data-inbox-toolbar className="flex min-h-11 shrink-0 items-center border-b bg-card">
-        <div className="hidden w-[256px] shrink-0 px-3 py-1 sm:block">
+    <div className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      {/*
+        Nella Inbox operativa questa barra non deve creare una seconda fascia
+        vuota sopra la posta. Su desktop largo la riusiamo nello spazio libero
+        a destra dell'header locale; nelle sottoviste e sui viewport piu'
+        stretti resta invece nel normale flusso, cosi' non si sovrappone mai ai
+        contenuti.
+      */}
+      <div
+        data-inbox-toolbar
+        data-inbox-toolbar-mode={subviewOpen ? "subview" : "operational"}
+        className={[
+          "z-[65] flex min-h-11 shrink-0 items-center border-b bg-card",
+          subviewOpen
+            ? "relative"
+            : "relative 2xl:absolute 2xl:right-3 2xl:top-1 2xl:min-h-0 2xl:border-0 2xl:bg-transparent",
+        ].join(" ")}
+      >
+        <div
+          className={[
+            "hidden shrink-0 sm:block",
+            subviewOpen ? "w-[256px] px-3 py-1" : "w-[256px] px-3 py-1 2xl:w-auto 2xl:p-0",
+          ].join(" ")}
+        >
           <OmnichannelCompose />
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-2 py-1 sm:justify-end sm:px-3">
+        <div
+          className={[
+            "flex min-w-0 flex-1 items-center justify-between gap-2 px-2 py-1 sm:justify-end sm:px-3",
+            !subviewOpen ? "2xl:flex-none 2xl:px-0 2xl:py-0" : "",
+          ].join(" ")}
+        >
           <span className="truncate text-sm font-semibold sm:sr-only">Inbox</span>
 
           {subviewOpen ? (
@@ -42,22 +65,32 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
               <span>Conversazioni</span>
             </Link>
           ) : (
-            <div className="flex items-center gap-1 sm:gap-2">
-              <Link
-                href="/admin/inbox/sent"
-                className="inline-flex min-h-8 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:px-3"
-              >
-                <Send className="h-4 w-4" aria-hidden />
-                <span className="hidden sm:inline">Inviati</span>
-              </Link>
-              <Link
-                href="/admin/inbox/email"
-                className="inline-flex min-h-8 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:px-3"
-              >
-                <FolderOpen className="h-4 w-4" aria-hidden />
-                <span className="hidden sm:inline">Cartelle email</span>
-              </Link>
-            </div>
+            <>
+              {/* Slot stabile: la traduzione non deve piu' infilarsi nella
+                  toolbar filtri/azioni del messaggio, che ha spazio limitato. */}
+              <div
+                data-inbox-translation-slot
+                className="relative hidden min-w-0 shrink-0 items-center gap-1.5 sm:flex"
+                aria-live="polite"
+              />
+
+              <nav aria-label="Viste Inbox" className="flex shrink-0 items-center gap-1 sm:gap-2">
+                <Link
+                  href="/admin/inbox/sent"
+                  className="inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-lg px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:px-3"
+                >
+                  <Send className="h-4 w-4" aria-hidden />
+                  <span className="hidden lg:inline">Inviati</span>
+                </Link>
+                <Link
+                  href="/admin/inbox/email"
+                  className="inline-flex min-h-8 items-center gap-2 whitespace-nowrap rounded-lg px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground sm:px-3"
+                >
+                  <FolderOpen className="h-4 w-4" aria-hidden />
+                  <span className="hidden lg:inline">Cartelle email</span>
+                </Link>
+              </nav>
+            </>
           )}
         </div>
       </div>
@@ -84,6 +117,7 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
           border-radius: 0.75rem !important;
           padding-left: 0.875rem !important;
           padding-right: 0.875rem !important;
+          white-space: nowrap !important;
         }
 
         /* La vista operativa aveva ancora l'header visuale derivato da Gmail:
@@ -106,6 +140,23 @@ export function InboxShell({ children }: { children: React.ReactNode }) {
           height: 1.75rem;
           flex: 0 0 1.75rem;
           background: url("/logo-ha-mark-64.png") center / contain no-repeat;
+        }
+
+        /*
+          Da 2xl in su la barra comune occupa lo spazio libero a destra dello
+          stesso header della Inbox. Riserviamo quello spazio all'header perche'
+          ricerca e controlli comuni non possano mai sovrapporsi. Risultato:
+          una riga verticale in meno e nessuna necessita' di scroll orizzontale.
+        */
+        @media (min-width: 1536px) {
+          [data-inbox-toolbar-mode="operational"] {
+            height: 2.75rem !important;
+            max-width: calc(100% - 1.5rem);
+          }
+
+          [data-inbox-view="operational"] > div > header {
+            padding-right: 44rem !important;
+          }
         }
 
         /* The native mailbox page can use a generic envelope icon in its local
