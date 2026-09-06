@@ -109,7 +109,7 @@ export function TenantSwitcher() {
           <ChevronsUpDown className="h-3 w-3 text-[#9ca3af]" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64 max-w-[calc(100vw-1rem)]">
+      <DropdownMenuContent align="end" className="z-[75] w-64 max-w-[calc(100vw-1rem)]">
         <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-wide text-[#6b7280]">
           Tenant disponibili ({data.tenants.length})
         </DropdownMenuLabel>
