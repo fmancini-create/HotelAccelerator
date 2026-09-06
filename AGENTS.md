@@ -81,6 +81,17 @@ Non usare "sviluppato", "completo" o "funzionante" senza indicare livello ed evi
 - Migrazioni additive per default; cambi rischiosi richiedono rollback.
 - Preferire estensione e riuso a duplicazione o riscrittura.
 
+## Fiscalita' 4BID — regola vincolante
+
+- **HotelProfitAI e' l'unico fiscal owner della suite 4BID.**
+- Flusso canonico: `prodotto 4BID -> HotelProfitAI -> FattureInCloud -> invio SDI manuale in FattureInCloud -> HotelProfitAI`.
+- HotelAccelerator puo' gestire incasso, Stripe, entitlement e riferimenti economici, ma non deve essere proprietario della creazione delle fatture FattureInCloud ne' dell'invio SDI ordinario.
+- Ogni pagamento fatturabile deve essere attribuibile deterministicamente al progetto/tenant e idempotente; con Stripe preservare la Stripe Invoice e `metadata.project` canonico.
+- I segreti FattureInCloud appartengono all'hub HotelProfitAI dopo il cutover.
+- Il codice FattureInCloud locale oggi presente in HotelAccelerator e' **legacy in conflitto**: non estenderlo e non considerarlo il target. Rimuoverlo/neutralizzarlo solo con cutover controllato, verifica end-to-end e rollback per evitare fatture perse o duplicate.
+- Dopo l'invio manuale allo SDI, HotelProfitAI deve riconciliare e aggiornare lo stesso documento con stato/esito; il satellite non crea una seconda fonte fiscale.
+- Leggere `docs/4BID_FISCAL_HUB.md` prima di modificare billing, Stripe, webhook fiscali o integrazioni FattureInCloud.
+
 ## Scalabilita'
 
 Progettare per migliaia di strutture senza costruire in anticipo complessita' inutile.
